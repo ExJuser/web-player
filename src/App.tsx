@@ -2554,7 +2554,7 @@ export default function App() {
 
       <aside className="playlist-panel">
         <div className="playlist-header">
-          <div>
+          <div className="playlist-title-row">
             <h2>播放列表</h2>
             <span>
               {videos.length
@@ -2565,21 +2565,20 @@ export default function App() {
             </span>
           </div>
           <div className="playlist-tools">
-            <label className="playlist-sort">
-              排序
-              <select
-                aria-label="播放列表排序方式"
-                value={playlistSortMode}
-                onChange={(event) => updatePlaylistSortMode(event.target.value as PlaylistSortMode)}
-                disabled={!videos.length}
-              >
-                {playlistSortOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <select
+              className="playlist-sort-select"
+              aria-label="播放列表排序方式"
+              title="排序方式"
+              value={playlistSortMode}
+              onChange={(event) => updatePlaylistSortMode(event.target.value as PlaylistSortMode)}
+              disabled={!videos.length}
+            >
+              {playlistSortOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
             <button
               className={`playlist-order-button ${isPlaylistSortReversed ? "active" : ""}`}
               type="button"
@@ -2606,18 +2605,16 @@ export default function App() {
                 disabled={!videos.length}
               >
                 <Star size={14} />
-                收藏
               </button>
             </div>
             <button
-              className="playlist-clear-button"
+              className="playlist-clear-button icon-only"
               type="button"
               onClick={clearFolderProgress}
               disabled={!videos.length || !Object.keys(progressStore).length}
               title="清空当前文件夹观看记录"
             >
               <Trash2 size={16} />
-              清空记录
             </button>
           </div>
         </div>
