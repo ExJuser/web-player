@@ -21,6 +21,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 type FileSystemDirectoryHandle = {
   values(): AsyncIterable<FileSystemDirectoryHandle | FileSystemFileHandle>;
   getFileHandle(name: string, options?: { create?: boolean }): Promise<FileSystemFileHandle>;
+  queryPermission?(descriptor?: { mode?: "read" | "readwrite" }): Promise<PermissionState>;
   requestPermission?(descriptor?: { mode?: "read" | "readwrite" }): Promise<PermissionState>;
   kind: "directory";
   name: string;
@@ -81,6 +82,9 @@ const SUBTITLE_EXTENSIONS = new Set([".srt", ".vtt"]);
 const PROGRESS_FILE_NAME = ".local-web-player-progress.json";
 const FOLDER_ACCESS_PROMPT_KEY = "local-web-player:skip-folder-access-prompt";
 const VOLUME_STORAGE_KEY = "local-web-player:volume";
+const RECENT_FOLDER_DB_NAME = "local-web-player";
+const RECENT_FOLDER_STORE_NAME = "handles";
+const RECENT_FOLDER_KEY = "recent-folder";
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
 const rates = [0.5, 0.75, 1, 1.25, 1.5, 2, 3];
 const seekSteps = [5, 10, 15];
@@ -210,6 +214,75 @@ async function savePlayerDataStore(directory: FileSystemDirectoryHandle, store: 
   const writable = await handle.createWritable();
   await writable.write(JSON.stringify({ version: 2, items: store.progress, favorites: store.favorites }, null, 2));
   await writable.close();
+}
+
+function openRecentFolderDatabase() {
+  return new Promise<IDBDatabase>((resolve, reject) => {
+    const request = indexedDB.open(RECENT_FOLDER_DB_NAME, 1);
+    request.onupgradeneeded = () => {
+      request.result.createObjectStore(RECENT_FOLDER_STORE_NAME);
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function readRecentFolderHandle() {
+  if (!("indexedDB" in window)) return null;
+  const database = await openRecentFolderDatabase();
+  return new Promise<FileSystemDirectoryHandle | null>((resolve, reject) => {
+    const transaction = database.transaction(RECENT_FOLDER_STORE_NAME, "readonly");
+    const request = transaction.objectStore(RECENT_FOLDER_STORE_NAME).get(RECENT_FOLDER_KEY);
+    request.onsuccess = () => resolve((request.result as FileSystemDirectoryHandle | undefined) ?? null);
+    request.onerror = () => reject(request.error);
+    transaction.oncomplete = () => database.close();
+    transaction.onerror = () => {
+      database.close();
+      reject(transaction.error);
+    };
+  });
+}
+
+async function writeRecentFolderHandle(directory: FileSystemDirectoryHandle) {
+  if (!("indexedDB" in window)) return;
+  const database = await openRecentFolderDatabase();
+  return new Promise<void>((resolve, reject) => {
+    const transaction = database.transaction(RECENT_FOLDER_STORE_NAME, "readwrite");
+    transaction.objectStore(RECENT_FOLDER_STORE_NAME).put(directory, RECENT_FOLDER_KEY);
+    transaction.oncomplete = () => {
+      database.close();
+      resolve();
+    };
+    transaction.onerror = () => {
+      database.close();
+      reject(transaction.error);
+    };
+  });
+}
+
+async function clearRecentFolderHandle() {
+  if (!("indexedDB" in window)) return;
+  const database = await openRecentFolderDatabase();
+  return new Promise<void>((resolve, reject) => {
+    const transaction = database.transaction(RECENT_FOLDER_STORE_NAME, "readwrite");
+    transaction.objectStore(RECENT_FOLDER_STORE_NAME).delete(RECENT_FOLDER_KEY);
+    transaction.oncomplete = () => {
+      database.close();
+      resolve();
+    };
+    transaction.onerror = () => {
+      database.close();
+      reject(transaction.error);
+    };
+  });
+}
+
+async function ensureDirectoryPermission(directory: FileSystemDirectoryHandle) {
+  const descriptor = { mode: "readwrite" as const };
+  const currentPermission = await directory.queryPermission?.(descriptor);
+  if (currentPermission === "granted") return true;
+  const nextPermission = await directory.requestPermission?.(descriptor);
+  return nextPermission !== "denied";
 }
 
 function formatTime(seconds: number) {
@@ -808,6 +881,58 @@ export default function App() {
     selectVideo(videos[currentIndex + 1].id);
   }, [currentIndex, selectVideo, videos]);
 
+  const loadDirectoryMedia = useCallback(
+    async (directory: FileSystemDirectoryHandle, options?: { remember?: boolean; restored?: boolean }) => {
+      setIsFolderDialogOpen(false);
+      setIsScanning(true);
+      setMessage(options?.restored ? "正在恢复上次文件夹..." : "正在扫描视频文件...");
+
+      const canUseDirectory = await ensureDirectoryPermission(directory);
+      if (!canUseDirectory) {
+        if (options?.remember) {
+          await clearRecentFolderHandle().catch(() => undefined);
+        }
+        setMessage("需要允许写入文件夹，才能在本地保存播放进度。");
+        return;
+      }
+
+      const [media, nextDataStore] = await Promise.all([collectVideos(directory), loadPlayerDataStore(directory)]);
+      const nextSubtitles = await Promise.all(
+        media.subtitles.map(async (subtitle) => ({
+          ...subtitle,
+          url: await createSubtitleUrl(subtitle),
+        })),
+      );
+
+      directoryRef.current = directory;
+      progressStoreRef.current = nextDataStore.progress;
+      favoriteVideoIdsRef.current = new Set(nextDataStore.favorites);
+      setProgressStore(nextDataStore.progress);
+      setFavoriteVideoIds(new Set(nextDataStore.favorites));
+      videosRef.current.forEach((video) => URL.revokeObjectURL(video.url));
+      subtitlesRef.current.forEach((subtitle) => {
+        if (subtitle.url) URL.revokeObjectURL(subtitle.url);
+      });
+      videosRef.current = media.videos;
+      subtitlesRef.current = nextSubtitles;
+      setVideos(media.videos);
+      setSubtitles(nextSubtitles);
+      setSelectedSubtitleId("off");
+      setPlaylistFilter("all");
+      setCurrentVideoId(media.videos[0]?.id ?? null);
+      setMessage(
+        media.videos.length
+          ? `${options?.restored ? "已恢复" : "已加载"} ${media.videos.length} 个视频`
+          : "这个文件夹里没有可播放的视频文件",
+      );
+
+      if (options?.remember) {
+        await writeRecentFolderHandle(directory).catch(() => undefined);
+      }
+    },
+    [],
+  );
+
   const chooseFolderWithFileInput = () => {
     const input = document.createElement("input");
     input.type = "file";
@@ -874,39 +999,8 @@ export default function App() {
     }
 
     try {
-      setIsFolderDialogOpen(false);
-      setIsScanning(true);
-      setMessage("正在扫描视频文件...");
       const directory = await window.showDirectoryPicker({ mode: "readwrite" });
-      const permission = await directory.requestPermission?.({ mode: "readwrite" });
-      if (permission === "denied") {
-        setMessage("需要允许写入文件夹，才能在本地保存播放进度。");
-        return;
-      }
-      const [media, nextDataStore] = await Promise.all([collectVideos(directory), loadPlayerDataStore(directory)]);
-      const nextSubtitles = await Promise.all(
-        media.subtitles.map(async (subtitle) => ({
-          ...subtitle,
-          url: await createSubtitleUrl(subtitle),
-        })),
-      );
-      directoryRef.current = directory;
-      progressStoreRef.current = nextDataStore.progress;
-      favoriteVideoIdsRef.current = new Set(nextDataStore.favorites);
-      setProgressStore(nextDataStore.progress);
-      setFavoriteVideoIds(new Set(nextDataStore.favorites));
-      videosRef.current.forEach((video) => URL.revokeObjectURL(video.url));
-      subtitlesRef.current.forEach((subtitle) => {
-        if (subtitle.url) URL.revokeObjectURL(subtitle.url);
-      });
-      videosRef.current = media.videos;
-      subtitlesRef.current = nextSubtitles;
-      setVideos(media.videos);
-      setSubtitles(nextSubtitles);
-      setSelectedSubtitleId("off");
-      setPlaylistFilter("all");
-      setCurrentVideoId(media.videos[0]?.id ?? null);
-      setMessage(media.videos.length ? `已加载 ${media.videos.length} 个视频` : "这个文件夹里没有可播放的视频文件");
+      await loadDirectoryMedia(directory, { remember: true });
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
         setMessage("已取消选择文件夹");
@@ -940,6 +1034,33 @@ export default function App() {
       localStorage.removeItem(FOLDER_ACCESS_PROMPT_KEY);
     }
   };
+
+  useEffect(() => {
+    if (!window.showDirectoryPicker) return;
+
+    let isCancelled = false;
+    const restoreRecentFolder = async () => {
+      try {
+        const directory = await readRecentFolderHandle();
+        if (!directory || isCancelled) return;
+        await loadDirectoryMedia(directory, { remember: true, restored: true });
+      } catch {
+        await clearRecentFolderHandle().catch(() => undefined);
+        if (!isCancelled) {
+          setMessage("无法恢复上次文件夹，请重新选择。");
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsScanning(false);
+        }
+      }
+    };
+
+    void restoreRecentFolder();
+    return () => {
+      isCancelled = true;
+    };
+  }, [loadDirectoryMedia]);
 
   useEffect(() => {
     return () => {
