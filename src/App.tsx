@@ -91,6 +91,7 @@ const FOLDER_ACCESS_PROMPT_KEY = "local-web-player:skip-folder-access-prompt";
 const VOLUME_STORAGE_KEY = "local-web-player:volume";
 const RECENT_FOLDER_DB_NAME = "local-web-player";
 const RECENT_FOLDER_STORE_NAME = "handles";
+const THUMBNAIL_STORE_NAME = "thumbnails";
 const RECENT_FOLDER_KEY = "recent-folder";
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
 const rates = [0.5, 0.75, 1, 1.25, 1.5, 2, 3];
@@ -232,12 +233,50 @@ async function savePlayerDataStore(directory: FileSystemDirectoryHandle, store: 
 
 function openRecentFolderDatabase() {
   return new Promise<IDBDatabase>((resolve, reject) => {
-    const request = indexedDB.open(RECENT_FOLDER_DB_NAME, 1);
+    const request = indexedDB.open(RECENT_FOLDER_DB_NAME, 2);
     request.onupgradeneeded = () => {
-      request.result.createObjectStore(RECENT_FOLDER_STORE_NAME);
+      if (!request.result.objectStoreNames.contains(RECENT_FOLDER_STORE_NAME)) {
+        request.result.createObjectStore(RECENT_FOLDER_STORE_NAME);
+      }
+      if (!request.result.objectStoreNames.contains(THUMBNAIL_STORE_NAME)) {
+        request.result.createObjectStore(THUMBNAIL_STORE_NAME);
+      }
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
+  });
+}
+
+async function readCachedThumbnail(videoId: string) {
+  if (!("indexedDB" in window)) return null;
+  const database = await openRecentFolderDatabase();
+  return new Promise<Blob | null>((resolve, reject) => {
+    const transaction = database.transaction(THUMBNAIL_STORE_NAME, "readonly");
+    const request = transaction.objectStore(THUMBNAIL_STORE_NAME).get(videoId);
+    request.onsuccess = () => resolve((request.result as Blob | undefined) ?? null);
+    request.onerror = () => reject(request.error);
+    transaction.oncomplete = () => database.close();
+    transaction.onerror = () => {
+      database.close();
+      reject(transaction.error);
+    };
+  });
+}
+
+async function writeCachedThumbnail(videoId: string, thumbnail: Blob) {
+  if (!("indexedDB" in window)) return;
+  const database = await openRecentFolderDatabase();
+  return new Promise<void>((resolve, reject) => {
+    const transaction = database.transaction(THUMBNAIL_STORE_NAME, "readwrite");
+    transaction.objectStore(THUMBNAIL_STORE_NAME).put(thumbnail, videoId);
+    transaction.oncomplete = () => {
+      database.close();
+      resolve();
+    };
+    transaction.onerror = () => {
+      database.close();
+      reject(transaction.error);
+    };
   });
 }
 
@@ -558,7 +597,7 @@ function encodeCanvasAsJpeg(canvas: HTMLCanvasElement) {
   });
 }
 
-async function createVideoThumbnail(video: VideoItem) {
+async function createVideoThumbnailBlob(video: VideoItem) {
   const element = document.createElement("video");
   const canvas = document.createElement("canvas");
   const cleanup = () => {
@@ -622,16 +661,25 @@ async function createVideoThumbnail(video: VideoItem) {
       if (!fallbackBlob) fallbackBlob = blob;
       if (!isCanvasNearlyBlack(context, canvas.width, canvas.height)) {
         cleanup();
-        return URL.createObjectURL(blob);
+        return blob;
       }
     }
 
     cleanup();
-    return URL.createObjectURL(fallbackBlob ?? (await encodeCanvasAsJpeg(canvas)));
+    return fallbackBlob ?? (await encodeCanvasAsJpeg(canvas));
   } catch (error) {
     cleanup();
     throw error;
   }
+}
+
+async function loadVideoThumbnail(video: VideoItem) {
+  const cachedThumbnail = await readCachedThumbnail(video.id).catch(() => null);
+  if (cachedThumbnail) return URL.createObjectURL(cachedThumbnail);
+
+  const thumbnailBlob = await createVideoThumbnailBlob(video);
+  void writeCachedThumbnail(video.id, thumbnailBlob).catch(() => undefined);
+  return URL.createObjectURL(thumbnailBlob);
 }
 
 export default function App() {
@@ -807,7 +855,7 @@ export default function App() {
       const video = videosRef.current.find((item) => item.id === videoId);
       if (!video || video.thumbnailStatus === "loading" || video.thumbnailStatus === "ready") return;
       setVideoThumbnailState(videoId, "loading");
-      createVideoThumbnail(video)
+      loadVideoThumbnail(video)
         .then((thumbnailUrl) => setVideoThumbnailState(videoId, "ready", thumbnailUrl))
         .catch(() => setVideoThumbnailState(videoId, "failed"));
     },
