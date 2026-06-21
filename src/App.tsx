@@ -14,14 +14,22 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type FileSystemDirectoryHandle = {
   values(): AsyncIterable<FileSystemDirectoryHandle | FileSystemFileHandle>;
+  getFileHandle(name: string, options?: { create?: boolean }): Promise<FileSystemFileHandle>;
+  requestPermission?(descriptor?: { mode?: "read" | "readwrite" }): Promise<PermissionState>;
   kind: "directory";
   name: string;
 };
 
 type FileSystemFileHandle = {
   getFile(): Promise<File>;
+  createWritable?(): Promise<LocalWritableFileStream>;
   kind: "file";
   name: string;
+};
+
+type LocalWritableFileStream = {
+  write(data: string): Promise<void>;
+  close(): Promise<void>;
 };
 
 type VideoItem = {
@@ -42,8 +50,10 @@ type PlaybackProgress = {
   completed: boolean;
 };
 
+type ProgressStore = Record<string, PlaybackProgress>;
+
 const VIDEO_EXTENSIONS = new Set([".mp4", ".webm", ".ogg", ".mov", ".m4v", ".mkv"]);
-const PROGRESS_PREFIX = "local-web-player:progress:";
+const PROGRESS_FILE_NAME = ".local-web-player-progress.json";
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
 const rates = [0.5, 0.75, 1, 1.25, 1.5, 2, 3];
 const seekSteps = [5, 10, 15];
@@ -54,7 +64,7 @@ const rightKeyHoldDelay = 350;
 
 declare global {
   interface Window {
-    showDirectoryPicker?: () => Promise<FileSystemDirectoryHandle>;
+    showDirectoryPicker?: (options?: { mode?: "read" | "readwrite" }) => Promise<FileSystemDirectoryHandle>;
   }
 }
 
@@ -68,29 +78,53 @@ function createVideoId(relativePath: string, file: File) {
   return `${relativePath}|${file.size}|${file.lastModified}`;
 }
 
-function progressKey(video: VideoItem) {
-  return `${PROGRESS_PREFIX}${video.id}`;
-}
-
-function loadProgress(video: VideoItem): PlaybackProgress | null {
-  try {
-    const raw = localStorage.getItem(progressKey(video));
-    return raw ? (JSON.parse(raw) as PlaybackProgress) : null;
-  } catch {
-    return null;
-  }
-}
-
-function saveProgress(video: VideoItem, currentTime: number, duration: number, completed = false) {
-  if (!Number.isFinite(currentTime) || !Number.isFinite(duration)) return;
-
-  const progress: PlaybackProgress = {
+function createProgress(currentTime: number, duration: number, completed = false): PlaybackProgress | null {
+  if (!Number.isFinite(currentTime) || !Number.isFinite(duration)) return null;
+  return {
     currentTime,
     duration,
     updatedAt: Date.now(),
     completed,
   };
-  localStorage.setItem(progressKey(video), JSON.stringify(progress));
+}
+
+function parseProgressStore(raw: string): ProgressStore {
+  const parsed = JSON.parse(raw) as { items?: unknown };
+  const source = parsed && typeof parsed === "object" && parsed.items ? parsed.items : parsed;
+  if (!source || typeof source !== "object" || Array.isArray(source)) return {};
+
+  const store: ProgressStore = {};
+  for (const [key, value] of Object.entries(source)) {
+    if (!value || typeof value !== "object") continue;
+    const progress = value as PlaybackProgress;
+    if (
+      Number.isFinite(progress.currentTime) &&
+      Number.isFinite(progress.duration) &&
+      Number.isFinite(progress.updatedAt) &&
+      typeof progress.completed === "boolean"
+    ) {
+      store[key] = progress;
+    }
+  }
+  return store;
+}
+
+async function loadProgressStore(directory: FileSystemDirectoryHandle): Promise<ProgressStore> {
+  try {
+    const handle = await directory.getFileHandle(PROGRESS_FILE_NAME);
+    const file = await handle.getFile();
+    return parseProgressStore(await file.text());
+  } catch {
+    return {};
+  }
+}
+
+async function saveProgressStore(directory: FileSystemDirectoryHandle, store: ProgressStore) {
+  const handle = await directory.getFileHandle(PROGRESS_FILE_NAME, { create: true });
+  if (!handle.createWritable) throw new Error("The selected folder does not allow file writes.");
+  const writable = await handle.createWritable();
+  await writable.write(JSON.stringify({ version: 1, items: store }, null, 2));
+  await writable.close();
 }
 
 function formatTime(seconds: number) {
@@ -114,8 +148,7 @@ function isFormControl(target: EventTarget | null) {
   return target.isContentEditable || ["INPUT", "SELECT", "TEXTAREA", "BUTTON"].includes(target.tagName);
 }
 
-function progressLabel(video: VideoItem) {
-  const progress = loadProgress(video);
+function progressLabel(progress: PlaybackProgress | null | undefined) {
   if (!progress || !progress.duration) return "未播放";
   if (progress.completed) return "已看完";
   const percent = Math.min(99, Math.round((progress.currentTime / progress.duration) * 100));
@@ -157,10 +190,13 @@ export default function App() {
   const saveTimerRef = useRef<number | null>(null);
   const controlsHideTimerRef = useRef<number | null>(null);
   const rightKeyHoldTimerRef = useRef<number | null>(null);
+  const directoryRef = useRef<FileSystemDirectoryHandle | null>(null);
+  const progressStoreRef = useRef<ProgressStore>({});
   const isRightKeyDownRef = useRef(false);
   const didRightKeyHoldRef = useRef(false);
   const [videos, setVideos] = useState<VideoItem[]>([]);
   const [currentVideoId, setCurrentVideoId] = useState<string | null>(null);
+  const [progressStore, setProgressStore] = useState<ProgressStore>({});
   const [isScanning, setIsScanning] = useState(false);
   const [isFolderDialogOpen, setIsFolderDialogOpen] = useState(false);
   const [message, setMessage] = useState("选择一个本地文件夹开始播放");
@@ -222,13 +258,37 @@ export default function App() {
     clearControlsHideTimer();
   }, [clearControlsHideTimer]);
 
+  const focusPlayer = useCallback(() => {
+    playerRef.current?.focus({ preventScroll: true });
+  }, []);
+
+  const updateProgress = useCallback(
+    (video: VideoItem, currentTime: number, duration: number, completed = false) => {
+      const progress = createProgress(currentTime, duration, completed);
+      const directory = directoryRef.current;
+      if (!progress || !directory) return;
+
+      const nextStore = {
+        ...progressStoreRef.current,
+        [video.id]: progress,
+      };
+      progressStoreRef.current = nextStore;
+      setProgressStore(nextStore);
+
+      saveProgressStore(directory, nextStore).catch(() => {
+        setMessage(`无法写入 ${PROGRESS_FILE_NAME}，请重新选择文件夹并允许保存进度。`);
+      });
+    },
+    [],
+  );
+
   const persistCurrentProgress = useCallback(
     (completed = false) => {
       const element = videoRef.current;
       if (!element || !currentVideo) return;
-      saveProgress(currentVideo, element.currentTime, element.duration || duration, completed);
+      updateProgress(currentVideo, element.currentTime, element.duration || duration, completed);
     },
-    [currentVideo, duration],
+    [currentVideo, duration, updateProgress],
   );
 
   const selectVideo = useCallback(
@@ -239,8 +299,9 @@ export default function App() {
       setCurrentTime(0);
       setDuration(0);
       setVideoAspectRatio(16 / 9);
+      focusPlayer();
     },
-    [persistCurrentProgress],
+    [focusPlayer, persistCurrentProgress],
   );
 
   useEffect(() => {
@@ -311,8 +372,16 @@ export default function App() {
       setIsFolderDialogOpen(false);
       setIsScanning(true);
       setMessage("正在扫描视频文件...");
-      const directory = await window.showDirectoryPicker();
-      const nextVideos = await collectVideos(directory);
+      const directory = await window.showDirectoryPicker({ mode: "readwrite" });
+      const permission = await directory.requestPermission?.({ mode: "readwrite" });
+      if (permission === "denied") {
+        setMessage("需要允许写入文件夹，才能在本地保存播放进度。");
+        return;
+      }
+      const [nextVideos, nextProgressStore] = await Promise.all([collectVideos(directory), loadProgressStore(directory)]);
+      directoryRef.current = directory;
+      progressStoreRef.current = nextProgressStore;
+      setProgressStore(nextProgressStore);
       setVideos((previous) => {
         previous.forEach((video) => URL.revokeObjectURL(video.url));
         return nextVideos;
@@ -370,7 +439,7 @@ export default function App() {
     const element = videoRef.current;
     if (!element || !currentVideo) return;
 
-    const progress = loadProgress(currentVideo);
+    const progress = progressStore[currentVideo.id];
     const resumeAt =
       progress && !progress.completed && progress.currentTime < Math.max(0, progress.duration - 8)
         ? progress.currentTime
@@ -394,7 +463,7 @@ export default function App() {
     return () => {
       element.removeEventListener("loadedmetadata", handleLoadedMetadata);
     };
-  }, [currentVideo]);
+  }, [currentVideo, progressStore]);
 
   useEffect(() => {
     const element = videoRef.current;
@@ -576,7 +645,7 @@ export default function App() {
     if (saveTimerRef.current) return;
     saveTimerRef.current = window.setTimeout(() => {
       saveTimerRef.current = null;
-      saveProgress(currentVideo, element.currentTime, element.duration || 0);
+      updateProgress(currentVideo, element.currentTime, element.duration || 0);
     }, 1500);
   };
 
@@ -612,6 +681,7 @@ export default function App() {
           onMouseLeave={() => {
             if (isFullscreen) scheduleControlsHide();
           }}
+          tabIndex={-1}
         >
           {currentVideo ? (
             <video
@@ -763,6 +833,7 @@ export default function App() {
         <div className="playlist">
           {videos.map((video, index) => {
             const isActive = video.id === currentVideoId;
+            const label = progressLabel(progressStore[video.id]);
             return (
               <button
                 key={video.id}
@@ -776,8 +847,8 @@ export default function App() {
                   <small>{video.relativePath}</small>
                 </span>
                 <span className="episode-progress">
-                  {progressLabel(video) === "已看完" ? <CheckCircle2 size={15} /> : null}
-                  {progressLabel(video)}
+                  {label === "已看完" ? <CheckCircle2 size={15} /> : null}
+                  {label}
                 </span>
               </button>
             );
