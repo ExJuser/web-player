@@ -34,6 +34,10 @@ type FileSystemFileHandle = {
   name: string;
 };
 
+type DataTransferItemWithHandle = DataTransferItem & {
+  getAsFileSystemHandle?: () => Promise<FileSystemDirectoryHandle | FileSystemFileHandle | null>;
+};
+
 type LocalWritableFileStream = {
   write(data: string): Promise<void>;
   close(): Promise<void>;
@@ -584,6 +588,7 @@ export default function App() {
   const [favoriteVideoIds, setFavoriteVideoIds] = useState<Set<string>>(() => new Set());
   const [playlistFilter, setPlaylistFilter] = useState<PlaylistFilter>("all");
   const [isScanning, setIsScanning] = useState(false);
+  const [isDragActive, setIsDragActive] = useState(false);
   const [isFolderDialogOpen, setIsFolderDialogOpen] = useState(false);
   const [isShortcutDialogOpen, setIsShortcutDialogOpen] = useState(false);
   const [skipFolderAccessPrompt, setSkipFolderAccessPrompt] = useState(
@@ -1053,6 +1058,41 @@ export default function App() {
     [revokeVideoUrls],
   );
 
+  const loadFileMedia = useCallback(
+    async (files: FileList | File[], messageSuffix = "播放进度仅在本次会话保留") => {
+      setIsFolderDialogOpen(false);
+      setIsScanning(true);
+      setMessage("正在扫描媒体文件...");
+      const media = collectVideosFromFiles(files);
+      const nextSubtitles = await Promise.all(
+        media.subtitles.map(async (subtitle) => ({
+          ...subtitle,
+          url: await createSubtitleUrl(subtitle),
+        })),
+      );
+      directoryRef.current = null;
+      progressStoreRef.current = {};
+      favoriteVideoIdsRef.current = new Set();
+      setProgressStore({});
+      setFavoriteVideoIds(new Set());
+      revokeVideoUrls(videosRef.current);
+      subtitlesRef.current.forEach((subtitle) => {
+        if (subtitle.url) URL.revokeObjectURL(subtitle.url);
+      });
+      videosRef.current = media.videos;
+      subtitlesRef.current = nextSubtitles;
+      setVideos(media.videos);
+      setSubtitles(nextSubtitles);
+      setSelectedSubtitleId("off");
+      setPlaylistFilter("all");
+      setCurrentVideoId(media.videos[0]?.id ?? null);
+      setMessage(
+        media.videos.length ? `已加载 ${media.videos.length} 个视频，${messageSuffix}` : "没有找到可播放的视频文件",
+      );
+    },
+    [revokeVideoUrls],
+  );
+
   const chooseFolderWithFileInput = () => {
     const input = document.createElement("input");
     input.type = "file";
@@ -1069,37 +1109,7 @@ export default function App() {
       }
 
       try {
-        setIsFolderDialogOpen(false);
-        setIsScanning(true);
-        setMessage("正在扫描媒体文件...");
-        const media = collectVideosFromFiles(files);
-        const nextSubtitles = await Promise.all(
-          media.subtitles.map(async (subtitle) => ({
-            ...subtitle,
-            url: await createSubtitleUrl(subtitle),
-          })),
-        );
-        directoryRef.current = null;
-        progressStoreRef.current = {};
-        favoriteVideoIdsRef.current = new Set();
-        setProgressStore({});
-        setFavoriteVideoIds(new Set());
-        revokeVideoUrls(videosRef.current);
-        subtitlesRef.current.forEach((subtitle) => {
-          if (subtitle.url) URL.revokeObjectURL(subtitle.url);
-        });
-        videosRef.current = media.videos;
-        subtitlesRef.current = nextSubtitles;
-        setVideos(media.videos);
-        setSubtitles(nextSubtitles);
-        setSelectedSubtitleId("off");
-        setPlaylistFilter("all");
-        setCurrentVideoId(media.videos[0]?.id ?? null);
-        setMessage(
-          media.videos.length
-            ? `已加载 ${media.videos.length} 个视频，播放进度仅在本次会话保留`
-            : "没有找到可播放的视频文件",
-        );
+        await loadFileMedia(files);
       } catch {
         setMessage("无法读取选择的媒体文件");
       } finally {
@@ -1145,6 +1155,55 @@ export default function App() {
 
     setIsFolderDialogOpen(true);
   };
+
+  const handleDragOver = useCallback((event: React.DragEvent<HTMLElement>) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+    setIsDragActive(true);
+  }, []);
+
+  const handleDragLeave = useCallback((event: React.DragEvent<HTMLElement>) => {
+    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+      setIsDragActive(false);
+    }
+  }, []);
+
+  const handleDrop = useCallback(
+    async (event: React.DragEvent<HTMLElement>) => {
+      event.preventDefault();
+      setIsDragActive(false);
+
+      try {
+        const items = Array.from(event.dataTransfer.items) as DataTransferItemWithHandle[];
+        const handles = (
+          await Promise.all(items.map((item) => item.getAsFileSystemHandle?.() ?? Promise.resolve(null)))
+        ).filter((handle): handle is FileSystemDirectoryHandle | FileSystemFileHandle => Boolean(handle));
+        const directory = handles.find((handle): handle is FileSystemDirectoryHandle => handle.kind === "directory");
+        if (directory) {
+          await loadDirectoryMedia(directory, { remember: true });
+          return;
+        }
+
+        const handleFiles = await Promise.all(
+          handles
+            .filter((handle): handle is FileSystemFileHandle => handle.kind === "file")
+            .map((handle) => handle.getFile()),
+        );
+        const droppedFiles = handleFiles.length ? handleFiles : Array.from(event.dataTransfer.files);
+        if (!droppedFiles.length) {
+          setMessage("当前浏览器不支持拖入文件夹，请使用“选择文件夹”。");
+          return;
+        }
+
+        await loadFileMedia(droppedFiles, "拖拽文件的播放进度仅在本次会话保留");
+      } catch {
+        setMessage("无法读取拖入的媒体，请确认浏览器权限后重试。");
+      } finally {
+        setIsScanning(false);
+      }
+    },
+    [loadDirectoryMedia, loadFileMedia],
+  );
 
   const updateSkipFolderAccessPrompt = (checked: boolean) => {
     setSkipFolderAccessPrompt(checked);
@@ -1753,7 +1812,20 @@ export default function App() {
 
   return (
     <>
-    <main className="app-shell" ref={appShellRef} style={shellStyle}>
+    <main
+      className={`app-shell ${isDragActive ? "drag-active" : ""}`}
+      ref={appShellRef}
+      style={shellStyle}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {isDragActive ? (
+        <div className="drop-overlay" aria-hidden="true">
+          <FolderOpen size={42} />
+          <span>松开以打开视频或文件夹</span>
+        </div>
+      ) : null}
       <section className="player-column" ref={playerColumnRef}>
         <header className="top-bar" ref={topBarRef}>
           <div>

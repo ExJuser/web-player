@@ -33,6 +33,7 @@ button {
   --player-column-width: 1fr;
   --player-frame-height: 100%;
   --playlist-width: 360px;
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, var(--player-column-width)) minmax(280px, var(--playlist-width));
   gap: 16px;
@@ -43,6 +44,24 @@ button {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 240px),
     #14161a;
+}
+
+.drop-overlay {
+  position: absolute;
+  inset: 18px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 12px;
+  border: 2px dashed rgba(0, 161, 214, 0.82);
+  border-radius: 8px;
+  background: rgba(5, 6, 7, 0.72);
+  color: #f5f7fb;
+  font-size: 16px;
+  font-weight: 700;
+  pointer-events: none;
 }
 
 .player-column {
