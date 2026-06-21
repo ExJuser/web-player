@@ -30,8 +30,10 @@ button {
 }
 
 .app-shell {
+  --player-column-width: 1fr;
+  --playlist-width: 360px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 360px;
+  grid-template-columns: minmax(0, var(--player-column-width)) minmax(280px, var(--playlist-width));
   gap: 16px;
   height: 100vh;
   min-height: 0;
@@ -128,6 +130,8 @@ button {
 }
 
 .video-element {
+  align-self: center;
+  max-width: 100%;
   object-fit: contain;
   cursor: pointer;
 }

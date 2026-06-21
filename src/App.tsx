@@ -148,7 +148,9 @@ async function collectVideos(directory: FileSystemDirectoryHandle) {
 
 export default function App() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const appShellRef = useRef<HTMLElement | null>(null);
   const playerRef = useRef<HTMLDivElement | null>(null);
+  const controlBarRef = useRef<HTMLDivElement | null>(null);
   const saveTimerRef = useRef<number | null>(null);
   const controlsHideTimerRef = useRef<number | null>(null);
   const [videos, setVideos] = useState<VideoItem[]>([]);
@@ -166,12 +168,22 @@ export default function App() {
   const [isAutoNextEnabled, setIsAutoNextEnabled] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [areControlsVisible, setAreControlsVisible] = useState(true);
+  const [videoAspectRatio, setVideoAspectRatio] = useState(16 / 9);
+  const [adaptiveColumns, setAdaptiveColumns] = useState<{ playerWidth: number; playlistWidth: number } | null>(null);
 
   const currentIndex = useMemo(
     () => videos.findIndex((item) => item.id === currentVideoId),
     [currentVideoId, videos],
   );
   const currentVideo = currentIndex >= 0 ? videos[currentIndex] : null;
+  const shellStyle = useMemo(
+    () =>
+      ({
+        "--player-column-width": adaptiveColumns ? `${adaptiveColumns.playerWidth}px` : "1fr",
+        "--playlist-width": adaptiveColumns ? `${adaptiveColumns.playlistWidth}px` : "360px",
+      }) as React.CSSProperties,
+    [adaptiveColumns],
+  );
 
   const clearControlsHideTimer = useCallback(() => {
     if (!controlsHideTimerRef.current) return;
@@ -214,9 +226,63 @@ export default function App() {
       setIsPlaying(false);
       setCurrentTime(0);
       setDuration(0);
+      setVideoAspectRatio(16 / 9);
     },
     [persistCurrentProgress],
   );
+
+  useEffect(() => {
+    if (isFullscreen) {
+      setAdaptiveColumns(null);
+      return;
+    }
+
+    const updateAdaptiveColumns = () => {
+      const shell = appShellRef.current;
+      const frame = playerRef.current;
+      if (!shell || !frame || window.innerWidth <= 980) {
+        setAdaptiveColumns(null);
+        return;
+      }
+
+      const shellStyles = window.getComputedStyle(shell);
+      const gap = Number.parseFloat(shellStyles.columnGap) || 16;
+      const availableWidth = shell.clientWidth;
+      const controlsHeight = controlBarRef.current?.getBoundingClientRect().height ?? 0;
+      const frameHeight = frame.getBoundingClientRect().height;
+      const videoHeight = Math.max(240, frameHeight - controlsHeight);
+      const minPlayerWidth = 420;
+      const minPlaylistWidth = 280;
+      const desiredPlayerWidth = Math.round(videoHeight * videoAspectRatio);
+      const maxPlayerWidth = Math.max(minPlayerWidth, availableWidth - gap - minPlaylistWidth);
+      const playerWidth = clamp(desiredPlayerWidth, minPlayerWidth, maxPlayerWidth);
+      const playlistWidth = Math.max(minPlaylistWidth, Math.round(availableWidth - gap - playerWidth));
+
+      setAdaptiveColumns((previous) => {
+        if (
+          previous &&
+          Math.abs(previous.playerWidth - playerWidth) < 2 &&
+          Math.abs(previous.playlistWidth - playlistWidth) < 2
+        ) {
+          return previous;
+        }
+        return { playerWidth, playlistWidth };
+      });
+    };
+
+    updateAdaptiveColumns();
+
+    const resizeObserver = new ResizeObserver(updateAdaptiveColumns);
+    if (appShellRef.current) resizeObserver.observe(appShellRef.current);
+    if (playerRef.current) resizeObserver.observe(playerRef.current);
+    if (controlBarRef.current) resizeObserver.observe(controlBarRef.current);
+    window.addEventListener("resize", updateAdaptiveColumns);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", updateAdaptiveColumns);
+    };
+  }, [isFullscreen, videoAspectRatio]);
 
   const playNext = useCallback(() => {
     if (currentIndex < 0 || currentIndex >= videos.length - 1) return;
@@ -290,6 +356,9 @@ export default function App() {
 
     const handleLoadedMetadata = () => {
       setDuration(element.duration || 0);
+      if (element.videoWidth > 0 && element.videoHeight > 0) {
+        setVideoAspectRatio(element.videoWidth / element.videoHeight);
+      }
       if (resumeAt > 0) {
         element.currentTime = resumeAt;
         setCurrentTime(resumeAt);
@@ -469,7 +538,7 @@ export default function App() {
   const progressPercent = duration ? Math.min(100, (currentTime / duration) * 100) : 0;
 
   return (
-    <main className="app-shell">
+    <main className="app-shell" ref={appShellRef} style={shellStyle}>
       <section className="player-column">
         <header className="top-bar">
           <div>
@@ -518,6 +587,7 @@ export default function App() {
           )}
 
           <div
+            ref={controlBarRef}
             className="control-bar"
             onFocus={keepControlsVisible}
             onMouseEnter={keepControlsVisible}
