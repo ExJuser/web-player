@@ -9,6 +9,7 @@ import {
   RotateCcw,
   ShieldCheck,
   SkipForward,
+  Star,
   Subtitles,
   Trash2,
   X,
@@ -67,6 +68,13 @@ type PlaybackProgress = {
 };
 
 type ProgressStore = Record<string, PlaybackProgress>;
+
+type PlayerDataStore = {
+  progress: ProgressStore;
+  favorites: string[];
+};
+
+type PlaylistFilter = "all" | "favorites";
 
 const VIDEO_EXTENSIONS = new Set([".mp4", ".webm", ".ogg", ".mov", ".m4v", ".mkv"]);
 const SUBTITLE_EXTENSIONS = new Set([".srt", ".vtt"]);
@@ -153,9 +161,7 @@ function createProgress(currentTime: number, duration: number, completed = false
   };
 }
 
-function parseProgressStore(raw: string): ProgressStore {
-  const parsed = JSON.parse(raw) as { items?: unknown };
-  const source = parsed && typeof parsed === "object" && parsed.items ? parsed.items : parsed;
+function parseProgressItems(source: unknown): ProgressStore {
   if (!source || typeof source !== "object" || Array.isArray(source)) return {};
 
   const store: ProgressStore = {};
@@ -174,21 +180,35 @@ function parseProgressStore(raw: string): ProgressStore {
   return store;
 }
 
-async function loadProgressStore(directory: FileSystemDirectoryHandle): Promise<ProgressStore> {
+function parsePlayerDataStore(raw: string): PlayerDataStore {
+  const parsed = JSON.parse(raw) as { items?: unknown; favorites?: unknown };
+  const progressSource = parsed && typeof parsed === "object" && parsed.items ? parsed.items : parsed;
+  const favorites =
+    parsed && typeof parsed === "object" && Array.isArray(parsed.favorites)
+      ? parsed.favorites.filter((id): id is string => typeof id === "string")
+      : [];
+
+  return {
+    progress: parseProgressItems(progressSource),
+    favorites,
+  };
+}
+
+async function loadPlayerDataStore(directory: FileSystemDirectoryHandle): Promise<PlayerDataStore> {
   try {
     const handle = await directory.getFileHandle(PROGRESS_FILE_NAME);
     const file = await handle.getFile();
-    return parseProgressStore(await file.text());
+    return parsePlayerDataStore(await file.text());
   } catch {
-    return {};
+    return { progress: {}, favorites: [] };
   }
 }
 
-async function saveProgressStore(directory: FileSystemDirectoryHandle, store: ProgressStore) {
+async function savePlayerDataStore(directory: FileSystemDirectoryHandle, store: PlayerDataStore) {
   const handle = await directory.getFileHandle(PROGRESS_FILE_NAME, { create: true });
   if (!handle.createWritable) throw new Error("The selected folder does not allow file writes.");
   const writable = await handle.createWritable();
-  await writable.write(JSON.stringify({ version: 1, items: store }, null, 2));
+  await writable.write(JSON.stringify({ version: 2, items: store.progress, favorites: store.favorites }, null, 2));
   await writable.close();
 }
 
@@ -361,6 +381,7 @@ export default function App() {
   const rightKeyHoldTimerRef = useRef<number | null>(null);
   const directoryRef = useRef<FileSystemDirectoryHandle | null>(null);
   const progressStoreRef = useRef<ProgressStore>({});
+  const favoriteVideoIdsRef = useRef(new Set<string>());
   const videosRef = useRef<VideoItem[]>([]);
   const subtitlesRef = useRef<SubtitleItem[]>([]);
   const clearedProgressVideoIdsRef = useRef(new Set<string>());
@@ -371,6 +392,8 @@ export default function App() {
   const [currentVideoId, setCurrentVideoId] = useState<string | null>(null);
   const [selectedSubtitleId, setSelectedSubtitleId] = useState<string>("off");
   const [progressStore, setProgressStore] = useState<ProgressStore>({});
+  const [favoriteVideoIds, setFavoriteVideoIds] = useState<Set<string>>(() => new Set());
+  const [playlistFilter, setPlaylistFilter] = useState<PlaylistFilter>("all");
   const [isScanning, setIsScanning] = useState(false);
   const [isFolderDialogOpen, setIsFolderDialogOpen] = useState(false);
   const [isShortcutDialogOpen, setIsShortcutDialogOpen] = useState(false);
@@ -421,6 +444,10 @@ export default function App() {
     [currentVideoId, videos],
   );
   const currentVideo = currentIndex >= 0 ? videos[currentIndex] : null;
+  const visibleVideos = useMemo(
+    () => (playlistFilter === "favorites" ? videos.filter((video) => favoriteVideoIds.has(video.id)) : videos),
+    [favoriteVideoIds, playlistFilter, videos],
+  );
   const currentVideoSubtitles = useMemo(() => {
     if (!currentVideo) return [];
     const currentBasePath = basePathOf(currentVideo.relativePath);
@@ -513,7 +540,10 @@ export default function App() {
       progressStoreRef.current = nextStore;
       setProgressStore(nextStore);
 
-      saveProgressStore(directory, nextStore).catch(() => {
+      savePlayerDataStore(directory, {
+        progress: nextStore,
+        favorites: Array.from(favoriteVideoIdsRef.current),
+      }).catch(() => {
         setMessage(`无法写入 ${PROGRESS_FILE_NAME}，请重新选择文件夹并允许保存进度。`);
       });
     },
@@ -527,7 +557,10 @@ export default function App() {
     progressStoreRef.current = nextStore;
     setProgressStore(nextStore);
 
-    saveProgressStore(directory, nextStore)
+    savePlayerDataStore(directory, {
+      progress: nextStore,
+      favorites: Array.from(favoriteVideoIdsRef.current),
+    })
       .then(() => {
         if (successMessage) setMessage(successMessage);
       })
@@ -535,6 +568,39 @@ export default function App() {
         setMessage(`无法写入 ${PROGRESS_FILE_NAME}，请重新选择文件夹并允许保存进度。`);
       });
   }, []);
+
+  const replaceFavorites = useCallback((nextFavorites: Set<string>, successMessage?: string) => {
+    const directory = directoryRef.current;
+    if (!directory) return;
+
+    favoriteVideoIdsRef.current = nextFavorites;
+    setFavoriteVideoIds(new Set(nextFavorites));
+
+    savePlayerDataStore(directory, {
+      progress: progressStoreRef.current,
+      favorites: Array.from(nextFavorites),
+    })
+      .then(() => {
+        if (successMessage) setMessage(successMessage);
+      })
+      .catch(() => {
+        setMessage(`无法写入 ${PROGRESS_FILE_NAME}，请重新选择文件夹并允许保存收藏。`);
+      });
+  }, []);
+
+  const toggleFavorite = useCallback(
+    (video: VideoItem) => {
+      const nextFavorites = new Set(favoriteVideoIdsRef.current);
+      if (nextFavorites.has(video.id)) {
+        nextFavorites.delete(video.id);
+        replaceFavorites(nextFavorites, `已取消收藏《${video.name}》`);
+      } else {
+        nextFavorites.add(video.id);
+        replaceFavorites(nextFavorites, `已收藏《${video.name}》`);
+      }
+    },
+    [replaceFavorites],
+  );
 
   const markVideoCompleted = useCallback(
     (video: VideoItem) => {
@@ -708,7 +774,7 @@ export default function App() {
         setMessage("需要允许写入文件夹，才能在本地保存播放进度。");
         return;
       }
-      const [media, nextProgressStore] = await Promise.all([collectVideos(directory), loadProgressStore(directory)]);
+      const [media, nextDataStore] = await Promise.all([collectVideos(directory), loadPlayerDataStore(directory)]);
       const nextSubtitles = await Promise.all(
         media.subtitles.map(async (subtitle) => ({
           ...subtitle,
@@ -716,8 +782,10 @@ export default function App() {
         })),
       );
       directoryRef.current = directory;
-      progressStoreRef.current = nextProgressStore;
-      setProgressStore(nextProgressStore);
+      progressStoreRef.current = nextDataStore.progress;
+      favoriteVideoIdsRef.current = new Set(nextDataStore.favorites);
+      setProgressStore(nextDataStore.progress);
+      setFavoriteVideoIds(new Set(nextDataStore.favorites));
       videosRef.current.forEach((video) => URL.revokeObjectURL(video.url));
       subtitlesRef.current.forEach((subtitle) => {
         if (subtitle.url) URL.revokeObjectURL(subtitle.url);
@@ -727,6 +795,7 @@ export default function App() {
       setVideos(media.videos);
       setSubtitles(nextSubtitles);
       setSelectedSubtitleId("off");
+      setPlaylistFilter("all");
       setCurrentVideoId(media.videos[0]?.id ?? null);
       setMessage(media.videos.length ? `已加载 ${media.videos.length} 个视频` : "这个文件夹里没有可播放的视频文件");
     } catch (error) {
@@ -1481,24 +1550,53 @@ export default function App() {
         <div className="playlist-header">
           <div>
             <h2>播放列表</h2>
-            <span>{videos.length ? `${videos.length} 个视频` : "等待选择文件夹"}</span>
+            <span>
+              {videos.length
+                ? playlistFilter === "favorites"
+                  ? `${visibleVideos.length} / ${videos.length} 个收藏`
+                  : `${videos.length} 个视频`
+                : "等待选择文件夹"}
+            </span>
           </div>
-          <button
-            className="playlist-clear-button"
-            type="button"
-            onClick={clearFolderProgress}
-            disabled={!videos.length || !Object.keys(progressStore).length}
-            title="清空当前文件夹观看记录"
-          >
-            <Trash2 size={16} />
-            清空记录
-          </button>
+          <div className="playlist-tools">
+            <div className="playlist-filter" aria-label="播放列表筛选">
+              <button
+                className={playlistFilter === "all" ? "active" : ""}
+                type="button"
+                onClick={() => setPlaylistFilter("all")}
+                disabled={!videos.length}
+              >
+                全部
+              </button>
+              <button
+                className={playlistFilter === "favorites" ? "active" : ""}
+                type="button"
+                onClick={() => setPlaylistFilter("favorites")}
+                disabled={!videos.length}
+              >
+                <Star size={14} />
+                收藏
+              </button>
+            </div>
+            <button
+              className="playlist-clear-button"
+              type="button"
+              onClick={clearFolderProgress}
+              disabled={!videos.length || !Object.keys(progressStore).length}
+              title="清空当前文件夹观看记录"
+            >
+              <Trash2 size={16} />
+              清空记录
+            </button>
+          </div>
         </div>
 
         <div className="playlist">
-          {videos.map((video, index) => {
+          {visibleVideos.map((video) => {
             const isActive = video.id === currentVideoId;
             const label = progressLabel(progressStore[video.id]);
+            const originalIndex = videos.findIndex((item) => item.id === video.id);
+            const isFavorite = favoriteVideoIds.has(video.id);
             return (
               <div
                 key={video.id}
@@ -1506,7 +1604,7 @@ export default function App() {
                 title={videoMetadataTitle(video)}
               >
                 <button className="playlist-select" type="button" onClick={() => selectVideo(video.id)}>
-                  <span className="episode-number">{String(index + 1).padStart(2, "0")}</span>
+                  <span className="episode-number">{String(originalIndex + 1).padStart(2, "0")}</span>
                   <span className="episode-main">
                     <strong>{video.name}</strong>
                     <small>{video.relativePath}</small>
@@ -1517,6 +1615,15 @@ export default function App() {
                   {label}
                 </span>
                 <span className="episode-actions">
+                  <button
+                    className={`episode-action-button favorite ${isFavorite ? "active" : ""}`}
+                    type="button"
+                    onClick={() => toggleFavorite(video)}
+                    title={isFavorite ? "取消收藏" : "收藏/稍后看"}
+                    aria-label={isFavorite ? "取消收藏" : "收藏/稍后看"}
+                  >
+                    <Star size={15} fill={isFavorite ? "currentColor" : "none"} />
+                  </button>
                   <button
                     className="episode-action-button"
                     type="button"
@@ -1541,6 +1648,7 @@ export default function App() {
           })}
 
           {!videos.length ? <div className="empty-list">{message}</div> : null}
+          {videos.length && !visibleVideos.length ? <div className="empty-list">还没有收藏的视频</div> : null}
         </div>
       </aside>
     </main>

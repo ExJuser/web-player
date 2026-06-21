@@ -464,6 +464,46 @@ button {
   padding-left: 16px;
 }
 
+.playlist-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.playlist-filter {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid #303743;
+  border-radius: 6px;
+  background: #191d23;
+}
+
+.playlist-filter button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 9px;
+  border-radius: 4px;
+  background: transparent;
+  color: #aab1bd;
+  cursor: pointer;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.playlist-filter button.active {
+  background: #00a1d6;
+  color: white;
+}
+
+.playlist-filter button:disabled {
+  cursor: not-allowed;
+  color: #5f6875;
+}
+
 .playlist-clear-button {
   display: inline-flex;
   align-items: center;
@@ -634,6 +674,11 @@ button {
   cursor: not-allowed;
   color: #5f6875;
   background: #191d23;
+}
+
+.episode-action-button.favorite.active {
+  background: rgba(255, 196, 87, 0.14);
+  color: #ffc457;
 }
 
 .empty-list {
@@ -893,6 +938,19 @@ button {
 
   .playlist-clear-button {
     width: 100%;
+  }
+
+  .playlist-tools {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .playlist-filter {
+    flex: 1;
+  }
+
+  .playlist-filter button {
+    flex: 1;
   }
 
   .playlist-item {
