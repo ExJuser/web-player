@@ -13,7 +13,7 @@ import {
   VolumeX,
   Volume2,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 type FileSystemDirectoryHandle = {
   values(): AsyncIterable<FileSystemDirectoryHandle | FileSystemFileHandle>;
@@ -184,6 +184,12 @@ function videoMetadataRows(video: VideoItem) {
   ] as const;
 }
 
+function videoMetadataTitle(video: VideoItem) {
+  return videoMetadataRows(video)
+    .map(([label, value]) => `${label}: ${value}`)
+    .join("\n");
+}
+
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
@@ -245,6 +251,7 @@ export default function App() {
   const rightKeyHoldTimerRef = useRef<number | null>(null);
   const directoryRef = useRef<FileSystemDirectoryHandle | null>(null);
   const progressStoreRef = useRef<ProgressStore>({});
+  const videosRef = useRef<VideoItem[]>([]);
   const clearedProgressVideoIdsRef = useRef(new Set<string>());
   const isRightKeyDownRef = useRef(false);
   const didRightKeyHoldRef = useRef(false);
@@ -288,6 +295,7 @@ export default function App() {
   playbackRateRef.current = playbackRate;
   holdPlaybackRateRef.current = holdPlaybackRate;
   isHoldSpeedActiveRef.current = isHoldSpeedActive;
+  videosRef.current = videos;
 
   const currentIndex = useMemo(
     () => videos.findIndex((item) => item.id === currentVideoId),
@@ -578,10 +586,9 @@ export default function App() {
       directoryRef.current = directory;
       progressStoreRef.current = nextProgressStore;
       setProgressStore(nextProgressStore);
-      setVideos((previous) => {
-        previous.forEach((video) => URL.revokeObjectURL(video.url));
-        return nextVideos;
-      });
+      videosRef.current.forEach((video) => URL.revokeObjectURL(video.url));
+      videosRef.current = nextVideos;
+      setVideos(nextVideos);
       setCurrentVideoId(nextVideos[0]?.id ?? null);
       setMessage(nextVideos.length ? `已加载 ${nextVideos.length} 个视频` : "这个文件夹里没有可播放的视频文件");
     } catch (error) {
@@ -620,9 +627,9 @@ export default function App() {
 
   useEffect(() => {
     return () => {
-      videos.forEach((video) => URL.revokeObjectURL(video.url));
+      videosRef.current.forEach((video) => URL.revokeObjectURL(video.url));
     };
-  }, [videos]);
+  }, []);
 
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -645,7 +652,7 @@ export default function App() {
     return clearControlsHideTimer;
   }, [clearControlsHideTimer, isFullscreen, isPlaying, scheduleControlsHide]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const element = videoRef.current;
     if (!element || !currentVideo) return;
 
@@ -669,12 +676,12 @@ export default function App() {
         element.currentTime = resumeAt;
         setCurrentTime(resumeAt);
       }
-      element.playbackRate = isHoldSpeedActiveRef.current ? holdPlaybackRateRef.current : playbackRateRef.current;
-      element.play().catch(() => undefined);
     };
 
     element.addEventListener("loadedmetadata", handleLoadedMetadata, { once: true });
+    element.playbackRate = isHoldSpeedActiveRef.current ? holdPlaybackRateRef.current : playbackRateRef.current;
     element.load();
+    element.play().catch(() => undefined);
 
     return () => {
       element.removeEventListener("loadedmetadata", handleLoadedMetadata);
@@ -1202,25 +1209,17 @@ export default function App() {
           {videos.map((video, index) => {
             const isActive = video.id === currentVideoId;
             const label = progressLabel(progressStore[video.id]);
-            const metadataRows = videoMetadataRows(video);
             return (
               <div
                 key={video.id}
                 className={`playlist-item ${isActive ? "active" : ""}`}
+                title={videoMetadataTitle(video)}
               >
                 <button className="playlist-select" type="button" onClick={() => selectVideo(video.id)}>
                   <span className="episode-number">{String(index + 1).padStart(2, "0")}</span>
                   <span className="episode-main">
                     <strong>{video.name}</strong>
                     <small>{video.relativePath}</small>
-                    <span className="episode-meta">
-                      {metadataRows.map(([metaLabel, value]) => (
-                        <span key={metaLabel}>
-                          <b>{metaLabel}</b>
-                          {value}
-                        </span>
-                      ))}
-                    </span>
                   </span>
                 </button>
                 <span className="episode-progress">

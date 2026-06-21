@@ -458,7 +458,7 @@ button {
 .playlist-item {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
-  align-items: start;
+  align-items: center;
   gap: 10px;
   width: 100%;
   min-height: 66px;
@@ -530,43 +530,6 @@ button {
   font-size: 12px;
 }
 
-.episode-meta {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px 8px;
-  max-height: 0;
-  margin-top: 0;
-  overflow: hidden;
-  color: #c9d0db;
-  font-size: 12px;
-  opacity: 0;
-  transition:
-    max-height 160ms ease,
-    margin-top 160ms ease,
-    opacity 160ms ease;
-}
-
-.playlist-item:hover .episode-meta,
-.playlist-item:focus-within .episode-meta,
-.playlist-item.active .episode-meta {
-  max-height: 72px;
-  margin-top: 9px;
-  opacity: 1;
-}
-
-.episode-meta span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.episode-meta b {
-  margin-right: 5px;
-  color: #8e97a5;
-  font-weight: 500;
-}
-
 .episode-progress {
   display: inline-flex;
   align-items: center;
@@ -580,7 +543,6 @@ button {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding-top: 2px;
 }
 
 .episode-action-button {
