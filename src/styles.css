@@ -561,7 +561,12 @@ button {
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 6px;
+  gap: 10px;
+}
+
+.playlist-sort-select + .playlist-order-button,
+.playlist-filter + .playlist-clear-button {
+  margin-left: 2px;
 }
 
 .playlist-sort-select {
