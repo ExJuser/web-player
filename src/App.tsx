@@ -1361,10 +1361,8 @@ export default function App() {
       );
       setCurrentVideoId(resumeTarget?.video.id ?? sortedVideos[0]?.id ?? null);
       setMessage(
-        resumeTarget
-          ? `继续从 ${formatTime(resumeTarget.progress.currentTime)} 播放：${resumeTarget.video.name}`
-          : media.videos.length
-            ? `${options?.restored ? "已恢复" : "已加载"} ${media.videos.length} 个视频`
+        media.videos.length
+          ? `${options?.restored ? "已恢复" : "已加载"} ${media.videos.length} 个视频`
           : "这个文件夹里没有可播放的视频文件",
       );
 
@@ -1565,6 +1563,13 @@ export default function App() {
       }
     };
   }, [requestVideoThumbnail, visibleVideos]);
+
+  useEffect(() => {
+    if (!currentVideoId || !playlistRef.current) return;
+
+    const activeItem = playlistRef.current.querySelector<HTMLElement>(".playlist-item.active");
+    activeItem?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [currentVideoId, visibleVideos]);
 
   useEffect(() => {
     if (!window.showDirectoryPicker) return;
