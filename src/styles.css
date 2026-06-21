@@ -696,6 +696,84 @@ button {
   margin-top: 2px;
 }
 
+.shortcut-dialog {
+  position: relative;
+  width: min(660px, 100%);
+  padding: 22px;
+  border: 1px solid #303743;
+  border-radius: 8px;
+  background: #181c22;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.42);
+}
+
+.shortcut-dialog-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-right: 36px;
+  color: #f5f7fb;
+}
+
+.shortcut-dialog-title h2 {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 700;
+}
+
+.shortcut-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.shortcut-group {
+  min-width: 0;
+}
+
+.shortcut-group h3 {
+  margin: 0 0 10px;
+  color: #8e97a5;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.shortcut-group dl {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.shortcut-group div {
+  display: grid;
+  grid-template-columns: 74px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+
+.shortcut-group dt {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  margin: 0;
+  padding: 0 8px;
+  border: 1px solid #303743;
+  border-radius: 6px;
+  background: #20252d;
+  color: #f5f7fb;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.shortcut-group dd {
+  min-width: 0;
+  margin: 0;
+  color: #c9d0db;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
 @media (max-width: 980px) {
   .app-shell {
     --player-frame-height: 100%;
@@ -762,6 +840,14 @@ button {
     grid-template-columns: 1fr;
     gap: 14px;
     padding: 18px;
+  }
+
+  .shortcut-dialog {
+    padding: 18px;
+  }
+
+  .shortcut-grid {
+    grid-template-columns: 1fr;
   }
 
   .dialog-copy {

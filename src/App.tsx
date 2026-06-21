@@ -1,6 +1,7 @@
 import {
   CheckCircle2,
   FolderOpen,
+  Keyboard,
   Maximize,
   Pause,
   PictureInPicture2,
@@ -68,6 +69,33 @@ const holdRates = [1.5, 2, 2.5, 3, 4];
 const volumeStep = 0.05;
 const controlsAutoHideDelay = 2500;
 const rightKeyHoldDelay = 350;
+
+const shortcutGroups = [
+  {
+    title: "播放",
+    items: [
+      ["空格", "播放 / 暂停"],
+      ["← / →", "快退 / 快进"],
+      ["长按 →", "临时倍速播放"],
+      ["F", "进入 / 退出全屏"],
+      ["M", "静音 / 取消静音"],
+    ],
+  },
+  {
+    title: "音量",
+    items: [
+      ["↑ / ↓", "调高 / 调低音量"],
+      ["滚轮", "在播放器上滚动调音量"],
+    ],
+  },
+  {
+    title: "界面",
+    items: [
+      ["?", "打开 / 关闭快捷键帮助"],
+      ["Esc", "关闭弹窗或退出全屏"],
+    ],
+  },
+] as const;
 
 declare global {
   interface Window {
@@ -260,6 +288,7 @@ export default function App() {
   const [progressStore, setProgressStore] = useState<ProgressStore>({});
   const [isScanning, setIsScanning] = useState(false);
   const [isFolderDialogOpen, setIsFolderDialogOpen] = useState(false);
+  const [isShortcutDialogOpen, setIsShortcutDialogOpen] = useState(false);
   const [skipFolderAccessPrompt, setSkipFolderAccessPrompt] = useState(
     () => localStorage.getItem(FOLDER_ACCESS_PROMPT_KEY) === "true",
   );
@@ -804,6 +833,10 @@ export default function App() {
     setIsMuted((muted) => !muted);
   }, [currentVideo]);
 
+  const toggleShortcutDialog = useCallback(() => {
+    setIsShortcutDialogOpen((open) => !open);
+  }, []);
+
   const toggleFullscreen = useCallback(async () => {
     if (!playerRef.current || !currentVideo) return;
     try {
@@ -839,7 +872,19 @@ export default function App() {
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (!currentVideo || isFormControl(event.target)) return;
+      if (event.key === "Escape" && isShortcutDialogOpen) {
+        event.preventDefault();
+        setIsShortcutDialogOpen(false);
+        return;
+      }
+
+      if (event.key === "?" && !isFormControl(event.target)) {
+        event.preventDefault();
+        toggleShortcutDialog();
+        return;
+      }
+
+      if (!currentVideo || isShortcutDialogOpen || isFormControl(event.target)) return;
 
       if (event.code === "Space") {
         event.preventDefault();
@@ -926,6 +971,8 @@ export default function App() {
     toggleFullscreen,
     toggleMute,
     togglePlay,
+    toggleShortcutDialog,
+    isShortcutDialogOpen,
   ]);
 
   useEffect(() => {
@@ -1179,6 +1226,9 @@ export default function App() {
               <button className="icon-button" type="button" onClick={togglePictureInPicture} disabled={!currentVideo} title="画中画">
                 <PictureInPicture2 size={20} />
               </button>
+              <button className="icon-button" type="button" onClick={toggleShortcutDialog} title="快捷键帮助">
+                <Keyboard size={20} />
+              </button>
               <button className="icon-button" type="button" onClick={toggleFullscreen} disabled={!currentVideo} title="全屏">
                 <Maximize size={20} />
               </button>
@@ -1299,6 +1349,45 @@ export default function App() {
               <FolderOpen size={18} />
               继续选择
             </button>
+          </div>
+        </section>
+      </div>
+    ) : null}
+    {isShortcutDialogOpen ? (
+      <div className="modal-backdrop" role="presentation" onMouseDown={() => setIsShortcutDialogOpen(false)}>
+        <section
+          aria-labelledby="shortcut-help-title"
+          aria-modal="true"
+          className="shortcut-dialog"
+          role="dialog"
+          onMouseDown={(event) => event.stopPropagation()}
+        >
+          <button
+            aria-label="关闭"
+            className="dialog-close"
+            type="button"
+            onClick={() => setIsShortcutDialogOpen(false)}
+          >
+            <X size={18} />
+          </button>
+          <div className="shortcut-dialog-title">
+            <Keyboard size={24} />
+            <h2 id="shortcut-help-title">快捷键帮助</h2>
+          </div>
+          <div className="shortcut-grid">
+            {shortcutGroups.map((group) => (
+              <section key={group.title} className="shortcut-group">
+                <h3>{group.title}</h3>
+                <dl>
+                  {group.items.map(([key, description]) => (
+                    <div key={key}>
+                      <dt>{key}</dt>
+                      <dd>{description}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </section>
+            ))}
           </div>
         </section>
       </div>
