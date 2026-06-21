@@ -545,6 +545,60 @@ button {
   gap: 8px;
 }
 
+.playlist-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #dce2ec;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.playlist-sort select {
+  height: 32px;
+  padding: 0 7px;
+  border: 1px solid #303743;
+  border-radius: 6px;
+  background: #20252d;
+  color: #f5f7fb;
+}
+
+.playlist-sort select:disabled {
+  cursor: not-allowed;
+  color: #5f6875;
+  background: #191d23;
+}
+
+.playlist-order-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid #303743;
+  border-radius: 6px;
+  background: #20252d;
+  color: #dce2ec;
+  cursor: pointer;
+}
+
+.playlist-order-button:hover {
+  background: #2a303a;
+}
+
+.playlist-order-button.active {
+  border-color: #00a1d6;
+  background: #07394a;
+  color: #79dfff;
+}
+
+.playlist-order-button:disabled {
+  cursor: not-allowed;
+  border-color: #303743;
+  background: #191d23;
+  color: #5f6875;
+}
+
 .playlist-filter {
   display: inline-flex;
   gap: 2px;
@@ -1047,6 +1101,15 @@ button {
 
   .playlist-filter button {
     flex: 1;
+  }
+
+  .playlist-sort {
+    flex: 1;
+  }
+
+  .playlist-sort select {
+    flex: 1;
+    min-width: 0;
   }
 
   .playlist-item {

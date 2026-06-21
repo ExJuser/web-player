@@ -1,4 +1,5 @@
 import {
+  ArrowDownUp,
   CheckCircle2,
   FolderOpen,
   Keyboard,
@@ -82,6 +83,7 @@ type PlayerDataStore = {
 };
 
 type PlaylistFilter = "all" | "favorites";
+type PlaylistSortMode = "name" | "path" | "modified";
 type PlaybackMode = "sequential" | "single-loop" | "list-loop" | "shuffle" | "favorites-only";
 
 const VIDEO_EXTENSIONS = new Set([".mp4", ".webm", ".ogg", ".mov", ".m4v", ".mkv"]);
@@ -103,6 +105,11 @@ const playbackModeOptions: Array<{ value: PlaybackMode; label: string }> = [
   { value: "list-loop", label: "列表循环" },
   { value: "shuffle", label: "随机播放" },
   { value: "favorites-only", label: "只播收藏" },
+];
+const playlistSortOptions: Array<{ value: PlaylistSortMode; label: string }> = [
+  { value: "name", label: "文件名" },
+  { value: "path", label: "路径" },
+  { value: "modified", label: "修改时间" },
 ];
 const volumeStep = 0.05;
 const controlsAutoHideDelay = 2500;
@@ -415,6 +422,23 @@ function progressLabel(progress: PlaybackProgress | null | undefined) {
   return `${percent}%`;
 }
 
+function compareVideos(a: VideoItem, b: VideoItem, mode: PlaylistSortMode) {
+  if (mode === "modified") {
+    return b.lastModified - a.lastModified || collator.compare(a.relativePath, b.relativePath);
+  }
+
+  if (mode === "path") {
+    return collator.compare(a.relativePath, b.relativePath);
+  }
+
+  return collator.compare(a.name, b.name) || collator.compare(a.relativePath, b.relativePath);
+}
+
+function getSortedVideos(videos: VideoItem[], mode: PlaylistSortMode, isReversed: boolean) {
+  const sorted = [...videos].sort((a, b) => compareVideos(a, b, mode));
+  return isReversed ? sorted.reverse() : sorted;
+}
+
 async function collectVideos(directory: FileSystemDirectoryHandle) {
   const videos: VideoItem[] = [];
   const subtitles: SubtitleItem[] = [];
@@ -720,6 +744,8 @@ export default function App() {
   const [progressStore, setProgressStore] = useState<ProgressStore>({});
   const [favoriteVideoIds, setFavoriteVideoIds] = useState<Set<string>>(() => new Set());
   const [playlistFilter, setPlaylistFilter] = useState<PlaylistFilter>("all");
+  const [playlistSortMode, setPlaylistSortMode] = useState<PlaylistSortMode>("name");
+  const [isPlaylistSortReversed, setIsPlaylistSortReversed] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const [isDragActive, setIsDragActive] = useState(false);
   const [isFolderDialogOpen, setIsFolderDialogOpen] = useState(false);
@@ -768,14 +794,24 @@ export default function App() {
   videosRef.current = videos;
   subtitlesRef.current = subtitles;
 
+  const playlistVideos = useMemo(
+    () => getSortedVideos(videos, playlistSortMode, isPlaylistSortReversed),
+    [isPlaylistSortReversed, playlistSortMode, videos],
+  );
   const currentIndex = useMemo(
-    () => videos.findIndex((item) => item.id === currentVideoId),
+    () => playlistVideos.findIndex((item) => item.id === currentVideoId),
+    [currentVideoId, playlistVideos],
+  );
+  const currentVideo = useMemo(
+    () => videos.find((item) => item.id === currentVideoId) ?? null,
     [currentVideoId, videos],
   );
-  const currentVideo = currentIndex >= 0 ? videos[currentIndex] : null;
   const visibleVideos = useMemo(
-    () => (playlistFilter === "favorites" ? videos.filter((video) => favoriteVideoIds.has(video.id)) : videos),
-    [favoriteVideoIds, playlistFilter, videos],
+    () =>
+      playlistFilter === "favorites"
+        ? playlistVideos.filter((video) => favoriteVideoIds.has(video.id))
+        : playlistVideos,
+    [favoriteVideoIds, playlistFilter, playlistVideos],
   );
   const currentVideoSubtitles = useMemo(() => {
     if (!currentVideo) return [];
@@ -1150,33 +1186,33 @@ export default function App() {
 
   const getNextVideoId = useCallback(
     (mode: PlaybackMode) => {
-      if (!videos.length || currentIndex < 0) return null;
+      if (!playlistVideos.length || currentIndex < 0) return null;
 
       if (mode === "single-loop") {
         return currentVideoId;
       }
 
       if (mode === "shuffle") {
-        if (videos.length === 1) return currentVideoId;
-        const candidates = videos.filter((video) => video.id !== currentVideoId);
+        if (playlistVideos.length === 1) return currentVideoId;
+        const candidates = playlistVideos.filter((video) => video.id !== currentVideoId);
         return candidates[Math.floor(Math.random() * candidates.length)]?.id ?? null;
       }
 
       if (mode === "favorites-only") {
-        const favoriteVideos = videos.filter((video) => favoriteVideoIds.has(video.id));
+        const favoriteVideos = playlistVideos.filter((video) => favoriteVideoIds.has(video.id));
         if (!favoriteVideos.length) return null;
         const favoriteIndex = favoriteVideos.findIndex((video) => video.id === currentVideoId);
         if (favoriteIndex < 0) return favoriteVideos[0].id;
         return favoriteIndex < favoriteVideos.length - 1 ? favoriteVideos[favoriteIndex + 1].id : null;
       }
 
-      if (currentIndex < videos.length - 1) {
-        return videos[currentIndex + 1].id;
+      if (currentIndex < playlistVideos.length - 1) {
+        return playlistVideos[currentIndex + 1].id;
       }
 
-      return mode === "list-loop" ? videos[0].id : null;
+      return mode === "list-loop" ? playlistVideos[0].id : null;
     },
-    [currentIndex, currentVideoId, favoriteVideoIds, videos],
+    [currentIndex, currentVideoId, favoriteVideoIds, playlistVideos],
   );
 
   const playNext = useCallback(() => {
@@ -1230,7 +1266,7 @@ export default function App() {
       setSubtitles(nextSubtitles);
       setSelectedSubtitleId("off");
       setPlaylistFilter("all");
-      setCurrentVideoId(media.videos[0]?.id ?? null);
+      setCurrentVideoId(getSortedVideos(media.videos, playlistSortMode, isPlaylistSortReversed)[0]?.id ?? null);
       setMessage(
         media.videos.length
           ? `${options?.restored ? "已恢复" : "已加载"} ${media.videos.length} 个视频`
@@ -1241,7 +1277,7 @@ export default function App() {
         await writeRecentFolderHandle(directory).catch(() => undefined);
       }
     },
-    [revokeVideoUrls],
+    [isPlaylistSortReversed, playlistSortMode, revokeVideoUrls],
   );
 
   const loadFileMedia = useCallback(
@@ -1271,12 +1307,12 @@ export default function App() {
       setSubtitles(nextSubtitles);
       setSelectedSubtitleId("off");
       setPlaylistFilter("all");
-      setCurrentVideoId(media.videos[0]?.id ?? null);
+      setCurrentVideoId(getSortedVideos(media.videos, playlistSortMode, isPlaylistSortReversed)[0]?.id ?? null);
       setMessage(
         media.videos.length ? `已加载 ${media.videos.length} 个视频，${messageSuffix}` : "没有找到可播放的视频文件",
       );
     },
-    [revokeVideoUrls],
+    [isPlaylistSortReversed, playlistSortMode, revokeVideoUrls],
   );
 
   const chooseFolderWithFileInput = () => {
@@ -2430,6 +2466,31 @@ export default function App() {
             </span>
           </div>
           <div className="playlist-tools">
+            <label className="playlist-sort">
+              排序
+              <select
+                aria-label="播放列表排序方式"
+                value={playlistSortMode}
+                onChange={(event) => setPlaylistSortMode(event.target.value as PlaylistSortMode)}
+                disabled={!videos.length}
+              >
+                {playlistSortOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              className={`playlist-order-button ${isPlaylistSortReversed ? "active" : ""}`}
+              type="button"
+              onClick={() => setIsPlaylistSortReversed((value) => !value)}
+              disabled={!videos.length}
+              title={isPlaylistSortReversed ? "切换为正序" : "切换为倒序"}
+              aria-label={isPlaylistSortReversed ? "切换为正序" : "切换为倒序"}
+            >
+              <ArrowDownUp size={16} />
+            </button>
             <div className="playlist-filter" aria-label="播放列表筛选">
               <button
                 className={playlistFilter === "all" ? "active" : ""}
@@ -2466,7 +2527,7 @@ export default function App() {
           {visibleVideos.map((video) => {
             const isActive = video.id === currentVideoId;
             const label = progressLabel(progressStore[video.id]);
-            const originalIndex = videos.findIndex((item) => item.id === video.id);
+            const playlistIndex = playlistVideos.findIndex((item) => item.id === video.id);
             const isFavorite = favoriteVideoIds.has(video.id);
             return (
               <div
@@ -2484,7 +2545,7 @@ export default function App() {
                     {video.thumbnailUrl ? (
                       <img src={video.thumbnailUrl} alt="" draggable={false} />
                     ) : (
-                      <span>{String(originalIndex + 1).padStart(2, "0")}</span>
+                      <span>{String(playlistIndex + 1).padStart(2, "0")}</span>
                     )}
                   </span>
                   <span className="episode-main">
