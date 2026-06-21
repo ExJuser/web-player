@@ -80,11 +80,17 @@ type ProgressStore = Record<string, PlaybackProgress>;
 type PlayerDataStore = {
   progress: ProgressStore;
   favorites: string[];
+  preferences: PlayerPreferences;
 };
 
 type PlaylistFilter = "all" | "favorites";
 type PlaylistSortMode = "name" | "path" | "modified";
 type PlaybackMode = "sequential" | "single-loop" | "list-loop" | "shuffle" | "favorites-only";
+
+type PlayerPreferences = {
+  playlistSortMode: PlaylistSortMode;
+  isPlaylistSortReversed: boolean;
+};
 
 const VIDEO_EXTENSIONS = new Set([".mp4", ".webm", ".ogg", ".mov", ".m4v", ".mkv"]);
 const SUBTITLE_EXTENSIONS = new Set([".srt", ".vtt"]);
@@ -115,6 +121,10 @@ const volumeStep = 0.05;
 const controlsAutoHideDelay = 2500;
 const rightKeyHoldDelay = 350;
 const doubleClickFeedbackDelay = 650;
+const defaultPlayerPreferences: PlayerPreferences = {
+  playlistSortMode: "name",
+  isPlaylistSortReversed: false,
+};
 
 const shortcutGroups = [
   {
@@ -206,8 +216,23 @@ function parseProgressItems(source: unknown): ProgressStore {
   return store;
 }
 
+function parsePlayerPreferences(source: unknown): PlayerPreferences {
+  if (!source || typeof source !== "object" || Array.isArray(source)) return defaultPlayerPreferences;
+  const preferences = source as Partial<PlayerPreferences>;
+  return {
+    playlistSortMode:
+      preferences.playlistSortMode === "path" || preferences.playlistSortMode === "modified"
+        ? preferences.playlistSortMode
+        : defaultPlayerPreferences.playlistSortMode,
+    isPlaylistSortReversed:
+      typeof preferences.isPlaylistSortReversed === "boolean"
+        ? preferences.isPlaylistSortReversed
+        : defaultPlayerPreferences.isPlaylistSortReversed,
+  };
+}
+
 function parsePlayerDataStore(raw: string): PlayerDataStore {
-  const parsed = JSON.parse(raw) as { items?: unknown; favorites?: unknown };
+  const parsed = JSON.parse(raw) as { items?: unknown; favorites?: unknown; preferences?: unknown };
   const progressSource = parsed && typeof parsed === "object" && parsed.items ? parsed.items : parsed;
   const favorites =
     parsed && typeof parsed === "object" && Array.isArray(parsed.favorites)
@@ -217,6 +242,7 @@ function parsePlayerDataStore(raw: string): PlayerDataStore {
   return {
     progress: parseProgressItems(progressSource),
     favorites,
+    preferences: parsePlayerPreferences(parsed?.preferences),
   };
 }
 
@@ -226,7 +252,7 @@ async function loadPlayerDataStore(directory: FileSystemDirectoryHandle): Promis
     const file = await handle.getFile();
     return parsePlayerDataStore(await file.text());
   } catch {
-    return { progress: {}, favorites: [] };
+    return { progress: {}, favorites: [], preferences: defaultPlayerPreferences };
   }
 }
 
@@ -234,7 +260,13 @@ async function savePlayerDataStore(directory: FileSystemDirectoryHandle, store: 
   const handle = await directory.getFileHandle(PROGRESS_FILE_NAME, { create: true });
   if (!handle.createWritable) throw new Error("The selected folder does not allow file writes.");
   const writable = await handle.createWritable();
-  await writable.write(JSON.stringify({ version: 2, items: store.progress, favorites: store.favorites }, null, 2));
+  await writable.write(
+    JSON.stringify(
+      { version: 3, items: store.progress, favorites: store.favorites, preferences: store.preferences },
+      null,
+      2,
+    ),
+  );
   await writable.close();
 }
 
@@ -437,6 +469,16 @@ function compareVideos(a: VideoItem, b: VideoItem, mode: PlaylistSortMode) {
 function getSortedVideos(videos: VideoItem[], mode: PlaylistSortMode, isReversed: boolean) {
   const sorted = [...videos].sort((a, b) => compareVideos(a, b, mode));
   return isReversed ? sorted.reverse() : sorted;
+}
+
+function getLatestResumableVideo(videos: VideoItem[], progressStore: ProgressStore) {
+  return videos
+    .map((video) => ({ video, progress: progressStore[video.id] }))
+    .filter(({ progress }) => {
+      if (!progress || progress.completed || progress.currentTime < 1) return false;
+      return progress.currentTime < Math.max(0, progress.duration - 8);
+    })
+    .sort((a, b) => b.progress.updatedAt - a.progress.updatedAt)[0];
 }
 
 async function collectVideos(directory: FileSystemDirectoryHandle) {
@@ -727,6 +769,7 @@ export default function App() {
   const rightMousePointerIdRef = useRef<number | null>(null);
   const directoryRef = useRef<FileSystemDirectoryHandle | null>(null);
   const progressStoreRef = useRef<ProgressStore>({});
+  const playerPreferencesRef = useRef<PlayerPreferences>(defaultPlayerPreferences);
   const favoriteVideoIdsRef = useRef(new Set<string>());
   const videosRef = useRef<VideoItem[]>([]);
   const subtitlesRef = useRef<SubtitleItem[]>([]);
@@ -744,8 +787,12 @@ export default function App() {
   const [progressStore, setProgressStore] = useState<ProgressStore>({});
   const [favoriteVideoIds, setFavoriteVideoIds] = useState<Set<string>>(() => new Set());
   const [playlistFilter, setPlaylistFilter] = useState<PlaylistFilter>("all");
-  const [playlistSortMode, setPlaylistSortMode] = useState<PlaylistSortMode>("name");
-  const [isPlaylistSortReversed, setIsPlaylistSortReversed] = useState(false);
+  const [playlistSortMode, setPlaylistSortMode] = useState<PlaylistSortMode>(
+    defaultPlayerPreferences.playlistSortMode,
+  );
+  const [isPlaylistSortReversed, setIsPlaylistSortReversed] = useState(
+    defaultPlayerPreferences.isPlaylistSortReversed,
+  );
   const [isScanning, setIsScanning] = useState(false);
   const [isDragActive, setIsDragActive] = useState(false);
   const [isFolderDialogOpen, setIsFolderDialogOpen] = useState(false);
@@ -958,6 +1005,7 @@ export default function App() {
       savePlayerDataStore(directory, {
         progress: nextStore,
         favorites: Array.from(favoriteVideoIdsRef.current),
+        preferences: playerPreferencesRef.current,
       }).catch(() => {
         setMessage(`无法写入 ${PROGRESS_FILE_NAME}，请重新选择文件夹并允许保存进度。`);
       });
@@ -975,6 +1023,7 @@ export default function App() {
     savePlayerDataStore(directory, {
       progress: nextStore,
       favorites: Array.from(favoriteVideoIdsRef.current),
+      preferences: playerPreferencesRef.current,
     })
       .then(() => {
         if (successMessage) setMessage(successMessage);
@@ -994,6 +1043,7 @@ export default function App() {
     savePlayerDataStore(directory, {
       progress: progressStoreRef.current,
       favorites: Array.from(nextFavorites),
+      preferences: playerPreferencesRef.current,
     })
       .then(() => {
         if (successMessage) setMessage(successMessage);
@@ -1002,6 +1052,40 @@ export default function App() {
         setMessage(`无法写入 ${PROGRESS_FILE_NAME}，请重新选择文件夹并允许保存收藏。`);
       });
   }, []);
+
+  const replacePlayerPreferences = useCallback((nextPreferences: PlayerPreferences) => {
+    playerPreferencesRef.current = nextPreferences;
+    setPlaylistSortMode(nextPreferences.playlistSortMode);
+    setIsPlaylistSortReversed(nextPreferences.isPlaylistSortReversed);
+
+    const directory = directoryRef.current;
+    if (!directory) return;
+
+    savePlayerDataStore(directory, {
+      progress: progressStoreRef.current,
+      favorites: Array.from(favoriteVideoIdsRef.current),
+      preferences: nextPreferences,
+    }).catch(() => {
+      setMessage(`无法写入 ${PROGRESS_FILE_NAME}，请重新选择文件夹并允许保存排序设置。`);
+    });
+  }, []);
+
+  const updatePlaylistSortMode = useCallback(
+    (nextMode: PlaylistSortMode) => {
+      replacePlayerPreferences({
+        ...playerPreferencesRef.current,
+        playlistSortMode: nextMode,
+      });
+    },
+    [replacePlayerPreferences],
+  );
+
+  const togglePlaylistSortDirection = useCallback(() => {
+    replacePlayerPreferences({
+      ...playerPreferencesRef.current,
+      isPlaylistSortReversed: !playerPreferencesRef.current.isPlaylistSortReversed,
+    });
+  }, [replacePlayerPreferences]);
 
   const toggleFavorite = useCallback(
     (video: VideoItem) => {
@@ -1253,8 +1337,11 @@ export default function App() {
 
       directoryRef.current = directory;
       progressStoreRef.current = nextDataStore.progress;
+      playerPreferencesRef.current = nextDataStore.preferences;
       favoriteVideoIdsRef.current = new Set(nextDataStore.favorites);
       setProgressStore(nextDataStore.progress);
+      setPlaylistSortMode(nextDataStore.preferences.playlistSortMode);
+      setIsPlaylistSortReversed(nextDataStore.preferences.isPlaylistSortReversed);
       setFavoriteVideoIds(new Set(nextDataStore.favorites));
       revokeVideoUrls(videosRef.current);
       subtitlesRef.current.forEach((subtitle) => {
@@ -1266,10 +1353,18 @@ export default function App() {
       setSubtitles(nextSubtitles);
       setSelectedSubtitleId("off");
       setPlaylistFilter("all");
-      setCurrentVideoId(getSortedVideos(media.videos, playlistSortMode, isPlaylistSortReversed)[0]?.id ?? null);
+      const resumeTarget = getLatestResumableVideo(media.videos, nextDataStore.progress);
+      const sortedVideos = getSortedVideos(
+        media.videos,
+        nextDataStore.preferences.playlistSortMode,
+        nextDataStore.preferences.isPlaylistSortReversed,
+      );
+      setCurrentVideoId(resumeTarget?.video.id ?? sortedVideos[0]?.id ?? null);
       setMessage(
-        media.videos.length
-          ? `${options?.restored ? "已恢复" : "已加载"} ${media.videos.length} 个视频`
+        resumeTarget
+          ? `继续从 ${formatTime(resumeTarget.progress.currentTime)} 播放：${resumeTarget.video.name}`
+          : media.videos.length
+            ? `${options?.restored ? "已恢复" : "已加载"} ${media.videos.length} 个视频`
           : "这个文件夹里没有可播放的视频文件",
       );
 
@@ -1277,7 +1372,7 @@ export default function App() {
         await writeRecentFolderHandle(directory).catch(() => undefined);
       }
     },
-    [isPlaylistSortReversed, playlistSortMode, revokeVideoUrls],
+    [revokeVideoUrls],
   );
 
   const loadFileMedia = useCallback(
@@ -1294,6 +1389,10 @@ export default function App() {
       );
       directoryRef.current = null;
       progressStoreRef.current = {};
+      playerPreferencesRef.current = {
+        playlistSortMode,
+        isPlaylistSortReversed,
+      };
       favoriteVideoIdsRef.current = new Set();
       setProgressStore({});
       setFavoriteVideoIds(new Set());
@@ -2471,7 +2570,7 @@ export default function App() {
               <select
                 aria-label="播放列表排序方式"
                 value={playlistSortMode}
-                onChange={(event) => setPlaylistSortMode(event.target.value as PlaylistSortMode)}
+                onChange={(event) => updatePlaylistSortMode(event.target.value as PlaylistSortMode)}
                 disabled={!videos.length}
               >
                 {playlistSortOptions.map((option) => (
@@ -2484,7 +2583,7 @@ export default function App() {
             <button
               className={`playlist-order-button ${isPlaylistSortReversed ? "active" : ""}`}
               type="button"
-              onClick={() => setIsPlaylistSortReversed((value) => !value)}
+              onClick={togglePlaylistSortDirection}
               disabled={!videos.length}
               title={isPlaylistSortReversed ? "切换为正序" : "切换为倒序"}
               aria-label={isPlaylistSortReversed ? "切换为正序" : "切换为倒序"}

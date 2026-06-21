@@ -81,6 +81,24 @@ button {
   min-height: 58px;
 }
 
+.playlist-header {
+  align-items: stretch;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.playlist-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.playlist-title-row span {
+  flex-shrink: 0;
+  text-align: right;
+}
+
 .top-bar h1,
 .playlist-header h2 {
   margin: 0;
@@ -542,28 +560,22 @@ button {
 .playlist-tools {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-}
-
-.playlist-sort {
-  display: inline-flex;
-  align-items: center;
+  justify-content: flex-end;
   gap: 6px;
-  color: #dce2ec;
-  font-size: 13px;
-  white-space: nowrap;
 }
 
-.playlist-sort select {
+.playlist-sort-select {
+  width: 92px;
   height: 32px;
   padding: 0 7px;
   border: 1px solid #303743;
   border-radius: 6px;
   background: #20252d;
   color: #f5f7fb;
+  font-size: 13px;
 }
 
-.playlist-sort select:disabled {
+.playlist-sort-select:disabled {
   cursor: not-allowed;
   color: #5f6875;
   background: #191d23;
@@ -647,6 +659,11 @@ button {
   cursor: pointer;
   font-size: 13px;
   white-space: nowrap;
+}
+
+.playlist-clear-button.icon-only {
+  width: 32px;
+  padding: 0;
 }
 
 .playlist-clear-button:hover {
@@ -1063,7 +1080,6 @@ button {
   }
 
   .top-bar,
-  .playlist-header,
   .control-row {
     align-items: stretch;
     flex-wrap: wrap;
@@ -1086,10 +1102,6 @@ button {
     display: none;
   }
 
-  .playlist-clear-button {
-    width: 100%;
-  }
-
   .playlist-tools {
     width: 100%;
     flex-wrap: wrap;
@@ -1103,11 +1115,7 @@ button {
     flex: 1;
   }
 
-  .playlist-sort {
-    flex: 1;
-  }
-
-  .playlist-sort select {
+  .playlist-sort-select {
     flex: 1;
     min-width: 0;
   }
