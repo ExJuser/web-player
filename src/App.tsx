@@ -490,76 +490,148 @@ async function createSubtitleUrl(subtitle: SubtitleItem) {
   return URL.createObjectURL(subtitle.file);
 }
 
-function createVideoThumbnail(video: VideoItem) {
-  return new Promise<string>((resolve, reject) => {
-    const element = document.createElement("video");
-    const canvas = document.createElement("canvas");
+function waitForMediaEvent(element: HTMLVideoElement, eventName: keyof HTMLMediaElementEventMap, timeout = 7000) {
+  return new Promise<void>((resolve, reject) => {
     const cleanup = () => {
-      element.removeAttribute("src");
-      element.load();
+      window.clearTimeout(timer);
+      element.removeEventListener(eventName, handleEvent);
+      element.removeEventListener("error", handleError);
     };
-    const fail = () => {
+    const handleEvent = () => {
       cleanup();
-      reject(new Error("Unable to create thumbnail."));
+      resolve();
     };
-    const drawFrame = () => {
-      const width = element.videoWidth;
-      const height = element.videoHeight;
-      if (!width || !height) {
-        fail();
-        return;
+    const handleError = () => {
+      cleanup();
+      reject(new Error("Unable to load video."));
+    };
+    const timer = window.setTimeout(() => {
+      cleanup();
+      reject(new Error(`Timed out waiting for ${eventName}.`));
+    }, timeout);
+
+    element.addEventListener(eventName, handleEvent, { once: true });
+    element.addEventListener("error", handleError, { once: true });
+  });
+}
+
+function waitForDrawableVideoFrame(element: HTMLVideoElement) {
+  if ("requestVideoFrameCallback" in element) {
+    return new Promise<void>((resolve) => {
+      const timer = window.setTimeout(resolve, 160);
+      element.requestVideoFrameCallback(() => {
+        window.clearTimeout(timer);
+        resolve();
+      });
+    });
+  }
+
+  return new Promise<void>((resolve) => window.setTimeout(resolve, 80));
+}
+
+function isCanvasNearlyBlack(context: CanvasRenderingContext2D, width: number, height: number) {
+  const pixels = context.getImageData(0, 0, width, height).data;
+  let brightPixels = 0;
+
+  for (let index = 0; index < pixels.length; index += 4) {
+    if (pixels[index] + pixels[index + 1] + pixels[index + 2] > 36) {
+      brightPixels += 1;
+    }
+  }
+
+  return brightPixels / (width * height) < 0.01;
+}
+
+function encodeCanvasAsJpeg(canvas: HTMLCanvasElement) {
+  return new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) {
+          reject(new Error("Unable to encode thumbnail."));
+          return;
+        }
+        resolve(blob);
+      },
+      "image/jpeg",
+      0.76,
+    );
+  });
+}
+
+async function createVideoThumbnail(video: VideoItem) {
+  const element = document.createElement("video");
+  const canvas = document.createElement("canvas");
+  const cleanup = () => {
+    element.removeAttribute("src");
+    element.load();
+  };
+
+  try {
+    element.muted = true;
+    element.preload = "auto";
+    element.playsInline = true;
+    element.src = video.url;
+
+    if (element.readyState < HTMLMediaElement.HAVE_METADATA) {
+      await waitForMediaEvent(element, "loadedmetadata");
+    }
+
+    const width = element.videoWidth;
+    const height = element.videoHeight;
+    if (!width || !height) {
+      throw new Error("Unable to create thumbnail.");
+    }
+
+    canvas.width = 192;
+    canvas.height = 108;
+    const context = canvas.getContext("2d");
+    if (!context) {
+      throw new Error("Unable to create thumbnail.");
+    }
+
+    const scale = Math.min(canvas.width / width, canvas.height / height);
+    const drawWidth = width * scale;
+    const drawHeight = height * scale;
+    const drawLeft = (canvas.width - drawWidth) / 2;
+    const drawTop = (canvas.height - drawHeight) / 2;
+    const duration = Number.isFinite(element.duration) ? element.duration : 0;
+    const targetTimes =
+      duration > 0
+        ? [duration * 0.1, duration * 0.25, duration * 0.5, duration * 0.75, 2]
+            .map((time) => Math.min(Math.max(time, 0.1), Math.max(0.1, duration - 0.1)))
+            .filter((time, index, times) => times.findIndex((other) => Math.abs(other - time) < 0.05) === index)
+        : [0];
+    let fallbackBlob: Blob | null = null;
+
+    for (const targetTime of targetTimes) {
+      if (Math.abs(element.currentTime - targetTime) > 0.05) {
+        const seeked = waitForMediaEvent(element, "seeked");
+        element.currentTime = targetTime;
+        await seeked;
+      } else if (element.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+        await waitForMediaEvent(element, "loadeddata");
       }
 
-      canvas.width = 192;
-      canvas.height = 108;
-      const context = canvas.getContext("2d");
-      if (!context) {
-        fail();
-        return;
-      }
+      await waitForDrawableVideoFrame(element);
 
-      const scale = Math.min(canvas.width / width, canvas.height / height);
-      const drawWidth = width * scale;
-      const drawHeight = height * scale;
-      const drawLeft = (canvas.width - drawWidth) / 2;
-      const drawTop = (canvas.height - drawHeight) / 2;
       context.fillStyle = "#050607";
       context.fillRect(0, 0, canvas.width, canvas.height);
       context.drawImage(element, drawLeft, drawTop, drawWidth, drawHeight);
-      canvas.toBlob(
-        (blob) => {
-          cleanup();
-          if (!blob) {
-            reject(new Error("Unable to encode thumbnail."));
-            return;
-          }
-          resolve(URL.createObjectURL(blob));
-        },
-        "image/jpeg",
-        0.76,
-      );
-    };
 
-    element.muted = true;
-    element.preload = "metadata";
-    element.playsInline = true;
-    element.addEventListener("error", fail, { once: true });
-    element.addEventListener(
-      "loadedmetadata",
-      () => {
-        const duration = Number.isFinite(element.duration) ? element.duration : 0;
-        const targetTime = duration > 0 ? Math.min(30, Math.max(0.1, duration * 0.1)) : 0;
-        if (targetTime <= 0 || element.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
-          drawFrame();
-          return;
-        }
-        element.addEventListener("seeked", drawFrame, { once: true });
-        element.currentTime = targetTime;
-      },
-      { once: true },
-    );
-    element.src = video.url;
-  });
+      const blob = await encodeCanvasAsJpeg(canvas);
+      if (!fallbackBlob) fallbackBlob = blob;
+      if (!isCanvasNearlyBlack(context, canvas.width, canvas.height)) {
+        cleanup();
+        return URL.createObjectURL(blob);
+      }
+    }
+
+    cleanup();
+    return URL.createObjectURL(fallbackBlob ?? (await encodeCanvasAsJpeg(canvas)));
+  } catch (error) {
+    cleanup();
+    throw error;
+  }
 }
 
 export default function App() {
@@ -741,9 +813,15 @@ export default function App() {
     (videoId: string, element: HTMLElement | null) => {
       if (!element) return;
       element.dataset.videoId = videoId;
-      thumbnailObserverRef.current?.observe(element);
+      const observer = thumbnailObserverRef.current;
+      if (observer) {
+        observer.observe(element);
+        return;
+      }
+
+      requestVideoThumbnail(videoId);
     },
-    [],
+    [requestVideoThumbnail],
   );
 
   const updateVideoMetadata = useCallback(
@@ -2228,7 +2306,7 @@ export default function App() {
                   onClick={() => selectVideo(video.id)}
                   ref={(element) => registerThumbnailTarget(video.id, element)}
                 >
-                  <span className="episode-thumbnail" aria-hidden="true">
+                  <span className={`episode-thumbnail ${video.thumbnailUrl ? "has-image" : ""}`} aria-hidden="true">
                     {video.thumbnailUrl ? (
                       <img src={video.thumbnailUrl} alt="" draggable={false} />
                     ) : (
