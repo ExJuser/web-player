@@ -182,6 +182,14 @@ button {
   background: #050607;
 }
 
+.player-frame:focus,
+.player-frame:focus-visible,
+.video-element:focus,
+.video-element:focus-visible {
+  outline: 0;
+  box-shadow: none;
+}
+
 .player-frame.fullscreen {
   width: 100%;
   height: 100%;
