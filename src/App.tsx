@@ -330,6 +330,42 @@ async function collectVideos(directory: FileSystemDirectoryHandle) {
   };
 }
 
+function collectVideosFromFiles(files: FileList | File[]) {
+  const videos: VideoItem[] = [];
+  const subtitles: SubtitleItem[] = [];
+
+  for (const file of Array.from(files)) {
+    const browserRelativePath = (file as File & { webkitRelativePath?: string }).webkitRelativePath;
+    const relativePath = (browserRelativePath || file.name).replace(/\\/g, "/");
+    const name = relativePath.split("/").pop() || file.name;
+
+    if (isVideoFile(name)) {
+      videos.push({
+        id: createVideoId(relativePath, file),
+        name,
+        relativePath,
+        file,
+        url: URL.createObjectURL(file),
+        size: file.size,
+        lastModified: file.lastModified,
+      });
+    } else if (isSubtitleFile(name)) {
+      subtitles.push({
+        id: `${relativePath}|${file.size}|${file.lastModified}`,
+        name,
+        relativePath,
+        file,
+        url: "",
+      });
+    }
+  }
+
+  return {
+    videos: videos.sort((a, b) => collator.compare(a.relativePath, b.relativePath)),
+    subtitles: subtitles.sort((a, b) => collator.compare(a.relativePath, b.relativePath)),
+  };
+}
+
 function escapeVttText(text: string) {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
@@ -758,9 +794,68 @@ export default function App() {
     selectVideo(videos[currentIndex + 1].id);
   }, [currentIndex, selectVideo, videos]);
 
+  const chooseFolderWithFileInput = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.multiple = true;
+    input.accept = Array.from(new Set([...VIDEO_EXTENSIONS, ...SUBTITLE_EXTENSIONS])).join(",");
+    input.style.display = "none";
+    input.setAttribute("webkitdirectory", "");
+
+    input.onchange = async () => {
+      const files = input.files;
+      if (!files?.length) {
+        input.remove();
+        return;
+      }
+
+      try {
+        setIsFolderDialogOpen(false);
+        setIsScanning(true);
+        setMessage("正在扫描媒体文件...");
+        const media = collectVideosFromFiles(files);
+        const nextSubtitles = await Promise.all(
+          media.subtitles.map(async (subtitle) => ({
+            ...subtitle,
+            url: await createSubtitleUrl(subtitle),
+          })),
+        );
+        directoryRef.current = null;
+        progressStoreRef.current = {};
+        favoriteVideoIdsRef.current = new Set();
+        setProgressStore({});
+        setFavoriteVideoIds(new Set());
+        videosRef.current.forEach((video) => URL.revokeObjectURL(video.url));
+        subtitlesRef.current.forEach((subtitle) => {
+          if (subtitle.url) URL.revokeObjectURL(subtitle.url);
+        });
+        videosRef.current = media.videos;
+        subtitlesRef.current = nextSubtitles;
+        setVideos(media.videos);
+        setSubtitles(nextSubtitles);
+        setSelectedSubtitleId("off");
+        setPlaylistFilter("all");
+        setCurrentVideoId(media.videos[0]?.id ?? null);
+        setMessage(
+          media.videos.length
+            ? `已加载 ${media.videos.length} 个视频，播放进度仅在本次会话保留`
+            : "没有找到可播放的视频文件",
+        );
+      } catch {
+        setMessage("无法读取选择的媒体文件");
+      } finally {
+        setIsScanning(false);
+        input.remove();
+      }
+    };
+
+    document.body.append(input);
+    input.click();
+  };
+
   const chooseFolder = async () => {
     if (!window.showDirectoryPicker) {
-      setMessage("当前浏览器不支持 File System Access API，请使用最新版 Chrome 或 Edge。");
+      chooseFolderWithFileInput();
       return;
     }
 
@@ -811,7 +906,7 @@ export default function App() {
 
   const requestFolderAccess = () => {
     if (!window.showDirectoryPicker) {
-      setMessage("当前浏览器不支持 File System Access API，请使用最新版 Chrome 或 Edge。");
+      chooseFolderWithFileInput();
       return;
     }
 
