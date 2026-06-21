@@ -260,7 +260,14 @@ export default function App() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [volume, setVolume] = useState(0.85);
+  const [timelinePreview, setTimelinePreview] = useState({
+    time: 0,
+    left: 0,
+    isVisible: false,
+    isDragging: false,
+  });
+  const [volume, setVolume] = useState(readStoredVolume);
+  const [isMuted, setIsMuted] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [seekStep, setSeekStep] = useState(10);
   const [holdPlaybackRate, setHoldPlaybackRate] = useState(3);
@@ -269,7 +276,11 @@ export default function App() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [areControlsVisible, setAreControlsVisible] = useState(true);
   const [videoAspectRatio, setVideoAspectRatio] = useState(16 / 9);
-  const [adaptiveColumns, setAdaptiveColumns] = useState<{ playerWidth: number; playlistWidth: number } | null>(null);
+  const [adaptiveColumns, setAdaptiveColumns] = useState<{
+    playerWidth: number;
+    playerHeight: number;
+    playlistWidth: number;
+  } | null>(null);
   const playbackRateRef = useRef(playbackRate);
   const holdPlaybackRateRef = useRef(holdPlaybackRate);
   const isHoldSpeedActiveRef = useRef(isHoldSpeedActive);
@@ -292,6 +303,7 @@ export default function App() {
     () =>
       ({
         "--player-column-width": adaptiveColumns ? `${adaptiveColumns.playerWidth}px` : "1fr",
+        "--player-frame-height": adaptiveColumns ? `${adaptiveColumns.playerHeight}px` : "100%",
         "--playlist-width": adaptiveColumns ? `${adaptiveColumns.playlistWidth}px` : "360px",
       }) as React.CSSProperties,
     [adaptiveColumns],
@@ -487,8 +499,9 @@ export default function App() {
 
     const updateAdaptiveColumns = () => {
       const shell = appShellRef.current;
+      const playerColumn = playerColumnRef.current;
       const frame = playerRef.current;
-      if (!shell || !frame || window.innerWidth <= 980) {
+      if (!shell || !playerColumn || !frame || window.innerWidth <= 980) {
         setAdaptiveColumns(null);
         return;
       }
@@ -496,25 +509,31 @@ export default function App() {
       const shellStyles = window.getComputedStyle(shell);
       const gap = Number.parseFloat(shellStyles.columnGap) || 16;
       const availableWidth = shell.clientWidth;
+      const playerColumnStyles = window.getComputedStyle(playerColumn);
+      const playerColumnGap = Number.parseFloat(playerColumnStyles.rowGap) || 14;
+      const topBarHeight = topBarRef.current?.getBoundingClientRect().height ?? 0;
       const controlsHeight = controlBarRef.current?.getBoundingClientRect().height ?? 0;
-      const frameHeight = frame.getBoundingClientRect().height;
-      const videoHeight = Math.max(240, frameHeight - controlsHeight);
+      const maxFrameHeight = Math.max(240, playerColumn.clientHeight - topBarHeight - playerColumnGap);
+      const maxVideoHeight = Math.max(180, maxFrameHeight - controlsHeight);
       const minPlayerWidth = 420;
       const minPlaylistWidth = 280;
-      const desiredPlayerWidth = Math.round(videoHeight * videoAspectRatio);
+      const desiredPlayerWidth = Math.round(maxVideoHeight * videoAspectRatio);
       const maxPlayerWidth = Math.max(minPlayerWidth, availableWidth - gap - minPlaylistWidth);
       const playerWidth = clamp(desiredPlayerWidth, minPlayerWidth, maxPlayerWidth);
+      const videoHeight = Math.min(maxVideoHeight, playerWidth / videoAspectRatio);
+      const playerHeight = Math.round(videoHeight + controlsHeight);
       const playlistWidth = Math.max(minPlaylistWidth, Math.round(availableWidth - gap - playerWidth));
 
       setAdaptiveColumns((previous) => {
         if (
           previous &&
           Math.abs(previous.playerWidth - playerWidth) < 2 &&
+          Math.abs(previous.playerHeight - playerHeight) < 2 &&
           Math.abs(previous.playlistWidth - playlistWidth) < 2
         ) {
           return previous;
         }
-        return { playerWidth, playlistWidth };
+        return { playerWidth, playerHeight, playlistWidth };
       });
     };
 
@@ -522,6 +541,8 @@ export default function App() {
 
     const resizeObserver = new ResizeObserver(updateAdaptiveColumns);
     if (appShellRef.current) resizeObserver.observe(appShellRef.current);
+    if (playerColumnRef.current) resizeObserver.observe(playerColumnRef.current);
+    if (topBarRef.current) resizeObserver.observe(topBarRef.current);
     if (playerRef.current) resizeObserver.observe(playerRef.current);
     if (controlBarRef.current) resizeObserver.observe(controlBarRef.current);
     window.addEventListener("resize", updateAdaptiveColumns);
@@ -658,13 +679,15 @@ export default function App() {
     return () => {
       element.removeEventListener("loadedmetadata", handleLoadedMetadata);
     };
-  }, [currentVideo]);
+  }, [currentVideo, updateVideoMetadata]);
 
   useEffect(() => {
     const element = videoRef.current;
     if (!element) return;
     element.volume = volume;
-  }, [volume]);
+    element.muted = isMuted;
+    localStorage.setItem(VOLUME_STORAGE_KEY, String(volume));
+  }, [currentVideo, isMuted, volume]);
 
   useEffect(() => {
     const element = videoRef.current;
@@ -700,6 +723,54 @@ export default function App() {
     [persistCurrentProgress],
   );
 
+  const updateTimelinePreview = useCallback(
+    (clientX: number, isDragging = false) => {
+      const timeline = timelineRef.current;
+      if (!timeline || !currentVideo || duration <= 0) {
+        setTimelinePreview((previous) => ({ ...previous, isVisible: false, isDragging: false }));
+        return;
+      }
+
+      const rect = timeline.getBoundingClientRect();
+      const ratio = rect.width ? clamp((clientX - rect.left) / rect.width, 0, 1) : 0;
+      setTimelinePreview({
+        time: ratio * duration,
+        left: ratio * 100,
+        isVisible: true,
+        isDragging,
+      });
+    },
+    [currentVideo, duration],
+  );
+
+  const updateTimelinePreviewFromTime = useCallback(
+    (time: number, isDragging = false) => {
+      if (!currentVideo || duration <= 0) {
+        setTimelinePreview((previous) => ({ ...previous, isVisible: false, isDragging: false }));
+        return;
+      }
+
+      const nextTime = clamp(time, 0, duration);
+      setTimelinePreview({
+        time: nextTime,
+        left: (nextTime / duration) * 100,
+        isVisible: true,
+        isDragging,
+      });
+    },
+    [currentVideo, duration],
+  );
+
+  const hideTimelinePreview = useCallback(() => {
+    setTimelinePreview((previous) =>
+      previous.isDragging ? previous : { ...previous, isVisible: false, isDragging: false },
+    );
+  }, []);
+
+  const stopTimelineDragPreview = useCallback(() => {
+    setTimelinePreview((previous) => ({ ...previous, isVisible: false, isDragging: false }));
+  }, []);
+
   const seekBy = useCallback(
     (seconds: number) => {
       const element = videoRef.current;
@@ -709,14 +780,35 @@ export default function App() {
     [seekTo],
   );
 
-  const adjustVolume = useCallback((delta: number) => {
-    const element = videoRef.current;
-    const nextVolume = clamp((element?.volume ?? volume) + delta, 0, 1);
-    setVolume(nextVolume);
-    if (element) {
-      element.volume = nextVolume;
+  const changeVolume = useCallback((nextVolume: number) => {
+    const normalizedVolume = clamp(nextVolume, 0, 1);
+    setVolume(normalizedVolume);
+    if (normalizedVolume > 0) {
+      setIsMuted(false);
     }
-  }, [volume]);
+  }, []);
+
+  const adjustVolume = useCallback((delta: number) => {
+    changeVolume(volume + delta);
+  }, [changeVolume, volume]);
+
+  const toggleMute = useCallback(() => {
+    if (!currentVideo) return;
+    setIsMuted((muted) => !muted);
+  }, [currentVideo]);
+
+  const toggleFullscreen = useCallback(async () => {
+    if (!playerRef.current || !currentVideo) return;
+    try {
+      if (document.fullscreenElement) {
+        await document.exitFullscreen();
+      } else {
+        await playerRef.current.requestFullscreen();
+      }
+    } catch {
+      setMessage("无法进入全屏模式");
+    }
+  }, [currentVideo]);
 
   const handlePlayerWheel = useCallback(
     (event: React.WheelEvent<HTMLDivElement>) => {
@@ -746,6 +838,22 @@ export default function App() {
         event.preventDefault();
         if (!event.repeat) {
           togglePlay();
+        }
+        return;
+      }
+
+      if (event.key.toLowerCase() === "m") {
+        event.preventDefault();
+        if (!event.repeat) {
+          toggleMute();
+        }
+        return;
+      }
+
+      if (event.key.toLowerCase() === "f") {
+        event.preventDefault();
+        if (!event.repeat) {
+          void toggleFullscreen();
         }
         return;
       }
@@ -801,7 +909,17 @@ export default function App() {
       window.removeEventListener("keyup", handleKeyUp);
       window.removeEventListener("blur", handleBlur);
     };
-  }, [adjustVolume, clearRightKeyHoldTimer, currentVideo, seekBy, seekStep, stopHoldSpeed, togglePlay]);
+  }, [
+    adjustVolume,
+    clearRightKeyHoldTimer,
+    currentVideo,
+    seekBy,
+    seekStep,
+    stopHoldSpeed,
+    toggleFullscreen,
+    toggleMute,
+    togglePlay,
+  ]);
 
   useEffect(() => {
     if (!isHoldSpeedActive) return;
@@ -810,19 +928,6 @@ export default function App() {
       window.removeEventListener("blur", stopHoldSpeed);
     };
   }, [isHoldSpeedActive, stopHoldSpeed]);
-
-  const toggleFullscreen = async () => {
-    if (!playerRef.current) return;
-    try {
-      if (document.fullscreenElement) {
-        await document.exitFullscreen();
-      } else {
-        await playerRef.current.requestFullscreen();
-      }
-    } catch {
-      setMessage("无法进入全屏模式");
-    }
-  };
 
   const togglePictureInPicture = async () => {
     const element = videoRef.current;
@@ -935,18 +1040,46 @@ export default function App() {
           >
             <div className="timeline-row">
               <span>{formatTime(currentTime)}</span>
-              <input
+              <div
+                className={`timeline-track ${timelinePreview.isVisible ? "preview-visible" : ""}`}
+                style={
+                  {
+                    "--preview-left": `${timelinePreview.left}%`,
+                  } as React.CSSProperties
+                }
+              >
+                <output className="timeline-preview">{formatTime(timelinePreview.time)}</output>
+                <input
+                  ref={timelineRef}
                 aria-label="播放进度"
                 className="timeline"
                 type="range"
                 min={0}
                 max={duration || 0}
                 step={0.1}
-                value={duration ? currentTime : 0}
-                onChange={(event) => seekTo(Number(event.target.value))}
+                  value={duration ? currentTime : 0}
+                  onChange={(event) => {
+                    const nextTime = Number(event.target.value);
+                    seekTo(nextTime);
+                    updateTimelinePreviewFromTime(nextTime, timelinePreview.isDragging);
+                  }}
+                  onPointerDown={(event) => {
+                    event.currentTarget.setPointerCapture(event.pointerId);
+                    updateTimelinePreview(event.clientX, true);
+                  }}
+                  onPointerMove={(event) => updateTimelinePreview(event.clientX, timelinePreview.isDragging)}
+                  onPointerUp={(event) => {
+                    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                      event.currentTarget.releasePointerCapture(event.pointerId);
+                    }
+                    stopTimelineDragPreview();
+                  }}
+                  onPointerCancel={stopTimelineDragPreview}
+                  onPointerLeave={hideTimelinePreview}
                 style={{ "--progress": `${progressPercent}%` } as React.CSSProperties}
-                disabled={!currentVideo}
-              />
+                  disabled={!currentVideo}
+                />
+              </div>
               <span>{formatTime(duration)}</span>
             </div>
 
@@ -959,7 +1092,16 @@ export default function App() {
               </button>
 
               <label className="volume-control">
-                <Volume2 size={18} />
+                <button
+                  aria-label={isMuted ? "取消静音" : "静音"}
+                  className="volume-toggle"
+                  type="button"
+                  onClick={toggleMute}
+                  disabled={!currentVideo}
+                  title={isMuted ? "取消静音" : "静音"}
+                >
+                  {isMuted || volume === 0 ? <VolumeX size={18} /> : <Volume2 size={18} />}
+                </button>
                 <input
                   aria-label="音量"
                   type="range"
@@ -967,7 +1109,7 @@ export default function App() {
                   max={1}
                   step={0.01}
                   value={volume}
-                  onChange={(event) => setVolume(Number(event.target.value))}
+                  onChange={(event) => changeVolume(Number(event.target.value))}
                 />
               </label>
 
