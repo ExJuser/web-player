@@ -393,8 +393,9 @@ button {
 
 .timeline-preview-time {
   position: absolute;
-  right: 8px;
+  right: auto;
   bottom: 8px;
+  left: 50%;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -407,6 +408,7 @@ button {
   color: #fff;
   line-height: 1;
   font-variant-numeric: tabular-nums;
+  transform: translateX(-50%);
 }
 
 .timeline-preview-video,
