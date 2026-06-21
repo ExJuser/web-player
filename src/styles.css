@@ -449,7 +449,6 @@ button {
 }
 
 .volume-control,
-.auto-next,
 .settings-control,
 .subtitle-control {
   display: inline-flex;
@@ -514,12 +513,6 @@ button {
 .subtitle-select:disabled {
   color: #5f6875;
   background: #191d23;
-}
-
-.auto-next input {
-  width: 16px;
-  height: 16px;
-  accent-color: #00a1d6;
 }
 
 .control-spacer {

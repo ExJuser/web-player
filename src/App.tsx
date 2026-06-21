@@ -82,6 +82,7 @@ type PlayerDataStore = {
 };
 
 type PlaylistFilter = "all" | "favorites";
+type PlaybackMode = "sequential" | "single-loop" | "list-loop" | "shuffle" | "favorites-only";
 
 const VIDEO_EXTENSIONS = new Set([".mp4", ".webm", ".ogg", ".mov", ".m4v", ".mkv"]);
 const SUBTITLE_EXTENSIONS = new Set([".srt", ".vtt"]);
@@ -95,6 +96,13 @@ const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "bas
 const rates = [0.5, 0.75, 1, 1.25, 1.5, 2, 3];
 const seekSteps = [5, 10, 15];
 const holdRates = [1.5, 2, 2.5, 3, 4];
+const playbackModeOptions: Array<{ value: PlaybackMode; label: string }> = [
+  { value: "sequential", label: "顺序播放" },
+  { value: "single-loop", label: "单集循环" },
+  { value: "list-loop", label: "列表循环" },
+  { value: "shuffle", label: "随机播放" },
+  { value: "favorites-only", label: "只播收藏" },
+];
 const volumeStep = 0.05;
 const controlsAutoHideDelay = 2500;
 const rightKeyHoldDelay = 350;
@@ -616,7 +624,7 @@ export default function App() {
   const [seekStep, setSeekStep] = useState(10);
   const [holdPlaybackRate, setHoldPlaybackRate] = useState(3);
   const [isHoldSpeedActive, setIsHoldSpeedActive] = useState(false);
-  const [isAutoNextEnabled, setIsAutoNextEnabled] = useState(true);
+  const [playbackMode, setPlaybackMode] = useState<PlaybackMode>("sequential");
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [areControlsVisible, setAreControlsVisible] = useState(true);
   const [videoAspectRatio, setVideoAspectRatio] = useState(16 / 9);
@@ -1001,10 +1009,49 @@ export default function App() {
     };
   }, [isFullscreen, videoAspectRatio]);
 
+  const getNextVideoId = useCallback(
+    (mode: PlaybackMode) => {
+      if (!videos.length || currentIndex < 0) return null;
+
+      if (mode === "single-loop") {
+        return currentVideoId;
+      }
+
+      if (mode === "shuffle") {
+        if (videos.length === 1) return currentVideoId;
+        const candidates = videos.filter((video) => video.id !== currentVideoId);
+        return candidates[Math.floor(Math.random() * candidates.length)]?.id ?? null;
+      }
+
+      if (mode === "favorites-only") {
+        const favoriteVideos = videos.filter((video) => favoriteVideoIds.has(video.id));
+        if (!favoriteVideos.length) return null;
+        const favoriteIndex = favoriteVideos.findIndex((video) => video.id === currentVideoId);
+        if (favoriteIndex < 0) return favoriteVideos[0].id;
+        return favoriteIndex < favoriteVideos.length - 1 ? favoriteVideos[favoriteIndex + 1].id : null;
+      }
+
+      if (currentIndex < videos.length - 1) {
+        return videos[currentIndex + 1].id;
+      }
+
+      return mode === "list-loop" ? videos[0].id : null;
+    },
+    [currentIndex, currentVideoId, favoriteVideoIds, videos],
+  );
+
   const playNext = useCallback(() => {
-    if (currentIndex < 0 || currentIndex >= videos.length - 1) return;
-    selectVideo(videos[currentIndex + 1].id);
-  }, [currentIndex, selectVideo, videos]);
+    const nextVideoId = getNextVideoId(playbackMode);
+    if (!nextVideoId) {
+      if (playbackMode === "favorites-only" && !favoriteVideoIds.size) {
+        setMessage("还没有收藏的视频，无法只播放收藏。");
+      }
+      return;
+    }
+    selectVideo(nextVideoId);
+  }, [favoriteVideoIds.size, getNextVideoId, playbackMode, selectVideo]);
+
+  const canPlayNext = useMemo(() => Boolean(getNextVideoId(playbackMode)), [getNextVideoId, playbackMode]);
 
   const loadDirectoryMedia = useCallback(
     async (directory: FileSystemDirectoryHandle, options?: { remember?: boolean; restored?: boolean }) => {
@@ -1803,9 +1850,24 @@ export default function App() {
   const handleEnded = () => {
     persistCurrentProgress(true);
     setIsPlaying(false);
-    if (isAutoNextEnabled) {
-      playNext();
+
+    if (playbackMode === "single-loop") {
+      const element = videoRef.current;
+      if (!element) return;
+      element.currentTime = 0;
+      setCurrentTime(0);
+      element.play().catch(() => undefined);
+      return;
     }
+
+    const nextVideoId = getNextVideoId(playbackMode);
+    if (!nextVideoId) {
+      if (playbackMode === "favorites-only" && !favoriteVideoIds.size) {
+        setMessage("还没有收藏的视频，无法只播放收藏。");
+      }
+      return;
+    }
+    selectVideo(nextVideoId);
   };
 
   const progressPercent = duration ? Math.min(100, (currentTime / duration) * 100) : 0;
@@ -1975,7 +2037,7 @@ export default function App() {
               <button className="icon-button" type="button" onClick={togglePlay} disabled={!currentVideo} title="播放/暂停">
                 {isPlaying ? <Pause size={20} /> : <Play size={20} />}
               </button>
-              <button className="icon-button" type="button" onClick={playNext} disabled={currentIndex >= videos.length - 1} title="下一集">
+              <button className="icon-button" type="button" onClick={playNext} disabled={!canPlayNext} title="下一集">
                 <SkipForward size={20} />
               </button>
 
@@ -2014,13 +2076,20 @@ export default function App() {
                 ))}
               </select>
 
-              <label className="auto-next">
-                <input
-                  type="checkbox"
-                  checked={isAutoNextEnabled}
-                  onChange={(event) => setIsAutoNextEnabled(event.target.checked)}
-                />
-                自动连播
+              <label className="settings-control">
+                队列
+                <select
+                  aria-label="播放队列模式"
+                  className="compact-select"
+                  value={playbackMode}
+                  onChange={(event) => setPlaybackMode(event.target.value as PlaybackMode)}
+                >
+                  {playbackModeOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
               </label>
 
               <label className="settings-control">
