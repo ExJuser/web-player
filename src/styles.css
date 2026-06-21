@@ -500,6 +500,24 @@ button {
   font-size: 12px;
 }
 
+.dialog-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  grid-column: 2;
+  color: #dce2ec;
+  font-size: 13px;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.dialog-check input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: #00a1d6;
+}
+
 .dialog-actions {
   display: flex;
   justify-content: flex-end;
@@ -561,6 +579,10 @@ button {
   }
 
   .permission-notes {
+    grid-column: 1;
+  }
+
+  .dialog-check {
     grid-column: 1;
   }
 

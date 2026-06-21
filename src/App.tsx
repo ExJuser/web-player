@@ -54,6 +54,7 @@ type ProgressStore = Record<string, PlaybackProgress>;
 
 const VIDEO_EXTENSIONS = new Set([".mp4", ".webm", ".ogg", ".mov", ".m4v", ".mkv"]);
 const PROGRESS_FILE_NAME = ".local-web-player-progress.json";
+const FOLDER_ACCESS_PROMPT_KEY = "local-web-player:skip-folder-access-prompt";
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
 const rates = [0.5, 0.75, 1, 1.25, 1.5, 2, 3];
 const seekSteps = [5, 10, 15];
@@ -199,6 +200,9 @@ export default function App() {
   const [progressStore, setProgressStore] = useState<ProgressStore>({});
   const [isScanning, setIsScanning] = useState(false);
   const [isFolderDialogOpen, setIsFolderDialogOpen] = useState(false);
+  const [skipFolderAccessPrompt, setSkipFolderAccessPrompt] = useState(
+    () => localStorage.getItem(FOLDER_ACCESS_PROMPT_KEY) === "true",
+  );
   const [message, setMessage] = useState("选择一个本地文件夹开始播放");
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -213,6 +217,13 @@ export default function App() {
   const [areControlsVisible, setAreControlsVisible] = useState(true);
   const [videoAspectRatio, setVideoAspectRatio] = useState(16 / 9);
   const [adaptiveColumns, setAdaptiveColumns] = useState<{ playerWidth: number; playlistWidth: number } | null>(null);
+  const playbackRateRef = useRef(playbackRate);
+  const holdPlaybackRateRef = useRef(holdPlaybackRate);
+  const isHoldSpeedActiveRef = useRef(isHoldSpeedActive);
+
+  playbackRateRef.current = playbackRate;
+  holdPlaybackRateRef.current = holdPlaybackRate;
+  isHoldSpeedActiveRef.current = isHoldSpeedActive;
 
   const currentIndex = useMemo(
     () => videos.findIndex((item) => item.id === currentVideoId),
@@ -291,9 +302,21 @@ export default function App() {
     [currentVideo, duration, updateProgress],
   );
 
+  const resetHoldSpeedState = useCallback(() => {
+    if (rightKeyHoldTimerRef.current) {
+      window.clearTimeout(rightKeyHoldTimerRef.current);
+      rightKeyHoldTimerRef.current = null;
+    }
+    isRightKeyDownRef.current = false;
+    didRightKeyHoldRef.current = false;
+    isHoldSpeedActiveRef.current = false;
+    setIsHoldSpeedActive(false);
+  }, []);
+
   const selectVideo = useCallback(
     (videoId: string) => {
       persistCurrentProgress();
+      resetHoldSpeedState();
       setCurrentVideoId(videoId);
       setIsPlaying(false);
       setCurrentTime(0);
@@ -301,7 +324,7 @@ export default function App() {
       setVideoAspectRatio(16 / 9);
       focusPlayer();
     },
-    [focusPlayer, persistCurrentProgress],
+    [focusPlayer, persistCurrentProgress, resetHoldSpeedState],
   );
 
   useEffect(() => {
@@ -405,7 +428,21 @@ export default function App() {
       return;
     }
 
+    if (skipFolderAccessPrompt) {
+      void chooseFolder();
+      return;
+    }
+
     setIsFolderDialogOpen(true);
+  };
+
+  const updateSkipFolderAccessPrompt = (checked: boolean) => {
+    setSkipFolderAccessPrompt(checked);
+    if (checked) {
+      localStorage.setItem(FOLDER_ACCESS_PROMPT_KEY, "true");
+    } else {
+      localStorage.removeItem(FOLDER_ACCESS_PROMPT_KEY);
+    }
   };
 
   useEffect(() => {
@@ -439,7 +476,7 @@ export default function App() {
     const element = videoRef.current;
     if (!element || !currentVideo) return;
 
-    const progress = progressStore[currentVideo.id];
+    const progress = progressStoreRef.current[currentVideo.id];
     const resumeAt =
       progress && !progress.completed && progress.currentTime < Math.max(0, progress.duration - 8)
         ? progress.currentTime
@@ -454,6 +491,7 @@ export default function App() {
         element.currentTime = resumeAt;
         setCurrentTime(resumeAt);
       }
+      element.playbackRate = isHoldSpeedActiveRef.current ? holdPlaybackRateRef.current : playbackRateRef.current;
       element.play().catch(() => undefined);
     };
 
@@ -463,7 +501,7 @@ export default function App() {
     return () => {
       element.removeEventListener("loadedmetadata", handleLoadedMetadata);
     };
-  }, [currentVideo, progressStore]);
+  }, [currentVideo]);
 
   useEffect(() => {
     const element = videoRef.current;
@@ -522,6 +560,16 @@ export default function App() {
       element.volume = nextVolume;
     }
   }, [volume]);
+
+  const handlePlayerWheel = useCallback(
+    (event: React.WheelEvent<HTMLDivElement>) => {
+      if (!currentVideo || event.deltaY === 0) return;
+      event.preventDefault();
+      revealControls();
+      adjustVolume(event.deltaY < 0 ? volumeStep : -volumeStep);
+    },
+    [adjustVolume, currentVideo, revealControls],
+  );
 
   const stopHoldSpeed = useCallback(() => {
     setIsHoldSpeedActive(false);
@@ -678,6 +726,7 @@ export default function App() {
           className={`player-frame ${isFullscreen ? "fullscreen" : ""} ${areControlsVisible ? "" : "controls-hidden"}`}
           ref={playerRef}
           onMouseMove={revealControls}
+          onWheel={handlePlayerWheel}
           onMouseLeave={() => {
             if (isFullscreen) scheduleControlsHide();
           }}
@@ -887,6 +936,14 @@ export default function App() {
             <span>仅本次选择生效</span>
             <span>可随时取消</span>
           </div>
+          <label className="dialog-check">
+            <input
+              type="checkbox"
+              checked={skipFolderAccessPrompt}
+              onChange={(event) => updateSkipFolderAccessPrompt(event.target.checked)}
+            />
+            不再提示，直接选择文件夹
+          </label>
           <div className="dialog-actions">
             <button className="secondary-button" type="button" onClick={() => setIsFolderDialogOpen(false)}>
               取消
