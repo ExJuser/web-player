@@ -760,6 +760,7 @@ export default function App() {
   const controlBarRef = useRef<HTMLDivElement | null>(null);
   const playlistRef = useRef<HTMLDivElement | null>(null);
   const saveTimerRef = useRef<number | null>(null);
+  const playlistAutoScrollTimerRef = useRef<number | null>(null);
   const controlsHideTimerRef = useRef<number | null>(null);
   const doubleClickFeedbackTimerRef = useRef<number | null>(null);
   const timelineFrameTimerRef = useRef<number | null>(null);
@@ -774,6 +775,8 @@ export default function App() {
   const videosRef = useRef<VideoItem[]>([]);
   const subtitlesRef = useRef<SubtitleItem[]>([]);
   const thumbnailObserverRef = useRef<IntersectionObserver | null>(null);
+  const lastPlaylistUserScrollAtRef = useRef(0);
+  const isPlaylistAutoScrollingRef = useRef(false);
   const clearedProgressVideoIdsRef = useRef(new Set<string>());
   const isRightKeyDownRef = useRef(false);
   const didRightKeyHoldRef = useRef(false);
@@ -1566,10 +1569,27 @@ export default function App() {
 
   useEffect(() => {
     if (!currentVideoId || !playlistRef.current) return;
+    if (Date.now() - lastPlaylistUserScrollAtRef.current < 800) return;
 
     const activeItem = playlistRef.current.querySelector<HTMLElement>(".playlist-item.active");
-    activeItem?.scrollIntoView({ block: "center", behavior: "smooth" });
+    if (!activeItem) return;
+
+    isPlaylistAutoScrollingRef.current = true;
+    activeItem.scrollIntoView({ block: "center", behavior: "smooth" });
+
+    if (playlistAutoScrollTimerRef.current) {
+      window.clearTimeout(playlistAutoScrollTimerRef.current);
+    }
+    playlistAutoScrollTimerRef.current = window.setTimeout(() => {
+      isPlaylistAutoScrollingRef.current = false;
+      playlistAutoScrollTimerRef.current = null;
+    }, 700);
   }, [currentVideoId, visibleVideos]);
+
+  const markPlaylistUserScroll = useCallback(() => {
+    if (isPlaylistAutoScrollingRef.current) return;
+    lastPlaylistUserScrollAtRef.current = Date.now();
+  }, []);
 
   useEffect(() => {
     if (!window.showDirectoryPicker) return;
@@ -1600,6 +1620,9 @@ export default function App() {
 
   useEffect(() => {
     return () => {
+      if (playlistAutoScrollTimerRef.current) {
+        window.clearTimeout(playlistAutoScrollTimerRef.current);
+      }
       revokeVideoUrls(videosRef.current);
       subtitlesRef.current.forEach((subtitle) => {
         if (subtitle.url) URL.revokeObjectURL(subtitle.url);
@@ -2624,7 +2647,13 @@ export default function App() {
           </div>
         </div>
 
-        <div className="playlist" ref={playlistRef}>
+        <div
+          className="playlist"
+          ref={playlistRef}
+          onScroll={markPlaylistUserScroll}
+          onWheel={markPlaylistUserScroll}
+          onTouchMove={markPlaylistUserScroll}
+        >
           {visibleVideos.map((video) => {
             const isActive = video.id === currentVideoId;
             const label = progressLabel(progressStore[video.id]);
