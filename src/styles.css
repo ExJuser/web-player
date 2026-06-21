@@ -270,13 +270,36 @@ button {
 }
 
 .playlist {
+  scrollbar-color: rgba(142, 151, 165, 0.58) rgba(20, 22, 26, 0.35);
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
   display: flex;
   flex: 1;
   min-height: 0;
   flex-direction: column;
   gap: 8px;
   overflow: auto;
-  padding-right: 4px;
+  padding-right: 8px;
+}
+
+.playlist::-webkit-scrollbar {
+  width: 10px;
+}
+
+.playlist::-webkit-scrollbar-track {
+  border-radius: 999px;
+  background: rgba(20, 22, 26, 0.35);
+}
+
+.playlist::-webkit-scrollbar-thumb {
+  min-height: 48px;
+  border: 2px solid rgba(20, 22, 26, 0.35);
+  border-radius: 999px;
+  background: rgba(142, 151, 165, 0.58);
+}
+
+.playlist::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 161, 214, 0.72);
 }
 
 .playlist-item {
