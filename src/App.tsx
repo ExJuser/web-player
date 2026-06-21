@@ -5,9 +5,12 @@ import {
   Pause,
   PictureInPicture2,
   Play,
+  RotateCcw,
   ShieldCheck,
   SkipForward,
+  Trash2,
   X,
+  VolumeX,
   Volume2,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -41,6 +44,8 @@ type VideoItem = {
   size: number;
   lastModified: number;
   duration?: number;
+  width?: number;
+  height?: number;
 };
 
 type PlaybackProgress = {
@@ -55,6 +60,7 @@ type ProgressStore = Record<string, PlaybackProgress>;
 const VIDEO_EXTENSIONS = new Set([".mp4", ".webm", ".ogg", ".mov", ".m4v", ".mkv"]);
 const PROGRESS_FILE_NAME = ".local-web-player-progress.json";
 const FOLDER_ACCESS_PROMPT_KEY = "local-web-player:skip-folder-access-prompt";
+const VOLUME_STORAGE_KEY = "local-web-player:volume";
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
 const rates = [0.5, 0.75, 1, 1.25, 1.5, 2, 3];
 const seekSteps = [5, 10, 15];
@@ -140,8 +146,51 @@ function formatTime(seconds: number) {
   return `${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
 }
 
+function formatFileSize(bytes: number) {
+  if (!Number.isFinite(bytes) || bytes < 0) return "未知大小";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let value = bytes;
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+  const digits = value >= 10 || unitIndex === 0 ? 0 : 1;
+  return `${value.toFixed(digits)} ${units[unitIndex]}`;
+}
+
+function formatModifiedTime(value: number) {
+  if (!Number.isFinite(value) || value <= 0) return "未知时间";
+  return new Intl.DateTimeFormat(undefined, {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(value);
+}
+
+function formatResolution(width?: number, height?: number) {
+  if (!width || !height) return "读取中";
+  return `${width} x ${height}`;
+}
+
+function videoMetadataRows(video: VideoItem) {
+  return [
+    ["大小", formatFileSize(video.size)],
+    ["时长", video.duration ? formatTime(video.duration) : "读取中"],
+    ["分辨率", formatResolution(video.width, video.height)],
+    ["修改", formatModifiedTime(video.lastModified)],
+  ] as const;
+}
+
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
+}
+
+function readStoredVolume() {
+  const storedVolume = Number(localStorage.getItem(VOLUME_STORAGE_KEY));
+  return Number.isFinite(storedVolume) ? clamp(storedVolume, 0, 1) : 0.85;
 }
 
 function isFormControl(target: EventTarget | null) {
@@ -185,7 +234,10 @@ async function collectVideos(directory: FileSystemDirectoryHandle) {
 
 export default function App() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const timelineRef = useRef<HTMLInputElement | null>(null);
   const appShellRef = useRef<HTMLElement | null>(null);
+  const playerColumnRef = useRef<HTMLElement | null>(null);
+  const topBarRef = useRef<HTMLElement | null>(null);
   const playerRef = useRef<HTMLDivElement | null>(null);
   const controlBarRef = useRef<HTMLDivElement | null>(null);
   const saveTimerRef = useRef<number | null>(null);
@@ -193,6 +245,7 @@ export default function App() {
   const rightKeyHoldTimerRef = useRef<number | null>(null);
   const directoryRef = useRef<FileSystemDirectoryHandle | null>(null);
   const progressStoreRef = useRef<ProgressStore>({});
+  const clearedProgressVideoIdsRef = useRef(new Set<string>());
   const isRightKeyDownRef = useRef(false);
   const didRightKeyHoldRef = useRef(false);
   const [videos, setVideos] = useState<VideoItem[]>([]);
@@ -273,9 +326,38 @@ export default function App() {
     playerRef.current?.focus({ preventScroll: true });
   }, []);
 
+  const updateVideoMetadata = useCallback(
+    (videoId: string, metadata: Pick<VideoItem, "duration" | "width" | "height">) => {
+      setVideos((previous) =>
+        previous.map((video) => {
+          if (video.id !== videoId) return video;
+          const nextDuration = metadata.duration && Number.isFinite(metadata.duration) ? metadata.duration : undefined;
+          const nextWidth = metadata.width && metadata.width > 0 ? metadata.width : undefined;
+          const nextHeight = metadata.height && metadata.height > 0 ? metadata.height : undefined;
+          if (video.duration === nextDuration && video.width === nextWidth && video.height === nextHeight) {
+            return video;
+          }
+          return {
+            ...video,
+            duration: nextDuration,
+            width: nextWidth,
+            height: nextHeight,
+          };
+        }),
+      );
+    },
+    [],
+  );
+
   const updateProgress = useCallback(
-    (video: VideoItem, currentTime: number, duration: number, completed = false) => {
-      const progress = createProgress(currentTime, duration, completed);
+    (video: VideoItem, currentTime: number, duration: number, completed?: boolean) => {
+      if (!completed && clearedProgressVideoIdsRef.current.has(video.id)) {
+        if (currentTime < 0.5) return;
+        clearedProgressVideoIdsRef.current.delete(video.id);
+      }
+
+      const previous = progressStoreRef.current[video.id];
+      const progress = createProgress(currentTime, duration, completed ?? previous?.completed ?? false);
       const directory = directoryRef.current;
       if (!progress || !directory) return;
 
@@ -292,6 +374,76 @@ export default function App() {
     },
     [],
   );
+
+  const replaceProgressStore = useCallback((nextStore: ProgressStore, successMessage?: string) => {
+    const directory = directoryRef.current;
+    if (!directory) return;
+
+    progressStoreRef.current = nextStore;
+    setProgressStore(nextStore);
+
+    saveProgressStore(directory, nextStore)
+      .then(() => {
+        if (successMessage) setMessage(successMessage);
+      })
+      .catch(() => {
+        setMessage(`无法写入 ${PROGRESS_FILE_NAME}，请重新选择文件夹并允许保存进度。`);
+      });
+  }, []);
+
+  const markVideoCompleted = useCallback(
+    (video: VideoItem) => {
+      clearedProgressVideoIdsRef.current.delete(video.id);
+      const element = videoRef.current;
+      const previous = progressStoreRef.current[video.id];
+      const nextDuration =
+        video.id === currentVideoId && element && Number.isFinite(element.duration) && element.duration > 0
+          ? element.duration
+          : previous?.duration && previous.duration > 0
+            ? previous.duration
+            : 1;
+      const progress = createProgress(nextDuration, nextDuration, true);
+      if (!progress) return;
+
+      replaceProgressStore(
+        {
+          ...progressStoreRef.current,
+          [video.id]: progress,
+        },
+        `已标记《${video.name}》为已看完`,
+      );
+    },
+    [currentVideoId, replaceProgressStore],
+  );
+
+  const resetVideoProgress = useCallback(
+    (video: VideoItem) => {
+      clearedProgressVideoIdsRef.current.add(video.id);
+      const nextStore = { ...progressStoreRef.current };
+      delete nextStore[video.id];
+
+      if (video.id === currentVideoId) {
+        const element = videoRef.current;
+        if (element && Number.isFinite(element.duration)) {
+          element.currentTime = 0;
+        }
+        setCurrentTime(0);
+      }
+
+      replaceProgressStore(nextStore, `已清除《${video.name}》的播放进度`);
+    },
+    [currentVideoId, replaceProgressStore],
+  );
+
+  const clearFolderProgress = useCallback(() => {
+    if (!videos.length) return;
+    const element = videoRef.current;
+    if (element && Number.isFinite(element.duration)) {
+      element.currentTime = 0;
+    }
+    setCurrentTime(0);
+    replaceProgressStore({}, "已清空当前文件夹的观看记录");
+  }, [replaceProgressStore, videos.length]);
 
   const persistCurrentProgress = useCallback(
     (completed = false) => {
@@ -487,6 +639,11 @@ export default function App() {
       if (element.videoWidth > 0 && element.videoHeight > 0) {
         setVideoAspectRatio(element.videoWidth / element.videoHeight);
       }
+      updateVideoMetadata(currentVideo.id, {
+        duration: element.duration || undefined,
+        width: element.videoWidth || undefined,
+        height: element.videoHeight || undefined,
+      });
       if (resumeAt > 0) {
         element.currentTime = resumeAt;
         setCurrentTime(resumeAt);
@@ -710,11 +867,21 @@ export default function App() {
   return (
     <>
     <main className="app-shell" ref={appShellRef} style={shellStyle}>
-      <section className="player-column">
-        <header className="top-bar">
+      <section className="player-column" ref={playerColumnRef}>
+        <header className="top-bar" ref={topBarRef}>
           <div>
             <h1>本地视频播放器</h1>
             <p>{currentVideo ? currentVideo.relativePath : message}</p>
+            {currentVideo ? (
+              <dl className="current-video-meta">
+                {videoMetadataRows(currentVideo).map(([label, value]) => (
+                  <div key={label}>
+                    <dt>{label}</dt>
+                    <dd>{value}</dd>
+                  </div>
+                ))}
+              </dl>
+            ) : null}
           </div>
           <button className="primary-button" type="button" onClick={requestFolderAccess} disabled={isScanning}>
             <FolderOpen size={18} />
@@ -877,29 +1044,68 @@ export default function App() {
             <h2>播放列表</h2>
             <span>{videos.length ? `${videos.length} 个视频` : "等待选择文件夹"}</span>
           </div>
+          <button
+            className="playlist-clear-button"
+            type="button"
+            onClick={clearFolderProgress}
+            disabled={!videos.length || !Object.keys(progressStore).length}
+            title="清空当前文件夹观看记录"
+          >
+            <Trash2 size={16} />
+            清空记录
+          </button>
         </div>
 
         <div className="playlist">
           {videos.map((video, index) => {
             const isActive = video.id === currentVideoId;
             const label = progressLabel(progressStore[video.id]);
+            const metadataRows = videoMetadataRows(video);
             return (
-              <button
+              <div
                 key={video.id}
                 className={`playlist-item ${isActive ? "active" : ""}`}
-                type="button"
-                onClick={() => selectVideo(video.id)}
               >
-                <span className="episode-number">{String(index + 1).padStart(2, "0")}</span>
-                <span className="episode-main">
-                  <strong>{video.name}</strong>
-                  <small>{video.relativePath}</small>
-                </span>
+                <button className="playlist-select" type="button" onClick={() => selectVideo(video.id)}>
+                  <span className="episode-number">{String(index + 1).padStart(2, "0")}</span>
+                  <span className="episode-main">
+                    <strong>{video.name}</strong>
+                    <small>{video.relativePath}</small>
+                    <span className="episode-meta">
+                      {metadataRows.map(([metaLabel, value]) => (
+                        <span key={metaLabel}>
+                          <b>{metaLabel}</b>
+                          {value}
+                        </span>
+                      ))}
+                    </span>
+                  </span>
+                </button>
                 <span className="episode-progress">
                   {label === "已看完" ? <CheckCircle2 size={15} /> : null}
                   {label}
                 </span>
-              </button>
+                <span className="episode-actions">
+                  <button
+                    className="episode-action-button"
+                    type="button"
+                    onClick={() => markVideoCompleted(video)}
+                    disabled={label === "已看完"}
+                    title="标记已看"
+                  >
+                    <CheckCircle2 size={15} />
+                  </button>
+                  <button
+                    className="episode-action-button"
+                    type="button"
+                    onClick={() => resetVideoProgress(video)}
+                    disabled={!progressStore[video.id]}
+                    title="清除进度"
+                  >
+                    <RotateCcw size={15} />
+                  </button>
+                </span>
+              </div>
             );
           })}
 
