@@ -50,6 +50,8 @@ type VideoItem = {
   duration?: number;
   width?: number;
   height?: number;
+  thumbnailUrl?: string;
+  thumbnailStatus?: "idle" | "loading" | "ready" | "failed";
 };
 
 type SubtitleItem = {
@@ -476,6 +478,78 @@ async function createSubtitleUrl(subtitle: SubtitleItem) {
   return URL.createObjectURL(subtitle.file);
 }
 
+function createVideoThumbnail(video: VideoItem) {
+  return new Promise<string>((resolve, reject) => {
+    const element = document.createElement("video");
+    const canvas = document.createElement("canvas");
+    const cleanup = () => {
+      element.removeAttribute("src");
+      element.load();
+    };
+    const fail = () => {
+      cleanup();
+      reject(new Error("Unable to create thumbnail."));
+    };
+    const drawFrame = () => {
+      const width = element.videoWidth;
+      const height = element.videoHeight;
+      if (!width || !height) {
+        fail();
+        return;
+      }
+
+      canvas.width = 192;
+      canvas.height = 108;
+      const context = canvas.getContext("2d");
+      if (!context) {
+        fail();
+        return;
+      }
+
+      const scale = Math.min(canvas.width / width, canvas.height / height);
+      const drawWidth = width * scale;
+      const drawHeight = height * scale;
+      const drawLeft = (canvas.width - drawWidth) / 2;
+      const drawTop = (canvas.height - drawHeight) / 2;
+      context.fillStyle = "#050607";
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(element, drawLeft, drawTop, drawWidth, drawHeight);
+      canvas.toBlob(
+        (blob) => {
+          cleanup();
+          if (!blob) {
+            reject(new Error("Unable to encode thumbnail."));
+            return;
+          }
+          resolve(URL.createObjectURL(blob));
+        },
+        "image/jpeg",
+        0.76,
+      );
+    };
+
+    element.muted = true;
+    element.preload = "metadata";
+    element.playsInline = true;
+    element.addEventListener("error", fail, { once: true });
+    element.addEventListener(
+      "loadedmetadata",
+      () => {
+        const duration = Number.isFinite(element.duration) ? element.duration : 0;
+        const targetTime = duration > 0 ? Math.min(30, Math.max(0.1, duration * 0.1)) : 0;
+        if (targetTime <= 0 || element.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+          drawFrame();
+          return;
+        }
+        element.addEventListener("seeked", drawFrame, { once: true });
+        element.currentTime = targetTime;
+      },
+      { once: true },
+    );
+    element.src = video.url;
+  });
+}
+
 export default function App() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const previewVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -486,6 +560,7 @@ export default function App() {
   const topBarRef = useRef<HTMLElement | null>(null);
   const playerRef = useRef<HTMLDivElement | null>(null);
   const controlBarRef = useRef<HTMLDivElement | null>(null);
+  const playlistRef = useRef<HTMLDivElement | null>(null);
   const saveTimerRef = useRef<number | null>(null);
   const controlsHideTimerRef = useRef<number | null>(null);
   const doubleClickFeedbackTimerRef = useRef<number | null>(null);
@@ -497,6 +572,7 @@ export default function App() {
   const favoriteVideoIdsRef = useRef(new Set<string>());
   const videosRef = useRef<VideoItem[]>([]);
   const subtitlesRef = useRef<SubtitleItem[]>([]);
+  const thumbnailObserverRef = useRef<IntersectionObserver | null>(null);
   const clearedProgressVideoIdsRef = useRef(new Set<string>());
   const isRightKeyDownRef = useRef(false);
   const didRightKeyHoldRef = useRef(false);
@@ -612,6 +688,50 @@ export default function App() {
   const focusPlayer = useCallback(() => {
     playerRef.current?.focus({ preventScroll: true });
   }, []);
+
+  const revokeVideoUrls = useCallback((items: VideoItem[]) => {
+    items.forEach((video) => {
+      URL.revokeObjectURL(video.url);
+      if (video.thumbnailUrl) URL.revokeObjectURL(video.thumbnailUrl);
+    });
+  }, []);
+
+  const setVideoThumbnailState = useCallback((videoId: string, status: VideoItem["thumbnailStatus"], url?: string) => {
+    setVideos((previous) => {
+      let didChange = false;
+      const nextVideos = previous.map((video) => {
+        if (video.id !== videoId) return video;
+        didChange = true;
+        if (video.thumbnailUrl && video.thumbnailUrl !== url) {
+          URL.revokeObjectURL(video.thumbnailUrl);
+        }
+        return { ...video, thumbnailStatus: status, thumbnailUrl: url };
+      });
+      if (didChange) videosRef.current = nextVideos;
+      return didChange ? nextVideos : previous;
+    });
+  }, []);
+
+  const requestVideoThumbnail = useCallback(
+    (videoId: string) => {
+      const video = videosRef.current.find((item) => item.id === videoId);
+      if (!video || video.thumbnailStatus === "loading" || video.thumbnailStatus === "ready") return;
+      setVideoThumbnailState(videoId, "loading");
+      createVideoThumbnail(video)
+        .then((thumbnailUrl) => setVideoThumbnailState(videoId, "ready", thumbnailUrl))
+        .catch(() => setVideoThumbnailState(videoId, "failed"));
+    },
+    [setVideoThumbnailState],
+  );
+
+  const registerThumbnailTarget = useCallback(
+    (videoId: string, element: HTMLElement | null) => {
+      if (!element) return;
+      element.dataset.videoId = videoId;
+      thumbnailObserverRef.current?.observe(element);
+    },
+    [],
+  );
 
   const updateVideoMetadata = useCallback(
     (videoId: string, metadata: Pick<VideoItem, "duration" | "width" | "height">) => {
@@ -909,7 +1029,7 @@ export default function App() {
       favoriteVideoIdsRef.current = new Set(nextDataStore.favorites);
       setProgressStore(nextDataStore.progress);
       setFavoriteVideoIds(new Set(nextDataStore.favorites));
-      videosRef.current.forEach((video) => URL.revokeObjectURL(video.url));
+      revokeVideoUrls(videosRef.current);
       subtitlesRef.current.forEach((subtitle) => {
         if (subtitle.url) URL.revokeObjectURL(subtitle.url);
       });
@@ -930,7 +1050,7 @@ export default function App() {
         await writeRecentFolderHandle(directory).catch(() => undefined);
       }
     },
-    [],
+    [revokeVideoUrls],
   );
 
   const chooseFolderWithFileInput = () => {
@@ -964,7 +1084,7 @@ export default function App() {
         favoriteVideoIdsRef.current = new Set();
         setProgressStore({});
         setFavoriteVideoIds(new Set());
-        videosRef.current.forEach((video) => URL.revokeObjectURL(video.url));
+        revokeVideoUrls(videosRef.current);
         subtitlesRef.current.forEach((subtitle) => {
           if (subtitle.url) URL.revokeObjectURL(subtitle.url);
         });
@@ -1036,6 +1156,37 @@ export default function App() {
   };
 
   useEffect(() => {
+    thumbnailObserverRef.current?.disconnect();
+    if (!playlistRef.current) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) return;
+          const videoId = (entry.target as HTMLElement).dataset.videoId;
+          if (videoId) {
+            requestVideoThumbnail(videoId);
+            observer.unobserve(entry.target);
+          }
+        });
+      },
+      { root: playlistRef.current, rootMargin: "160px 0px", threshold: 0.01 },
+    );
+
+    thumbnailObserverRef.current = observer;
+    playlistRef.current
+      .querySelectorAll<HTMLElement>("[data-video-id]")
+      .forEach((element) => observer.observe(element));
+
+    return () => {
+      observer.disconnect();
+      if (thumbnailObserverRef.current === observer) {
+        thumbnailObserverRef.current = null;
+      }
+    };
+  }, [requestVideoThumbnail, visibleVideos]);
+
+  useEffect(() => {
     if (!window.showDirectoryPicker) return;
 
     let isCancelled = false;
@@ -1064,12 +1215,12 @@ export default function App() {
 
   useEffect(() => {
     return () => {
-      videosRef.current.forEach((video) => URL.revokeObjectURL(video.url));
+      revokeVideoUrls(videosRef.current);
       subtitlesRef.current.forEach((subtitle) => {
         if (subtitle.url) URL.revokeObjectURL(subtitle.url);
       });
     };
-  }, []);
+  }, [revokeVideoUrls]);
 
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -1918,7 +2069,7 @@ export default function App() {
           </div>
         </div>
 
-        <div className="playlist">
+        <div className="playlist" ref={playlistRef}>
           {visibleVideos.map((video) => {
             const isActive = video.id === currentVideoId;
             const label = progressLabel(progressStore[video.id]);
@@ -1930,11 +2081,26 @@ export default function App() {
                 className={`playlist-item ${isActive ? "active" : ""}`}
                 title={videoMetadataTitle(video)}
               >
-                <button className="playlist-select" type="button" onClick={() => selectVideo(video.id)}>
-                  <span className="episode-number">{String(originalIndex + 1).padStart(2, "0")}</span>
+                <button
+                  className="playlist-select"
+                  type="button"
+                  onClick={() => selectVideo(video.id)}
+                  ref={(element) => registerThumbnailTarget(video.id, element)}
+                >
+                  <span className="episode-thumbnail" aria-hidden="true">
+                    {video.thumbnailUrl ? (
+                      <img src={video.thumbnailUrl} alt="" draggable={false} />
+                    ) : (
+                      <span>{String(originalIndex + 1).padStart(2, "0")}</span>
+                    )}
+                  </span>
                   <span className="episode-main">
                     <strong>{video.name}</strong>
                     <small>{video.relativePath}</small>
+                    <span className="episode-progress compact">
+                      {label === "已看完" ? <CheckCircle2 size={15} /> : null}
+                      {label}
+                    </span>
                   </span>
                 </button>
                 <span className="episode-progress">
