@@ -4,9 +4,9 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "node scripts/dev-server.mjs dev",
     "build": "tsc --noEmit && vite build",
-    "preview": "vite preview"
+    "preview": "node scripts/dev-server.mjs preview"
   },
   "dependencies": {
     "@vitejs/plugin-react": "^5.0.0",
