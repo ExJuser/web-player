@@ -180,6 +180,11 @@ export default function App() {
     [currentVideoId, videos],
   );
   const currentVideo = currentIndex >= 0 ? videos[currentIndex] : null;
+  const effectivePlaybackRate = isHoldSpeedActive ? holdPlaybackRate : playbackRate;
+  const playbackRateOptions = useMemo(() => {
+    if (rates.includes(effectivePlaybackRate)) return rates;
+    return [...rates, effectivePlaybackRate].sort((a, b) => a - b);
+  }, [effectivePlaybackRate]);
   const shellStyle = useMemo(
     () =>
       ({
@@ -669,10 +674,10 @@ export default function App() {
               <select
                 aria-label="播放速度"
                 className="rate-select"
-                value={playbackRate}
+                value={effectivePlaybackRate}
                 onChange={(event) => setPlaybackRate(Number(event.target.value))}
               >
-                {rates.map((rate) => (
+                {playbackRateOptions.map((rate) => (
                   <option key={rate} value={rate}>
                     {rate}x
                   </option>
