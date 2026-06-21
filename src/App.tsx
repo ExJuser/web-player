@@ -651,6 +651,8 @@ export default function App() {
   const timelineFrameTimerRef = useRef<number | null>(null);
   const timelineFrameRequestRef = useRef(0);
   const rightKeyHoldTimerRef = useRef<number | null>(null);
+  const rightMouseHoldTimerRef = useRef<number | null>(null);
+  const rightMousePointerIdRef = useRef<number | null>(null);
   const directoryRef = useRef<FileSystemDirectoryHandle | null>(null);
   const progressStoreRef = useRef<ProgressStore>({});
   const favoriteVideoIdsRef = useRef(new Set<string>());
@@ -660,6 +662,9 @@ export default function App() {
   const clearedProgressVideoIdsRef = useRef(new Set<string>());
   const isRightKeyDownRef = useRef(false);
   const didRightKeyHoldRef = useRef(false);
+  const isRightMouseDownRef = useRef(false);
+  const didRightMouseHoldRef = useRef(false);
+  const didRightMouseStartPlaybackRef = useRef(false);
   const [videos, setVideos] = useState<VideoItem[]>([]);
   const [subtitles, setSubtitles] = useState<SubtitleItem[]>([]);
   const [currentVideoId, setCurrentVideoId] = useState<string | null>(null);
@@ -996,8 +1001,16 @@ export default function App() {
       window.clearTimeout(rightKeyHoldTimerRef.current);
       rightKeyHoldTimerRef.current = null;
     }
+    if (rightMouseHoldTimerRef.current) {
+      window.clearTimeout(rightMouseHoldTimerRef.current);
+      rightMouseHoldTimerRef.current = null;
+    }
     isRightKeyDownRef.current = false;
     didRightKeyHoldRef.current = false;
+    isRightMouseDownRef.current = false;
+    didRightMouseHoldRef.current = false;
+    didRightMouseStartPlaybackRef.current = false;
+    rightMousePointerIdRef.current = null;
     isHoldSpeedActiveRef.current = false;
     setIsHoldSpeedActive(false);
   }, []);
@@ -1774,6 +1787,109 @@ export default function App() {
     rightKeyHoldTimerRef.current = null;
   }, []);
 
+  const clearRightMouseHoldTimer = useCallback(() => {
+    if (!rightMouseHoldTimerRef.current) return;
+    window.clearTimeout(rightMouseHoldTimerRef.current);
+    rightMouseHoldTimerRef.current = null;
+  }, []);
+
+  const stopRightMouseHoldSpeed = useCallback(() => {
+    clearRightMouseHoldTimer();
+    if (!isRightMouseDownRef.current && !didRightMouseHoldRef.current) return;
+    isRightMouseDownRef.current = false;
+    didRightMouseHoldRef.current = false;
+    didRightMouseStartPlaybackRef.current = false;
+    rightMousePointerIdRef.current = null;
+    stopHoldSpeed();
+  }, [clearRightMouseHoldTimer, stopHoldSpeed]);
+
+  const handlePlayerContextMenu = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    if (event.target !== videoRef.current) return;
+    event.preventDefault();
+  }, []);
+
+  const handlePlayerPointerDown = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (!currentVideo || event.button !== 2 || event.target !== videoRef.current) return;
+      event.preventDefault();
+      event.stopPropagation();
+      revealControls();
+      if (isRightMouseDownRef.current) return;
+
+      isRightMouseDownRef.current = true;
+      didRightMouseHoldRef.current = false;
+      rightMousePointerIdRef.current = event.pointerId;
+      if (!event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.setPointerCapture(event.pointerId);
+      }
+      const element = videoRef.current;
+      didRightMouseStartPlaybackRef.current = Boolean(element?.paused);
+      if (element?.paused) {
+        element.play().catch(() => {
+          didRightMouseStartPlaybackRef.current = false;
+        });
+      }
+      clearRightMouseHoldTimer();
+      rightMouseHoldTimerRef.current = window.setTimeout(() => {
+        const element = videoRef.current;
+        if (!element || !isRightMouseDownRef.current) return;
+        didRightMouseHoldRef.current = true;
+        element.playbackRate = holdPlaybackRateRef.current;
+        isHoldSpeedActiveRef.current = true;
+        setIsHoldSpeedActive(true);
+        rightMouseHoldTimerRef.current = null;
+      }, rightKeyHoldDelay);
+    },
+    [clearRightMouseHoldTimer, currentVideo, revealControls],
+  );
+
+  const handlePlayerPointerUp = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (event.button !== 2 || !isRightMouseDownRef.current) return;
+      event.preventDefault();
+      event.stopPropagation();
+      clearRightMouseHoldTimer();
+      if (rightMousePointerIdRef.current === event.pointerId && event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+      rightMousePointerIdRef.current = null;
+      isRightMouseDownRef.current = false;
+      if (didRightMouseHoldRef.current) {
+        didRightMouseHoldRef.current = false;
+        stopHoldSpeed();
+      } else if (didRightMouseStartPlaybackRef.current) {
+        videoRef.current?.pause();
+      }
+      didRightMouseStartPlaybackRef.current = false;
+    },
+    [clearRightMouseHoldTimer, stopHoldSpeed],
+  );
+
+  const handlePlayerPointerCancel = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (rightMousePointerIdRef.current === event.pointerId) {
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+          event.currentTarget.releasePointerCapture(event.pointerId);
+        }
+        stopRightMouseHoldSpeed();
+      }
+    },
+    [stopRightMouseHoldSpeed],
+  );
+
+  useEffect(() => {
+    const handleWindowMouseUp = (event: MouseEvent) => {
+      if (event.button === 2) {
+        stopRightMouseHoldSpeed();
+      }
+    };
+
+    window.addEventListener("mouseup", handleWindowMouseUp);
+    return () => {
+      window.removeEventListener("mouseup", handleWindowMouseUp);
+    };
+  }, [stopRightMouseHoldSpeed]);
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape" && isShortcutDialogOpen) {
@@ -1854,6 +1970,7 @@ export default function App() {
       clearRightKeyHoldTimer();
       isRightKeyDownRef.current = false;
       didRightKeyHoldRef.current = false;
+      stopRightMouseHoldSpeed();
       stopHoldSpeed();
     };
 
@@ -1876,6 +1993,7 @@ export default function App() {
     toggleMute,
     togglePlay,
     toggleShortcutDialog,
+    stopRightMouseHoldSpeed,
     isShortcutDialogOpen,
   ]);
 
@@ -1891,6 +2009,9 @@ export default function App() {
     return () => {
       if (doubleClickFeedbackTimerRef.current) {
         window.clearTimeout(doubleClickFeedbackTimerRef.current);
+      }
+      if (rightMouseHoldTimerRef.current) {
+        window.clearTimeout(rightMouseHoldTimerRef.current);
       }
     };
   }, []);
@@ -1992,10 +2113,15 @@ export default function App() {
           className={`player-frame ${isFullscreen ? "fullscreen" : ""} ${areControlsVisible ? "" : "controls-hidden"}`}
           ref={playerRef}
           onMouseMove={revealControls}
+          onContextMenu={handlePlayerContextMenu}
+          onPointerDownCapture={handlePlayerPointerDown}
+          onPointerUpCapture={handlePlayerPointerUp}
+          onPointerCancel={handlePlayerPointerCancel}
           onDoubleClick={handlePlayerDoubleClick}
           onWheel={handlePlayerWheel}
           onMouseLeave={() => {
             if (isFullscreen) scheduleControlsHide();
+            stopRightMouseHoldSpeed();
           }}
           tabIndex={-1}
         >
