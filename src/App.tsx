@@ -5,7 +5,9 @@ import {
   Pause,
   PictureInPicture2,
   Play,
+  ShieldCheck,
   SkipForward,
+  X,
   Volume2,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -160,6 +162,7 @@ export default function App() {
   const [videos, setVideos] = useState<VideoItem[]>([]);
   const [currentVideoId, setCurrentVideoId] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
+  const [isFolderDialogOpen, setIsFolderDialogOpen] = useState(false);
   const [message, setMessage] = useState("选择一个本地文件夹开始播放");
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -305,6 +308,7 @@ export default function App() {
     }
 
     try {
+      setIsFolderDialogOpen(false);
       setIsScanning(true);
       setMessage("正在扫描视频文件...");
       const directory = await window.showDirectoryPicker();
@@ -324,6 +328,15 @@ export default function App() {
     } finally {
       setIsScanning(false);
     }
+  };
+
+  const requestFolderAccess = () => {
+    if (!window.showDirectoryPicker) {
+      setMessage("当前浏览器不支持 File System Access API，请使用最新版 Chrome 或 Edge。");
+      return;
+    }
+
+    setIsFolderDialogOpen(true);
   };
 
   useEffect(() => {
@@ -578,6 +591,7 @@ export default function App() {
   const progressPercent = duration ? Math.min(100, (currentTime / duration) * 100) : 0;
 
   return (
+    <>
     <main className="app-shell" ref={appShellRef} style={shellStyle}>
       <section className="player-column">
         <header className="top-bar">
@@ -585,7 +599,7 @@ export default function App() {
             <h1>本地视频播放器</h1>
             <p>{currentVideo ? currentVideo.relativePath : message}</p>
           </div>
-          <button className="primary-button" type="button" onClick={chooseFolder} disabled={isScanning}>
+          <button className="primary-button" type="button" onClick={requestFolderAccess} disabled={isScanning}>
             <FolderOpen size={18} />
             {isScanning ? "扫描中" : "选择文件夹"}
           </button>
@@ -773,5 +787,47 @@ export default function App() {
         </div>
       </aside>
     </main>
+    {isFolderDialogOpen ? (
+      <div className="modal-backdrop" role="presentation" onMouseDown={() => setIsFolderDialogOpen(false)}>
+        <section
+          aria-labelledby="folder-access-title"
+          aria-modal="true"
+          className="folder-dialog"
+          role="dialog"
+          onMouseDown={(event) => event.stopPropagation()}
+        >
+          <button
+            aria-label="关闭"
+            className="dialog-close"
+            type="button"
+            onClick={() => setIsFolderDialogOpen(false)}
+          >
+            <X size={18} />
+          </button>
+          <div className="dialog-icon">
+            <ShieldCheck size={28} />
+          </div>
+          <div className="dialog-copy">
+            <h2 id="folder-access-title">允许访问本地视频文件夹</h2>
+            <p>播放器只会读取你选择的文件夹，用来扫描可播放的视频和保存本地播放进度。</p>
+          </div>
+          <div className="permission-notes">
+            <span>不会上传文件</span>
+            <span>仅本次选择生效</span>
+            <span>可随时取消</span>
+          </div>
+          <div className="dialog-actions">
+            <button className="secondary-button" type="button" onClick={() => setIsFolderDialogOpen(false)}>
+              取消
+            </button>
+            <button className="primary-button" type="button" onClick={chooseFolder}>
+              <FolderOpen size={18} />
+              继续选择
+            </button>
+          </div>
+        </section>
+      </div>
+    ) : null}
+    </>
   );
 }
