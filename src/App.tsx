@@ -48,6 +48,7 @@ const seekSteps = [5, 10, 15];
 const holdRates = [1.5, 2, 2.5, 3, 4];
 const volumeStep = 0.05;
 const controlsAutoHideDelay = 2500;
+const rightKeyHoldDelay = 350;
 
 declare global {
   interface Window {
@@ -153,6 +154,9 @@ export default function App() {
   const controlBarRef = useRef<HTMLDivElement | null>(null);
   const saveTimerRef = useRef<number | null>(null);
   const controlsHideTimerRef = useRef<number | null>(null);
+  const rightKeyHoldTimerRef = useRef<number | null>(null);
+  const isRightKeyDownRef = useRef(false);
+  const didRightKeyHoldRef = useRef(false);
   const [videos, setVideos] = useState<VideoItem[]>([]);
   const [currentVideoId, setCurrentVideoId] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
@@ -432,6 +436,16 @@ export default function App() {
     }
   }, [volume]);
 
+  const stopHoldSpeed = useCallback(() => {
+    setIsHoldSpeedActive(false);
+  }, []);
+
+  const clearRightKeyHoldTimer = useCallback(() => {
+    if (!rightKeyHoldTimerRef.current) return;
+    window.clearTimeout(rightKeyHoldTimerRef.current);
+    rightKeyHoldTimerRef.current = null;
+  }, []);
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (!currentVideo || isFormControl(event.target)) return;
@@ -449,7 +463,15 @@ export default function App() {
         seekBy(-seekStep);
       } else if (event.key === "ArrowRight") {
         event.preventDefault();
-        seekBy(seekStep);
+        if (event.repeat || isRightKeyDownRef.current) return;
+        isRightKeyDownRef.current = true;
+        didRightKeyHoldRef.current = false;
+        clearRightKeyHoldTimer();
+        rightKeyHoldTimerRef.current = window.setTimeout(() => {
+          didRightKeyHoldRef.current = true;
+          setIsHoldSpeedActive(true);
+          rightKeyHoldTimerRef.current = null;
+        }, rightKeyHoldDelay);
       } else if (event.key === "ArrowUp") {
         event.preventDefault();
         adjustVolume(volumeStep);
@@ -459,30 +481,43 @@ export default function App() {
       }
     };
 
+    const handleKeyUp = (event: KeyboardEvent) => {
+      if (event.key !== "ArrowRight" || !isRightKeyDownRef.current) return;
+      event.preventDefault();
+      clearRightKeyHoldTimer();
+      isRightKeyDownRef.current = false;
+      if (didRightKeyHoldRef.current) {
+        didRightKeyHoldRef.current = false;
+        stopHoldSpeed();
+      } else if (currentVideo && !isFormControl(event.target)) {
+        seekBy(seekStep);
+      }
+    };
+
+    const handleBlur = () => {
+      clearRightKeyHoldTimer();
+      isRightKeyDownRef.current = false;
+      didRightKeyHoldRef.current = false;
+      stopHoldSpeed();
+    };
+
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [adjustVolume, currentVideo, seekBy, seekStep, togglePlay]);
+    window.addEventListener("keyup", handleKeyUp);
+    window.addEventListener("blur", handleBlur);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+      window.removeEventListener("blur", handleBlur);
+    };
+  }, [adjustVolume, clearRightKeyHoldTimer, currentVideo, seekBy, seekStep, stopHoldSpeed, togglePlay]);
 
   useEffect(() => {
     if (!isHoldSpeedActive) return;
-    const stopHoldSpeed = () => setIsHoldSpeedActive(false);
-    window.addEventListener("mouseup", stopHoldSpeed);
     window.addEventListener("blur", stopHoldSpeed);
     return () => {
-      window.removeEventListener("mouseup", stopHoldSpeed);
       window.removeEventListener("blur", stopHoldSpeed);
     };
-  }, [isHoldSpeedActive]);
-
-  const startHoldSpeed = (event: React.MouseEvent<HTMLVideoElement>) => {
-    if (event.button !== 2 || !currentVideo) return;
-    event.preventDefault();
-    setIsHoldSpeedActive(true);
-  };
-
-  const stopHoldSpeed = () => {
-    setIsHoldSpeedActive(false);
-  };
+  }, [isHoldSpeedActive, stopHoldSpeed]);
 
   const toggleFullscreen = async () => {
     if (!playerRef.current) return;
@@ -565,10 +600,6 @@ export default function App() {
               className="video-element"
               src={currentVideo.url}
               onClick={togglePlay}
-              onMouseDown={startHoldSpeed}
-              onMouseUp={stopHoldSpeed}
-              onMouseLeave={stopHoldSpeed}
-              onContextMenu={(event) => event.preventDefault()}
               onPlay={() => setIsPlaying(true)}
               onPause={() => {
                 setIsPlaying(false);
@@ -674,9 +705,9 @@ export default function App() {
               </label>
 
               <label className="settings-control">
-                长按右键
+                长按右方向
                 <select
-                  aria-label="长按右键倍速"
+                  aria-label="长按右方向键倍速"
                   className="compact-select"
                   value={holdPlaybackRate}
                   onChange={(event) => setHoldPlaybackRate(Number(event.target.value))}
