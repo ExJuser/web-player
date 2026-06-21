@@ -85,6 +85,7 @@ button {
   align-items: stretch;
   flex-direction: column;
   gap: 10px;
+  padding-right: 18px;
 }
 
 .playlist-title-row {
