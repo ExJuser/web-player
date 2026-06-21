@@ -405,6 +405,8 @@ async function createSubtitleUrl(subtitle: SubtitleItem) {
 
 export default function App() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const previewVideoRef = useRef<HTMLVideoElement | null>(null);
+  const previewCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const timelineRef = useRef<HTMLInputElement | null>(null);
   const appShellRef = useRef<HTMLElement | null>(null);
   const playerColumnRef = useRef<HTMLElement | null>(null);
@@ -414,6 +416,8 @@ export default function App() {
   const saveTimerRef = useRef<number | null>(null);
   const controlsHideTimerRef = useRef<number | null>(null);
   const doubleClickFeedbackTimerRef = useRef<number | null>(null);
+  const timelineFrameTimerRef = useRef<number | null>(null);
+  const timelineFrameRequestRef = useRef(0);
   const rightKeyHoldTimerRef = useRef<number | null>(null);
   const directoryRef = useRef<FileSystemDirectoryHandle | null>(null);
   const progressStoreRef = useRef<ProgressStore>({});
@@ -445,6 +449,8 @@ export default function App() {
     left: 0,
     isVisible: false,
     isDragging: false,
+    imageUrl: "",
+    isLoadingFrame: false,
   });
   const [doubleClickFeedback, setDoubleClickFeedback] = useState<{
     side: "left" | "center" | "right";
@@ -720,6 +726,14 @@ export default function App() {
       setIsPlaying(false);
       setCurrentTime(0);
       setDuration(0);
+      setTimelinePreview({
+        time: 0,
+        left: 0,
+        isVisible: false,
+        isDragging: false,
+        imageUrl: "",
+        isLoadingFrame: false,
+      });
       setSelectedSubtitleId("off");
       setVideoAspectRatio(16 / 9);
       focusPlayer();
@@ -1055,12 +1069,13 @@ export default function App() {
 
       const rect = timeline.getBoundingClientRect();
       const ratio = rect.width ? clamp((clientX - rect.left) / rect.width, 0, 1) : 0;
-      setTimelinePreview({
+      setTimelinePreview((previous) => ({
+        ...previous,
         time: ratio * duration,
         left: ratio * 100,
         isVisible: true,
         isDragging,
-      });
+      }));
     },
     [currentVideo, duration],
   );
@@ -1073,12 +1088,13 @@ export default function App() {
       }
 
       const nextTime = clamp(time, 0, duration);
-      setTimelinePreview({
+      setTimelinePreview((previous) => ({
+        ...previous,
         time: nextTime,
         left: (nextTime / duration) * 100,
         isVisible: true,
         isDragging,
-      });
+      }));
     },
     [currentVideo, duration],
   );
@@ -1092,6 +1108,78 @@ export default function App() {
   const stopTimelineDragPreview = useCallback(() => {
     setTimelinePreview((previous) => ({ ...previous, isVisible: false, isDragging: false }));
   }, []);
+
+  const captureTimelineFrame = useCallback((time: number) => {
+    const previewVideo = previewVideoRef.current;
+    const canvas = previewCanvasRef.current;
+    if (!previewVideo || !canvas || !currentVideo || duration <= 0 || previewVideo.readyState < HTMLMediaElement.HAVE_METADATA) {
+      return;
+    }
+
+    const requestId = timelineFrameRequestRef.current + 1;
+    timelineFrameRequestRef.current = requestId;
+    const targetTime = clamp(time, 0, Math.max(0, previewVideo.duration || duration));
+    setTimelinePreview((previous) => (previous.isVisible ? { ...previous, isLoadingFrame: true } : previous));
+
+    const drawFrame = () => {
+      if (timelineFrameRequestRef.current !== requestId) return;
+      const context = canvas.getContext("2d");
+      const sourceWidth = previewVideo.videoWidth;
+      const sourceHeight = previewVideo.videoHeight;
+      if (!context || !sourceWidth || !sourceHeight) return;
+
+      const canvasWidth = canvas.width;
+      const canvasHeight = canvas.height;
+      const scale = Math.min(canvasWidth / sourceWidth, canvasHeight / sourceHeight);
+      const drawWidth = sourceWidth * scale;
+      const drawHeight = sourceHeight * scale;
+      const drawLeft = (canvasWidth - drawWidth) / 2;
+      const drawTop = (canvasHeight - drawHeight) / 2;
+
+      context.fillStyle = "#050607";
+      context.fillRect(0, 0, canvasWidth, canvasHeight);
+      context.drawImage(previewVideo, drawLeft, drawTop, drawWidth, drawHeight);
+      const imageUrl = canvas.toDataURL("image/jpeg", 0.78);
+      setTimelinePreview((previous) =>
+        previous.isVisible ? { ...previous, imageUrl, isLoadingFrame: false } : previous,
+      );
+    };
+
+    if (Math.abs(previewVideo.currentTime - targetTime) < 0.08 && previewVideo.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+      drawFrame();
+      return;
+    }
+
+    previewVideo.addEventListener("seeked", drawFrame, { once: true });
+    previewVideo.currentTime = targetTime;
+  }, [currentVideo, duration]);
+
+  useEffect(() => {
+    if (timelineFrameTimerRef.current) {
+      window.clearTimeout(timelineFrameTimerRef.current);
+      timelineFrameTimerRef.current = null;
+    }
+
+    if (!timelinePreview.isVisible || !currentVideo || duration <= 0) {
+      timelineFrameRequestRef.current += 1;
+      setTimelinePreview((previous) =>
+        previous.imageUrl || previous.isLoadingFrame ? { ...previous, imageUrl: "", isLoadingFrame: false } : previous,
+      );
+      return;
+    }
+
+    timelineFrameTimerRef.current = window.setTimeout(() => {
+      timelineFrameTimerRef.current = null;
+      captureTimelineFrame(timelinePreview.time);
+    }, 80);
+
+    return () => {
+      if (timelineFrameTimerRef.current) {
+        window.clearTimeout(timelineFrameTimerRef.current);
+        timelineFrameTimerRef.current = null;
+      }
+    };
+  }, [captureTimelineFrame, currentVideo, duration, timelinePreview.isVisible, timelinePreview.time]);
 
   const seekBy = useCallback(
     (seconds: number) => {
@@ -1428,25 +1516,37 @@ export default function App() {
           tabIndex={-1}
         >
           {currentVideo ? (
-            <video
-              ref={videoRef}
-              className="video-element"
-              src={currentVideo.url}
-              onClick={togglePlay}
-              onPlay={() => setIsPlaying(true)}
-              onPause={() => {
-                setIsPlaying(false);
-                persistCurrentProgress();
-              }}
-              onTimeUpdate={handleTimeUpdate}
-              onDurationChange={(event) => setDuration(event.currentTarget.duration || 0)}
-              onEnded={handleEnded}
-              playsInline
-            >
-              {selectedSubtitle ? (
-                <track key={selectedSubtitle.id} src={selectedSubtitle.url} kind="subtitles" label={selectedSubtitle.name} default />
-              ) : null}
-            </video>
+            <>
+              <video
+                ref={videoRef}
+                className="video-element"
+                src={currentVideo.url}
+                onClick={togglePlay}
+                onPlay={() => setIsPlaying(true)}
+                onPause={() => {
+                  setIsPlaying(false);
+                  persistCurrentProgress();
+                }}
+                onTimeUpdate={handleTimeUpdate}
+                onDurationChange={(event) => setDuration(event.currentTarget.duration || 0)}
+                onEnded={handleEnded}
+                playsInline
+              >
+                {selectedSubtitle ? (
+                  <track key={selectedSubtitle.id} src={selectedSubtitle.url} kind="subtitles" label={selectedSubtitle.name} default />
+                ) : null}
+              </video>
+              <video
+                ref={previewVideoRef}
+                className="timeline-preview-video"
+                src={currentVideo.url}
+                muted
+                preload="metadata"
+                playsInline
+                tabIndex={-1}
+              />
+              <canvas ref={previewCanvasRef} className="timeline-preview-canvas" width={192} height={108} />
+            </>
           ) : (
             <div className="empty-player">
               <FolderOpen size={40} />
@@ -1481,7 +1581,18 @@ export default function App() {
                   } as React.CSSProperties
                 }
               >
-                <output className="timeline-preview">{formatTime(timelinePreview.time)}</output>
+                <output className="timeline-preview">
+                  <span className="timeline-preview-frame">
+                    {timelinePreview.imageUrl ? (
+                      <img src={timelinePreview.imageUrl} alt="" draggable={false} />
+                    ) : (
+                      <span className="timeline-preview-placeholder">
+                        {timelinePreview.isLoadingFrame ? "" : formatTime(timelinePreview.time)}
+                      </span>
+                    )}
+                  </span>
+                  <span className="timeline-preview-time">{formatTime(timelinePreview.time)}</span>
+                </output>
                 <input
                   ref={timelineRef}
                 aria-label="播放进度"
