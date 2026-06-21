@@ -378,7 +378,8 @@ button {
 
 .volume-control,
 .auto-next,
-.settings-control {
+.settings-control,
+.subtitle-control {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -426,6 +427,21 @@ button {
   border-radius: 6px;
   background: #20252d;
   color: #f5f7fb;
+}
+
+.subtitle-select {
+  width: 142px;
+  height: 32px;
+  padding: 0 7px;
+  border: 1px solid #303743;
+  border-radius: 6px;
+  background: #20252d;
+  color: #f5f7fb;
+}
+
+.subtitle-select:disabled {
+  color: #5f6875;
+  background: #191d23;
 }
 
 .auto-next input {

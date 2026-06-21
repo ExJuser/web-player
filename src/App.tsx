@@ -9,6 +9,7 @@ import {
   RotateCcw,
   ShieldCheck,
   SkipForward,
+  Subtitles,
   Trash2,
   X,
   VolumeX,
@@ -49,6 +50,15 @@ type VideoItem = {
   height?: number;
 };
 
+type SubtitleItem = {
+  id: string;
+  name: string;
+  relativePath: string;
+  file: File;
+  url: string;
+  isManual?: boolean;
+};
+
 type PlaybackProgress = {
   currentTime: number;
   duration: number;
@@ -59,6 +69,7 @@ type PlaybackProgress = {
 type ProgressStore = Record<string, PlaybackProgress>;
 
 const VIDEO_EXTENSIONS = new Set([".mp4", ".webm", ".ogg", ".mov", ".m4v", ".mkv"]);
+const SUBTITLE_EXTENSIONS = new Set([".srt", ".vtt"]);
 const PROGRESS_FILE_NAME = ".local-web-player-progress.json";
 const FOLDER_ACCESS_PROMPT_KEY = "local-web-player:skip-folder-access-prompt";
 const VOLUME_STORAGE_KEY = "local-web-player:volume";
@@ -105,9 +116,27 @@ declare global {
 }
 
 function isVideoFile(name: string) {
+  return hasExtension(name, VIDEO_EXTENSIONS);
+}
+
+function isSubtitleFile(name: string) {
+  return hasExtension(name, SUBTITLE_EXTENSIONS);
+}
+
+function hasExtension(name: string, extensions: Set<string>) {
   const dotIndex = name.lastIndexOf(".");
   if (dotIndex < 0) return false;
-  return VIDEO_EXTENSIONS.has(name.slice(dotIndex).toLowerCase());
+  return extensions.has(name.slice(dotIndex).toLowerCase());
+}
+
+function extensionOf(name: string) {
+  const dotIndex = name.lastIndexOf(".");
+  return dotIndex >= 0 ? name.slice(dotIndex).toLowerCase() : "";
+}
+
+function basePathOf(path: string) {
+  const dotIndex = path.lastIndexOf(".");
+  return dotIndex >= 0 ? path.slice(0, dotIndex).toLowerCase() : path.toLowerCase();
 }
 
 function createVideoId(relativePath: string, file: File) {
@@ -242,6 +271,7 @@ function progressLabel(progress: PlaybackProgress | null | undefined) {
 
 async function collectVideos(directory: FileSystemDirectoryHandle) {
   const videos: VideoItem[] = [];
+  const subtitles: SubtitleItem[] = [];
 
   async function walk(handle: FileSystemDirectoryHandle, segments: string[]) {
     for await (const entry of handle.values()) {
@@ -259,12 +289,62 @@ async function collectVideos(directory: FileSystemDirectoryHandle) {
           size: file.size,
           lastModified: file.lastModified,
         });
+      } else if (isSubtitleFile(entry.name)) {
+        const file = await entry.getFile();
+        const relativePath = [...segments, entry.name].join("/");
+        subtitles.push({
+          id: `${relativePath}|${file.size}|${file.lastModified}`,
+          name: entry.name,
+          relativePath,
+          file,
+          url: "",
+        });
       }
     }
   }
 
   await walk(directory, []);
-  return videos.sort((a, b) => collator.compare(a.relativePath, b.relativePath));
+  return {
+    videos: videos.sort((a, b) => collator.compare(a.relativePath, b.relativePath)),
+    subtitles: subtitles.sort((a, b) => collator.compare(a.relativePath, b.relativePath)),
+  };
+}
+
+function escapeVttText(text: string) {
+  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function srtTimestampToVtt(value: string) {
+  return value.replace(",", ".");
+}
+
+function srtToVtt(raw: string) {
+  const normalized = raw.replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
+  const blocks = normalized.split(/\n{2,}/);
+  const cues = blocks
+    .map((block) => {
+      const lines = block.split("\n").filter(Boolean);
+      if (!lines.length) return "";
+      const timeLineIndex = lines.findIndex((line) => line.includes("-->"));
+      if (timeLineIndex < 0) return "";
+      const timeLine = lines[timeLineIndex].replace(
+        /(\d{2}:\d{2}:\d{2}),(\d{3})/g,
+        (_, time: string, millis: string) => srtTimestampToVtt(`${time},${millis}`),
+      );
+      const textLines = lines.slice(timeLineIndex + 1).map(escapeVttText);
+      return [timeLine, ...textLines].join("\n");
+    })
+    .filter(Boolean);
+
+  return `WEBVTT\n\n${cues.join("\n\n")}`;
+}
+
+async function createSubtitleUrl(subtitle: SubtitleItem) {
+  if (extensionOf(subtitle.name) === ".srt") {
+    const vtt = srtToVtt(await subtitle.file.text());
+    return URL.createObjectURL(new Blob([vtt], { type: "text/vtt" }));
+  }
+  return URL.createObjectURL(subtitle.file);
 }
 
 export default function App() {
@@ -282,11 +362,14 @@ export default function App() {
   const directoryRef = useRef<FileSystemDirectoryHandle | null>(null);
   const progressStoreRef = useRef<ProgressStore>({});
   const videosRef = useRef<VideoItem[]>([]);
+  const subtitlesRef = useRef<SubtitleItem[]>([]);
   const clearedProgressVideoIdsRef = useRef(new Set<string>());
   const isRightKeyDownRef = useRef(false);
   const didRightKeyHoldRef = useRef(false);
   const [videos, setVideos] = useState<VideoItem[]>([]);
+  const [subtitles, setSubtitles] = useState<SubtitleItem[]>([]);
   const [currentVideoId, setCurrentVideoId] = useState<string | null>(null);
+  const [selectedSubtitleId, setSelectedSubtitleId] = useState<string>("off");
   const [progressStore, setProgressStore] = useState<ProgressStore>({});
   const [isScanning, setIsScanning] = useState(false);
   const [isFolderDialogOpen, setIsFolderDialogOpen] = useState(false);
@@ -331,12 +414,19 @@ export default function App() {
   holdPlaybackRateRef.current = holdPlaybackRate;
   isHoldSpeedActiveRef.current = isHoldSpeedActive;
   videosRef.current = videos;
+  subtitlesRef.current = subtitles;
 
   const currentIndex = useMemo(
     () => videos.findIndex((item) => item.id === currentVideoId),
     [currentVideoId, videos],
   );
   const currentVideo = currentIndex >= 0 ? videos[currentIndex] : null;
+  const currentVideoSubtitles = useMemo(() => {
+    if (!currentVideo) return [];
+    const currentBasePath = basePathOf(currentVideo.relativePath);
+    return subtitles.filter((subtitle) => subtitle.isManual || basePathOf(subtitle.relativePath) === currentBasePath);
+  }, [currentVideo, subtitles]);
+  const selectedSubtitle = currentVideoSubtitles.find((subtitle) => subtitle.id === selectedSubtitleId) ?? null;
   const effectivePlaybackRate = isHoldSpeedActive ? holdPlaybackRate : playbackRate;
   const playbackRateOptions = useMemo(() => {
     if (rates.includes(effectivePlaybackRate)) return rates;
@@ -528,6 +618,7 @@ export default function App() {
       setIsPlaying(false);
       setCurrentTime(0);
       setDuration(0);
+      setSelectedSubtitleId("off");
       setVideoAspectRatio(16 / 9);
       focusPlayer();
     },
@@ -617,15 +708,27 @@ export default function App() {
         setMessage("需要允许写入文件夹，才能在本地保存播放进度。");
         return;
       }
-      const [nextVideos, nextProgressStore] = await Promise.all([collectVideos(directory), loadProgressStore(directory)]);
+      const [media, nextProgressStore] = await Promise.all([collectVideos(directory), loadProgressStore(directory)]);
+      const nextSubtitles = await Promise.all(
+        media.subtitles.map(async (subtitle) => ({
+          ...subtitle,
+          url: await createSubtitleUrl(subtitle),
+        })),
+      );
       directoryRef.current = directory;
       progressStoreRef.current = nextProgressStore;
       setProgressStore(nextProgressStore);
       videosRef.current.forEach((video) => URL.revokeObjectURL(video.url));
-      videosRef.current = nextVideos;
-      setVideos(nextVideos);
-      setCurrentVideoId(nextVideos[0]?.id ?? null);
-      setMessage(nextVideos.length ? `已加载 ${nextVideos.length} 个视频` : "这个文件夹里没有可播放的视频文件");
+      subtitlesRef.current.forEach((subtitle) => {
+        if (subtitle.url) URL.revokeObjectURL(subtitle.url);
+      });
+      videosRef.current = media.videos;
+      subtitlesRef.current = nextSubtitles;
+      setVideos(media.videos);
+      setSubtitles(nextSubtitles);
+      setSelectedSubtitleId("off");
+      setCurrentVideoId(media.videos[0]?.id ?? null);
+      setMessage(media.videos.length ? `已加载 ${media.videos.length} 个视频` : "这个文件夹里没有可播放的视频文件");
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
         setMessage("已取消选择文件夹");
@@ -663,6 +766,9 @@ export default function App() {
   useEffect(() => {
     return () => {
       videosRef.current.forEach((video) => URL.revokeObjectURL(video.url));
+      subtitlesRef.current.forEach((subtitle) => {
+        if (subtitle.url) URL.revokeObjectURL(subtitle.url);
+      });
     };
   }, []);
 
@@ -752,6 +858,16 @@ export default function App() {
       element.pause();
     }
   }, [currentVideo]);
+
+  useEffect(() => {
+    if (!currentVideo) {
+      setSelectedSubtitleId("off");
+      return;
+    }
+
+    const matchedSubtitle = currentVideoSubtitles.find((subtitle) => !subtitle.isManual);
+    setSelectedSubtitleId(matchedSubtitle?.id ?? "off");
+  }, [currentVideo, currentVideoSubtitles]);
 
   const seekTo = useCallback(
     (value: number) => {
@@ -848,6 +964,44 @@ export default function App() {
   const toggleMute = useCallback(() => {
     if (!currentVideo) return;
     setIsMuted((muted) => !muted);
+  }, [currentVideo]);
+
+  const chooseSubtitleFile = useCallback(async () => {
+    if (!currentVideo) return;
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".srt,.vtt,text/vtt,application/x-subrip";
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file || !isSubtitleFile(file.name)) return;
+      try {
+        const subtitle: SubtitleItem = {
+          id: `manual:${currentVideo.id}:${file.name}|${file.size}|${file.lastModified}`,
+          name: file.name,
+          relativePath: file.name,
+          file,
+          url: "",
+          isManual: true,
+        };
+        const subtitleWithUrl = {
+          ...subtitle,
+          url: await createSubtitleUrl(subtitle),
+        };
+        setSubtitles((previous) => {
+          previous
+            .filter((item) => item.isManual && item.id.startsWith(`manual:${currentVideo.id}:`))
+            .forEach((item) => URL.revokeObjectURL(item.url));
+          return [
+            ...previous.filter((item) => !(item.isManual && item.id.startsWith(`manual:${currentVideo.id}:`))),
+            subtitleWithUrl,
+          ];
+        });
+        setSelectedSubtitleId(subtitleWithUrl.id);
+      } catch {
+        setMessage("无法读取字幕文件，请确认字幕格式后重试。");
+      }
+    };
+    input.click();
   }, [currentVideo]);
 
   const toggleShortcutDialog = useCallback(() => {
@@ -1124,7 +1278,11 @@ export default function App() {
               onDurationChange={(event) => setDuration(event.currentTarget.duration || 0)}
               onEnded={handleEnded}
               playsInline
-            />
+            >
+              {selectedSubtitle ? (
+                <track key={selectedSubtitle.id} src={selectedSubtitle.url} kind="subtitles" label={selectedSubtitle.name} default />
+              ) : null}
+            </video>
           ) : (
             <div className="empty-player">
               <FolderOpen size={40} />
@@ -1275,6 +1433,31 @@ export default function App() {
                       {rate}x
                     </option>
                   ))}
+                </select>
+              </label>
+
+              <label className="subtitle-control">
+                <Subtitles size={18} />
+                <select
+                  aria-label="字幕"
+                  className="subtitle-select"
+                  value={selectedSubtitleId}
+                  onChange={(event) => {
+                    if (event.target.value === "manual") {
+                      void chooseSubtitleFile();
+                      return;
+                    }
+                    setSelectedSubtitleId(event.target.value);
+                  }}
+                  disabled={!currentVideo}
+                >
+                  <option value="off">字幕关闭</option>
+                  {currentVideoSubtitles.map((subtitle) => (
+                    <option key={subtitle.id} value={subtitle.id}>
+                      {subtitle.isManual ? `手动: ${subtitle.name}` : subtitle.name}
+                    </option>
+                  ))}
+                  <option value="manual">选择字幕...</option>
                 </select>
               </label>
 
