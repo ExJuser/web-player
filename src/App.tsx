@@ -69,6 +69,7 @@ const holdRates = [1.5, 2, 2.5, 3, 4];
 const volumeStep = 0.05;
 const controlsAutoHideDelay = 2500;
 const rightKeyHoldDelay = 350;
+const doubleClickFeedbackDelay = 650;
 
 const shortcutGroups = [
   {
@@ -276,6 +277,7 @@ export default function App() {
   const controlBarRef = useRef<HTMLDivElement | null>(null);
   const saveTimerRef = useRef<number | null>(null);
   const controlsHideTimerRef = useRef<number | null>(null);
+  const doubleClickFeedbackTimerRef = useRef<number | null>(null);
   const rightKeyHoldTimerRef = useRef<number | null>(null);
   const directoryRef = useRef<FileSystemDirectoryHandle | null>(null);
   const progressStoreRef = useRef<ProgressStore>({});
@@ -302,6 +304,10 @@ export default function App() {
     isVisible: false,
     isDragging: false,
   });
+  const [doubleClickFeedback, setDoubleClickFeedback] = useState<{
+    side: "left" | "center" | "right";
+    text: string;
+  } | null>(null);
   const [volume, setVolume] = useState(readStoredVolume);
   const [isMuted, setIsMuted] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
@@ -816,6 +822,17 @@ export default function App() {
     [seekTo],
   );
 
+  const showDoubleClickFeedback = useCallback((side: "left" | "center" | "right", text: string) => {
+    if (doubleClickFeedbackTimerRef.current) {
+      window.clearTimeout(doubleClickFeedbackTimerRef.current);
+    }
+    setDoubleClickFeedback({ side, text });
+    doubleClickFeedbackTimerRef.current = window.setTimeout(() => {
+      setDoubleClickFeedback(null);
+      doubleClickFeedbackTimerRef.current = null;
+    }, doubleClickFeedbackDelay);
+  }, []);
+
   const changeVolume = useCallback((nextVolume: number) => {
     const normalizedVolume = clamp(nextVolume, 0, 1);
     setVolume(normalizedVolume);
@@ -849,6 +866,31 @@ export default function App() {
       setMessage("无法进入全屏模式");
     }
   }, [currentVideo]);
+
+  const handlePlayerDoubleClick = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      if (!currentVideo || event.button !== 0 || event.target !== videoRef.current) return;
+      event.preventDefault();
+      event.stopPropagation();
+
+      const frame = playerRef.current;
+      if (!frame) return;
+      const rect = frame.getBoundingClientRect();
+      const ratio = rect.width ? (event.clientX - rect.left) / rect.width : 0.5;
+
+      if (ratio < 0.35) {
+        seekBy(-seekStep);
+        showDoubleClickFeedback("left", `-${seekStep}s`);
+      } else if (ratio > 0.65) {
+        seekBy(seekStep);
+        showDoubleClickFeedback("right", `+${seekStep}s`);
+      } else {
+        void toggleFullscreen();
+        showDoubleClickFeedback("center", document.fullscreenElement ? "退出全屏" : "全屏");
+      }
+    },
+    [currentVideo, seekBy, seekStep, showDoubleClickFeedback, toggleFullscreen],
+  );
 
   const handlePlayerWheel = useCallback(
     (event: React.WheelEvent<HTMLDivElement>) => {
@@ -983,6 +1025,14 @@ export default function App() {
     };
   }, [isHoldSpeedActive, stopHoldSpeed]);
 
+  useEffect(() => {
+    return () => {
+      if (doubleClickFeedbackTimerRef.current) {
+        window.clearTimeout(doubleClickFeedbackTimerRef.current);
+      }
+    };
+  }, []);
+
   const togglePictureInPicture = async () => {
     const element = videoRef.current;
     if (!element || !document.pictureInPictureEnabled) {
@@ -1052,6 +1102,7 @@ export default function App() {
           className={`player-frame ${isFullscreen ? "fullscreen" : ""} ${areControlsVisible ? "" : "controls-hidden"}`}
           ref={playerRef}
           onMouseMove={revealControls}
+          onDoubleClick={handlePlayerDoubleClick}
           onWheel={handlePlayerWheel}
           onMouseLeave={() => {
             if (isFullscreen) scheduleControlsHide();
@@ -1080,6 +1131,12 @@ export default function App() {
               <span>{message}</span>
             </div>
           )}
+
+          {doubleClickFeedback ? (
+            <div className={`double-click-feedback ${doubleClickFeedback.side}`} aria-live="polite">
+              {doubleClickFeedback.text}
+            </div>
+          ) : null}
 
           <div
             ref={controlBarRef}

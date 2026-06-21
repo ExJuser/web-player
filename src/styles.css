@@ -231,6 +231,58 @@ button {
   cursor: none;
 }
 
+.double-click-feedback {
+  position: absolute;
+  top: 50%;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 76px;
+  height: 42px;
+  padding: 0 14px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  background: rgba(5, 6, 7, 0.72);
+  color: #f5f7fb;
+  font-size: 16px;
+  font-weight: 700;
+  pointer-events: none;
+  transform: translateY(-50%);
+  animation: feedback-pop 650ms ease forwards;
+}
+
+.double-click-feedback.left {
+  left: 18%;
+}
+
+.double-click-feedback.center {
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.double-click-feedback.right {
+  right: 18%;
+}
+
+@keyframes feedback-pop {
+  0% {
+    opacity: 0;
+    scale: 0.9;
+  }
+
+  18%,
+  72% {
+    opacity: 1;
+    scale: 1;
+  }
+
+  100% {
+    opacity: 0;
+    scale: 1.04;
+  }
+}
+
 .timeline-row,
 .control-row {
   display: flex;
