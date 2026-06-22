@@ -1193,6 +1193,13 @@ button {
   font-weight: 700;
 }
 
+.shortcut-dialog-note {
+  margin: 10px 0 0;
+  color: #9aa4b2;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .shortcut-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1225,18 +1232,30 @@ button {
 }
 
 .shortcut-group dt {
+  margin: 0;
+}
+
+.shortcut-key-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  width: 100%;
   min-height: 28px;
-  margin: 0;
   padding: 0 8px;
   border: 1px solid #303743;
   border-radius: 6px;
   background: #20252d;
   color: #f5f7fb;
+  cursor: pointer;
   font-size: 12px;
   white-space: nowrap;
+}
+
+.shortcut-key-button:hover,
+.shortcut-key-button.recording {
+  border-color: #00a1d6;
+  background: #07394a;
+  color: #79dfff;
 }
 
 .shortcut-group dd {
@@ -1245,6 +1264,21 @@ button {
   color: #c9d0db;
   font-size: 13px;
   line-height: 1.35;
+}
+
+.shortcut-dialog-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.shortcut-dialog-footer span {
+  min-width: 0;
+  color: #9aa4b2;
+  font-size: 13px;
+  line-height: 1.4;
 }
 
 @media (max-width: 980px) {

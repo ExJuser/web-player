@@ -99,10 +99,26 @@ type PlayerDataStore = {
 type PlaylistFilter = "all" | "favorites";
 type PlaylistSortMode = "name" | "path" | "modified" | "size";
 type PlaybackMode = "sequential" | "single-loop" | "list-loop" | "shuffle" | "favorites-only";
+type ShortcutAction =
+  | "togglePlay"
+  | "seekBackward"
+  | "seekForward"
+  | "holdSpeed"
+  | "volumeUp"
+  | "volumeDown"
+  | "toggleMute"
+  | "toggleFullscreen"
+  | "toggleFavorite"
+  | "markCompleted"
+  | "playNext"
+  | "togglePrivacy"
+  | "toggleShortcuts";
+type ShortcutMap = Record<ShortcutAction, string>;
 
 type PlayerPreferences = {
   playlistSortMode: PlaylistSortMode;
   isPlaylistSortReversed: boolean;
+  shortcuts: ShortcutMap;
 };
 
 type MediaCollection = {
@@ -196,38 +212,57 @@ const thumbnailCacheTimeout = 3000;
 const thumbnailGenerationTimeout = 12000;
 const thumbnailEncodeTimeout = 3000;
 const playlistScrollFrameDelay = 16;
+const defaultShortcuts: ShortcutMap = {
+  togglePlay: "Space",
+  seekBackward: "ArrowLeft",
+  seekForward: "ArrowRight",
+  holdSpeed: "ArrowRight",
+  volumeUp: "ArrowUp",
+  volumeDown: "ArrowDown",
+  toggleMute: "KeyM",
+  toggleFullscreen: "KeyF",
+  toggleFavorite: "KeyS",
+  markCompleted: "KeyC",
+  playNext: "KeyN",
+  togglePrivacy: "KeyP",
+  toggleShortcuts: "Slash",
+};
 const defaultPlayerPreferences: PlayerPreferences = {
   playlistSortMode: "name",
   isPlaylistSortReversed: false,
+  shortcuts: defaultShortcuts,
 };
 
-const shortcutGroups = [
+const shortcutGroups: Array<{ title: string; items: Array<{ action: ShortcutAction; label: string }> }> = [
   {
     title: "播放",
     items: [
-      ["空格", "播放 / 暂停"],
-      ["← / →", "快退 / 快进"],
-      ["长按 →", "临时倍速播放"],
-      ["F", "进入 / 退出全屏"],
-      ["M", "静音 / 取消静音"],
+      { action: "togglePlay", label: "播放 / 暂停" },
+      { action: "seekBackward", label: "快退" },
+      { action: "seekForward", label: "快进" },
+      { action: "holdSpeed", label: "按住临时倍速" },
+      { action: "playNext", label: "下一集" },
     ],
   },
   {
-    title: "音量",
+    title: "播放状态",
     items: [
-      ["↑ / ↓", "调高 / 调低音量"],
-      ["滚轮", "在播放器上滚动调音量"],
+      { action: "toggleFullscreen", label: "进入 / 退出全屏" },
+      { action: "toggleFavorite", label: "收藏 / 取消收藏" },
+      { action: "markCompleted", label: "标记看完" },
+      { action: "toggleMute", label: "静音 / 取消静音" },
     ],
   },
   {
-    title: "界面",
+    title: "音量与界面",
     items: [
-      ["P", "隐私模式 / 快速清屏"],
-      ["?", "打开 / 关闭快捷键帮助"],
-      ["Esc", "关闭弹窗、退出隐私模式或全屏"],
+      { action: "volumeUp", label: "调高音量" },
+      { action: "volumeDown", label: "调低音量" },
+      { action: "togglePrivacy", label: "隐私模式 / 快速清屏" },
+      { action: "toggleShortcuts", label: "打开快捷键设置" },
     ],
   },
-] as const;
+];
 
 declare global {
   interface Window {
@@ -328,6 +363,17 @@ function parseProgressItems(source: unknown): ProgressStore {
   return store;
 }
 
+function parseShortcuts(source: unknown): ShortcutMap {
+  if (!source || typeof source !== "object" || Array.isArray(source)) return defaultShortcuts;
+  const shortcuts = source as Partial<ShortcutMap>;
+  return Object.fromEntries(
+    (Object.keys(defaultShortcuts) as ShortcutAction[]).map((action) => [
+      action,
+      typeof shortcuts[action] === "string" && shortcuts[action] ? shortcuts[action] : defaultShortcuts[action],
+    ]),
+  ) as ShortcutMap;
+}
+
 function parsePlayerPreferences(source: unknown): PlayerPreferences {
   if (!source || typeof source !== "object" || Array.isArray(source)) return defaultPlayerPreferences;
   const preferences = source as Partial<PlayerPreferences>;
@@ -342,6 +388,7 @@ function parsePlayerPreferences(source: unknown): PlayerPreferences {
       typeof preferences.isPlaylistSortReversed === "boolean"
         ? preferences.isPlaylistSortReversed
         : defaultPlayerPreferences.isPlaylistSortReversed,
+    shortcuts: parseShortcuts(preferences.shortcuts),
   };
 }
 
@@ -587,6 +634,36 @@ function readStoredVolume() {
 function isFormControl(target: EventTarget | null) {
   if (!(target instanceof HTMLElement)) return false;
   return target.isContentEditable || ["INPUT", "SELECT", "TEXTAREA", "BUTTON"].includes(target.tagName);
+}
+
+function formatShortcutKey(code: string) {
+  if (code === "Space") return "空格";
+  if (code === "Slash") return "?";
+  if (code.startsWith("Key")) return code.slice(3);
+  if (code.startsWith("Digit")) return code.slice(5);
+  if (code === "ArrowLeft") return "←";
+  if (code === "ArrowRight") return "→";
+  if (code === "ArrowUp") return "↑";
+  if (code === "ArrowDown") return "↓";
+  if (code.startsWith("Numpad")) return `小键盘 ${code.slice(6)}`;
+  return code.replace(/([a-z])([A-Z])/g, "$1 $2");
+}
+
+function shortcutCodeFromEvent(event: KeyboardEvent | React.KeyboardEvent) {
+  if (event.code === "Slash" && event.shiftKey) return "Slash";
+  return event.code || event.key;
+}
+
+function getShortcutConflict(shortcuts: ShortcutMap, action: ShortcutAction, nextCode: string) {
+  return (Object.keys(shortcuts) as ShortcutAction[]).find(
+    (candidate) =>
+      candidate !== action &&
+      shortcuts[candidate] === nextCode &&
+      !(
+        (action === "seekForward" && candidate === "holdSpeed") ||
+        (action === "holdSpeed" && candidate === "seekForward")
+      ),
+  );
 }
 
 function compareVideos(a: VideoItem, b: VideoItem, mode: PlaylistSortMode) {
@@ -1105,6 +1182,9 @@ export default function App() {
   const [isPlaylistSortReversed, setIsPlaylistSortReversed] = useState(
     defaultPlayerPreferences.isPlaylistSortReversed,
   );
+  const [shortcuts, setShortcuts] = useState<ShortcutMap>(defaultPlayerPreferences.shortcuts);
+  const [recordingShortcutAction, setRecordingShortcutAction] = useState<ShortcutAction | null>(null);
+  const [shortcutMessage, setShortcutMessage] = useState("");
   const [isScanning, setIsScanning] = useState(false);
   const [isMainVideoLoading, setIsMainVideoLoading] = useState(false);
   const [isDragActive, setIsDragActive] = useState(false);
@@ -1590,6 +1670,7 @@ export default function App() {
     playerPreferencesRef.current = nextPreferences;
     setPlaylistSortMode(nextPreferences.playlistSortMode);
     setIsPlaylistSortReversed(nextPreferences.isPlaylistSortReversed);
+    setShortcuts(nextPreferences.shortcuts);
 
     const directory = directoryRef.current;
     if (!directory) return;
@@ -1620,6 +1701,55 @@ export default function App() {
     });
   }, [replacePlayerPreferences]);
 
+  const updateShortcut = useCallback(
+    (action: ShortcutAction, nextCode: string) => {
+      const conflictAction = getShortcutConflict(playerPreferencesRef.current.shortcuts, action, nextCode);
+      if (conflictAction) {
+        const conflictItem = shortcutGroups
+          .flatMap((group) => group.items)
+          .find((item) => item.action === conflictAction);
+        setShortcutMessage(`“${formatShortcutKey(nextCode)}” 已用于 ${conflictItem?.label ?? "其他动作"}`);
+        return;
+      }
+
+      replacePlayerPreferences({
+        ...playerPreferencesRef.current,
+        shortcuts: {
+          ...playerPreferencesRef.current.shortcuts,
+          [action]: nextCode,
+        },
+      });
+      setShortcutMessage(`已设置为 ${formatShortcutKey(nextCode)}`);
+    },
+    [replacePlayerPreferences],
+  );
+
+  const resetShortcuts = useCallback(() => {
+    replacePlayerPreferences({
+      ...playerPreferencesRef.current,
+      shortcuts: defaultShortcuts,
+    });
+    setRecordingShortcutAction(null);
+    setShortcutMessage("已恢复默认快捷键");
+  }, [replacePlayerPreferences]);
+
+  const handleShortcutCapture = useCallback(
+    (event: React.KeyboardEvent<HTMLButtonElement>, action: ShortcutAction) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.key === "Escape") {
+        setRecordingShortcutAction(null);
+        setShortcutMessage("");
+        return;
+      }
+
+      const nextCode = shortcutCodeFromEvent(event);
+      updateShortcut(action, nextCode);
+      setRecordingShortcutAction(null);
+    },
+    [updateShortcut],
+  );
+
   const toggleFavorite = useCallback(
     (video: VideoItem) => {
       const nextFavorites = new Set(favoriteVideoIdsRef.current);
@@ -1633,6 +1763,11 @@ export default function App() {
     },
     [replaceFavorites],
   );
+
+  const toggleCurrentFavorite = useCallback(() => {
+    if (!currentVideo) return;
+    toggleFavorite(currentVideo);
+  }, [currentVideo, toggleFavorite]);
 
   const markVideoCompleted = useCallback(
     (video: VideoItem) => {
@@ -1658,6 +1793,11 @@ export default function App() {
     },
     [currentVideoId, replaceProgressStore],
   );
+
+  const markCurrentVideoCompleted = useCallback(() => {
+    if (!currentVideo) return;
+    markVideoCompleted(currentVideo);
+  }, [currentVideo, markVideoCompleted]);
 
   const resetVideoProgress = useCallback(
     (video: VideoItem) => {
@@ -1964,6 +2104,7 @@ export default function App() {
         playerPreferencesRef.current = {
           playlistSortMode,
           isPlaylistSortReversed,
+          shortcuts,
         };
         setProgressStore({});
         setFavoriteVideoIds(new Set());
@@ -2209,6 +2350,7 @@ export default function App() {
       playerPreferencesRef.current = {
         playlistSortMode,
         isPlaylistSortReversed,
+        shortcuts,
       };
       favoriteVideoIdsRef.current = new Set();
       setProgressStore({});
@@ -3105,6 +3247,8 @@ export default function App() {
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      const activeShortcuts = playerPreferencesRef.current.shortcuts;
+      const eventCode = shortcutCodeFromEvent(event);
       if (event.key === "Escape" && deleteCandidate) {
         event.preventDefault();
         setDeleteCandidate(null);
@@ -3123,13 +3267,13 @@ export default function App() {
         return;
       }
 
-      if (event.key === "?" && !isFormControl(event.target)) {
+      if (eventCode === activeShortcuts.toggleShortcuts && !isFormControl(event.target)) {
         event.preventDefault();
         toggleShortcutDialog();
         return;
       }
 
-      if (event.key.toLowerCase() === "p" && !isFormControl(event.target)) {
+      if (eventCode === activeShortcuts.togglePrivacy && !isFormControl(event.target)) {
         event.preventDefault();
         if (!event.repeat) {
           togglePrivacyMode();
@@ -3140,17 +3284,17 @@ export default function App() {
       if (!currentVideo || isShortcutDialogOpen || deleteCandidate || isFormControl(event.target)) return;
 
       if (isPrivacyMode) {
-        if (event.key === "ArrowLeft") {
+        if (eventCode === activeShortcuts.seekBackward) {
           event.preventDefault();
           seekBy(-seekStep);
-        } else if (event.key === "ArrowRight") {
+        } else if (eventCode === activeShortcuts.seekForward) {
           event.preventDefault();
           seekBy(seekStep);
         }
         return;
       }
 
-      if (event.code === "Space") {
+      if (eventCode === activeShortcuts.togglePlay) {
         event.preventDefault();
         if (!event.repeat) {
           togglePlay();
@@ -3158,7 +3302,7 @@ export default function App() {
         return;
       }
 
-      if (event.key.toLowerCase() === "m") {
+      if (eventCode === activeShortcuts.toggleMute) {
         event.preventDefault();
         if (!event.repeat) {
           toggleMute();
@@ -3166,7 +3310,7 @@ export default function App() {
         return;
       }
 
-      if (event.key.toLowerCase() === "f") {
+      if (eventCode === activeShortcuts.toggleFullscreen) {
         event.preventDefault();
         if (!event.repeat) {
           void toggleFullscreen();
@@ -3174,10 +3318,34 @@ export default function App() {
         return;
       }
 
-      if (event.key === "ArrowLeft") {
+      if (eventCode === activeShortcuts.toggleFavorite) {
+        event.preventDefault();
+        if (!event.repeat) {
+          toggleCurrentFavorite();
+        }
+        return;
+      }
+
+      if (eventCode === activeShortcuts.markCompleted) {
+        event.preventDefault();
+        if (!event.repeat) {
+          markCurrentVideoCompleted();
+        }
+        return;
+      }
+
+      if (eventCode === activeShortcuts.playNext) {
+        event.preventDefault();
+        if (!event.repeat) {
+          playNext();
+        }
+        return;
+      }
+
+      if (eventCode === activeShortcuts.seekBackward) {
         event.preventDefault();
         seekBy(-seekStep);
-      } else if (event.key === "ArrowRight") {
+      } else if (eventCode === activeShortcuts.holdSpeed) {
         event.preventDefault();
         if (event.repeat || isRightKeyDownRef.current) return;
         isRightKeyDownRef.current = true;
@@ -3188,24 +3356,32 @@ export default function App() {
           startHoldSpeed();
           rightKeyHoldTimerRef.current = null;
         }, rightKeyHoldDelay);
-      } else if (event.key === "ArrowUp") {
+      } else if (eventCode === activeShortcuts.seekForward) {
+        event.preventDefault();
+        seekBy(seekStep);
+      } else if (eventCode === activeShortcuts.volumeUp) {
         event.preventDefault();
         adjustVolume(volumeStep);
-      } else if (event.key === "ArrowDown") {
+      } else if (eventCode === activeShortcuts.volumeDown) {
         event.preventDefault();
         adjustVolume(-volumeStep);
       }
     };
 
     const handleKeyUp = (event: KeyboardEvent) => {
-      if (event.key !== "ArrowRight" || !isRightKeyDownRef.current) return;
+      const activeShortcuts = playerPreferencesRef.current.shortcuts;
+      if (shortcutCodeFromEvent(event) !== activeShortcuts.holdSpeed || !isRightKeyDownRef.current) return;
       event.preventDefault();
       clearRightKeyHoldTimer();
       isRightKeyDownRef.current = false;
       if (didRightKeyHoldRef.current) {
         didRightKeyHoldRef.current = false;
         stopHoldSpeed();
-      } else if (currentVideo && !isFormControl(event.target)) {
+      } else if (
+        currentVideo &&
+        activeShortcuts.holdSpeed === activeShortcuts.seekForward &&
+        !isFormControl(event.target)
+      ) {
         seekBy(seekStep);
       }
     };
@@ -3237,12 +3413,15 @@ export default function App() {
     toggleFullscreen,
     toggleMute,
     togglePlay,
+    toggleCurrentFavorite,
     toggleShortcutDialog,
     stopRightMouseHoldSpeed,
     deleteCandidate,
     exitPrivacyMode,
     isPrivacyMode,
     isShortcutDialogOpen,
+    markCurrentVideoCompleted,
+    playNext,
     togglePrivacyMode,
   ]);
 
@@ -3956,22 +4135,45 @@ export default function App() {
           </button>
           <div className="shortcut-dialog-title">
             <Keyboard size={24} />
-            <h2 id="shortcut-help-title">快捷键帮助</h2>
+            <h2 id="shortcut-help-title">快捷键设置</h2>
           </div>
+          <p className="shortcut-dialog-note">
+            点击按键后按下新的快捷键。Esc 关闭录制，右方向默认同时用于短按快进和长按倍速。
+          </p>
           <div className="shortcut-grid">
             {shortcutGroups.map((group) => (
               <section key={group.title} className="shortcut-group">
                 <h3>{group.title}</h3>
                 <dl>
-                  {group.items.map(([key, description]) => (
-                    <div key={key}>
-                      <dt>{key}</dt>
-                      <dd>{description}</dd>
+                  {group.items.map((item) => (
+                    <div key={item.action}>
+                      <dt>
+                        <button
+                          className={`shortcut-key-button ${recordingShortcutAction === item.action ? "recording" : ""}`}
+                          type="button"
+                          onClick={() => {
+                            setRecordingShortcutAction(item.action);
+                            setShortcutMessage(`按下新的“${item.label}”快捷键`);
+                          }}
+                          onKeyDown={(event) => handleShortcutCapture(event, item.action)}
+                        >
+                          {recordingShortcutAction === item.action
+                            ? "录制中"
+                            : formatShortcutKey(shortcuts[item.action])}
+                        </button>
+                      </dt>
+                      <dd>{item.label}</dd>
                     </div>
                   ))}
                 </dl>
               </section>
             ))}
+          </div>
+          <div className="shortcut-dialog-footer">
+            <span>{shortcutMessage || "滚轮仍可在播放器区域调节音量。"}</span>
+            <button className="secondary-button" type="button" onClick={resetShortcuts}>
+              恢复默认
+            </button>
           </div>
         </section>
       </div>
