@@ -99,6 +99,11 @@ type PlayerDataStore = {
 type PlaylistFilter = "all" | "favorites";
 type PlaylistSortMode = "name" | "path" | "modified" | "size";
 type PlaybackMode = "sequential" | "single-loop" | "list-loop" | "shuffle" | "favorites-only";
+type AutoNextPrompt = {
+  nextVideoId: string;
+  nextVideoName: string;
+  remainingSeconds: number;
+};
 type ShortcutAction =
   | "togglePlay"
   | "seekBackward"
@@ -201,6 +206,7 @@ const playlistSortOptions: Array<{ value: PlaylistSortMode; label: string }> = [
 ];
 const volumeStep = 0.05;
 const controlsAutoHideDelay = 2500;
+const autoNextPromptSeconds = 5;
 const rightKeyHoldDelay = 350;
 const doubleClickFeedbackDelay = 650;
 const mediaScanBatchSize = 150;
@@ -1136,6 +1142,7 @@ export default function App() {
   const saveTimerRef = useRef<number | null>(null);
   const playlistAutoScrollTimerRef = useRef<number | null>(null);
   const controlsHideTimerRef = useRef<number | null>(null);
+  const autoNextTimerRef = useRef<number | null>(null);
   const doubleClickFeedbackTimerRef = useRef<number | null>(null);
   const timelineFrameTimerRef = useRef<number | null>(null);
   const timelineFrameRequestRef = useRef(0);
@@ -1213,6 +1220,7 @@ export default function App() {
     side: "left" | "center" | "right";
     text: string;
   } | null>(null);
+  const [autoNextPrompt, setAutoNextPrompt] = useState<AutoNextPrompt | null>(null);
   const [volume, setVolume] = useState(readStoredVolume);
   const [isMuted, setIsMuted] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
@@ -1330,6 +1338,14 @@ export default function App() {
     controlsHideTimerRef.current = null;
   }, []);
 
+  const cancelAutoNextPrompt = useCallback(() => {
+    if (autoNextTimerRef.current) {
+      window.clearTimeout(autoNextTimerRef.current);
+      autoNextTimerRef.current = null;
+    }
+    setAutoNextPrompt(null);
+  }, []);
+
   const scheduleControlsHide = useCallback(() => {
     clearControlsHideTimer();
     if (!isFullscreen || !isPlaying || !currentVideo) return;
@@ -1404,6 +1420,7 @@ export default function App() {
   }, []);
 
   const clearLoadedMedia = useCallback(() => {
+    cancelAutoNextPrompt();
     videoRef.current?.pause();
     revokeVideoUrls(videosRef.current);
     subtitlesRef.current.forEach((subtitle) => {
@@ -1418,7 +1435,7 @@ export default function App() {
     setCurrentTime(0);
     setDuration(0);
     setIsPlaying(false);
-  }, [revokeVideoUrls]);
+  }, [cancelAutoNextPrompt, revokeVideoUrls]);
 
   const setVideoThumbnailState = useCallback((videoId: string, status: VideoItem["thumbnailStatus"], url?: string) => {
     setVideos((previous) => {
@@ -1946,6 +1963,7 @@ export default function App() {
 
   const selectVideo = useCallback(
     (videoId: string) => {
+      cancelAutoNextPrompt();
       persistCurrentProgress();
       resetHoldSpeedState();
       pendingAutoPlayVideoIdRef.current = videoId;
@@ -1967,7 +1985,7 @@ export default function App() {
       setVideoAspectRatio(16 / 9);
       focusPlayer();
     },
-    [focusPlayer, persistCurrentProgress, resetHoldSpeedState],
+    [cancelAutoNextPrompt, focusPlayer, persistCurrentProgress, resetHoldSpeedState],
   );
 
   useEffect(() => {
@@ -2080,6 +2098,45 @@ export default function App() {
   }, [favoritePlaylistVideos.length, getNextVideoId, playbackMode, playlistFilter, selectVideo]);
 
   const canPlayNext = useMemo(() => Boolean(getNextVideoId(playbackMode)), [getNextVideoId, playbackMode]);
+
+  const confirmAutoNext = useCallback(
+    (nextVideoId: string) => {
+      cancelAutoNextPrompt();
+      selectVideo(nextVideoId);
+    },
+    [cancelAutoNextPrompt, selectVideo],
+  );
+
+  const startAutoNextPrompt = useCallback(
+    (nextVideoId: string) => {
+      const nextVideo = videosRef.current.find((video) => video.id === nextVideoId);
+      cancelAutoNextPrompt();
+      setAutoNextPrompt({
+        nextVideoId,
+        nextVideoName: nextVideo?.name ?? "下一集",
+        remainingSeconds: autoNextPromptSeconds,
+      });
+
+      const tick = (remainingSeconds: number) => {
+        autoNextTimerRef.current = window.setTimeout(() => {
+          const nextRemainingSeconds = remainingSeconds - 1;
+          if (nextRemainingSeconds <= 0) {
+            confirmAutoNext(nextVideoId);
+            return;
+          }
+          setAutoNextPrompt((previous) =>
+            previous?.nextVideoId === nextVideoId
+              ? { ...previous, remainingSeconds: nextRemainingSeconds }
+              : previous,
+          );
+          tick(nextRemainingSeconds);
+        }, 1000);
+      };
+
+      tick(autoNextPromptSeconds);
+    },
+    [cancelAutoNextPrompt, confirmAutoNext],
+  );
 
   const loadMagnet = useCallback(
     async (magnetUri: string) => {
@@ -3249,6 +3306,12 @@ export default function App() {
     const handleKeyDown = (event: KeyboardEvent) => {
       const activeShortcuts = playerPreferencesRef.current.shortcuts;
       const eventCode = shortcutCodeFromEvent(event);
+      if (event.key === "Escape" && autoNextPrompt) {
+        event.preventDefault();
+        cancelAutoNextPrompt();
+        return;
+      }
+
       if (event.key === "Escape" && deleteCandidate) {
         event.preventDefault();
         setDeleteCandidate(null);
@@ -3404,6 +3467,8 @@ export default function App() {
     };
   }, [
     adjustVolume,
+    autoNextPrompt,
+    cancelAutoNextPrompt,
     clearRightKeyHoldTimer,
     currentVideo,
     seekBy,
@@ -3440,6 +3505,9 @@ export default function App() {
       }
       if (rightMouseHoldTimerRef.current) {
         window.clearTimeout(rightMouseHoldTimerRef.current);
+      }
+      if (autoNextTimerRef.current) {
+        window.clearTimeout(autoNextTimerRef.current);
       }
     };
   }, []);
@@ -3494,7 +3562,7 @@ export default function App() {
       }
       return;
     }
-    selectVideo(nextVideoId);
+    startAutoNextPrompt(nextVideoId);
   };
 
   const progressPercent = duration ? Math.min(100, (currentTime / duration) * 100) : 0;
@@ -3610,6 +3678,24 @@ export default function App() {
           {doubleClickFeedback ? (
             <div className={`double-click-feedback ${doubleClickFeedback.side}`} aria-live="polite">
               {doubleClickFeedback.text}
+            </div>
+          ) : null}
+
+          {autoNextPrompt ? (
+            <div className="auto-next-prompt" role="status" aria-live="polite">
+              <div className="auto-next-countdown">{autoNextPrompt.remainingSeconds}</div>
+              <div className="auto-next-copy">
+                <span>即将播放下一集</span>
+                <strong>{autoNextPrompt.nextVideoName}</strong>
+              </div>
+              <div className="auto-next-actions">
+                <button type="button" onClick={() => confirmAutoNext(autoNextPrompt.nextVideoId)}>
+                  立即播放
+                </button>
+                <button type="button" onClick={cancelAutoNextPrompt}>
+                  取消
+                </button>
+              </div>
             </div>
           ) : null}
 
