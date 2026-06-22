@@ -22,6 +22,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 type FileSystemDirectoryHandle = {
   values(): AsyncIterable<FileSystemDirectoryHandle | FileSystemFileHandle>;
   getFileHandle(name: string, options?: { create?: boolean }): Promise<FileSystemFileHandle>;
+  removeEntry?(name: string, options?: { recursive?: boolean }): Promise<void>;
   queryPermission?(descriptor?: { mode?: "read" | "readwrite" }): Promise<PermissionState>;
   requestPermission?(descriptor?: { mode?: "read" | "readwrite" }): Promise<PermissionState>;
   kind: "directory";
@@ -57,6 +58,7 @@ type VideoItem = {
   height?: number;
   thumbnailUrl?: string;
   thumbnailStatus?: "idle" | "loading" | "ready" | "failed";
+  parentDirectory?: FileSystemDirectoryHandle;
 };
 
 type SubtitleItem = {
@@ -500,6 +502,7 @@ async function collectVideos(directory: FileSystemDirectoryHandle) {
           url: URL.createObjectURL(file),
           size: file.size,
           lastModified: file.lastModified,
+          parentDirectory: handle,
         });
       } else if (isSubtitleFile(entry.name)) {
         const file = await entry.getFile();
@@ -1146,6 +1149,80 @@ export default function App() {
       replaceProgressStore(nextStore, `已清除《${video.name}》的播放进度`);
     },
     [currentVideoId, replaceProgressStore],
+  );
+
+  const deleteLocalVideo = useCallback(
+    async (video: VideoItem) => {
+      const parentDirectory = video.parentDirectory;
+      if (!parentDirectory?.removeEntry) {
+        setMessage("当前加载方式不支持删除本地文件，请通过“选择文件夹”重新加载后再试。");
+        return;
+      }
+
+      const confirmed = window.confirm(`确定要从本地磁盘删除这个视频吗？\n\n${video.relativePath}`);
+      if (!confirmed) return;
+
+      try {
+        const rootDirectory = directoryRef.current;
+        if (!rootDirectory || !(await ensureDirectoryPermission(rootDirectory))) {
+          setMessage("需要允许文件夹写入权限，才能删除本地文件。");
+          return;
+        }
+
+        const sortedBeforeDelete = getSortedVideos(
+          videosRef.current,
+          playerPreferencesRef.current.playlistSortMode,
+          playerPreferencesRef.current.isPlaylistSortReversed,
+        );
+        const previousIndex = sortedBeforeDelete.findIndex((item) => item.id === video.id);
+
+        await parentDirectory.removeEntry(video.name);
+
+        const nextVideos = videosRef.current.filter((item) => item.id !== video.id);
+        const nextProgressStore = { ...progressStoreRef.current };
+        const nextFavoriteVideoIds = new Set(favoriteVideoIdsRef.current);
+        delete nextProgressStore[video.id];
+        nextFavoriteVideoIds.delete(video.id);
+        clearedProgressVideoIdsRef.current.delete(video.id);
+        if (video.thumbnailUrl) URL.revokeObjectURL(video.thumbnailUrl);
+        URL.revokeObjectURL(video.url);
+
+        videosRef.current = nextVideos;
+        progressStoreRef.current = nextProgressStore;
+        favoriteVideoIdsRef.current = nextFavoriteVideoIds;
+        setVideos(nextVideos);
+        setProgressStore(nextProgressStore);
+        setFavoriteVideoIds(nextFavoriteVideoIds);
+
+        if (video.id === currentVideoId) {
+          videoRef.current?.pause();
+          const sortedAfterDelete = getSortedVideos(
+            nextVideos,
+            playerPreferencesRef.current.playlistSortMode,
+            playerPreferencesRef.current.isPlaylistSortReversed,
+          );
+          const fallbackIndex = previousIndex < 0 ? 0 : Math.min(previousIndex, sortedAfterDelete.length - 1);
+          setCurrentVideoId(sortedAfterDelete[fallbackIndex]?.id ?? null);
+          setCurrentTime(0);
+          setDuration(0);
+          setSelectedSubtitleId("off");
+          setIsPlaying(false);
+        }
+
+        if (rootDirectory) {
+          await savePlayerDataStore(rootDirectory, {
+            progress: nextProgressStore,
+            favorites: Array.from(nextFavoriteVideoIds),
+            preferences: playerPreferencesRef.current,
+          });
+        }
+
+        setMessage(`已删除本地文件《${video.name}》`);
+      } catch {
+        setMessage("删除本地文件失败，请确认浏览器仍有文件夹写入权限。");
+      }
+    },
+    [currentVideoId],
   );
 
   const clearFolderProgress = useCallback(() => {
@@ -2718,6 +2795,16 @@ export default function App() {
                     title="清除进度"
                   >
                     <RotateCcw size={15} />
+                  </button>
+                  <button
+                    className="episode-action-button danger"
+                    type="button"
+                    onClick={() => void deleteLocalVideo(video)}
+                    disabled={!video.parentDirectory?.removeEntry}
+                    title={video.parentDirectory?.removeEntry ? "删除本地文件" : "当前加载方式不支持删除本地文件"}
+                    aria-label={video.parentDirectory?.removeEntry ? "删除本地文件" : "当前加载方式不支持删除本地文件"}
+                  >
+                    <Trash2 size={15} />
                   </button>
                 </span>
               </div>

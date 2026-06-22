@@ -854,6 +854,20 @@ button {
   color: #ffc457;
 }
 
+.episode-action-button.danger {
+  color: #ff9b9b;
+}
+
+.episode-action-button.danger:hover {
+  background: rgba(255, 82, 82, 0.15);
+  color: #ffb3b3;
+}
+
+.episode-action-button.danger:disabled {
+  color: #5f6875;
+  background: #191d23;
+}
+
 .empty-list {
   display: flex;
   align-items: center;
