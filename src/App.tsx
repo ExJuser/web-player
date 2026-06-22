@@ -2,6 +2,7 @@ import {
   ArrowDownUp,
   CheckCircle2,
   FolderOpen,
+  EyeOff,
   Keyboard,
   Link2,
   LocateFixed,
@@ -96,7 +97,7 @@ type PlayerDataStore = {
 };
 
 type PlaylistFilter = "all" | "favorites";
-type PlaylistSortMode = "name" | "path" | "modified";
+type PlaylistSortMode = "name" | "path" | "modified" | "size";
 type PlaybackMode = "sequential" | "single-loop" | "list-loop" | "shuffle" | "favorites-only";
 
 type PlayerPreferences = {
@@ -155,6 +156,7 @@ type TorrentStreamTask = {
 const VIDEO_EXTENSIONS = new Set([".mp4", ".webm", ".ogg", ".mov", ".m4v", ".mkv"]);
 const SUBTITLE_EXTENSIONS = new Set([".srt", ".vtt"]);
 const MIN_LOCAL_VIDEO_SIZE_BYTES = 50 * 1024 * 1024;
+const IGNORED_VIDEO_BASENAMES = new Set(["theme_video", "trailer"]);
 const PROGRESS_FILE_NAME = ".local-web-player-progress.json";
 const FOLDER_ACCESS_PROMPT_KEY = "local-web-player:skip-folder-access-prompt";
 const VOLUME_STORAGE_KEY = "local-web-player:volume";
@@ -176,6 +178,7 @@ const playbackModeOptions: Array<{ value: PlaybackMode; label: string }> = [
   { value: "favorites-only", label: "只播收藏" },
 ];
 const playlistSortOptions: Array<{ value: PlaylistSortMode; label: string }> = [
+  { value: "size", label: "大小" },
   { value: "name", label: "文件名" },
   { value: "path", label: "路径" },
   { value: "modified", label: "修改时间" },
@@ -189,6 +192,9 @@ const mediaScanBatchDelay = 500;
 const playlistItemHeight = 86;
 const playlistVirtualOverscan = 10;
 const thumbnailQueueDelay = 180;
+const thumbnailCacheTimeout = 3000;
+const thumbnailGenerationTimeout = 12000;
+const thumbnailEncodeTimeout = 3000;
 const playlistScrollFrameDelay = 16;
 const defaultPlayerPreferences: PlayerPreferences = {
   playlistSortMode: "name",
@@ -216,8 +222,9 @@ const shortcutGroups = [
   {
     title: "界面",
     items: [
+      ["P", "隐私模式 / 快速清屏"],
       ["?", "打开 / 关闭快捷键帮助"],
-      ["Esc", "关闭弹窗或退出全屏"],
+      ["Esc", "关闭弹窗、退出隐私模式或全屏"],
     ],
   },
 ] as const;
@@ -230,6 +237,17 @@ declare global {
 
 function isVideoFile(name: string) {
   return hasExtension(name, VIDEO_EXTENSIONS);
+}
+
+function isIgnoredVideoFile(name: string) {
+  const fileName = name.split(/[\\/]/).pop() || name;
+  const dotIndex = fileName.lastIndexOf(".");
+  const baseName = dotIndex >= 0 ? fileName.slice(0, dotIndex) : fileName;
+  return IGNORED_VIDEO_BASENAMES.has(baseName.toLowerCase());
+}
+
+function shouldFilterLocalVideoFile(name: string, size: number) {
+  return size < MIN_LOCAL_VIDEO_SIZE_BYTES || isIgnoredVideoFile(name);
 }
 
 function isMagnetUri(value: string) {
@@ -315,7 +333,9 @@ function parsePlayerPreferences(source: unknown): PlayerPreferences {
   const preferences = source as Partial<PlayerPreferences>;
   return {
     playlistSortMode:
-      preferences.playlistSortMode === "path" || preferences.playlistSortMode === "modified"
+      preferences.playlistSortMode === "path" ||
+      preferences.playlistSortMode === "modified" ||
+      preferences.playlistSortMode === "size"
         ? preferences.playlistSortMode
         : defaultPlayerPreferences.playlistSortMode,
     isPlaylistSortReversed:
@@ -578,6 +598,10 @@ function compareVideos(a: VideoItem, b: VideoItem, mode: PlaylistSortMode) {
     return collator.compare(a.relativePath, b.relativePath);
   }
 
+  if (mode === "size") {
+    return b.size - a.size || collator.compare(a.relativePath, b.relativePath);
+  }
+
   return collator.compare(a.name, b.name) || collator.compare(a.relativePath, b.relativePath);
 }
 
@@ -669,7 +693,7 @@ async function* collectVideos(directory: FileSystemDirectoryHandle): AsyncGenera
       } else if (isVideoFile(entry.name)) {
         scannedFiles += 1;
         const file = await entry.getFile();
-        if (file.size < MIN_LOCAL_VIDEO_SIZE_BYTES) {
+        if (shouldFilterLocalVideoFile(entry.name, file.size)) {
           filteredSmallVideos += 1;
         } else {
           const relativePath = [...segments, entry.name].join("/");
@@ -719,7 +743,7 @@ function collectVideosFromFiles(files: FileList | File[]): MediaCollection {
 
     if (isVideoFile(name)) {
       collection.scannedFiles += 1;
-      if (file.size < MIN_LOCAL_VIDEO_SIZE_BYTES) {
+      if (shouldFilterLocalVideoFile(name, file.size)) {
         collection.filteredSmallVideos += 1;
         continue;
       }
@@ -809,6 +833,22 @@ function waitForMediaEvent(element: HTMLVideoElement, eventName: keyof HTMLMedia
   });
 }
 
+function withTimeout<T>(promise: Promise<T>, timeout: number, message: string) {
+  return new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(() => reject(new Error(message)), timeout);
+    promise.then(
+      (value) => {
+        window.clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        window.clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
 function waitForDrawableVideoFrame(element: HTMLVideoElement) {
   if ("requestVideoFrameCallback" in element) {
     return new Promise<void>((resolve) => {
@@ -873,19 +913,23 @@ function isCanvasNearlyBlack(context: CanvasRenderingContext2D, width: number, h
 }
 
 function encodeCanvasAsJpeg(canvas: HTMLCanvasElement) {
-  return new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob(
-      (blob) => {
-        if (!blob) {
-          reject(new Error("Unable to encode thumbnail."));
-          return;
-        }
-        resolve(blob);
-      },
-      "image/jpeg",
-      0.76,
-    );
-  });
+  return withTimeout(
+    new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) {
+            reject(new Error("Unable to encode thumbnail."));
+            return;
+          }
+          resolve(blob);
+        },
+        "image/jpeg",
+        0.76,
+      );
+    }),
+    thumbnailEncodeTimeout,
+    "Timed out encoding thumbnail.",
+  );
 }
 
 async function createVideoThumbnailBlob(video: VideoItem) {
@@ -970,18 +1014,30 @@ async function createVideoThumbnailBlob(video: VideoItem) {
 }
 
 async function loadVideoThumbnail(video: VideoItem) {
-  const cachedThumbnail = await readCachedThumbnail(video.id).catch(() => null);
+  const cachedThumbnail = await withTimeout(
+    readCachedThumbnail(video.id),
+    thumbnailCacheTimeout,
+    "Timed out reading cached thumbnail.",
+  ).catch(() => null);
   if (cachedThumbnail) {
     return { thumbnailUrl: URL.createObjectURL(cachedThumbnail), metadata: undefined };
   }
 
-  const { thumbnailBlob, metadata } = await createVideoThumbnailBlob(video);
+  const { thumbnailBlob, metadata } = await withTimeout(
+    createVideoThumbnailBlob(video),
+    thumbnailGenerationTimeout,
+    "Timed out creating thumbnail.",
+  );
   void writeCachedThumbnail(video.id, thumbnailBlob).catch(() => undefined);
   return { thumbnailUrl: URL.createObjectURL(thumbnailBlob), metadata };
 }
 
 async function loadCachedVideoThumbnail(video: VideoItem) {
-  const cachedThumbnail = await readCachedThumbnail(video.id).catch(() => null);
+  const cachedThumbnail = await withTimeout(
+    readCachedThumbnail(video.id),
+    thumbnailCacheTimeout,
+    "Timed out reading cached thumbnail.",
+  ).catch(() => null);
   return cachedThumbnail ? URL.createObjectURL(cachedThumbnail) : null;
 }
 
@@ -1025,6 +1081,7 @@ export default function App() {
   const pendingAutoPlayVideoIdRef = useRef<string | null>(null);
   const playlistScrollFrameRef = useRef<number | null>(null);
   const lastPlaylistUserScrollAtRef = useRef(0);
+  const lastPlaylistAutoScrollKeyRef = useRef("");
   const isPlaylistAutoScrollingRef = useRef(false);
   const clearedProgressVideoIdsRef = useRef(new Set<string>());
   const isRightKeyDownRef = useRef(false);
@@ -1051,6 +1108,7 @@ export default function App() {
   const [isDragActive, setIsDragActive] = useState(false);
   const [isFolderDialogOpen, setIsFolderDialogOpen] = useState(false);
   const [isShortcutDialogOpen, setIsShortcutDialogOpen] = useState(false);
+  const [isPrivacyMode, setIsPrivacyMode] = useState(false);
   const [deleteCandidate, setDeleteCandidate] = useState<VideoItem | null>(null);
   const [skipFolderAccessPrompt, setSkipFolderAccessPrompt] = useState(
     () => localStorage.getItem(FOLDER_ACCESS_PROMPT_KEY) === "true",
@@ -1117,6 +1175,7 @@ export default function App() {
     () => (playlistFilter === "favorites" ? favoritePlaylistVideos : playlistVideos),
     [favoritePlaylistVideos, playlistFilter, playlistVideos],
   );
+  const visibleVideoIdsKey = useMemo(() => visibleVideos.map((video) => video.id).join("\n"), [visibleVideos]);
   const playlistIndexById = useMemo(() => {
     const indexes = new Map<string, number>();
     playlistVideos.forEach((video, index) => indexes.set(video.id, index));
@@ -1139,6 +1198,21 @@ export default function App() {
       bottomSpacerHeight: Math.max(0, (visibleVideos.length - endIndex) * playlistItemHeight),
     };
   }, [playlistViewport.height, playlistViewport.scrollTop, visibleVideos]);
+  const viewportPlaylistItems = useMemo(() => {
+    const viewportHeight = playlistViewport.height || 0;
+    if (viewportHeight <= 0) return virtualPlaylist.items;
+
+    const startIndex = Math.max(0, Math.floor(playlistViewport.scrollTop / playlistItemHeight));
+    const endIndex = Math.min(
+      visibleVideos.length,
+      Math.ceil((playlistViewport.scrollTop + viewportHeight) / playlistItemHeight),
+    );
+    return visibleVideos.slice(startIndex, endIndex);
+  }, [playlistViewport.height, playlistViewport.scrollTop, virtualPlaylist.items, visibleVideos]);
+  const viewportVideoIdsKey = useMemo(
+    () => viewportPlaylistItems.map((video) => video.id).join("\n"),
+    [viewportPlaylistItems],
+  );
   const virtualVideoIdsKey = useMemo(
     () => virtualPlaylist.items.map((video) => video.id).join("\n"),
     [virtualPlaylist.items],
@@ -1377,36 +1451,50 @@ export default function App() {
     }, thumbnailQueueDelay);
   }, [setVideoThumbnailState, updateVideoMetadata]);
 
+  const enqueueVideoThumbnail = useCallback(
+    (videoId: string, priority = false) => {
+      if (thumbnailQueuedIdsRef.current.has(videoId)) {
+        if (priority) {
+          thumbnailQueueRef.current = [videoId, ...thumbnailQueueRef.current.filter((queuedId) => queuedId !== videoId)];
+        }
+        return;
+      }
+      thumbnailQueuedIdsRef.current.add(videoId);
+      if (priority) {
+        thumbnailQueueRef.current.unshift(videoId);
+      } else {
+        thumbnailQueueRef.current.push(videoId);
+      }
+      scheduleThumbnailWorker();
+    },
+    [scheduleThumbnailWorker],
+  );
+
   const requestVideoThumbnail = useCallback(
-    (videoId: string) => {
+    (videoId: string, priority = false) => {
       const video = videosRef.current.find((item) => item.id === videoId);
       if (!video || video.thumbnailStatus === "loading" || video.thumbnailStatus === "ready") return;
 
       if (isScanningRef.current) {
-        setVideoThumbnailState(videoId, "loading");
         loadCachedVideoThumbnail(video)
           .then((thumbnailUrl) => {
             if (thumbnailUrl) {
               setVideoThumbnailState(videoId, "ready", thumbnailUrl);
-            } else {
-              setVideoThumbnailState(videoId, "idle");
-              if (!isScanningRef.current && !thumbnailQueuedIdsRef.current.has(videoId)) {
-                thumbnailQueuedIdsRef.current.add(videoId);
-                thumbnailQueueRef.current.push(videoId);
-                scheduleThumbnailWorker();
-              }
+            } else if (!isScanningRef.current) {
+              enqueueVideoThumbnail(videoId, priority);
             }
           })
-          .catch(() => setVideoThumbnailState(videoId, "idle"));
+          .catch(() => {
+            if (!isScanningRef.current) {
+              enqueueVideoThumbnail(videoId, priority);
+            }
+          });
         return;
       }
 
-      if (thumbnailQueuedIdsRef.current.has(videoId)) return;
-      thumbnailQueuedIdsRef.current.add(videoId);
-      thumbnailQueueRef.current.push(videoId);
-      scheduleThumbnailWorker();
+      enqueueVideoThumbnail(videoId, priority);
     },
-    [scheduleThumbnailWorker, setVideoThumbnailState],
+    [enqueueVideoThumbnail, setVideoThumbnailState],
   );
 
   const registerThumbnailTarget = useCallback(
@@ -1419,7 +1507,7 @@ export default function App() {
         return;
       }
 
-      requestVideoThumbnail(videoId);
+      requestVideoThumbnail(videoId, true);
     },
     [requestVideoThumbnail],
   );
@@ -1880,7 +1968,7 @@ export default function App() {
           const task = await loadTorrentStreamTask(nextMagnetUri);
           activeTorrentStreamTaskIdRef.current = task.torrentId;
           const torrentVideos = task.files
-            .filter((file) => isVideoFile(file.name || file.path))
+            .filter((file) => isVideoFile(file.name || file.path) && !isIgnoredVideoFile(file.name || file.path))
             .sort((a, b) => collator.compare(a.path, b.path))
             .map((file) => createTorrentStreamVideoItem(task, file));
 
@@ -1939,7 +2027,7 @@ export default function App() {
 
         activeTorrentRef.current = torrent;
         const torrentVideos = torrent.files
-          .filter((file) => isVideoFile(file.name || file.path))
+          .filter((file) => isVideoFile(file.name || file.path) && !isIgnoredVideoFile(file.name || file.path))
           .sort((a, b) => collator.compare(a.path, b.path))
           .map((file) => createMagnetVideoItem(torrent, file));
 
@@ -2264,10 +2352,19 @@ export default function App() {
 
   useEffect(() => {
     if (!isScanning && !isMainVideoLoading) {
+      viewportPlaylistItems.forEach((video) => requestVideoThumbnail(video.id, true));
       virtualPlaylist.items.forEach((video) => requestVideoThumbnail(video.id));
       scheduleThumbnailWorker();
     }
-  }, [isMainVideoLoading, isScanning, requestVideoThumbnail, scheduleThumbnailWorker, virtualPlaylist.items]);
+  }, [
+    isMainVideoLoading,
+    isScanning,
+    requestVideoThumbnail,
+    scheduleThumbnailWorker,
+    viewportPlaylistItems,
+    viewportVideoIdsKey,
+    virtualPlaylist.items,
+  ]);
 
   useEffect(() => {
     thumbnailObserverRef.current?.disconnect();
@@ -2279,7 +2376,7 @@ export default function App() {
           if (!entry.isIntersecting) return;
           const videoId = (entry.target as HTMLElement).dataset.videoId;
           if (videoId) {
-            requestVideoThumbnail(videoId);
+            requestVideoThumbnail(videoId, true);
             observer.unobserve(entry.target);
           }
         });
@@ -2321,10 +2418,14 @@ export default function App() {
 
   useEffect(() => {
     if (!currentVideoId || !playlistRef.current) return;
+    if (isScanning) return;
+    const autoScrollKey = `${currentVideoId}\n${visibleVideoIdsKey}`;
+    if (lastPlaylistAutoScrollKeyRef.current === autoScrollKey) return;
+    lastPlaylistAutoScrollKeyRef.current = autoScrollKey;
     if (Date.now() - lastPlaylistUserScrollAtRef.current < 800) return;
 
     scrollToCurrentPlaylistItem();
-  }, [currentVideoId, scrollToCurrentPlaylistItem, visibleVideoIndexById]);
+  }, [currentVideoId, isScanning, scrollToCurrentPlaylistItem, visibleVideoIdsKey]);
 
   const markPlaylistUserScroll = useCallback((event?: React.UIEvent<HTMLDivElement>) => {
     const element = event?.currentTarget ?? playlistRef.current;
@@ -2403,7 +2504,7 @@ export default function App() {
     };
   }, [destroyActiveTorrentStreamTask, revokeVideoUrls]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const mediaElements = [videoRef.current, previewVideoRef.current].filter(
       (element): element is HTMLVideoElement => Boolean(element),
     );
@@ -2475,11 +2576,6 @@ export default function App() {
       isMainVideoLoadingRef.current = false;
       setIsMainVideoLoading(false);
       scheduleThumbnailWorker();
-      if (pendingAutoPlayVideoIdRef.current !== currentVideo.id) return;
-      pendingAutoPlayVideoIdRef.current = null;
-      element.play().catch(() => {
-        setMessage("浏览器没有开始播放当前视频，请再点一次播放按钮。");
-      });
     };
     const handleError = () => {
       isMainVideoLoadingRef.current = false;
@@ -2499,6 +2595,12 @@ export default function App() {
       if (element.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) {
         handleCanPlay();
       }
+    }
+    if (pendingAutoPlayVideoIdRef.current === currentVideo.id) {
+      pendingAutoPlayVideoIdRef.current = null;
+      element.play().catch(() => {
+        setMessage("浏览器没有开始播放当前视频，请再点一次播放按钮。");
+      });
     }
 
     return () => {
@@ -2765,6 +2867,42 @@ export default function App() {
     setIsShortcutDialogOpen((open) => !open);
   }, []);
 
+  const enterPrivacyMode = useCallback(() => {
+    persistCurrentProgress();
+    resetHoldSpeedState();
+    setIsShortcutDialogOpen(false);
+    setDeleteCandidate(null);
+    setIsFolderDialogOpen(false);
+    setTimelinePreview({
+      time: 0,
+      left: 0,
+      isVisible: false,
+      isDragging: false,
+      imageUrl: "",
+      isLoadingFrame: false,
+    });
+    videoRef.current?.pause();
+    if (document.fullscreenElement) {
+      void document.exitFullscreen().catch(() => undefined);
+    }
+    setIsPrivacyMode(true);
+    setMessage("隐私模式已开启");
+  }, [persistCurrentProgress, resetHoldSpeedState]);
+
+  const exitPrivacyMode = useCallback(() => {
+    setIsPrivacyMode(false);
+    setMessage(currentVideo ? "已恢复播放界面" : "选择一个本地文件夹开始播放");
+    focusPlayer();
+  }, [currentVideo, focusPlayer]);
+
+  const togglePrivacyMode = useCallback(() => {
+    if (isPrivacyMode) {
+      exitPrivacyMode();
+    } else {
+      enterPrivacyMode();
+    }
+  }, [enterPrivacyMode, exitPrivacyMode, isPrivacyMode]);
+
   const toggleFullscreen = useCallback(async () => {
     if (!playerRef.current || !currentVideo) return;
     try {
@@ -2952,11 +3090,27 @@ export default function App() {
         return;
       }
 
+      if (event.key === "Escape" && isPrivacyMode) {
+        event.preventDefault();
+        exitPrivacyMode();
+        return;
+      }
+
       if (event.key === "?" && !isFormControl(event.target)) {
         event.preventDefault();
         toggleShortcutDialog();
         return;
       }
+
+      if (event.key.toLowerCase() === "p" && !isFormControl(event.target)) {
+        event.preventDefault();
+        if (!event.repeat) {
+          togglePrivacyMode();
+        }
+        return;
+      }
+
+      if (isPrivacyMode) return;
 
       if (!currentVideo || isShortcutDialogOpen || deleteCandidate || isFormControl(event.target)) return;
 
@@ -3050,7 +3204,10 @@ export default function App() {
     toggleShortcutDialog,
     stopRightMouseHoldSpeed,
     deleteCandidate,
+    exitPrivacyMode,
+    isPrivacyMode,
     isShortcutDialogOpen,
+    togglePrivacyMode,
   ]);
 
   useEffect(() => {
@@ -3130,7 +3287,7 @@ export default function App() {
   return (
     <>
     <main
-      className={`app-shell ${isDragActive ? "drag-active" : ""}`}
+      className={`app-shell ${isDragActive ? "drag-active" : ""} ${isPrivacyMode ? "privacy-mode" : ""}`}
       ref={appShellRef}
       style={shellStyle}
       onDragOver={handleDragOver}
@@ -3146,9 +3303,11 @@ export default function App() {
       <section className="player-column" ref={playerColumnRef}>
         <header className="top-bar" ref={topBarRef}>
           <div className="video-summary">
-            {currentVideo ? null : <h1>本地视频播放器</h1>}
-            <p className="current-video-title">{currentVideo ? currentVideo.relativePath : message}</p>
-            {currentVideo ? (
+            {currentVideo && !isPrivacyMode ? null : <h1>{isPrivacyMode ? "在线视频播放器" : "本地视频播放器"}</h1>}
+            <p className="current-video-title">
+              {isPrivacyMode ? "正在播放：推荐视频" : currentVideo ? currentVideo.relativePath : message}
+            </p>
+            {currentVideo && !isPrivacyMode ? (
               <dl className="current-video-meta">
                 {videoMetadataRows(currentVideo).map(([label, value]) => (
                   <div key={label}>
@@ -3159,10 +3318,24 @@ export default function App() {
               </dl>
             ) : null}
           </div>
-          <button className="primary-button" type="button" onClick={requestFolderAccess} disabled={isScanning}>
-            <FolderOpen size={18} />
-            {isScanning ? "扫描中" : "选择文件夹"}
-          </button>
+          <div className="top-actions">
+            <button
+              className={`privacy-button ${isPrivacyMode ? "active" : ""}`}
+              type="button"
+              onClick={togglePrivacyMode}
+              title="隐私模式 / 快速清屏 (P)"
+              aria-pressed={isPrivacyMode}
+            >
+              <EyeOff size={18} />
+              {isPrivacyMode ? "恢复" : "隐私"}
+            </button>
+            {!isPrivacyMode ? (
+              <button className="primary-button" type="button" onClick={requestFolderAccess} disabled={isScanning}>
+                <FolderOpen size={18} />
+                {isScanning ? "扫描中" : "选择文件夹"}
+              </button>
+            ) : null}
+          </div>
         </header>
 
         <div
@@ -3181,7 +3354,20 @@ export default function App() {
           }}
           tabIndex={-1}
         >
-          {currentVideo ? (
+          {isPrivacyMode ? (
+            <div className="privacy-cover" role="status" aria-live="polite">
+              <div className="privacy-cover-screen">
+                <Play size={58} />
+              </div>
+              <div className="privacy-cover-controls" aria-hidden="true">
+                <span className="privacy-cover-time">00:00</span>
+                <span className="privacy-cover-track">
+                  <span />
+                </span>
+                <span className="privacy-cover-time">00:00</span>
+              </div>
+            </div>
+          ) : currentVideo ? (
             <>
               <video
                 ref={videoRef}
@@ -3235,6 +3421,76 @@ export default function App() {
               keepControlsVisible();
             }}
           >
+            {isPrivacyMode ? (
+              <>
+                <div className="timeline-row">
+                  <span>00:00</span>
+                  <div className="timeline-track">
+                    <input
+                      aria-label="播放进度"
+                      className="timeline"
+                      type="range"
+                      min={0}
+                      max={100}
+                      step={1}
+                      value={18}
+                      readOnly
+                      disabled
+                      style={{ "--progress": "18%" } as React.CSSProperties}
+                    />
+                  </div>
+                  <span>00:00</span>
+                </div>
+
+                <div className="control-row">
+                  <button className="icon-button" type="button" disabled title="播放/暂停">
+                    <Play size={20} />
+                  </button>
+                  <button className="icon-button" type="button" disabled title="下一集">
+                    <SkipForward size={20} />
+                  </button>
+
+                  <label className="volume-control">
+                    <button
+                      aria-label="静音"
+                      className="volume-toggle"
+                      type="button"
+                      disabled
+                      title="静音"
+                    >
+                      <Volume2 size={18} />
+                    </button>
+                    <input aria-label="音量" type="range" min={0} max={1} step={0.01} value={0.85} readOnly disabled />
+                  </label>
+
+                  <select aria-label="播放速度" className="rate-select" value={1} disabled>
+                    <option value={1}>1x</option>
+                  </select>
+
+                  <span className="control-spacer" />
+
+                  <button className="icon-button" type="button" disabled title="画中画">
+                    <PictureInPicture2 size={20} />
+                  </button>
+                  <button className="icon-button" type="button" onClick={toggleShortcutDialog} title="快捷键帮助">
+                    <Keyboard size={20} />
+                  </button>
+                  <button
+                    className="icon-button privacy-toggle active"
+                    type="button"
+                    onClick={togglePrivacyMode}
+                    title="恢复播放界面 (P / Esc)"
+                    aria-pressed
+                  >
+                    <EyeOff size={20} />
+                  </button>
+                  <button className="icon-button" type="button" disabled title="全屏">
+                    <Maximize size={20} />
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
             <div className="timeline-row">
               <span>{formatTime(currentTime)}</span>
               <div
@@ -3419,14 +3675,26 @@ export default function App() {
               <button className="icon-button" type="button" onClick={toggleShortcutDialog} title="快捷键帮助">
                 <Keyboard size={20} />
               </button>
+              <button
+                className={`icon-button privacy-toggle ${isPrivacyMode ? "active" : ""}`}
+                type="button"
+                onClick={togglePrivacyMode}
+                title="隐私模式 / 快速清屏 (P)"
+                aria-pressed={isPrivacyMode}
+              >
+                <EyeOff size={20} />
+              </button>
               <button className="icon-button" type="button" onClick={toggleFullscreen} disabled={!currentVideo} title="全屏">
                 <Maximize size={20} />
               </button>
             </div>
+              </>
+            )}
           </div>
         </div>
       </section>
 
+      {!isPrivacyMode ? (
       <aside className="playlist-panel">
         <div className="playlist-header">
           <div className="playlist-title-row">
@@ -3618,6 +3886,7 @@ export default function App() {
           {videos.length && !visibleVideos.length ? <div className="empty-list">还没有收藏的视频</div> : null}
         </div>
       </aside>
+      ) : null}
     </main>
     {deleteCandidate ? (
       <div className="modal-backdrop" role="presentation" onMouseDown={() => setDeleteCandidate(null)}>
