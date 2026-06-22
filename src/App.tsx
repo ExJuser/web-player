@@ -1930,6 +1930,10 @@ export default function App() {
     setTimelinePreview((previous) => ({ ...previous, isVisible: false, isDragging: false }));
   }, []);
 
+  const returnFocusToPlayer = useCallback(() => {
+    playerRef.current?.focus({ preventScroll: true });
+  }, []);
+
   const captureTimelineFrame = useCallback((time: number) => {
     const previewVideo = previewVideoRef.current;
     const canvas = previewCanvasRef.current;
@@ -2599,8 +2603,12 @@ export default function App() {
                       event.currentTarget.releasePointerCapture(event.pointerId);
                     }
                     stopTimelineDragPreview();
+                    returnFocusToPlayer();
                   }}
-                  onPointerCancel={stopTimelineDragPreview}
+                  onPointerCancel={() => {
+                    stopTimelineDragPreview();
+                    returnFocusToPlayer();
+                  }}
                   onPointerLeave={hideTimelinePreview}
                 style={{ "--progress": `${progressPercent}%` } as React.CSSProperties}
                   disabled={!currentVideo}
