@@ -452,13 +452,6 @@ function isFormControl(target: EventTarget | null) {
   return target.isContentEditable || ["INPUT", "SELECT", "TEXTAREA", "BUTTON"].includes(target.tagName);
 }
 
-function progressLabel(progress: PlaybackProgress | null | undefined) {
-  if (!progress || !progress.duration) return "未播放";
-  if (progress.completed) return "已看完";
-  const percent = Math.min(99, Math.round((progress.currentTime / progress.duration) * 100));
-  return `${percent}%`;
-}
-
 function compareVideos(a: VideoItem, b: VideoItem, mode: PlaylistSortMode) {
   if (mode === "modified") {
     return b.lastModified - a.lastModified || collator.compare(a.relativePath, b.relativePath);
@@ -2839,7 +2832,8 @@ export default function App() {
         >
           {visibleVideos.map((video) => {
             const isActive = video.id === currentVideoId;
-            const label = progressLabel(progressStore[video.id]);
+            const progress = progressStore[video.id];
+            const isCompleted = Boolean(progress?.completed);
             const playlistIndex = playlistVideos.findIndex((item) => item.id === video.id);
             const isFavorite = favoriteVideoIds.has(video.id);
             return (
@@ -2864,16 +2858,20 @@ export default function App() {
                   <span className="episode-main">
                     <strong>{video.name}</strong>
                     <small>{video.relativePath}</small>
-                    <span className="episode-progress compact">
-                      {label === "已看完" ? <CheckCircle2 size={15} /> : null}
-                      {label}
-                    </span>
+                    {isCompleted ? (
+                      <span className="episode-progress compact">
+                        <CheckCircle2 size={15} />
+                        已看完
+                      </span>
+                    ) : null}
                   </span>
                 </button>
-                <span className="episode-progress">
-                  {label === "已看完" ? <CheckCircle2 size={15} /> : null}
-                  {label}
-                </span>
+                {isCompleted ? (
+                  <span className="episode-progress">
+                    <CheckCircle2 size={15} />
+                    已看完
+                  </span>
+                ) : null}
                 <span className="episode-actions">
                   <button
                     className={`episode-action-button favorite ${isFavorite ? "active" : ""}`}
@@ -2888,7 +2886,7 @@ export default function App() {
                     className="episode-action-button"
                     type="button"
                     onClick={() => markVideoCompleted(video)}
-                    disabled={label === "已看完"}
+                    disabled={isCompleted}
                     title="标记已看"
                   >
                     <CheckCircle2 size={15} />
