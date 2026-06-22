@@ -1072,6 +1072,7 @@ export default function App() {
   const videosRef = useRef<VideoItem[]>([]);
   const subtitlesRef = useRef<SubtitleItem[]>([]);
   const thumbnailObserverRef = useRef<IntersectionObserver | null>(null);
+  const thumbnailTargetVideoIdsRef = useRef(new WeakMap<HTMLElement, string>());
   const thumbnailQueueRef = useRef<string[]>([]);
   const thumbnailQueuedIdsRef = useRef(new Set<string>());
   const thumbnailWorkerTimerRef = useRef<number | null>(null);
@@ -1502,13 +1503,15 @@ export default function App() {
     (videoId: string, element: HTMLElement | null) => {
       if (!element) return;
       element.dataset.videoId = videoId;
+      const previousVideoId = thumbnailTargetVideoIdsRef.current.get(element);
+      if (previousVideoId !== videoId) {
+        thumbnailTargetVideoIdsRef.current.set(element, videoId);
+        requestVideoThumbnail(videoId, true);
+      }
       const observer = thumbnailObserverRef.current;
       if (observer) {
         observer.observe(element);
-        return;
       }
-
-      requestVideoThumbnail(videoId, true);
     },
     [requestVideoThumbnail],
   );
@@ -3127,9 +3130,18 @@ export default function App() {
         return;
       }
 
-      if (isPrivacyMode) return;
-
       if (!currentVideo || isShortcutDialogOpen || deleteCandidate || isFormControl(event.target)) return;
+
+      if (isPrivacyMode) {
+        if (event.key === "ArrowLeft") {
+          event.preventDefault();
+          seekBy(-seekStep);
+        } else if (event.key === "ArrowRight") {
+          event.preventDefault();
+          seekBy(seekStep);
+        }
+        return;
+      }
 
       if (event.code === "Space") {
         event.preventDefault();

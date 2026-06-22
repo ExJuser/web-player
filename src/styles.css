@@ -333,6 +333,11 @@ button {
   background: #101216;
 }
 
+.app-shell.privacy-mode .control-bar {
+  position: relative;
+  z-index: 2;
+}
+
 .player-frame.fullscreen .control-bar {
   position: absolute;
   right: 0;
