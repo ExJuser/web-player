@@ -776,6 +776,12 @@ button {
   padding-right: 8px;
 }
 
+.playlist-virtual-spacer {
+  width: 100%;
+  flex: 0 0 auto;
+  pointer-events: none;
+}
+
 .playlist::-webkit-scrollbar {
   width: 10px;
 }

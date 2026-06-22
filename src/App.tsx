@@ -57,9 +57,10 @@ type VideoItem = {
   url: string;
   size: number;
   lastModified: number;
-  source?: "local" | "magnet";
+  source?: "local" | "magnet" | "torrent-stream";
   torrentFile?: WebTorrentFile;
   torrentInfoHash?: string;
+  torrentStreamTaskId?: string;
   duration?: number;
   width?: number;
   height?: number;
@@ -103,6 +104,20 @@ type PlayerPreferences = {
   isPlaylistSortReversed: boolean;
 };
 
+type MediaCollection = {
+  videos: VideoItem[];
+  subtitles: SubtitleItem[];
+  scannedFiles: number;
+  filteredSmallVideos: number;
+};
+
+type MediaScanBatch = {
+  videos: VideoItem[];
+  subtitles: SubtitleItem[];
+  scannedFiles: number;
+  filteredSmallVideos: number;
+};
+
 type WebTorrentClient = {
   torrents: WebTorrentTorrent[];
   add(
@@ -116,8 +131,30 @@ type WebTorrentClient = {
 
 type WebTorrentConstructor = new (options?: Record<string, unknown>) => WebTorrentClient;
 
+type TorrentStreamFile = {
+  index: number;
+  name: string;
+  path: string;
+  length: number;
+  mimeType: string;
+  streamUrl: string;
+};
+
+type TorrentStreamTask = {
+  torrentId: string;
+  name: string;
+  infoHash: string;
+  status: "resolving" | "ready";
+  progress: number;
+  downloadSpeed: number;
+  uploadSpeed: number;
+  numPeers: number;
+  files: TorrentStreamFile[];
+};
+
 const VIDEO_EXTENSIONS = new Set([".mp4", ".webm", ".ogg", ".mov", ".m4v", ".mkv"]);
 const SUBTITLE_EXTENSIONS = new Set([".srt", ".vtt"]);
+const MIN_LOCAL_VIDEO_SIZE_BYTES = 50 * 1024 * 1024;
 const PROGRESS_FILE_NAME = ".local-web-player-progress.json";
 const FOLDER_ACCESS_PROMPT_KEY = "local-web-player:skip-folder-access-prompt";
 const VOLUME_STORAGE_KEY = "local-web-player:volume";
@@ -126,6 +163,7 @@ const RECENT_FOLDER_STORE_NAME = "handles";
 const THUMBNAIL_STORE_NAME = "thumbnails";
 const RECENT_FOLDER_KEY = "recent-folder";
 const WEBTORRENT_SW_URL = "/webtorrent-sw.min.js";
+const TORRENT_STREAM_API_ORIGIN = "http://127.0.0.1:3002";
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
 const rates = [0.5, 0.75, 1, 1.25, 1.5, 2, 3];
 const seekSteps = [5, 10, 15];
@@ -146,6 +184,10 @@ const volumeStep = 0.05;
 const controlsAutoHideDelay = 2500;
 const rightKeyHoldDelay = 350;
 const doubleClickFeedbackDelay = 650;
+const mediaScanBatchSize = 50;
+const mediaScanBatchDelay = 250;
+const playlistItemHeight = 86;
+const playlistVirtualOverscan = 10;
 const defaultPlayerPreferences: PlayerPreferences = {
   playlistSortMode: "name",
   isPlaylistSortReversed: false,
@@ -231,6 +273,10 @@ function createVideoId(relativePath: string, file: File) {
 
 function createMagnetVideoId(infoHash: string, file: WebTorrentFile) {
   return `magnet:${infoHash}:${file.path}:${file.length}`;
+}
+
+function createTorrentStreamVideoId(task: TorrentStreamTask, file: TorrentStreamFile) {
+  return `torrent-stream:${task.infoHash || task.torrentId}:${file.path}:${file.length}`;
 }
 
 function createProgress(currentTime: number, duration: number, completed = false): PlaybackProgress | null {
@@ -487,6 +533,20 @@ function createMagnetVideoItem(torrent: WebTorrentTorrent, file: WebTorrentFile)
   };
 }
 
+function createTorrentStreamVideoItem(task: TorrentStreamTask, file: TorrentStreamFile): VideoItem {
+  return {
+    id: createTorrentStreamVideoId(task, file),
+    name: file.name || file.path.split("/").pop() || task.name,
+    relativePath: `${task.name}/${file.path}`,
+    url: file.streamUrl,
+    size: file.length,
+    lastModified: Date.now(),
+    source: "torrent-stream",
+    torrentInfoHash: task.infoHash,
+    torrentStreamTaskId: task.torrentId,
+  };
+}
+
 function videoMetadataTitle(video: VideoItem) {
   return videoMetadataRows(video)
     .map(([label, value]) => `${label}: ${value}`)
@@ -534,31 +594,83 @@ function getLatestResumableVideo(videos: VideoItem[], progressStore: ProgressSto
     .sort((a, b) => b.progress.updatedAt - a.progress.updatedAt)[0];
 }
 
-async function collectVideos(directory: FileSystemDirectoryHandle) {
-  const videos: VideoItem[] = [];
-  const subtitles: SubtitleItem[] = [];
+function createEmptyMediaCollection(): MediaCollection {
+  return {
+    videos: [],
+    subtitles: [],
+    scannedFiles: 0,
+    filteredSmallVideos: 0,
+  };
+}
 
-  async function walk(handle: FileSystemDirectoryHandle, segments: string[]) {
+function mergeMediaBatch(collection: MediaCollection, batch: MediaScanBatch): MediaCollection {
+  return {
+    videos: [...collection.videos, ...batch.videos],
+    subtitles: [...collection.subtitles, ...batch.subtitles],
+    scannedFiles: batch.scannedFiles,
+    filteredSmallVideos: batch.filteredSmallVideos,
+  };
+}
+
+function sortMediaCollection(collection: MediaCollection): MediaCollection {
+  return {
+    ...collection,
+    videos: [...collection.videos].sort((a, b) => collator.compare(a.relativePath, b.relativePath)),
+    subtitles: [...collection.subtitles].sort((a, b) => collator.compare(a.relativePath, b.relativePath)),
+  };
+}
+
+function shouldFlushMediaScan(lastFlushAt: number, pendingVideos: VideoItem[], pendingSubtitles: SubtitleItem[]) {
+  return pendingVideos.length + pendingSubtitles.length >= mediaScanBatchSize || Date.now() - lastFlushAt >= mediaScanBatchDelay;
+}
+
+async function* collectVideos(directory: FileSystemDirectoryHandle): AsyncGenerator<MediaScanBatch> {
+  let pendingVideos: VideoItem[] = [];
+  let pendingSubtitles: SubtitleItem[] = [];
+  let scannedFiles = 0;
+  let filteredSmallVideos = 0;
+  let lastFlushAt = Date.now();
+
+  function createBatch() {
+    const batch = {
+      videos: pendingVideos,
+      subtitles: pendingSubtitles,
+      scannedFiles,
+      filteredSmallVideos,
+    };
+    pendingVideos = [];
+    pendingSubtitles = [];
+    lastFlushAt = Date.now();
+    return batch;
+  }
+
+  async function* walk(handle: FileSystemDirectoryHandle, segments: string[]): AsyncGenerator<MediaScanBatch> {
     for await (const entry of handle.values()) {
       if (entry.kind === "directory") {
-        await walk(entry, [...segments, entry.name]);
+        yield* walk(entry, [...segments, entry.name]);
       } else if (isVideoFile(entry.name)) {
+        scannedFiles += 1;
         const file = await entry.getFile();
-        const relativePath = [...segments, entry.name].join("/");
-        videos.push({
-          id: createVideoId(relativePath, file),
-          name: entry.name,
-          relativePath,
-          file,
-          url: URL.createObjectURL(file),
-          size: file.size,
-          lastModified: file.lastModified,
-          parentDirectory: handle,
-        });
+        if (file.size < MIN_LOCAL_VIDEO_SIZE_BYTES) {
+          filteredSmallVideos += 1;
+        } else {
+          const relativePath = [...segments, entry.name].join("/");
+          pendingVideos.push({
+            id: createVideoId(relativePath, file),
+            name: entry.name,
+            relativePath,
+            file,
+            url: URL.createObjectURL(file),
+            size: file.size,
+            lastModified: file.lastModified,
+            parentDirectory: handle,
+          });
+        }
       } else if (isSubtitleFile(entry.name)) {
+        scannedFiles += 1;
         const file = await entry.getFile();
         const relativePath = [...segments, entry.name].join("/");
-        subtitles.push({
+        pendingSubtitles.push({
           id: `${relativePath}|${file.size}|${file.lastModified}`,
           name: entry.name,
           relativePath,
@@ -566,19 +678,21 @@ async function collectVideos(directory: FileSystemDirectoryHandle) {
           url: "",
         });
       }
+
+      if (shouldFlushMediaScan(lastFlushAt, pendingVideos, pendingSubtitles)) {
+        yield createBatch();
+      }
     }
   }
 
-  await walk(directory, []);
-  return {
-    videos: videos.sort((a, b) => collator.compare(a.relativePath, b.relativePath)),
-    subtitles: subtitles.sort((a, b) => collator.compare(a.relativePath, b.relativePath)),
-  };
+  yield* walk(directory, []);
+  if (pendingVideos.length || pendingSubtitles.length || scannedFiles || filteredSmallVideos) {
+    yield createBatch();
+  }
 }
 
-function collectVideosFromFiles(files: FileList | File[]) {
-  const videos: VideoItem[] = [];
-  const subtitles: SubtitleItem[] = [];
+function collectVideosFromFiles(files: FileList | File[]): MediaCollection {
+  const collection = createEmptyMediaCollection();
 
   for (const file of Array.from(files)) {
     const browserRelativePath = (file as File & { webkitRelativePath?: string }).webkitRelativePath;
@@ -586,7 +700,12 @@ function collectVideosFromFiles(files: FileList | File[]) {
     const name = relativePath.split("/").pop() || file.name;
 
     if (isVideoFile(name)) {
-      videos.push({
+      collection.scannedFiles += 1;
+      if (file.size < MIN_LOCAL_VIDEO_SIZE_BYTES) {
+        collection.filteredSmallVideos += 1;
+        continue;
+      }
+      collection.videos.push({
         id: createVideoId(relativePath, file),
         name,
         relativePath,
@@ -596,7 +715,8 @@ function collectVideosFromFiles(files: FileList | File[]) {
         lastModified: file.lastModified,
       });
     } else if (isSubtitleFile(name)) {
-      subtitles.push({
+      collection.scannedFiles += 1;
+      collection.subtitles.push({
         id: `${relativePath}|${file.size}|${file.lastModified}`,
         name,
         relativePath,
@@ -606,10 +726,7 @@ function collectVideosFromFiles(files: FileList | File[]) {
     }
   }
 
-  return {
-    videos: videos.sort((a, b) => collator.compare(a.relativePath, b.relativePath)),
-    subtitles: subtitles.sort((a, b) => collator.compare(a.relativePath, b.relativePath)),
-  };
+  return sortMediaCollection(collection);
 }
 
 function escapeVttText(text: string) {
@@ -850,6 +967,7 @@ export default function App() {
   const webTorrentClientRef = useRef<WebTorrentClient | null>(null);
   const webTorrentServerReadyRef = useRef<Promise<void> | null>(null);
   const activeTorrentRef = useRef<WebTorrentTorrent | null>(null);
+  const activeTorrentStreamTaskIdRef = useRef<string | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const previewVideoRef = useRef<HTMLVideoElement | null>(null);
   const previewCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -939,6 +1057,7 @@ export default function App() {
     playerHeight: number;
     playlistWidth: number;
   } | null>(null);
+  const [playlistViewport, setPlaylistViewport] = useState({ scrollTop: 0, height: 0 });
   const playbackRateRef = useRef(playbackRate);
   const holdPlaybackRateRef = useRef(holdPlaybackRate);
   const isHoldSpeedActiveRef = useRef(isHoldSpeedActive);
@@ -965,7 +1084,32 @@ export default function App() {
     () => (playlistFilter === "favorites" ? favoritePlaylistVideos : playlistVideos),
     [favoritePlaylistVideos, playlistFilter, playlistVideos],
   );
-  const visibleVideoIdsKey = useMemo(() => visibleVideos.map((video) => video.id).join("\n"), [visibleVideos]);
+  const playlistIndexById = useMemo(() => {
+    const indexes = new Map<string, number>();
+    playlistVideos.forEach((video, index) => indexes.set(video.id, index));
+    return indexes;
+  }, [playlistVideos]);
+  const visibleVideoIndexById = useMemo(() => {
+    const indexes = new Map<string, number>();
+    visibleVideos.forEach((video, index) => indexes.set(video.id, index));
+    return indexes;
+  }, [visibleVideos]);
+  const virtualPlaylist = useMemo(() => {
+    const viewportHeight = playlistViewport.height || 0;
+    const startIndex = Math.max(0, Math.floor(playlistViewport.scrollTop / playlistItemHeight) - playlistVirtualOverscan);
+    const visibleCount = viewportHeight > 0 ? Math.ceil(viewportHeight / playlistItemHeight) : 12;
+    const endIndex = Math.min(visibleVideos.length, startIndex + visibleCount + playlistVirtualOverscan * 2);
+    return {
+      items: visibleVideos.slice(startIndex, endIndex),
+      startIndex,
+      topSpacerHeight: startIndex * playlistItemHeight,
+      bottomSpacerHeight: Math.max(0, (visibleVideos.length - endIndex) * playlistItemHeight),
+    };
+  }, [playlistViewport.height, playlistViewport.scrollTop, visibleVideos]);
+  const virtualVideoIdsKey = useMemo(
+    () => virtualPlaylist.items.map((video) => video.id).join("\n"),
+    [virtualPlaylist.items],
+  );
   const isCurrentVideoVisible = useMemo(
     () => !!currentVideoId && visibleVideos.some((video) => video.id === currentVideoId),
     [currentVideoId, visibleVideos],
@@ -1032,6 +1176,42 @@ export default function App() {
     if (!torrent) return;
     activeTorrentRef.current = null;
     torrent.destroy();
+  }, []);
+
+  const destroyActiveTorrentStreamTask = useCallback(() => {
+    const taskId = activeTorrentStreamTaskIdRef.current;
+    if (!taskId) return;
+    activeTorrentStreamTaskIdRef.current = null;
+    void fetch(`${TORRENT_STREAM_API_ORIGIN}/api/torrents/${encodeURIComponent(taskId)}`, {
+      method: "DELETE",
+    }).catch(() => undefined);
+  }, []);
+
+  const loadTorrentStreamTask = useCallback(async (magnetUri: string) => {
+    const response = await fetch(`${TORRENT_STREAM_API_ORIGIN}/api/torrents`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ magnetUri }),
+    });
+
+    let data: unknown = null;
+    try {
+      data = await response.json();
+    } catch {
+      data = null;
+    }
+
+    if (!response.ok) {
+      const message =
+        data && typeof data === "object" && "error" in data && typeof data.error === "string"
+          ? data.error
+          : "本地磁力转流服务加载失败。";
+      throw new Error(message);
+    }
+
+    return data as TorrentStreamTask;
   }, []);
 
   const clearLoadedMedia = useCallback(() => {
@@ -1592,11 +1772,12 @@ export default function App() {
 
       setIsLoadingMagnet(true);
       setIsScanning(true);
-      setMessage("正在连接磁力链接并获取种子元数据...");
+      setMessage("正在请求本地磁力转流服务解析元数据...");
 
+      let localServiceErrorMessage = "";
       try {
-        const client = await ensureWebTorrentClient();
         destroyActiveTorrent();
+        destroyActiveTorrentStreamTask();
         clearLoadedMedia();
         directoryRef.current = null;
         progressStoreRef.current = {};
@@ -1608,6 +1789,34 @@ export default function App() {
         setProgressStore({});
         setFavoriteVideoIds(new Set());
 
+        try {
+          const task = await loadTorrentStreamTask(nextMagnetUri);
+          activeTorrentStreamTaskIdRef.current = task.torrentId;
+          const torrentVideos = task.files
+            .filter((file) => isVideoFile(file.name || file.path))
+            .sort((a, b) => collator.compare(a.path, b.path))
+            .map((file) => createTorrentStreamVideoItem(task, file));
+
+          if (!torrentVideos.length) {
+            destroyActiveTorrentStreamTask();
+            setMessage("这个磁力链接里没有找到当前浏览器可识别的视频文件。");
+            return;
+          }
+
+          videosRef.current = torrentVideos;
+          subtitlesRef.current = [];
+          setVideos(torrentVideos);
+          setSubtitles([]);
+          setPlaylistFilter("all");
+          setCurrentVideoId(getSortedVideos(torrentVideos, playlistSortMode, isPlaylistSortReversed)[0]?.id ?? null);
+          setMessage(`已通过本地转流服务加载：${task.name}，共 ${torrentVideos.length} 个视频`);
+          return;
+        } catch (error) {
+          localServiceErrorMessage = error instanceof Error ? error.message : "";
+        }
+
+        setMessage("本地转流服务不可用，正在尝试浏览器 WebTorrent 播放...");
+        const client = await ensureWebTorrentClient();
         const torrent = await new Promise<WebTorrentTorrent>((resolve, reject) => {
           let settled = false;
           let nextTorrent: WebTorrentTorrent | null = null;
@@ -1666,11 +1875,20 @@ export default function App() {
         setSubtitles([]);
         setPlaylistFilter("all");
         setCurrentVideoId(getSortedVideos(torrentVideos, playlistSortMode, isPlaylistSortReversed)[0]?.id ?? null);
-        setMessage(`已加载磁力链接：${torrent.name}，共 ${torrentVideos.length} 个视频`);
+        setMessage(`已通过浏览器 WebTorrent 加载：${torrent.name}，共 ${torrentVideos.length} 个视频`);
       } catch (error) {
         destroyActiveTorrent();
+        destroyActiveTorrentStreamTask();
         clearLoadedMedia();
-        setMessage(error instanceof Error ? error.message : "磁力链接加载失败，请确认链接和 tracker 可用。");
+        if (error instanceof TypeError) {
+          setMessage(
+            "磁力链接加载失败：本地转流服务未启动或无法访问。请使用 npm run dev / npm run preview 启动完整服务。",
+          );
+        } else {
+          const browserErrorMessage = error instanceof Error ? error.message : "浏览器 WebTorrent 加载失败。";
+          const localMessage = localServiceErrorMessage ? `本地服务：${localServiceErrorMessage} ` : "";
+          setMessage(`${localMessage}浏览器 WebTorrent：${browserErrorMessage}`);
+        }
       } finally {
         setIsLoadingMagnet(false);
         setIsScanning(false);
@@ -1679,8 +1897,10 @@ export default function App() {
     [
       clearLoadedMedia,
       destroyActiveTorrent,
+      destroyActiveTorrentStreamTask,
       ensureWebTorrentClient,
       isPlaylistSortReversed,
+      loadTorrentStreamTask,
       playlistSortMode,
     ],
   );
@@ -1696,6 +1916,7 @@ export default function App() {
   const loadDirectoryMedia = useCallback(
     async (directory: FileSystemDirectoryHandle, options?: { remember?: boolean; restored?: boolean }) => {
       destroyActiveTorrent();
+      destroyActiveTorrentStreamTask();
       setIsFolderDialogOpen(false);
       setIsScanning(true);
       setMessage(options?.restored ? "正在恢复上次文件夹..." : "正在扫描视频文件...");
@@ -1709,15 +1930,11 @@ export default function App() {
         return;
       }
 
-      const [media, nextDataStore] = await Promise.all([collectVideos(directory), loadPlayerDataStore(directory)]);
-      const nextSubtitles = await Promise.all(
-        media.subtitles.map(async (subtitle) => ({
-          ...subtitle,
-          url: await createSubtitleUrl(subtitle),
-        })),
-      );
-
+      const dataStorePromise = loadPlayerDataStore(directory);
+      let media = createEmptyMediaCollection();
+      let hasSelectedInitialVideo = false;
       directoryRef.current = directory;
+      const nextDataStore = await dataStorePromise;
       progressStoreRef.current = nextDataStore.progress;
       playerPreferencesRef.current = nextDataStore.preferences;
       favoriteVideoIdsRef.current = new Set(nextDataStore.favorites);
@@ -1729,22 +1946,67 @@ export default function App() {
       subtitlesRef.current.forEach((subtitle) => {
         if (subtitle.url) URL.revokeObjectURL(subtitle.url);
       });
-      videosRef.current = media.videos;
-      subtitlesRef.current = nextSubtitles;
-      setVideos(media.videos);
-      setSubtitles(nextSubtitles);
+      videosRef.current = [];
+      subtitlesRef.current = [];
+      setVideos([]);
+      setSubtitles([]);
       setSelectedSubtitleId("off");
       setPlaylistFilter("all");
-      const resumeTarget = getLatestResumableVideo(media.videos, nextDataStore.progress);
-      const sortedVideos = getSortedVideos(
-        media.videos,
-        nextDataStore.preferences.playlistSortMode,
-        nextDataStore.preferences.isPlaylistSortReversed,
+      setCurrentVideoId(null);
+
+      for await (const batch of collectVideos(directory)) {
+        media = sortMediaCollection(mergeMediaBatch(media, batch));
+        const nextSubtitles = await Promise.all(
+          media.subtitles.map(async (subtitle) => ({
+            ...subtitle,
+            url: subtitle.url || (await createSubtitleUrl(subtitle)),
+          })),
+        );
+        media = { ...media, subtitles: nextSubtitles };
+        videosRef.current = media.videos;
+        subtitlesRef.current = media.subtitles;
+        setVideos(media.videos);
+        setSubtitles(media.subtitles);
+        setMessage(
+          `正在扫描，已找到 ${media.videos.length} 个视频，已过滤 ${media.filteredSmallVideos} 个小视频，已检查 ${media.scannedFiles} 个媒体文件`,
+        );
+
+        if (!hasSelectedInitialVideo && media.videos.length) {
+          const resumeTarget = getLatestResumableVideo(media.videos, nextDataStore.progress);
+          const sortedVideos = getSortedVideos(
+            media.videos,
+            nextDataStore.preferences.playlistSortMode,
+            nextDataStore.preferences.isPlaylistSortReversed,
+          );
+          setCurrentVideoId(resumeTarget?.video.id ?? sortedVideos[0]?.id ?? null);
+          hasSelectedInitialVideo = true;
+        }
+      }
+
+      media = sortMediaCollection(media);
+      const nextSubtitles = await Promise.all(
+        media.subtitles.map(async (subtitle) => ({
+          ...subtitle,
+          url: subtitle.url || (await createSubtitleUrl(subtitle)),
+        })),
       );
-      setCurrentVideoId(resumeTarget?.video.id ?? sortedVideos[0]?.id ?? null);
+      media = { ...media, subtitles: nextSubtitles };
+      videosRef.current = media.videos;
+      subtitlesRef.current = media.subtitles;
+      setVideos(media.videos);
+      setSubtitles(media.subtitles);
+      if (media.videos.length) {
+        const resumeTarget = getLatestResumableVideo(media.videos, nextDataStore.progress);
+        const sortedVideos = getSortedVideos(
+          media.videos,
+          nextDataStore.preferences.playlistSortMode,
+          nextDataStore.preferences.isPlaylistSortReversed,
+        );
+        setCurrentVideoId((currentId) => currentId ?? resumeTarget?.video.id ?? sortedVideos[0]?.id ?? null);
+      }
       setMessage(
         media.videos.length
-          ? `${options?.restored ? "已恢复" : "已加载"} ${media.videos.length} 个视频`
+          ? `${options?.restored ? "已恢复" : "已加载"} ${media.videos.length} 个视频，已过滤 ${media.filteredSmallVideos} 个 50 MB 以下小视频`
           : "这个文件夹里没有可播放的视频文件",
       );
 
@@ -1752,12 +2014,13 @@ export default function App() {
         await writeRecentFolderHandle(directory).catch(() => undefined);
       }
     },
-    [destroyActiveTorrent, revokeVideoUrls],
+    [destroyActiveTorrent, destroyActiveTorrentStreamTask, revokeVideoUrls],
   );
 
   const loadFileMedia = useCallback(
     async (files: FileList | File[], messageSuffix = "播放进度仅在本次会话保留") => {
       destroyActiveTorrent();
+      destroyActiveTorrentStreamTask();
       setIsFolderDialogOpen(false);
       setIsScanning(true);
       setMessage("正在扫描媒体文件...");
@@ -1789,10 +2052,12 @@ export default function App() {
       setPlaylistFilter("all");
       setCurrentVideoId(getSortedVideos(media.videos, playlistSortMode, isPlaylistSortReversed)[0]?.id ?? null);
       setMessage(
-        media.videos.length ? `已加载 ${media.videos.length} 个视频，${messageSuffix}` : "没有找到可播放的视频文件",
+        media.videos.length
+          ? `已加载 ${media.videos.length} 个视频，已过滤 ${media.filteredSmallVideos} 个 50 MB 以下小视频，${messageSuffix}`
+          : "没有找到可播放的视频文件",
       );
     },
-    [destroyActiveTorrent, isPlaylistSortReversed, playlistSortMode, revokeVideoUrls],
+    [destroyActiveTorrent, destroyActiveTorrentStreamTask, isPlaylistSortReversed, playlistSortMode, revokeVideoUrls],
   );
 
   const chooseFolderWithFileInput = () => {
@@ -1945,13 +2210,17 @@ export default function App() {
         thumbnailObserverRef.current = null;
       }
     };
-  }, [requestVideoThumbnail, visibleVideoIdsKey]);
+  }, [requestVideoThumbnail, virtualVideoIdsKey]);
 
   const scrollToCurrentPlaylistItem = useCallback((behavior: ScrollBehavior = "smooth") => {
-    const activeItem = playlistRef.current?.querySelector<HTMLElement>(".playlist-item.active");
-    if (!activeItem) return;
+    const playlist = playlistRef.current;
+    if (!playlist || !currentVideoId) return;
+    const index = visibleVideoIndexById.get(currentVideoId);
+    if (index === undefined) return;
     isPlaylistAutoScrollingRef.current = true;
-    activeItem.scrollIntoView({ block: "center", behavior });
+    const top = Math.max(0, index * playlistItemHeight - playlist.clientHeight / 2 + playlistItemHeight / 2);
+    playlist.scrollTo({ top, behavior });
+    setPlaylistViewport((previous) => ({ ...previous, scrollTop: top }));
 
     if (playlistAutoScrollTimerRef.current) {
       window.clearTimeout(playlistAutoScrollTimerRef.current);
@@ -1960,18 +2229,36 @@ export default function App() {
       isPlaylistAutoScrollingRef.current = false;
       playlistAutoScrollTimerRef.current = null;
     }, 700);
-  }, []);
+  }, [currentVideoId, visibleVideoIndexById]);
 
   useEffect(() => {
     if (!currentVideoId || !playlistRef.current) return;
     if (Date.now() - lastPlaylistUserScrollAtRef.current < 800) return;
 
     scrollToCurrentPlaylistItem();
-  }, [currentVideoId, scrollToCurrentPlaylistItem, visibleVideoIdsKey]);
+  }, [currentVideoId, scrollToCurrentPlaylistItem, visibleVideoIndexById]);
 
-  const markPlaylistUserScroll = useCallback(() => {
+  const markPlaylistUserScroll = useCallback((event?: React.UIEvent<HTMLDivElement>) => {
+    const element = event?.currentTarget ?? playlistRef.current;
+    if (element) {
+      setPlaylistViewport({ scrollTop: element.scrollTop, height: element.clientHeight });
+    }
     if (isPlaylistAutoScrollingRef.current) return;
     lastPlaylistUserScrollAtRef.current = Date.now();
+  }, []);
+
+  useLayoutEffect(() => {
+    const playlist = playlistRef.current;
+    if (!playlist) return;
+
+    const updatePlaylistViewport = () => {
+      setPlaylistViewport({ scrollTop: playlist.scrollTop, height: playlist.clientHeight });
+    };
+
+    updatePlaylistViewport();
+    const observer = new ResizeObserver(updatePlaylistViewport);
+    observer.observe(playlist);
+    return () => observer.disconnect();
   }, []);
 
   useEffect(() => {
@@ -2010,10 +2297,11 @@ export default function App() {
       subtitlesRef.current.forEach((subtitle) => {
         if (subtitle.url && isObjectUrl(subtitle.url)) URL.revokeObjectURL(subtitle.url);
       });
+      destroyActiveTorrentStreamTask();
       activeTorrentRef.current?.destroy();
       webTorrentClientRef.current?.destroy();
     };
-  }, [revokeVideoUrls]);
+  }, [destroyActiveTorrentStreamTask, revokeVideoUrls]);
 
   useEffect(() => {
     const mediaElements = [videoRef.current, previewVideoRef.current].filter(
@@ -3111,11 +3399,14 @@ export default function App() {
           onWheel={markPlaylistUserScroll}
           onTouchMove={markPlaylistUserScroll}
         >
-          {visibleVideos.map((video) => {
+          {virtualPlaylist.topSpacerHeight ? (
+            <div className="playlist-virtual-spacer" style={{ height: virtualPlaylist.topSpacerHeight }} />
+          ) : null}
+          {virtualPlaylist.items.map((video) => {
             const isActive = video.id === currentVideoId;
             const progress = progressStore[video.id];
             const isCompleted = Boolean(progress?.completed);
-            const playlistIndex = playlistVideos.findIndex((item) => item.id === video.id);
+            const playlistIndex = playlistIndexById.get(video.id) ?? 0;
             const isFavorite = favoriteVideoIds.has(video.id);
             return (
               <div
@@ -3195,6 +3486,9 @@ export default function App() {
               </div>
             );
           })}
+          {virtualPlaylist.bottomSpacerHeight ? (
+            <div className="playlist-virtual-spacer" style={{ height: virtualPlaylist.bottomSpacerHeight }} />
+          ) : null}
 
           {!videos.length ? <div className="empty-list">{message}</div> : null}
           {videos.length && !visibleVideos.length ? <div className="empty-list">还没有收藏的视频</div> : null}
