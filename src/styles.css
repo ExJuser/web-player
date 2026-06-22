@@ -781,6 +781,51 @@ button {
   margin-left: 2px;
 }
 
+.series-mode-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid #303743;
+  border-radius: 6px;
+  background: #20252d;
+  color: #dce2ec;
+  cursor: pointer;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.series-mode-button.active {
+  border-color: #00a1d6;
+  background: #07394a;
+  color: #79dfff;
+}
+
+.series-mode-button:disabled {
+  cursor: not-allowed;
+  color: #5f6875;
+  background: #191d23;
+}
+
+.series-select {
+  min-width: 126px;
+  max-width: 180px;
+  height: 32px;
+  padding: 0 7px;
+  border: 1px solid #303743;
+  border-radius: 6px;
+  background: #20252d;
+  color: #f5f7fb;
+  font-size: 13px;
+}
+
+.series-select:disabled {
+  cursor: not-allowed;
+  color: #5f6875;
+  background: #191d23;
+}
+
 .playlist-sort-select {
   width: 92px;
   height: 32px;
@@ -1024,6 +1069,10 @@ button {
   margin-top: 5px;
   color: #8e97a5;
   font-size: 12px;
+}
+
+.episode-main .episode-series {
+  color: #79dfff;
 }
 
 .episode-progress {

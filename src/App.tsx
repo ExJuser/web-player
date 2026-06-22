@@ -124,6 +124,8 @@ type PlayerPreferences = {
   playlistSortMode: PlaylistSortMode;
   isPlaylistSortReversed: boolean;
   shortcuts: ShortcutMap;
+  isSeriesMode: boolean;
+  selectedSeriesKey: string;
 };
 
 type MediaCollection = {
@@ -237,6 +239,8 @@ const defaultPlayerPreferences: PlayerPreferences = {
   playlistSortMode: "name",
   isPlaylistSortReversed: false,
   shortcuts: defaultShortcuts,
+  isSeriesMode: false,
+  selectedSeriesKey: "all",
 };
 
 const shortcutGroups: Array<{ title: string; items: Array<{ action: ShortcutAction; label: string }> }> = [
@@ -328,6 +332,33 @@ function basePathOf(path: string) {
   return dotIndex >= 0 ? path.slice(0, dotIndex).toLowerCase() : path.toLowerCase();
 }
 
+function baseNameWithoutExtension(name: string) {
+  const fileName = name.split(/[\\/]/).pop() || name;
+  const dotIndex = fileName.lastIndexOf(".");
+  return dotIndex >= 0 ? fileName.slice(0, dotIndex) : fileName;
+}
+
+function inferSeriesTitle(video: VideoItem) {
+  const normalizedPath = video.relativePath.replace(/\\/g, "/");
+  const pathParts = normalizedPath.split("/").filter(Boolean);
+  if (pathParts.length > 1) return pathParts[0];
+
+  return (
+    baseNameWithoutExtension(video.name)
+      .replace(/\[[^\]]+\]/g, " ")
+      .replace(/【[^】]+】/g, " ")
+      .replace(/\b(?:S\d{1,2}E\d{1,3}|EP?\s*\d{1,4}|第\s*\d{1,4}\s*[集话話]|[._ -]\d{1,4})\b/gi, " ")
+      .replace(/\b(?:1080p|2160p|720p|4k|8k|x264|x265|h264|h265|hevc|avc|aac|web-dl|bdrip|bluray)\b/gi, " ")
+      .replace(/[._-]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim() || baseNameWithoutExtension(video.name)
+  );
+}
+
+function seriesKeyFromTitle(title: string) {
+  return title.trim().toLowerCase();
+}
+
 function createVideoId(relativePath: string, file: File) {
   return `${relativePath}|${file.size}|${file.lastModified}`;
 }
@@ -395,6 +426,14 @@ function parsePlayerPreferences(source: unknown): PlayerPreferences {
         ? preferences.isPlaylistSortReversed
         : defaultPlayerPreferences.isPlaylistSortReversed,
     shortcuts: parseShortcuts(preferences.shortcuts),
+    isSeriesMode:
+      typeof preferences.isSeriesMode === "boolean"
+        ? preferences.isSeriesMode
+        : defaultPlayerPreferences.isSeriesMode,
+    selectedSeriesKey:
+      typeof preferences.selectedSeriesKey === "string" && preferences.selectedSeriesKey
+        ? preferences.selectedSeriesKey
+        : defaultPlayerPreferences.selectedSeriesKey,
   };
 }
 
@@ -1190,6 +1229,8 @@ export default function App() {
     defaultPlayerPreferences.isPlaylistSortReversed,
   );
   const [shortcuts, setShortcuts] = useState<ShortcutMap>(defaultPlayerPreferences.shortcuts);
+  const [isSeriesMode, setIsSeriesMode] = useState(defaultPlayerPreferences.isSeriesMode);
+  const [selectedSeriesKey, setSelectedSeriesKey] = useState(defaultPlayerPreferences.selectedSeriesKey);
   const [recordingShortcutAction, setRecordingShortcutAction] = useState<ShortcutAction | null>(null);
   const [shortcutMessage, setShortcutMessage] = useState("");
   const [isScanning, setIsScanning] = useState(false);
@@ -1253,17 +1294,40 @@ export default function App() {
     () => getSortedVideos(videos, playlistSortMode, isPlaylistSortReversed),
     [isPlaylistSortReversed, playlistSortMode, videos],
   );
+  const seriesOptions = useMemo(() => {
+    const seriesByKey = new Map<string, { key: string; title: string; count: number }>();
+    playlistVideos.forEach((video) => {
+      const title = inferSeriesTitle(video);
+      const key = seriesKeyFromTitle(title);
+      const existing = seriesByKey.get(key);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        seriesByKey.set(key, { key, title, count: 1 });
+      }
+    });
+    return Array.from(seriesByKey.values()).sort((a, b) => collator.compare(a.title, b.title));
+  }, [playlistVideos]);
+  const seriesTitleByVideoId = useMemo(() => {
+    const titles = new Map<string, string>();
+    playlistVideos.forEach((video) => titles.set(video.id, inferSeriesTitle(video)));
+    return titles;
+  }, [playlistVideos]);
+  const seriesFilteredVideos = useMemo(() => {
+    if (!isSeriesMode || selectedSeriesKey === "all") return playlistVideos;
+    return playlistVideos.filter((video) => seriesKeyFromTitle(seriesTitleByVideoId.get(video.id) ?? "") === selectedSeriesKey);
+  }, [isSeriesMode, playlistVideos, selectedSeriesKey, seriesTitleByVideoId]);
   const currentVideo = useMemo(
     () => videos.find((item) => item.id === currentVideoId) ?? null,
     [currentVideoId, videos],
   );
   const favoritePlaylistVideos = useMemo(
-    () => playlistVideos.filter((video) => favoriteVideoIds.has(video.id)),
-    [favoriteVideoIds, playlistVideos],
+    () => seriesFilteredVideos.filter((video) => favoriteVideoIds.has(video.id)),
+    [favoriteVideoIds, seriesFilteredVideos],
   );
   const visibleVideos = useMemo(
-    () => (playlistFilter === "favorites" ? favoritePlaylistVideos : playlistVideos),
-    [favoritePlaylistVideos, playlistFilter, playlistVideos],
+    () => (playlistFilter === "favorites" ? favoritePlaylistVideos : seriesFilteredVideos),
+    [favoritePlaylistVideos, playlistFilter, seriesFilteredVideos],
   );
   const visibleVideoIdsKey = useMemo(() => visibleVideos.map((video) => video.id).join("\n"), [visibleVideos]);
   const playlistIndexById = useMemo(() => {
@@ -1688,6 +1752,8 @@ export default function App() {
     setPlaylistSortMode(nextPreferences.playlistSortMode);
     setIsPlaylistSortReversed(nextPreferences.isPlaylistSortReversed);
     setShortcuts(nextPreferences.shortcuts);
+    setIsSeriesMode(nextPreferences.isSeriesMode);
+    setSelectedSeriesKey(nextPreferences.selectedSeriesKey);
 
     const directory = directoryRef.current;
     if (!directory) return;
@@ -1749,6 +1815,29 @@ export default function App() {
     setRecordingShortcutAction(null);
     setShortcutMessage("已恢复默认快捷键");
   }, [replacePlayerPreferences]);
+
+  const toggleSeriesMode = useCallback(() => {
+    const nextSeriesMode = !playerPreferencesRef.current.isSeriesMode;
+    const currentSeriesKey =
+      currentVideo && nextSeriesMode
+        ? seriesKeyFromTitle(seriesTitleByVideoId.get(currentVideo.id) ?? inferSeriesTitle(currentVideo))
+        : playerPreferencesRef.current.selectedSeriesKey;
+    replacePlayerPreferences({
+      ...playerPreferencesRef.current,
+      isSeriesMode: nextSeriesMode,
+      selectedSeriesKey: nextSeriesMode ? currentSeriesKey : "all",
+    });
+  }, [currentVideo, replacePlayerPreferences, seriesTitleByVideoId]);
+
+  const updateSelectedSeries = useCallback(
+    (nextSeriesKey: string) => {
+      replacePlayerPreferences({
+        ...playerPreferencesRef.current,
+        selectedSeriesKey: nextSeriesKey,
+      });
+    },
+    [replacePlayerPreferences],
+  );
 
   const handleShortcutCapture = useCallback(
     (event: React.KeyboardEvent<HTMLButtonElement>, action: ShortcutAction) => {
@@ -2056,13 +2145,24 @@ export default function App() {
     };
   }, [isFullscreen, videoAspectRatio]);
 
+  useEffect(() => {
+    if (!isSeriesMode || !currentVideo) return;
+    const currentSeriesKey = seriesKeyFromTitle(seriesTitleByVideoId.get(currentVideo.id) ?? inferSeriesTitle(currentVideo));
+    if (currentSeriesKey === selectedSeriesKey) return;
+    replacePlayerPreferences({
+      ...playerPreferencesRef.current,
+      selectedSeriesKey: currentSeriesKey,
+    });
+  }, [currentVideo, isSeriesMode, replacePlayerPreferences, selectedSeriesKey, seriesTitleByVideoId]);
+
   const getNextVideoId = useCallback(
     (mode: PlaybackMode) => {
       if (mode === "single-loop") {
         return currentVideoId;
       }
 
-      const queueVideos = mode === "favorites-only" || playlistFilter === "favorites" ? favoritePlaylistVideos : playlistVideos;
+      const queueVideos =
+        mode === "favorites-only" || playlistFilter === "favorites" ? favoritePlaylistVideos : seriesFilteredVideos;
       if (!queueVideos.length) return null;
 
       const queueCurrentIndex = queueVideos.findIndex((video) => video.id === currentVideoId);
@@ -2083,7 +2183,7 @@ export default function App() {
 
       return mode === "list-loop" ? queueVideos[0].id : null;
     },
-    [currentVideoId, favoritePlaylistVideos, playlistFilter, playlistVideos],
+    [currentVideoId, favoritePlaylistVideos, playlistFilter, seriesFilteredVideos],
   );
 
   const playNext = useCallback(() => {
@@ -2162,6 +2262,8 @@ export default function App() {
           playlistSortMode,
           isPlaylistSortReversed,
           shortcuts,
+          isSeriesMode,
+          selectedSeriesKey,
         };
         setProgressStore({});
         setFavoriteVideoIds(new Set());
@@ -2408,6 +2510,8 @@ export default function App() {
         playlistSortMode,
         isPlaylistSortReversed,
         shortcuts,
+        isSeriesMode,
+        selectedSeriesKey,
       };
       favoriteVideoIdsRef.current = new Set();
       setProgressStore({});
@@ -3923,16 +4027,44 @@ export default function App() {
       <aside className="playlist-panel">
         <div className="playlist-header">
           <div className="playlist-title-row">
-            <h2>播放列表</h2>
+            <h2>{isSeriesMode ? "追番列表" : "播放列表"}</h2>
             <span>
               {videos.length
                 ? playlistFilter === "favorites"
                   ? `${visibleVideos.length} / ${videos.length} 个收藏`
-                  : `${videos.length} 个视频`
+                  : isSeriesMode
+                    ? `${visibleVideos.length} / ${videos.length} 个视频`
+                    : `${videos.length} 个视频`
                 : "等待选择文件夹"}
             </span>
           </div>
           <div className="playlist-tools">
+            <button
+              className={`series-mode-button ${isSeriesMode ? "active" : ""}`}
+              type="button"
+              onClick={toggleSeriesMode}
+              disabled={!videos.length}
+              title={isSeriesMode ? "关闭追番模式" : "打开追番模式"}
+              aria-pressed={isSeriesMode}
+            >
+              追番
+            </button>
+            {isSeriesMode ? (
+              <select
+                className="series-select"
+                aria-label="选择系列"
+                value={selectedSeriesKey}
+                onChange={(event) => updateSelectedSeries(event.target.value)}
+                disabled={!seriesOptions.length}
+              >
+                <option value="all">全部系列</option>
+                {seriesOptions.map((series) => (
+                  <option key={series.key} value={series.key}>
+                    {series.title} ({series.count})
+                  </option>
+                ))}
+              </select>
+            ) : null}
             <select
               className="playlist-sort-select"
               aria-label="播放列表排序方式"
@@ -4025,6 +4157,7 @@ export default function App() {
             const isCompleted = Boolean(progress?.completed);
             const playlistIndex = playlistIndexById.get(video.id) ?? 0;
             const isFavorite = favoriteVideoIds.has(video.id);
+            const seriesTitle = isSeriesMode ? seriesTitleByVideoId.get(video.id) : "";
             return (
               <div
                 key={video.id}
@@ -4047,6 +4180,7 @@ export default function App() {
                   <span className="episode-main">
                     <strong>{video.name}</strong>
                     <small>{video.relativePath}</small>
+                    {seriesTitle ? <small className="episode-series">{seriesTitle}</small> : null}
                     {isCompleted ? (
                       <span className="episode-progress compact">
                         <CheckCircle2 size={15} />
