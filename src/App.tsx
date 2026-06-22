@@ -3,6 +3,7 @@ import {
   CheckCircle2,
   FolderOpen,
   Keyboard,
+  LocateFixed,
   Maximize,
   Pause,
   PictureInPicture2,
@@ -1708,15 +1709,11 @@ export default function App() {
     };
   }, [requestVideoThumbnail, visibleVideoIdsKey]);
 
-  useEffect(() => {
-    if (!currentVideoId || !playlistRef.current) return;
-    if (Date.now() - lastPlaylistUserScrollAtRef.current < 800) return;
-
-    const activeItem = playlistRef.current.querySelector<HTMLElement>(".playlist-item.active");
+  const scrollToCurrentPlaylistItem = useCallback((behavior: ScrollBehavior = "smooth") => {
+    const activeItem = playlistRef.current?.querySelector<HTMLElement>(".playlist-item.active");
     if (!activeItem) return;
-
     isPlaylistAutoScrollingRef.current = true;
-    activeItem.scrollIntoView({ block: "center", behavior: "smooth" });
+    activeItem.scrollIntoView({ block: "center", behavior });
 
     if (playlistAutoScrollTimerRef.current) {
       window.clearTimeout(playlistAutoScrollTimerRef.current);
@@ -1725,7 +1722,14 @@ export default function App() {
       isPlaylistAutoScrollingRef.current = false;
       playlistAutoScrollTimerRef.current = null;
     }, 700);
-  }, [currentVideoId, visibleVideoIdsKey]);
+  }, []);
+
+  useEffect(() => {
+    if (!currentVideoId || !playlistRef.current) return;
+    if (Date.now() - lastPlaylistUserScrollAtRef.current < 800) return;
+
+    scrollToCurrentPlaylistItem();
+  }, [currentVideoId, scrollToCurrentPlaylistItem, visibleVideoIdsKey]);
 
   const markPlaylistUserScroll = useCallback(() => {
     if (isPlaylistAutoScrollingRef.current) return;
@@ -2785,6 +2789,16 @@ export default function App() {
               aria-label={isPlaylistSortReversed ? "切换为正序" : "切换为倒序"}
             >
               <ArrowDownUp size={16} />
+            </button>
+            <button
+              className="playlist-locate-button"
+              type="button"
+              onClick={() => scrollToCurrentPlaylistItem()}
+              disabled={!isCurrentVideoVisible}
+              title={isCurrentVideoVisible ? "回到当前播放" : "当前播放不在列表筛选结果中"}
+              aria-label={isCurrentVideoVisible ? "回到当前播放" : "当前播放不在列表筛选结果中"}
+            >
+              <LocateFixed size={16} />
             </button>
             <div className="playlist-filter" aria-label="播放列表筛选">
               <button

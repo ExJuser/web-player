@@ -606,7 +606,8 @@ button {
   background: #191d23;
 }
 
-.playlist-order-button {
+.playlist-order-button,
+.playlist-locate-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -619,7 +620,8 @@ button {
   cursor: pointer;
 }
 
-.playlist-order-button:hover {
+.playlist-order-button:hover,
+.playlist-locate-button:hover {
   background: #2a303a;
 }
 
@@ -629,7 +631,8 @@ button {
   color: #79dfff;
 }
 
-.playlist-order-button:disabled {
+.playlist-order-button:disabled,
+.playlist-locate-button:disabled {
   cursor: not-allowed;
   border-color: #303743;
   background: #191d23;
