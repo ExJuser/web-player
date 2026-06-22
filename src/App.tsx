@@ -61,6 +61,8 @@ type VideoItem = {
   parentDirectory?: FileSystemDirectoryHandle;
 };
 
+type VideoMetadata = Pick<VideoItem, "duration" | "width" | "height">;
+
 type SubtitleItem = {
   id: string;
   name: string;
@@ -637,6 +639,38 @@ function waitForDrawableVideoFrame(element: HTMLVideoElement) {
   return new Promise<void>((resolve) => window.setTimeout(resolve, 80));
 }
 
+function getVideoElementMetadata(element: HTMLVideoElement): VideoMetadata {
+  return {
+    duration: Number.isFinite(element.duration) ? element.duration : undefined,
+    width: element.videoWidth || undefined,
+    height: element.videoHeight || undefined,
+  };
+}
+
+async function loadVideoMetadata(video: VideoItem) {
+  const element = document.createElement("video");
+  const cleanup = () => {
+    element.removeAttribute("src");
+    element.load();
+  };
+
+  try {
+    element.preload = "metadata";
+    element.src = video.url;
+
+    if (element.readyState < HTMLMediaElement.HAVE_METADATA) {
+      await waitForMediaEvent(element, "loadedmetadata");
+    }
+
+    const metadata = getVideoElementMetadata(element);
+    cleanup();
+    return metadata;
+  } catch (error) {
+    cleanup();
+    throw error;
+  }
+}
+
 function isCanvasNearlyBlack(context: CanvasRenderingContext2D, width: number, height: number) {
   const pixels = context.getImageData(0, 0, width, height).data;
   let brightPixels = 0;
@@ -684,8 +718,9 @@ async function createVideoThumbnailBlob(video: VideoItem) {
       await waitForMediaEvent(element, "loadedmetadata");
     }
 
-    const width = element.videoWidth;
-    const height = element.videoHeight;
+    const metadata = getVideoElementMetadata(element);
+    const width = metadata.width;
+    const height = metadata.height;
     if (!width || !height) {
       throw new Error("Unable to create thumbnail.");
     }
@@ -730,12 +765,12 @@ async function createVideoThumbnailBlob(video: VideoItem) {
       if (!fallbackBlob) fallbackBlob = blob;
       if (!isCanvasNearlyBlack(context, canvas.width, canvas.height)) {
         cleanup();
-        return blob;
+        return { thumbnailBlob: blob, metadata };
       }
     }
 
     cleanup();
-    return fallbackBlob ?? (await encodeCanvasAsJpeg(canvas));
+    return { thumbnailBlob: fallbackBlob ?? (await encodeCanvasAsJpeg(canvas)), metadata };
   } catch (error) {
     cleanup();
     throw error;
@@ -744,11 +779,14 @@ async function createVideoThumbnailBlob(video: VideoItem) {
 
 async function loadVideoThumbnail(video: VideoItem) {
   const cachedThumbnail = await readCachedThumbnail(video.id).catch(() => null);
-  if (cachedThumbnail) return URL.createObjectURL(cachedThumbnail);
+  if (cachedThumbnail) {
+    const metadata = await loadVideoMetadata(video).catch(() => undefined);
+    return { thumbnailUrl: URL.createObjectURL(cachedThumbnail), metadata };
+  }
 
-  const thumbnailBlob = await createVideoThumbnailBlob(video);
+  const { thumbnailBlob, metadata } = await createVideoThumbnailBlob(video);
   void writeCachedThumbnail(video.id, thumbnailBlob).catch(() => undefined);
-  return URL.createObjectURL(thumbnailBlob);
+  return { thumbnailUrl: URL.createObjectURL(thumbnailBlob), metadata };
 }
 
 export default function App() {
@@ -941,16 +979,48 @@ export default function App() {
     });
   }, []);
 
+  const updateVideoMetadata = useCallback(
+    (videoId: string, metadata: VideoMetadata) => {
+      setVideos((previous) => {
+        let didChange = false;
+        const nextVideos = previous.map((video) => {
+          if (video.id !== videoId) return video;
+          const nextDuration = metadata.duration && Number.isFinite(metadata.duration) ? metadata.duration : undefined;
+          const nextWidth = metadata.width && metadata.width > 0 ? metadata.width : undefined;
+          const nextHeight = metadata.height && metadata.height > 0 ? metadata.height : undefined;
+          if (video.duration === nextDuration && video.width === nextWidth && video.height === nextHeight) {
+            return video;
+          }
+          didChange = true;
+          return {
+            ...video,
+            duration: nextDuration,
+            width: nextWidth,
+            height: nextHeight,
+          };
+        });
+        if (didChange) videosRef.current = nextVideos;
+        return didChange ? nextVideos : previous;
+      });
+    },
+    [],
+  );
+
   const requestVideoThumbnail = useCallback(
     (videoId: string) => {
       const video = videosRef.current.find((item) => item.id === videoId);
       if (!video || video.thumbnailStatus === "loading" || video.thumbnailStatus === "ready") return;
       setVideoThumbnailState(videoId, "loading");
       loadVideoThumbnail(video)
-        .then((thumbnailUrl) => setVideoThumbnailState(videoId, "ready", thumbnailUrl))
+        .then(({ thumbnailUrl, metadata }) => {
+          if (metadata) {
+            updateVideoMetadata(videoId, metadata);
+          }
+          setVideoThumbnailState(videoId, "ready", thumbnailUrl);
+        })
         .catch(() => setVideoThumbnailState(videoId, "failed"));
     },
-    [setVideoThumbnailState],
+    [setVideoThumbnailState, updateVideoMetadata],
   );
 
   const registerThumbnailTarget = useCallback(
@@ -966,29 +1036,6 @@ export default function App() {
       requestVideoThumbnail(videoId);
     },
     [requestVideoThumbnail],
-  );
-
-  const updateVideoMetadata = useCallback(
-    (videoId: string, metadata: Pick<VideoItem, "duration" | "width" | "height">) => {
-      setVideos((previous) =>
-        previous.map((video) => {
-          if (video.id !== videoId) return video;
-          const nextDuration = metadata.duration && Number.isFinite(metadata.duration) ? metadata.duration : undefined;
-          const nextWidth = metadata.width && metadata.width > 0 ? metadata.width : undefined;
-          const nextHeight = metadata.height && metadata.height > 0 ? metadata.height : undefined;
-          if (video.duration === nextDuration && video.width === nextWidth && video.height === nextHeight) {
-            return video;
-          }
-          return {
-            ...video,
-            duration: nextDuration,
-            width: nextWidth,
-            height: nextHeight,
-          };
-        }),
-      );
-    },
-    [],
   );
 
   const updateProgress = useCallback(
