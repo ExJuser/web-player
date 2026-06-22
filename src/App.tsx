@@ -842,6 +842,7 @@ export default function App() {
   const [isDragActive, setIsDragActive] = useState(false);
   const [isFolderDialogOpen, setIsFolderDialogOpen] = useState(false);
   const [isShortcutDialogOpen, setIsShortcutDialogOpen] = useState(false);
+  const [deleteCandidate, setDeleteCandidate] = useState<VideoItem | null>(null);
   const [skipFolderAccessPrompt, setSkipFolderAccessPrompt] = useState(
     () => localStorage.getItem(FOLDER_ACCESS_PROMPT_KEY) === "true",
   );
@@ -1200,6 +1201,15 @@ export default function App() {
     [currentVideoId, replaceProgressStore],
   );
 
+  const requestDeleteLocalVideo = useCallback((video: VideoItem) => {
+    if (!video.parentDirectory?.removeEntry) {
+      setMessage("当前加载方式不支持删除本地文件，请通过“选择文件夹”重新加载后再试。");
+      return;
+    }
+
+    setDeleteCandidate(video);
+  }, []);
+
   const deleteLocalVideo = useCallback(
     async (video: VideoItem) => {
       const parentDirectory = video.parentDirectory;
@@ -1207,9 +1217,6 @@ export default function App() {
         setMessage("当前加载方式不支持删除本地文件，请通过“选择文件夹”重新加载后再试。");
         return;
       }
-
-      const confirmed = window.confirm(`确定要从本地磁盘删除这个视频吗？\n\n${video.relativePath}`);
-      if (!confirmed) return;
 
       try {
         const rootDirectory = directoryRef.current;
@@ -1273,6 +1280,13 @@ export default function App() {
     },
     [currentVideoId],
   );
+
+  const confirmDeleteLocalVideo = useCallback(async () => {
+    if (!deleteCandidate) return;
+    const target = deleteCandidate;
+    setDeleteCandidate(null);
+    await deleteLocalVideo(target);
+  }, [deleteCandidate, deleteLocalVideo]);
 
   const clearFolderProgress = useCallback(() => {
     if (!videos.length) return;
@@ -2242,6 +2256,12 @@ export default function App() {
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && deleteCandidate) {
+        event.preventDefault();
+        setDeleteCandidate(null);
+        return;
+      }
+
       if (event.key === "Escape" && isShortcutDialogOpen) {
         event.preventDefault();
         setIsShortcutDialogOpen(false);
@@ -2254,7 +2274,7 @@ export default function App() {
         return;
       }
 
-      if (!currentVideo || isShortcutDialogOpen || isFormControl(event.target)) return;
+      if (!currentVideo || isShortcutDialogOpen || deleteCandidate || isFormControl(event.target)) return;
 
       if (event.code === "Space") {
         event.preventDefault();
@@ -2345,6 +2365,7 @@ export default function App() {
     togglePlay,
     toggleShortcutDialog,
     stopRightMouseHoldSpeed,
+    deleteCandidate,
     isShortcutDialogOpen,
   ]);
 
@@ -2862,7 +2883,7 @@ export default function App() {
                   <button
                     className="episode-action-button danger"
                     type="button"
-                    onClick={() => void deleteLocalVideo(video)}
+                    onClick={() => requestDeleteLocalVideo(video)}
                     disabled={!video.parentDirectory?.removeEntry}
                     title={video.parentDirectory?.removeEntry ? "删除本地文件" : "当前加载方式不支持删除本地文件"}
                     aria-label={video.parentDirectory?.removeEntry ? "删除本地文件" : "当前加载方式不支持删除本地文件"}
@@ -2879,6 +2900,46 @@ export default function App() {
         </div>
       </aside>
     </main>
+    {deleteCandidate ? (
+      <div className="modal-backdrop" role="presentation" onMouseDown={() => setDeleteCandidate(null)}>
+        <section
+          aria-labelledby="delete-file-title"
+          aria-modal="true"
+          className="delete-dialog"
+          role="dialog"
+          onMouseDown={(event) => event.stopPropagation()}
+        >
+          <button
+            aria-label="关闭"
+            className="dialog-close"
+            type="button"
+            onClick={() => setDeleteCandidate(null)}
+          >
+            <X size={18} />
+          </button>
+          <div className="dialog-icon danger">
+            <Trash2 size={28} />
+          </div>
+          <div className="dialog-copy">
+            <h2 id="delete-file-title">删除本地文件？</h2>
+            <p>这个操作会直接从本地磁盘删除视频文件，删除后无法在播放器内恢复。</p>
+          </div>
+          <div className="delete-file-preview">
+            <strong>{deleteCandidate.name}</strong>
+            <span>{deleteCandidate.relativePath}</span>
+          </div>
+          <div className="dialog-actions">
+            <button className="secondary-button" type="button" onClick={() => setDeleteCandidate(null)}>
+              取消
+            </button>
+            <button className="danger-button" type="button" onClick={() => void confirmDeleteLocalVideo()}>
+              <Trash2 size={18} />
+              删除文件
+            </button>
+          </div>
+        </section>
+      </div>
+    ) : null}
     {isFolderDialogOpen ? (
       <div className="modal-backdrop" role="presentation" onMouseDown={() => setIsFolderDialogOpen(false)}>
         <section

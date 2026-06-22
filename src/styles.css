@@ -187,6 +187,25 @@ button {
   background: #2a303a;
 }
 
+.danger-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 112px;
+  height: 38px;
+  padding: 0 14px;
+  border-radius: 6px;
+  background: #d93f3f;
+  color: white;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.danger-button:hover {
+  background: #f05252;
+}
+
 .player-frame {
   position: relative;
   display: flex;
@@ -891,7 +910,8 @@ button {
   backdrop-filter: blur(12px);
 }
 
-.folder-dialog {
+.folder-dialog,
+.delete-dialog {
   position: relative;
   display: grid;
   grid-template-columns: 52px minmax(0, 1fr);
@@ -929,6 +949,12 @@ button {
   border-radius: 8px;
   background: rgba(0, 161, 214, 0.13);
   color: #57cdf5;
+}
+
+.dialog-icon.danger {
+  border-color: rgba(255, 82, 82, 0.32);
+  background: rgba(255, 82, 82, 0.13);
+  color: #ff9b9b;
 }
 
 .dialog-copy {
@@ -986,6 +1012,34 @@ button {
   height: 16px;
   margin: 0;
   accent-color: #00a1d6;
+}
+
+.delete-file-preview {
+  display: grid;
+  gap: 5px;
+  grid-column: 2;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid #303743;
+  border-radius: 6px;
+  background: #20252d;
+}
+
+.delete-file-preview strong,
+.delete-file-preview span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.delete-file-preview strong {
+  color: #f5f7fb;
+  font-size: 14px;
+}
+
+.delete-file-preview span {
+  color: #8e97a5;
+  font-size: 12px;
 }
 
 .dialog-actions {
@@ -1167,7 +1221,8 @@ button {
     justify-content: flex-end;
   }
 
-  .folder-dialog {
+  .folder-dialog,
+  .delete-dialog {
     grid-template-columns: 1fr;
     gap: 14px;
     padding: 18px;
@@ -1193,12 +1248,17 @@ button {
     grid-column: 1;
   }
 
+  .delete-file-preview {
+    grid-column: 1;
+  }
+
   .dialog-actions {
     flex-direction: column-reverse;
   }
 
   .dialog-actions .primary-button,
-  .dialog-actions .secondary-button {
+  .dialog-actions .secondary-button,
+  .dialog-actions .danger-button {
     width: 100%;
   }
 }
