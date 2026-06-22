@@ -53,6 +53,42 @@ button {
     #15181d;
 }
 
+.app-shell.cinema-mode {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+  padding: 0;
+  background: #000;
+}
+
+.app-shell.cinema-mode .player-column {
+  gap: 0;
+}
+
+.app-shell.cinema-mode .top-bar {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 3;
+  min-height: 0;
+  padding: 12px 16px;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.72), transparent);
+  pointer-events: none;
+}
+
+.app-shell.cinema-mode .top-actions {
+  pointer-events: auto;
+}
+
+.app-shell.cinema-mode .current-video-meta,
+.app-shell.cinema-mode .top-actions .primary-button {
+  display: none;
+}
+
+.app-shell.cinema-mode .current-video-title {
+  color: rgba(245, 247, 251, 0.72);
+}
+
 .drop-overlay {
   position: absolute;
   inset: 12px;
@@ -195,6 +231,17 @@ button {
   color: #79dfff;
 }
 
+.icon-button.cinema-toggle {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.icon-button.cinema-toggle.active {
+  border-color: #00a1d6;
+  background: #07394a;
+  color: #79dfff;
+}
+
 .primary-button:disabled {
   cursor: wait;
   opacity: 0.7;
@@ -263,6 +310,15 @@ button {
 }
 
 .player-frame.fullscreen {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: #000;
+}
+
+.app-shell.cinema-mode .player-frame {
   width: 100%;
   height: 100%;
   margin: 0;
@@ -395,6 +451,24 @@ button {
   right: 18%;
 }
 
+.app-shell.cinema-mode .control-bar {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 2;
+  border-top-color: rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.08), rgba(0, 0, 0, 0.88));
+}
+
+.app-shell.cinema-mode .control-row {
+  padding-bottom: 2px;
+}
+
+.app-shell.cinema-mode .timeline {
+  height: 6px;
+}
+
 .auto-next-prompt {
   position: absolute;
   top: 50%;
@@ -475,6 +549,27 @@ button {
 
 .auto-next-actions button:hover {
   filter: brightness(1.1);
+}
+
+.player-overlay-feedback {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 104px;
+  height: 48px;
+  padding: 0 18px;
+  border-radius: 999px;
+  background: rgba(5, 6, 7, 0.78);
+  color: #f5f7fb;
+  font-size: 16px;
+  font-weight: 700;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  animation: feedback-pop 900ms ease forwards;
 }
 
 @keyframes feedback-pop {

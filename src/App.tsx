@@ -117,6 +117,7 @@ type ShortcutAction =
   | "markCompleted"
   | "playNext"
   | "togglePrivacy"
+  | "toggleCinema"
   | "toggleShortcuts";
 type ShortcutMap = Record<ShortcutAction, string>;
 
@@ -126,6 +127,7 @@ type PlayerPreferences = {
   shortcuts: ShortcutMap;
   isSeriesMode: boolean;
   selectedSeriesKey: string;
+  isCinemaMode: boolean;
 };
 
 type MediaCollection = {
@@ -233,6 +235,7 @@ const defaultShortcuts: ShortcutMap = {
   markCompleted: "KeyC",
   playNext: "KeyN",
   togglePrivacy: "KeyP",
+  toggleCinema: "KeyT",
   toggleShortcuts: "Slash",
 };
 const defaultPlayerPreferences: PlayerPreferences = {
@@ -241,6 +244,7 @@ const defaultPlayerPreferences: PlayerPreferences = {
   shortcuts: defaultShortcuts,
   isSeriesMode: false,
   selectedSeriesKey: "all",
+  isCinemaMode: false,
 };
 
 const shortcutGroups: Array<{ title: string; items: Array<{ action: ShortcutAction; label: string }> }> = [
@@ -269,6 +273,7 @@ const shortcutGroups: Array<{ title: string; items: Array<{ action: ShortcutActi
       { action: "volumeUp", label: "调高音量" },
       { action: "volumeDown", label: "调低音量" },
       { action: "togglePrivacy", label: "隐私模式 / 快速清屏" },
+      { action: "toggleCinema", label: "影院模式" },
       { action: "toggleShortcuts", label: "打开快捷键设置" },
     ],
   },
@@ -434,6 +439,10 @@ function parsePlayerPreferences(source: unknown): PlayerPreferences {
       typeof preferences.selectedSeriesKey === "string" && preferences.selectedSeriesKey
         ? preferences.selectedSeriesKey
         : defaultPlayerPreferences.selectedSeriesKey,
+    isCinemaMode:
+      typeof preferences.isCinemaMode === "boolean"
+        ? preferences.isCinemaMode
+        : defaultPlayerPreferences.isCinemaMode,
   };
 }
 
@@ -1183,6 +1192,7 @@ export default function App() {
   const controlsHideTimerRef = useRef<number | null>(null);
   const autoNextTimerRef = useRef<number | null>(null);
   const doubleClickFeedbackTimerRef = useRef<number | null>(null);
+  const playerOverlayFeedbackTimerRef = useRef<number | null>(null);
   const timelineFrameTimerRef = useRef<number | null>(null);
   const timelineFrameRequestRef = useRef(0);
   const rightKeyHoldTimerRef = useRef<number | null>(null);
@@ -1231,6 +1241,7 @@ export default function App() {
   const [shortcuts, setShortcuts] = useState<ShortcutMap>(defaultPlayerPreferences.shortcuts);
   const [isSeriesMode, setIsSeriesMode] = useState(defaultPlayerPreferences.isSeriesMode);
   const [selectedSeriesKey, setSelectedSeriesKey] = useState(defaultPlayerPreferences.selectedSeriesKey);
+  const [isCinemaMode, setIsCinemaMode] = useState(defaultPlayerPreferences.isCinemaMode);
   const [recordingShortcutAction, setRecordingShortcutAction] = useState<ShortcutAction | null>(null);
   const [shortcutMessage, setShortcutMessage] = useState("");
   const [isScanning, setIsScanning] = useState(false);
@@ -1261,6 +1272,7 @@ export default function App() {
     side: "left" | "center" | "right";
     text: string;
   } | null>(null);
+  const [playerOverlayFeedback, setPlayerOverlayFeedback] = useState("");
   const [autoNextPrompt, setAutoNextPrompt] = useState<AutoNextPrompt | null>(null);
   const [volume, setVolume] = useState(readStoredVolume);
   const [isMuted, setIsMuted] = useState(false);
@@ -1754,6 +1766,7 @@ export default function App() {
     setShortcuts(nextPreferences.shortcuts);
     setIsSeriesMode(nextPreferences.isSeriesMode);
     setSelectedSeriesKey(nextPreferences.selectedSeriesKey);
+    setIsCinemaMode(nextPreferences.isCinemaMode);
 
     const directory = directoryRef.current;
     if (!directory) return;
@@ -1838,6 +1851,14 @@ export default function App() {
     },
     [replacePlayerPreferences],
   );
+
+  const toggleCinemaMode = useCallback(() => {
+    replacePlayerPreferences({
+      ...playerPreferencesRef.current,
+      isCinemaMode: !playerPreferencesRef.current.isCinemaMode,
+    });
+    focusPlayer();
+  }, [focusPlayer, replacePlayerPreferences]);
 
   const handleShortcutCapture = useCallback(
     (event: React.KeyboardEvent<HTMLButtonElement>, action: ShortcutAction) => {
@@ -2264,6 +2285,7 @@ export default function App() {
           shortcuts,
           isSeriesMode,
           selectedSeriesKey,
+          isCinemaMode,
         };
         setProgressStore({});
         setFavoriteVideoIds(new Set());
@@ -2512,6 +2534,7 @@ export default function App() {
         shortcuts,
         isSeriesMode,
         selectedSeriesKey,
+        isCinemaMode,
       };
       favoriteVideoIdsRef.current = new Set();
       setProgressStore({});
@@ -3102,15 +3125,6 @@ export default function App() {
     };
   }, [captureTimelineFrame, currentVideo, duration, isPrivacyMode, timelinePreview.isVisible, timelinePreview.time]);
 
-  const seekBy = useCallback(
-    (seconds: number) => {
-      const element = videoRef.current;
-      if (!element || !Number.isFinite(element.duration)) return;
-      seekTo(element.currentTime + seconds);
-    },
-    [seekTo],
-  );
-
   const showDoubleClickFeedback = useCallback((side: "left" | "center" | "right", text: string) => {
     if (doubleClickFeedbackTimerRef.current) {
       window.clearTimeout(doubleClickFeedbackTimerRef.current);
@@ -3122,13 +3136,39 @@ export default function App() {
     }, doubleClickFeedbackDelay);
   }, []);
 
+  const showPlayerOverlayFeedback = useCallback((text: string) => {
+    if (playerOverlayFeedbackTimerRef.current) {
+      window.clearTimeout(playerOverlayFeedbackTimerRef.current);
+    }
+    setPlayerOverlayFeedback(text);
+    playerOverlayFeedbackTimerRef.current = window.setTimeout(() => {
+      setPlayerOverlayFeedback("");
+      playerOverlayFeedbackTimerRef.current = null;
+    }, 900);
+  }, []);
+
+  const seekBy = useCallback(
+    (seconds: number) => {
+      const element = videoRef.current;
+      if (!element || !Number.isFinite(element.duration)) return;
+      seekTo(element.currentTime + seconds);
+      if (isCinemaMode) {
+        showPlayerOverlayFeedback(`${seconds > 0 ? "+" : ""}${seconds}s`);
+      }
+    },
+    [isCinemaMode, seekTo, showPlayerOverlayFeedback],
+  );
+
   const changeVolume = useCallback((nextVolume: number) => {
     const normalizedVolume = clamp(nextVolume, 0, 1);
     setVolume(normalizedVolume);
     if (normalizedVolume > 0) {
       setIsMuted(false);
     }
-  }, []);
+    if (isCinemaMode) {
+      showPlayerOverlayFeedback(`音量 ${Math.round(normalizedVolume * 100)}%`);
+    }
+  }, [isCinemaMode, showPlayerOverlayFeedback]);
 
   const adjustVolume = useCallback((delta: number) => {
     changeVolume(volume + delta);
@@ -3434,6 +3474,12 @@ export default function App() {
         return;
       }
 
+      if (event.key === "Escape" && isCinemaMode) {
+        event.preventDefault();
+        toggleCinemaMode();
+        return;
+      }
+
       if (eventCode === activeShortcuts.toggleShortcuts && !isFormControl(event.target)) {
         event.preventDefault();
         toggleShortcutDialog();
@@ -3444,6 +3490,14 @@ export default function App() {
         event.preventDefault();
         if (!event.repeat) {
           togglePrivacyMode();
+        }
+        return;
+      }
+
+      if (eventCode === activeShortcuts.toggleCinema && !isFormControl(event.target)) {
+        event.preventDefault();
+        if (!event.repeat) {
+          toggleCinemaMode();
         }
         return;
       }
@@ -3587,10 +3641,12 @@ export default function App() {
     stopRightMouseHoldSpeed,
     deleteCandidate,
     exitPrivacyMode,
+    isCinemaMode,
     isPrivacyMode,
     isShortcutDialogOpen,
     markCurrentVideoCompleted,
     playNext,
+    toggleCinemaMode,
     togglePrivacyMode,
   ]);
 
@@ -3606,6 +3662,9 @@ export default function App() {
     return () => {
       if (doubleClickFeedbackTimerRef.current) {
         window.clearTimeout(doubleClickFeedbackTimerRef.current);
+      }
+      if (playerOverlayFeedbackTimerRef.current) {
+        window.clearTimeout(playerOverlayFeedbackTimerRef.current);
       }
       if (rightMouseHoldTimerRef.current) {
         window.clearTimeout(rightMouseHoldTimerRef.current);
@@ -3674,7 +3733,7 @@ export default function App() {
   return (
     <>
     <main
-      className={`app-shell ${isDragActive ? "drag-active" : ""} ${isPrivacyMode ? "privacy-mode" : ""}`}
+      className={`app-shell ${isDragActive ? "drag-active" : ""} ${isPrivacyMode ? "privacy-mode" : ""} ${isCinemaMode ? "cinema-mode" : ""}`}
       ref={appShellRef}
       style={shellStyle}
       onDragOver={handleDragOver}
@@ -3782,6 +3841,12 @@ export default function App() {
           {doubleClickFeedback ? (
             <div className={`double-click-feedback ${doubleClickFeedback.side}`} aria-live="polite">
               {doubleClickFeedback.text}
+            </div>
+          ) : null}
+
+          {playerOverlayFeedback ? (
+            <div className="player-overlay-feedback" aria-live="polite">
+              {playerOverlayFeedback}
             </div>
           ) : null}
 
@@ -4015,6 +4080,16 @@ export default function App() {
               >
                 <EyeOff size={20} />
               </button>
+              <button
+                className={`icon-button cinema-toggle ${isCinemaMode ? "active" : ""}`}
+                type="button"
+                onClick={toggleCinemaMode}
+                disabled={!currentVideo}
+                title="影院模式"
+                aria-pressed={isCinemaMode}
+              >
+                T
+              </button>
               <button className="icon-button" type="button" onClick={toggleFullscreen} disabled={!currentVideo} title="全屏">
                 <Maximize size={20} />
               </button>
@@ -4023,7 +4098,7 @@ export default function App() {
         </div>
       </section>
 
-      {!isPrivacyMode ? (
+      {!isPrivacyMode && !isCinemaMode ? (
       <aside className="playlist-panel">
         <div className="playlist-header">
           <div className="playlist-title-row">
