@@ -1079,6 +1079,7 @@ export default function App() {
   const isScanningRef = useRef(false);
   const isMainVideoLoadingRef = useRef(false);
   const pendingAutoPlayVideoIdRef = useRef<string | null>(null);
+  const privacyResumePlaybackRef = useRef<{ videoId: string; shouldResume: boolean } | null>(null);
   const playlistScrollFrameRef = useRef<number | null>(null);
   const lastPlaylistUserScrollAtRef = useRef(0);
   const lastPlaylistAutoScrollKeyRef = useRef("");
@@ -2868,6 +2869,13 @@ export default function App() {
   }, []);
 
   const enterPrivacyMode = useCallback(() => {
+    const element = videoRef.current;
+    privacyResumePlaybackRef.current = currentVideo
+      ? {
+          videoId: currentVideo.id,
+          shouldResume: Boolean(element && !element.paused && !element.ended),
+        }
+      : null;
     persistCurrentProgress();
     resetHoldSpeedState();
     setIsShortcutDialogOpen(false);
@@ -2881,18 +2889,27 @@ export default function App() {
       imageUrl: "",
       isLoadingFrame: false,
     });
-    videoRef.current?.pause();
+    element?.pause();
     if (document.fullscreenElement) {
       void document.exitFullscreen().catch(() => undefined);
     }
     setIsPrivacyMode(true);
     setMessage("隐私模式已开启");
-  }, [persistCurrentProgress, resetHoldSpeedState]);
+  }, [currentVideo, persistCurrentProgress, resetHoldSpeedState]);
 
   const exitPrivacyMode = useCallback(() => {
+    const resumePlayback = privacyResumePlaybackRef.current;
+    privacyResumePlaybackRef.current = null;
     setIsPrivacyMode(false);
     setMessage(currentVideo ? "已恢复播放界面" : "选择一个本地文件夹开始播放");
     focusPlayer();
+    if (currentVideo && resumePlayback?.videoId === currentVideo.id && resumePlayback.shouldResume) {
+      window.setTimeout(() => {
+        videoRef.current?.play().catch(() => {
+          setMessage("浏览器没有恢复播放，请再点一次播放按钮。");
+        });
+      }, 0);
+    }
   }, [currentVideo, focusPlayer]);
 
   const togglePrivacyMode = useCallback(() => {
@@ -3319,16 +3336,6 @@ export default function App() {
             ) : null}
           </div>
           <div className="top-actions">
-            <button
-              className={`privacy-button ${isPrivacyMode ? "active" : ""}`}
-              type="button"
-              onClick={togglePrivacyMode}
-              title="隐私模式 / 快速清屏 (P)"
-              aria-pressed={isPrivacyMode}
-            >
-              <EyeOff size={18} />
-              {isPrivacyMode ? "恢复" : "隐私"}
-            </button>
             {!isPrivacyMode ? (
               <button className="primary-button" type="button" onClick={requestFolderAccess} disabled={isScanning}>
                 <FolderOpen size={18} />
@@ -3354,21 +3361,8 @@ export default function App() {
           }}
           tabIndex={-1}
         >
-          {isPrivacyMode ? (
-            <div className="privacy-cover" role="status" aria-live="polite">
-              <div className="privacy-cover-screen">
-                <Play size={58} />
-              </div>
-              <div className="privacy-cover-controls" aria-hidden="true">
-                <span className="privacy-cover-time">00:00</span>
-                <span className="privacy-cover-track">
-                  <span />
-                </span>
-                <span className="privacy-cover-time">00:00</span>
-              </div>
-            </div>
-          ) : currentVideo ? (
-            <>
+          <div className="player-viewport">
+            {currentVideo ? (
               <video
                 ref={videoRef}
                 className="video-element"
@@ -3387,6 +3381,21 @@ export default function App() {
                   <track key={selectedSubtitle.id} src={selectedSubtitle.url} kind="subtitles" label={selectedSubtitle.name} default />
                 ) : null}
               </video>
+            ) : !isPrivacyMode ? (
+              <div className="empty-player">
+                <FolderOpen size={40} />
+                <span>{message}</span>
+              </div>
+            ) : null}
+
+            {isPrivacyMode ? (
+              <div className="privacy-cover" role="status" aria-live="polite">
+                <Play size={58} />
+              </div>
+            ) : null}
+
+            {currentVideo ? (
+              <>
               <video
                 ref={previewVideoRef}
                 className="timeline-preview-video"
@@ -3396,13 +3405,9 @@ export default function App() {
                 tabIndex={-1}
               />
               <canvas ref={previewCanvasRef} className="timeline-preview-canvas" width={192} height={108} />
-            </>
-          ) : (
-            <div className="empty-player">
-              <FolderOpen size={40} />
-              <span>{message}</span>
-            </div>
-          )}
+              </>
+            ) : null}
+          </div>
 
           {doubleClickFeedback ? (
             <div className={`double-click-feedback ${doubleClickFeedback.side}`} aria-live="polite">
@@ -3421,76 +3426,6 @@ export default function App() {
               keepControlsVisible();
             }}
           >
-            {isPrivacyMode ? (
-              <>
-                <div className="timeline-row">
-                  <span>00:00</span>
-                  <div className="timeline-track">
-                    <input
-                      aria-label="播放进度"
-                      className="timeline"
-                      type="range"
-                      min={0}
-                      max={100}
-                      step={1}
-                      value={18}
-                      readOnly
-                      disabled
-                      style={{ "--progress": "18%" } as React.CSSProperties}
-                    />
-                  </div>
-                  <span>00:00</span>
-                </div>
-
-                <div className="control-row">
-                  <button className="icon-button" type="button" disabled title="播放/暂停">
-                    <Play size={20} />
-                  </button>
-                  <button className="icon-button" type="button" disabled title="下一集">
-                    <SkipForward size={20} />
-                  </button>
-
-                  <label className="volume-control">
-                    <button
-                      aria-label="静音"
-                      className="volume-toggle"
-                      type="button"
-                      disabled
-                      title="静音"
-                    >
-                      <Volume2 size={18} />
-                    </button>
-                    <input aria-label="音量" type="range" min={0} max={1} step={0.01} value={0.85} readOnly disabled />
-                  </label>
-
-                  <select aria-label="播放速度" className="rate-select" value={1} disabled>
-                    <option value={1}>1x</option>
-                  </select>
-
-                  <span className="control-spacer" />
-
-                  <button className="icon-button" type="button" disabled title="画中画">
-                    <PictureInPicture2 size={20} />
-                  </button>
-                  <button className="icon-button" type="button" onClick={toggleShortcutDialog} title="快捷键帮助">
-                    <Keyboard size={20} />
-                  </button>
-                  <button
-                    className="icon-button privacy-toggle active"
-                    type="button"
-                    onClick={togglePrivacyMode}
-                    title="恢复播放界面 (P / Esc)"
-                    aria-pressed
-                  >
-                    <EyeOff size={20} />
-                  </button>
-                  <button className="icon-button" type="button" disabled title="全屏">
-                    <Maximize size={20} />
-                  </button>
-                </div>
-              </>
-            ) : (
-              <>
             <div className="timeline-row">
               <span>{formatTime(currentTime)}</span>
               <div
@@ -3688,8 +3623,6 @@ export default function App() {
                 <Maximize size={20} />
               </button>
             </div>
-              </>
-            )}
           </div>
         </div>
       </section>
