@@ -785,7 +785,8 @@ export default function App() {
   const didRightKeyHoldRef = useRef(false);
   const isRightMouseDownRef = useRef(false);
   const didRightMouseHoldRef = useRef(false);
-  const didRightMouseStartPlaybackRef = useRef(false);
+  const didHoldSpeedStartPlaybackRef = useRef(false);
+  const wasHoldSpeedPlaybackPausedRef = useRef(false);
   const [videos, setVideos] = useState<VideoItem[]>([]);
   const [subtitles, setSubtitles] = useState<SubtitleItem[]>([]);
   const [currentVideoId, setCurrentVideoId] = useState<string | null>(null);
@@ -1257,7 +1258,8 @@ export default function App() {
     didRightKeyHoldRef.current = false;
     isRightMouseDownRef.current = false;
     didRightMouseHoldRef.current = false;
-    didRightMouseStartPlaybackRef.current = false;
+    didHoldSpeedStartPlaybackRef.current = false;
+    wasHoldSpeedPlaybackPausedRef.current = false;
     rightMousePointerIdRef.current = null;
     isHoldSpeedActiveRef.current = false;
     setIsHoldSpeedActive(false);
@@ -2065,8 +2067,38 @@ export default function App() {
     [adjustVolume, currentVideo, revealControls],
   );
 
+  const startHoldSpeed = useCallback(() => {
+    const element = videoRef.current;
+    if (!element) return;
+
+    didHoldSpeedStartPlaybackRef.current = false;
+    wasHoldSpeedPlaybackPausedRef.current = element.paused;
+    element.playbackRate = holdPlaybackRateRef.current;
+    isHoldSpeedActiveRef.current = true;
+    setIsHoldSpeedActive(true);
+
+    if (element.paused) {
+      didHoldSpeedStartPlaybackRef.current = true;
+      element.play().catch(() => {
+        didHoldSpeedStartPlaybackRef.current = false;
+        wasHoldSpeedPlaybackPausedRef.current = false;
+      });
+    }
+  }, []);
+
   const stopHoldSpeed = useCallback(() => {
+    const element = videoRef.current;
+    const shouldRestorePaused = didHoldSpeedStartPlaybackRef.current && wasHoldSpeedPlaybackPausedRef.current;
+    isHoldSpeedActiveRef.current = false;
+    if (element) {
+      element.playbackRate = playbackRateRef.current;
+    }
+    didHoldSpeedStartPlaybackRef.current = false;
+    wasHoldSpeedPlaybackPausedRef.current = false;
     setIsHoldSpeedActive(false);
+    if (shouldRestorePaused) {
+      element?.pause();
+    }
   }, []);
 
   const clearRightKeyHoldTimer = useCallback(() => {
@@ -2086,7 +2118,6 @@ export default function App() {
     if (!isRightMouseDownRef.current && !didRightMouseHoldRef.current) return;
     isRightMouseDownRef.current = false;
     didRightMouseHoldRef.current = false;
-    didRightMouseStartPlaybackRef.current = false;
     rightMousePointerIdRef.current = null;
     stopHoldSpeed();
   }, [clearRightMouseHoldTimer, stopHoldSpeed]);
@@ -2110,25 +2141,16 @@ export default function App() {
       if (!event.currentTarget.hasPointerCapture(event.pointerId)) {
         event.currentTarget.setPointerCapture(event.pointerId);
       }
-      const element = videoRef.current;
-      didRightMouseStartPlaybackRef.current = Boolean(element?.paused);
-      if (element?.paused) {
-        element.play().catch(() => {
-          didRightMouseStartPlaybackRef.current = false;
-        });
-      }
       clearRightMouseHoldTimer();
       rightMouseHoldTimerRef.current = window.setTimeout(() => {
         const element = videoRef.current;
         if (!element || !isRightMouseDownRef.current) return;
         didRightMouseHoldRef.current = true;
-        element.playbackRate = holdPlaybackRateRef.current;
-        isHoldSpeedActiveRef.current = true;
-        setIsHoldSpeedActive(true);
+        startHoldSpeed();
         rightMouseHoldTimerRef.current = null;
       }, rightKeyHoldDelay);
     },
-    [clearRightMouseHoldTimer, currentVideo, revealControls],
+    [clearRightMouseHoldTimer, currentVideo, revealControls, startHoldSpeed],
   );
 
   const handlePlayerPointerUp = useCallback(
@@ -2140,17 +2162,9 @@ export default function App() {
       if (rightMousePointerIdRef.current === event.pointerId && event.currentTarget.hasPointerCapture(event.pointerId)) {
         event.currentTarget.releasePointerCapture(event.pointerId);
       }
-      rightMousePointerIdRef.current = null;
-      isRightMouseDownRef.current = false;
-      if (didRightMouseHoldRef.current) {
-        didRightMouseHoldRef.current = false;
-        stopHoldSpeed();
-      } else if (didRightMouseStartPlaybackRef.current) {
-        videoRef.current?.pause();
-      }
-      didRightMouseStartPlaybackRef.current = false;
+      stopRightMouseHoldSpeed();
     },
-    [clearRightMouseHoldTimer, stopHoldSpeed],
+    [clearRightMouseHoldTimer, stopRightMouseHoldSpeed],
   );
 
   const handlePlayerPointerCancel = useCallback(
@@ -2229,7 +2243,7 @@ export default function App() {
         clearRightKeyHoldTimer();
         rightKeyHoldTimerRef.current = window.setTimeout(() => {
           didRightKeyHoldRef.current = true;
-          setIsHoldSpeedActive(true);
+          startHoldSpeed();
           rightKeyHoldTimerRef.current = null;
         }, rightKeyHoldDelay);
       } else if (event.key === "ArrowUp") {
@@ -2277,6 +2291,7 @@ export default function App() {
     seekBy,
     seekStep,
     stopHoldSpeed,
+    startHoldSpeed,
     toggleFullscreen,
     toggleMute,
     togglePlay,
