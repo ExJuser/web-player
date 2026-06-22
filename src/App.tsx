@@ -826,8 +826,8 @@ export default function App() {
   const [volume, setVolume] = useState(readStoredVolume);
   const [isMuted, setIsMuted] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
-  const [seekStep, setSeekStep] = useState(10);
-  const [holdPlaybackRate, setHoldPlaybackRate] = useState(3);
+  const [seekStep, setSeekStep] = useState(15);
+  const [holdPlaybackRate, setHoldPlaybackRate] = useState(4);
   const [isHoldSpeedActive, setIsHoldSpeedActive] = useState(false);
   const [playbackMode, setPlaybackMode] = useState<PlaybackMode>("sequential");
   const [isFullscreen, setIsFullscreen] = useState(false);
