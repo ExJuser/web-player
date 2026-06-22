@@ -1,6 +1,7 @@
 node_modules/
 dist/
 .npm-cache/
+.torrent-cache/
 *.log
 *.tsbuildinfo
 vite.config.js
