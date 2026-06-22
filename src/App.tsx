@@ -867,6 +867,7 @@ export default function App() {
         : playlistVideos,
     [favoriteVideoIds, playlistFilter, playlistVideos],
   );
+  const visibleVideoIdsKey = useMemo(() => visibleVideos.map((video) => video.id).join("\n"), [visibleVideos]);
   const currentVideoSubtitles = useMemo(() => {
     if (!currentVideo) return [];
     const currentBasePath = basePathOf(currentVideo.relativePath);
@@ -1644,7 +1645,7 @@ export default function App() {
         thumbnailObserverRef.current = null;
       }
     };
-  }, [requestVideoThumbnail, visibleVideos]);
+  }, [requestVideoThumbnail, visibleVideoIdsKey]);
 
   useEffect(() => {
     if (!currentVideoId || !playlistRef.current) return;
@@ -1663,7 +1664,7 @@ export default function App() {
       isPlaylistAutoScrollingRef.current = false;
       playlistAutoScrollTimerRef.current = null;
     }, 700);
-  }, [currentVideoId, visibleVideos]);
+  }, [currentVideoId, visibleVideoIdsKey]);
 
   const markPlaylistUserScroll = useCallback(() => {
     if (isPlaylistAutoScrollingRef.current) return;
