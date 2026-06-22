@@ -891,22 +891,23 @@ export default function App() {
     () => getSortedVideos(videos, playlistSortMode, isPlaylistSortReversed),
     [isPlaylistSortReversed, playlistSortMode, videos],
   );
-  const currentIndex = useMemo(
-    () => playlistVideos.findIndex((item) => item.id === currentVideoId),
-    [currentVideoId, playlistVideos],
-  );
   const currentVideo = useMemo(
     () => videos.find((item) => item.id === currentVideoId) ?? null,
     [currentVideoId, videos],
   );
+  const favoritePlaylistVideos = useMemo(
+    () => playlistVideos.filter((video) => favoriteVideoIds.has(video.id)),
+    [favoriteVideoIds, playlistVideos],
+  );
   const visibleVideos = useMemo(
-    () =>
-      playlistFilter === "favorites"
-        ? playlistVideos.filter((video) => favoriteVideoIds.has(video.id))
-        : playlistVideos,
-    [favoriteVideoIds, playlistFilter, playlistVideos],
+    () => (playlistFilter === "favorites" ? favoritePlaylistVideos : playlistVideos),
+    [favoritePlaylistVideos, playlistFilter, playlistVideos],
   );
   const visibleVideoIdsKey = useMemo(() => visibleVideos.map((video) => video.id).join("\n"), [visibleVideos]);
+  const isCurrentVideoVisible = useMemo(
+    () => !!currentVideoId && visibleVideos.some((video) => video.id === currentVideoId),
+    [currentVideoId, visibleVideos],
+  );
   const currentVideoSubtitles = useMemo(() => {
     if (!currentVideo) return [];
     const currentBasePath = basePathOf(currentVideo.relativePath);
@@ -1414,45 +1415,44 @@ export default function App() {
 
   const getNextVideoId = useCallback(
     (mode: PlaybackMode) => {
-      if (!playlistVideos.length || currentIndex < 0) return null;
-
       if (mode === "single-loop") {
         return currentVideoId;
       }
 
+      const queueVideos = mode === "favorites-only" || playlistFilter === "favorites" ? favoritePlaylistVideos : playlistVideos;
+      if (!queueVideos.length) return null;
+
+      const queueCurrentIndex = queueVideos.findIndex((video) => video.id === currentVideoId);
+
       if (mode === "shuffle") {
-        if (playlistVideos.length === 1) return currentVideoId;
-        const candidates = playlistVideos.filter((video) => video.id !== currentVideoId);
+        if (queueVideos.length === 1) return queueVideos[0].id;
+        const candidates = queueVideos.filter((video) => video.id !== currentVideoId);
         return candidates[Math.floor(Math.random() * candidates.length)]?.id ?? null;
       }
 
-      if (mode === "favorites-only") {
-        const favoriteVideos = playlistVideos.filter((video) => favoriteVideoIds.has(video.id));
-        if (!favoriteVideos.length) return null;
-        const favoriteIndex = favoriteVideos.findIndex((video) => video.id === currentVideoId);
-        if (favoriteIndex < 0) return favoriteVideos[0].id;
-        return favoriteIndex < favoriteVideos.length - 1 ? favoriteVideos[favoriteIndex + 1].id : null;
+      if (queueCurrentIndex < 0) {
+        return queueVideos[0].id;
       }
 
-      if (currentIndex < playlistVideos.length - 1) {
-        return playlistVideos[currentIndex + 1].id;
+      if (queueCurrentIndex < queueVideos.length - 1) {
+        return queueVideos[queueCurrentIndex + 1].id;
       }
 
-      return mode === "list-loop" ? playlistVideos[0].id : null;
+      return mode === "list-loop" ? queueVideos[0].id : null;
     },
-    [currentIndex, currentVideoId, favoriteVideoIds, playlistVideos],
+    [currentVideoId, favoritePlaylistVideos, playlistFilter, playlistVideos],
   );
 
   const playNext = useCallback(() => {
     const nextVideoId = getNextVideoId(playbackMode);
     if (!nextVideoId) {
-      if (playbackMode === "favorites-only" && !favoriteVideoIds.size) {
+      if ((playbackMode === "favorites-only" || playlistFilter === "favorites") && !favoritePlaylistVideos.length) {
         setMessage("还没有收藏的视频，无法只播放收藏。");
       }
       return;
     }
     selectVideo(nextVideoId);
-  }, [favoriteVideoIds.size, getNextVideoId, playbackMode, selectVideo]);
+  }, [favoritePlaylistVideos.length, getNextVideoId, playbackMode, playlistFilter, selectVideo]);
 
   const canPlayNext = useMemo(() => Boolean(getNextVideoId(playbackMode)), [getNextVideoId, playbackMode]);
 
@@ -2437,7 +2437,7 @@ export default function App() {
 
     const nextVideoId = getNextVideoId(playbackMode);
     if (!nextVideoId) {
-      if (playbackMode === "favorites-only" && !favoriteVideoIds.size) {
+      if ((playbackMode === "favorites-only" || playlistFilter === "favorites") && !favoritePlaylistVideos.length) {
         setMessage("还没有收藏的视频，无法只播放收藏。");
       }
       return;
