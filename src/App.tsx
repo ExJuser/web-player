@@ -3,6 +3,7 @@ import {
   CheckCircle2,
   FolderOpen,
   Keyboard,
+  Link2,
   LocateFixed,
   Maximize,
   Pause,
@@ -19,6 +20,8 @@ import {
   Volume2,
 } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import webTorrentBundleUrl from "webtorrent/dist/webtorrent.min.js?url";
+import type { WebTorrentFile, WebTorrentTorrent } from "webtorrent";
 
 type FileSystemDirectoryHandle = {
   values(): AsyncIterable<FileSystemDirectoryHandle | FileSystemFileHandle>;
@@ -50,10 +53,13 @@ type VideoItem = {
   id: string;
   name: string;
   relativePath: string;
-  file: File;
+  file?: File;
   url: string;
   size: number;
   lastModified: number;
+  source?: "local" | "magnet";
+  torrentFile?: WebTorrentFile;
+  torrentInfoHash?: string;
   duration?: number;
   width?: number;
   height?: number;
@@ -97,6 +103,19 @@ type PlayerPreferences = {
   isPlaylistSortReversed: boolean;
 };
 
+type WebTorrentClient = {
+  torrents: WebTorrentTorrent[];
+  add(
+    torrentId: string,
+    options: Record<string, unknown>,
+    onTorrent: (torrent: WebTorrentTorrent) => void,
+  ): WebTorrentTorrent;
+  createServer(options: { controller: ServiceWorkerRegistration }): unknown;
+  destroy(callback?: (error?: Error) => void): void;
+};
+
+type WebTorrentConstructor = new (options?: Record<string, unknown>) => WebTorrentClient;
+
 const VIDEO_EXTENSIONS = new Set([".mp4", ".webm", ".ogg", ".mov", ".m4v", ".mkv"]);
 const SUBTITLE_EXTENSIONS = new Set([".srt", ".vtt"]);
 const PROGRESS_FILE_NAME = ".local-web-player-progress.json";
@@ -106,6 +125,7 @@ const RECENT_FOLDER_DB_NAME = "local-web-player";
 const RECENT_FOLDER_STORE_NAME = "handles";
 const THUMBNAIL_STORE_NAME = "thumbnails";
 const RECENT_FOLDER_KEY = "recent-folder";
+const WEBTORRENT_SW_URL = "/webtorrent-sw.min.js";
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
 const rates = [0.5, 0.75, 1, 1.25, 1.5, 2, 3];
 const seekSteps = [5, 10, 15];
@@ -168,6 +188,23 @@ function isVideoFile(name: string) {
   return hasExtension(name, VIDEO_EXTENSIONS);
 }
 
+function isMagnetUri(value: string) {
+  return value.trim().toLowerCase().startsWith("magnet:?");
+}
+
+function isObjectUrl(value: string) {
+  return value.startsWith("blob:");
+}
+
+function loadWebTorrentConstructor() {
+  return import(/* @vite-ignore */ webTorrentBundleUrl)
+    .then((module) => (module as { default?: WebTorrentConstructor }).default)
+    .then((WebTorrentConstructor) => {
+      if (!WebTorrentConstructor) throw new Error("WebTorrent 加载失败。");
+      return WebTorrentConstructor;
+    });
+}
+
 function isSubtitleFile(name: string) {
   return hasExtension(name, SUBTITLE_EXTENSIONS);
 }
@@ -190,6 +227,10 @@ function basePathOf(path: string) {
 
 function createVideoId(relativePath: string, file: File) {
   return `${relativePath}|${file.size}|${file.lastModified}`;
+}
+
+function createMagnetVideoId(infoHash: string, file: WebTorrentFile) {
+  return `magnet:${infoHash}:${file.path}:${file.length}`;
 }
 
 function createProgress(currentTime: number, duration: number, completed = false): PlaybackProgress | null {
@@ -432,6 +473,20 @@ function videoMetadataRows(video: VideoItem) {
   ] as const;
 }
 
+function createMagnetVideoItem(torrent: WebTorrentTorrent, file: WebTorrentFile): VideoItem {
+  return {
+    id: createMagnetVideoId(torrent.infoHash, file),
+    name: file.name || file.path.split("/").pop() || torrent.name,
+    relativePath: `${torrent.name}/${file.path}`,
+    url: file.streamURL,
+    size: file.length,
+    lastModified: Date.now(),
+    source: "magnet",
+    torrentFile: file,
+    torrentInfoHash: torrent.infoHash,
+  };
+}
+
 function videoMetadataTitle(video: VideoItem) {
   return videoMetadataRows(video)
     .map(([label, value]) => `${label}: ${value}`)
@@ -650,7 +705,11 @@ async function loadVideoMetadata(video: VideoItem) {
 
   try {
     element.preload = "metadata";
-    element.src = video.url;
+    if (video.torrentFile) {
+      video.torrentFile.streamTo(element);
+    } else {
+      element.src = video.url;
+    }
 
     if (element.readyState < HTMLMediaElement.HAVE_METADATA) {
       await waitForMediaEvent(element, "loadedmetadata");
@@ -706,7 +765,11 @@ async function createVideoThumbnailBlob(video: VideoItem) {
     element.muted = true;
     element.preload = "auto";
     element.playsInline = true;
-    element.src = video.url;
+    if (video.torrentFile) {
+      video.torrentFile.streamTo(element);
+    } else {
+      element.src = video.url;
+    }
 
     if (element.readyState < HTMLMediaElement.HAVE_METADATA) {
       await waitForMediaEvent(element, "loadedmetadata");
@@ -784,6 +847,9 @@ async function loadVideoThumbnail(video: VideoItem) {
 }
 
 export default function App() {
+  const webTorrentClientRef = useRef<WebTorrentClient | null>(null);
+  const webTorrentServerReadyRef = useRef<Promise<void> | null>(null);
+  const activeTorrentRef = useRef<WebTorrentTorrent | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const previewVideoRef = useRef<HTMLVideoElement | null>(null);
   const previewCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -841,6 +907,8 @@ export default function App() {
     () => localStorage.getItem(FOLDER_ACCESS_PROMPT_KEY) === "true",
   );
   const [message, setMessage] = useState("选择一个本地文件夹开始播放");
+  const [magnetInput, setMagnetInput] = useState("");
+  const [isLoadingMagnet, setIsLoadingMagnet] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -954,10 +1022,34 @@ export default function App() {
 
   const revokeVideoUrls = useCallback((items: VideoItem[]) => {
     items.forEach((video) => {
-      URL.revokeObjectURL(video.url);
-      if (video.thumbnailUrl) URL.revokeObjectURL(video.thumbnailUrl);
+      if (isObjectUrl(video.url)) URL.revokeObjectURL(video.url);
+      if (video.thumbnailUrl && isObjectUrl(video.thumbnailUrl)) URL.revokeObjectURL(video.thumbnailUrl);
     });
   }, []);
+
+  const destroyActiveTorrent = useCallback(() => {
+    const torrent = activeTorrentRef.current;
+    if (!torrent) return;
+    activeTorrentRef.current = null;
+    torrent.destroy();
+  }, []);
+
+  const clearLoadedMedia = useCallback(() => {
+    videoRef.current?.pause();
+    revokeVideoUrls(videosRef.current);
+    subtitlesRef.current.forEach((subtitle) => {
+      if (subtitle.url && isObjectUrl(subtitle.url)) URL.revokeObjectURL(subtitle.url);
+    });
+    videosRef.current = [];
+    subtitlesRef.current = [];
+    setVideos([]);
+    setSubtitles([]);
+    setCurrentVideoId(null);
+    setSelectedSubtitleId("off");
+    setCurrentTime(0);
+    setDuration(0);
+    setIsPlaying(false);
+  }, [revokeVideoUrls]);
 
   const setVideoThumbnailState = useCallback((videoId: string, status: VideoItem["thumbnailStatus"], url?: string) => {
     setVideos((previous) => {
@@ -1001,6 +1093,40 @@ export default function App() {
     },
     [],
   );
+
+  const ensureWebTorrentClient = useCallback(async () => {
+    if (!("serviceWorker" in navigator)) {
+      throw new Error("当前浏览器不支持 Service Worker，无法在线播放磁力链接。");
+    }
+
+    if (!webTorrentClientRef.current) {
+      const WebTorrentConstructor = await loadWebTorrentConstructor();
+      webTorrentClientRef.current = new WebTorrentConstructor();
+    }
+
+    if (!webTorrentServerReadyRef.current) {
+      webTorrentServerReadyRef.current = (async () => {
+        const registration = await navigator.serviceWorker.register(WEBTORRENT_SW_URL);
+        if (!registration.active) {
+          await new Promise<void>((resolve, reject) => {
+            const worker = registration.installing ?? registration.waiting;
+            if (!worker) {
+              reject(new Error("无法激活磁力链接播放服务。"));
+              return;
+            }
+            worker.addEventListener("statechange", () => {
+              if (worker.state === "activated") resolve();
+              if (worker.state === "redundant") reject(new Error("磁力链接播放服务已失效。"));
+            });
+          });
+        }
+        webTorrentClientRef.current?.createServer({ controller: registration });
+      })();
+    }
+
+    await webTorrentServerReadyRef.current;
+    return webTorrentClientRef.current;
+  }, []);
 
   const requestVideoThumbnail = useCallback(
     (videoId: string) => {
@@ -1367,15 +1493,21 @@ export default function App() {
       const playerColumnGap = Number.parseFloat(playerColumnStyles.rowGap) || 14;
       const topBarHeight = topBarRef.current?.getBoundingClientRect().height ?? 0;
       const controlsHeight = controlBarRef.current?.getBoundingClientRect().height ?? 0;
+      const frameStyles = window.getComputedStyle(frame);
+      const frameBorderX =
+        (Number.parseFloat(frameStyles.borderLeftWidth) || 0) + (Number.parseFloat(frameStyles.borderRightWidth) || 0);
+      const frameBorderY =
+        (Number.parseFloat(frameStyles.borderTopWidth) || 0) + (Number.parseFloat(frameStyles.borderBottomWidth) || 0);
       const maxFrameHeight = Math.max(240, playerColumn.clientHeight - topBarHeight - playerColumnGap);
-      const maxVideoHeight = Math.max(180, maxFrameHeight - controlsHeight);
+      const maxVideoHeight = Math.max(180, maxFrameHeight - controlsHeight - frameBorderY);
       const minPlayerWidth = 420;
       const minPlaylistWidth = 280;
-      const desiredPlayerWidth = Math.round(maxVideoHeight * videoAspectRatio);
+      const desiredPlayerWidth = maxVideoHeight * videoAspectRatio + frameBorderX;
       const maxPlayerWidth = Math.max(minPlayerWidth, availableWidth - gap - minPlaylistWidth);
       const playerWidth = clamp(desiredPlayerWidth, minPlayerWidth, maxPlayerWidth);
-      const videoHeight = Math.min(maxVideoHeight, playerWidth / videoAspectRatio);
-      const playerHeight = Math.round(videoHeight + controlsHeight);
+      const videoWidth = Math.max(0, playerWidth - frameBorderX);
+      const videoHeight = Math.min(maxVideoHeight, videoWidth / videoAspectRatio);
+      const playerHeight = videoHeight + controlsHeight + frameBorderY;
       const playlistWidth = Math.max(minPlaylistWidth, Math.round(availableWidth - gap - playerWidth));
 
       setAdaptiveColumns((previous) => {
@@ -1450,8 +1582,120 @@ export default function App() {
 
   const canPlayNext = useMemo(() => Boolean(getNextVideoId(playbackMode)), [getNextVideoId, playbackMode]);
 
+  const loadMagnet = useCallback(
+    async (magnetUri: string) => {
+      const nextMagnetUri = magnetUri.trim();
+      if (!isMagnetUri(nextMagnetUri)) {
+        setMessage("请输入有效的 magnet:? 磁力链接。");
+        return;
+      }
+
+      setIsLoadingMagnet(true);
+      setIsScanning(true);
+      setMessage("正在连接磁力链接并获取种子元数据...");
+
+      try {
+        const client = await ensureWebTorrentClient();
+        destroyActiveTorrent();
+        clearLoadedMedia();
+        directoryRef.current = null;
+        progressStoreRef.current = {};
+        favoriteVideoIdsRef.current = new Set();
+        playerPreferencesRef.current = {
+          playlistSortMode,
+          isPlaylistSortReversed,
+        };
+        setProgressStore({});
+        setFavoriteVideoIds(new Set());
+
+        const torrent = await new Promise<WebTorrentTorrent>((resolve, reject) => {
+          let settled = false;
+          let nextTorrent: WebTorrentTorrent | null = null;
+          const cleanupPendingTorrent = () => {
+            nextTorrent?.destroy();
+            nextTorrent = null;
+          };
+          const timeout = window.setTimeout(() => {
+            if (settled) return;
+            settled = true;
+            cleanupPendingTorrent();
+            reject(new Error("获取种子元数据超时。"));
+          }, 45000);
+
+          const finish = (value: WebTorrentTorrent) => {
+            if (settled) return;
+            settled = true;
+            nextTorrent = null;
+            window.clearTimeout(timeout);
+            resolve(value);
+          };
+          const fail = (error: Error) => {
+            if (settled) return;
+            settled = true;
+            cleanupPendingTorrent();
+            window.clearTimeout(timeout);
+            reject(error);
+          };
+
+          nextTorrent = client.add(nextMagnetUri, {}, finish);
+          nextTorrent.on("error", fail);
+        });
+
+        activeTorrentRef.current = torrent;
+        const torrentVideos = torrent.files
+          .filter((file) => isVideoFile(file.name || file.path))
+          .sort((a, b) => collator.compare(a.path, b.path))
+          .map((file) => createMagnetVideoItem(torrent, file));
+
+        if (!torrentVideos.length) {
+          destroyActiveTorrent();
+          setMessage("这个磁力链接里没有找到当前浏览器可识别的视频文件。");
+          return;
+        }
+
+        torrent.on("download", () => {
+          const percent = Math.round(torrent.progress * 100);
+          const speed = formatFileSize(torrent.downloadSpeed);
+          setMessage(`磁力链接下载中：${percent}% · ${speed}/s · ${torrent.numPeers} 个连接`);
+        });
+        torrent.on("done", () => setMessage("磁力链接已下载完成，可继续在线播放。"));
+
+        videosRef.current = torrentVideos;
+        subtitlesRef.current = [];
+        setVideos(torrentVideos);
+        setSubtitles([]);
+        setPlaylistFilter("all");
+        setCurrentVideoId(getSortedVideos(torrentVideos, playlistSortMode, isPlaylistSortReversed)[0]?.id ?? null);
+        setMessage(`已加载磁力链接：${torrent.name}，共 ${torrentVideos.length} 个视频`);
+      } catch (error) {
+        destroyActiveTorrent();
+        clearLoadedMedia();
+        setMessage(error instanceof Error ? error.message : "磁力链接加载失败，请确认链接和 tracker 可用。");
+      } finally {
+        setIsLoadingMagnet(false);
+        setIsScanning(false);
+      }
+    },
+    [
+      clearLoadedMedia,
+      destroyActiveTorrent,
+      ensureWebTorrentClient,
+      isPlaylistSortReversed,
+      playlistSortMode,
+    ],
+  );
+
+  const handleMagnetSubmit = useCallback(
+    (event: React.FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      void loadMagnet(magnetInput);
+    },
+    [loadMagnet, magnetInput],
+  );
+
   const loadDirectoryMedia = useCallback(
     async (directory: FileSystemDirectoryHandle, options?: { remember?: boolean; restored?: boolean }) => {
+      destroyActiveTorrent();
       setIsFolderDialogOpen(false);
       setIsScanning(true);
       setMessage(options?.restored ? "正在恢复上次文件夹..." : "正在扫描视频文件...");
@@ -1508,11 +1752,12 @@ export default function App() {
         await writeRecentFolderHandle(directory).catch(() => undefined);
       }
     },
-    [revokeVideoUrls],
+    [destroyActiveTorrent, revokeVideoUrls],
   );
 
   const loadFileMedia = useCallback(
     async (files: FileList | File[], messageSuffix = "播放进度仅在本次会话保留") => {
+      destroyActiveTorrent();
       setIsFolderDialogOpen(false);
       setIsScanning(true);
       setMessage("正在扫描媒体文件...");
@@ -1547,7 +1792,7 @@ export default function App() {
         media.videos.length ? `已加载 ${media.videos.length} 个视频，${messageSuffix}` : "没有找到可播放的视频文件",
       );
     },
-    [isPlaylistSortReversed, playlistSortMode, revokeVideoUrls],
+    [destroyActiveTorrent, isPlaylistSortReversed, playlistSortMode, revokeVideoUrls],
   );
 
   const chooseFolderWithFileInput = () => {
@@ -1763,10 +2008,34 @@ export default function App() {
       }
       revokeVideoUrls(videosRef.current);
       subtitlesRef.current.forEach((subtitle) => {
-        if (subtitle.url) URL.revokeObjectURL(subtitle.url);
+        if (subtitle.url && isObjectUrl(subtitle.url)) URL.revokeObjectURL(subtitle.url);
       });
+      activeTorrentRef.current?.destroy();
+      webTorrentClientRef.current?.destroy();
     };
   }, [revokeVideoUrls]);
+
+  useEffect(() => {
+    const mediaElements = [videoRef.current, previewVideoRef.current].filter(
+      (element): element is HTMLVideoElement => Boolean(element),
+    );
+
+    mediaElements.forEach((element) => {
+      element.removeAttribute("src");
+      if (currentVideo?.torrentFile) {
+        currentVideo.torrentFile.streamTo(element);
+      } else if (currentVideo?.url) {
+        element.src = currentVideo.url;
+      }
+    });
+
+    return () => {
+      mediaElements.forEach((element) => {
+        element.removeAttribute("src");
+        element.load();
+      });
+    };
+  }, [currentVideo]);
 
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -2462,9 +2731,9 @@ export default function App() {
       ) : null}
       <section className="player-column" ref={playerColumnRef}>
         <header className="top-bar" ref={topBarRef}>
-          <div>
-            <h1>本地视频播放器</h1>
-            <p>{currentVideo ? currentVideo.relativePath : message}</p>
+          <div className="video-summary">
+            {currentVideo ? null : <h1>本地视频播放器</h1>}
+            <p className="current-video-title">{currentVideo ? currentVideo.relativePath : message}</p>
             {currentVideo ? (
               <dl className="current-video-meta">
                 {videoMetadataRows(currentVideo).map(([label, value]) => (
@@ -2503,7 +2772,6 @@ export default function App() {
               <video
                 ref={videoRef}
                 className="video-element"
-                src={currentVideo.url}
                 onClick={togglePlay}
                 onPlay={() => setIsPlaying(true)}
                 onPause={() => {
@@ -2522,7 +2790,6 @@ export default function App() {
               <video
                 ref={previewVideoRef}
                 className="timeline-preview-video"
-                src={currentVideo.url}
                 muted
                 preload="metadata"
                 playsInline
@@ -2821,6 +3088,20 @@ export default function App() {
               <Trash2 size={16} />
             </button>
           </div>
+          <form className="magnet-form" onSubmit={handleMagnetSubmit}>
+            <input
+              aria-label="磁力链接"
+              type="url"
+              inputMode="url"
+              placeholder="粘贴 magnet:? 磁力链接"
+              value={magnetInput}
+              onChange={(event) => setMagnetInput(event.target.value)}
+            />
+            <button type="submit" disabled={isLoadingMagnet || !magnetInput.trim()} title="在线播放磁力链接">
+              <Link2 size={16} />
+              {isLoadingMagnet ? "连接中" : "播放"}
+            </button>
+          </form>
         </div>
 
         <div

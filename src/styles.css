@@ -36,10 +36,10 @@ button {
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, var(--player-column-width)) minmax(280px, var(--playlist-width));
-  gap: 16px;
+  gap: 12px;
   height: 100vh;
   min-height: 0;
-  padding: 18px;
+  padding: 12px;
   overflow: hidden;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 240px),
@@ -48,7 +48,7 @@ button {
 
 .drop-overlay {
   position: absolute;
-  inset: 18px;
+  inset: 12px;
   z-index: 10;
   display: flex;
   align-items: center;
@@ -69,7 +69,7 @@ button {
   min-width: 0;
   min-height: 0;
   flex-direction: column;
-  gap: 14px;
+  gap: 8px;
 }
 
 .top-bar,
@@ -77,8 +77,8 @@ button {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  min-height: 58px;
+  gap: 12px;
+  min-height: 40px;
 }
 
 .playlist-header {
@@ -108,28 +108,42 @@ button {
   letter-spacing: 0;
 }
 
+.video-summary {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+}
+
 .top-bar p,
 .playlist-header span {
-  margin: 6px 0 0;
+  margin: 0;
   color: #aab1bd;
   font-size: 13px;
   line-height: 1.35;
   word-break: break-all;
 }
 
+.current-video-title {
+  min-width: min(420px, 100%);
+  max-width: 100%;
+}
+
 .current-video-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin: 10px 0 0;
+  gap: 6px;
+  margin: 0;
 }
 
 .current-video-meta div {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-height: 26px;
-  padding: 0 9px;
+  min-height: 22px;
+  padding: 0 7px;
   border: 1px solid #2b323d;
   border-radius: 6px;
   background: #20252d;
@@ -151,9 +165,9 @@ button {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  min-width: 126px;
-  height: 38px;
-  padding: 0 14px;
+  min-width: 118px;
+  height: 34px;
+  padding: 0 12px;
   border-radius: 6px;
   background: #00a1d6;
   color: white;
@@ -267,8 +281,8 @@ button {
   display: flex;
   flex: 0 0 auto;
   flex-direction: column;
-  gap: 10px;
-  padding: 12px 14px 14px;
+  gap: 6px;
+  padding: 8px 12px 10px;
   border-top: 1px solid #22272e;
   background: #101216;
 }
@@ -352,7 +366,7 @@ button {
 .control-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .timeline-row > span {
@@ -369,7 +383,7 @@ button {
   flex: 1;
   align-items: center;
   min-width: 0;
-  height: 26px;
+  height: 20px;
 }
 
 .timeline-preview {
@@ -482,8 +496,8 @@ button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
+  width: 30px;
+  height: 30px;
   border-radius: 6px;
   background: #20252d;
   color: #f5f7fb;
@@ -531,8 +545,8 @@ button {
 }
 
 .rate-select {
-  height: 34px;
-  padding: 0 8px;
+  height: 30px;
+  padding: 0 7px;
   border: 1px solid #303743;
   border-radius: 6px;
   background: #20252d;
@@ -540,7 +554,7 @@ button {
 }
 
 .compact-select {
-  height: 32px;
+  height: 30px;
   padding: 0 7px;
   border: 1px solid #303743;
   border-radius: 6px;
@@ -550,7 +564,7 @@ button {
 
 .subtitle-select {
   width: 142px;
-  height: 32px;
+  height: 30px;
   padding: 0 7px;
   border: 1px solid #303743;
   border-radius: 6px;
@@ -582,6 +596,51 @@ button {
   align-items: center;
   justify-content: flex-end;
   gap: 10px;
+}
+
+.magnet-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.magnet-form input {
+  min-width: 0;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid #303743;
+  border-radius: 6px;
+  outline: 0;
+  background: #20252d;
+  color: #f5f7fb;
+}
+
+.magnet-form input:focus {
+  border-color: #00a1d6;
+}
+
+.magnet-form input::placeholder {
+  color: #737d8c;
+}
+
+.magnet-form button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 86px;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 6px;
+  background: #00a1d6;
+  color: white;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.magnet-form button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
 }
 
 .playlist-sort-select + .playlist-order-button,
@@ -1182,6 +1241,14 @@ button {
   .playlist-tools {
     width: 100%;
     flex-wrap: wrap;
+  }
+
+  .magnet-form {
+    grid-template-columns: 1fr;
+  }
+
+  .magnet-form button {
+    width: 100%;
   }
 
   .playlist-filter {
