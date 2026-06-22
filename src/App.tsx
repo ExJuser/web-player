@@ -2669,7 +2669,7 @@ export default function App() {
   const updateTimelinePreview = useCallback(
     (clientX: number, isDragging = false) => {
       const timeline = timelineRef.current;
-      if (!timeline || !currentVideo || duration <= 0) {
+      if (isPrivacyMode || !timeline || !currentVideo || duration <= 0) {
         setTimelinePreview((previous) => ({ ...previous, isVisible: false, isDragging: false }));
         return;
       }
@@ -2684,12 +2684,12 @@ export default function App() {
         isDragging,
       }));
     },
-    [currentVideo, duration],
+    [currentVideo, duration, isPrivacyMode],
   );
 
   const updateTimelinePreviewFromTime = useCallback(
     (time: number, isDragging = false) => {
-      if (!currentVideo || duration <= 0) {
+      if (isPrivacyMode || !currentVideo || duration <= 0) {
         setTimelinePreview((previous) => ({ ...previous, isVisible: false, isDragging: false }));
         return;
       }
@@ -2703,7 +2703,7 @@ export default function App() {
         isDragging,
       }));
     },
-    [currentVideo, duration],
+    [currentVideo, duration, isPrivacyMode],
   );
 
   const hideTimelinePreview = useCallback(() => {
@@ -2723,7 +2723,14 @@ export default function App() {
   const captureTimelineFrame = useCallback((time: number) => {
     const previewVideo = previewVideoRef.current;
     const canvas = previewCanvasRef.current;
-    if (!previewVideo || !canvas || !currentVideo || duration <= 0 || previewVideo.readyState < HTMLMediaElement.HAVE_METADATA) {
+    if (
+      isPrivacyMode ||
+      !previewVideo ||
+      !canvas ||
+      !currentVideo ||
+      duration <= 0 ||
+      previewVideo.readyState < HTMLMediaElement.HAVE_METADATA
+    ) {
       return;
     }
 
@@ -2763,7 +2770,7 @@ export default function App() {
 
     previewVideo.addEventListener("seeked", drawFrame, { once: true });
     previewVideo.currentTime = targetTime;
-  }, [currentVideo, duration]);
+  }, [currentVideo, duration, isPrivacyMode]);
 
   useEffect(() => {
     if (timelineFrameTimerRef.current) {
@@ -2771,7 +2778,7 @@ export default function App() {
       timelineFrameTimerRef.current = null;
     }
 
-    if (!timelinePreview.isVisible || !currentVideo || duration <= 0) {
+    if (isPrivacyMode || !timelinePreview.isVisible || !currentVideo || duration <= 0) {
       timelineFrameRequestRef.current += 1;
       setTimelinePreview((previous) =>
         previous.imageUrl || previous.isLoadingFrame ? { ...previous, imageUrl: "", isLoadingFrame: false } : previous,
@@ -2790,7 +2797,7 @@ export default function App() {
         timelineFrameTimerRef.current = null;
       }
     };
-  }, [captureTimelineFrame, currentVideo, duration, timelinePreview.isVisible, timelinePreview.time]);
+  }, [captureTimelineFrame, currentVideo, duration, isPrivacyMode, timelinePreview.isVisible, timelinePreview.time]);
 
   const seekBy = useCallback(
     (seconds: number) => {
@@ -3470,16 +3477,22 @@ export default function App() {
                 step={0.1}
                   value={duration ? currentTime : 0}
                   onChange={(event) => {
+                    if (isPrivacyMode) return;
                     const nextTime = Number(event.target.value);
                     seekTo(nextTime);
                     updateTimelinePreviewFromTime(nextTime, timelinePreview.isDragging);
                   }}
                   onPointerDown={(event) => {
+                    if (isPrivacyMode) return;
                     event.currentTarget.setPointerCapture(event.pointerId);
                     updateTimelinePreview(event.clientX, true);
                   }}
-                  onPointerMove={(event) => updateTimelinePreview(event.clientX, timelinePreview.isDragging)}
+                  onPointerMove={(event) => {
+                    if (isPrivacyMode) return;
+                    updateTimelinePreview(event.clientX, timelinePreview.isDragging);
+                  }}
                   onPointerUp={(event) => {
+                    if (isPrivacyMode) return;
                     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
                       event.currentTarget.releasePointerCapture(event.pointerId);
                     }
@@ -3490,9 +3503,11 @@ export default function App() {
                     stopTimelineDragPreview();
                     returnFocusToPlayer();
                   }}
-                  onPointerLeave={hideTimelinePreview}
+                  onPointerLeave={() => {
+                    if (!isPrivacyMode) hideTimelinePreview();
+                  }}
                 style={{ "--progress": `${progressPercent}%` } as React.CSSProperties}
-                  disabled={!currentVideo}
+                  disabled={!currentVideo || isPrivacyMode}
                 />
               </div>
               <span>{formatTime(duration)}</span>
