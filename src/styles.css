@@ -1209,12 +1209,14 @@ button {
 .episode-main strong {
   font-size: 14px;
   font-weight: 600;
+  line-height: 18px;
 }
 
 .episode-main small {
-  margin-top: 5px;
+  margin-top: 3px;
   color: #8e97a5;
   font-size: 12px;
+  line-height: 14px;
 }
 
 .episode-main .episode-series {

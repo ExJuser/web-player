@@ -1906,16 +1906,6 @@ export default function App() {
     };
   }, [isFullscreen, videoAspectRatio]);
 
-  useEffect(() => {
-    if (!isSeriesMode || !currentVideo) return;
-    const currentSeriesKey = seriesKeyFromTitle(seriesTitleByVideoId.get(currentVideo.id) ?? inferSeriesTitle(currentVideo));
-    if (currentSeriesKey === selectedSeriesKey) return;
-    replacePlayerPreferences({
-      ...playerPreferencesRef.current,
-      selectedSeriesKey: currentSeriesKey,
-    });
-  }, [currentVideo, isSeriesMode, replacePlayerPreferences, selectedSeriesKey, seriesTitleByVideoId]);
-
   const getNextVideoId = useCallback(
     (mode: PlaybackMode) => {
       if (mode === "single-loop") {
