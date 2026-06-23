@@ -1275,6 +1275,8 @@ export default function App() {
     controlsHideTimerRef.current = null;
   }, []);
 
+  const shouldAutoHideControls = (isFullscreen || isCinemaMode) && isPlaying && Boolean(currentVideo);
+
   const cancelAutoNextPrompt = useCallback(() => {
     if (autoNextTimerRef.current) {
       window.clearTimeout(autoNextTimerRef.current);
@@ -1285,12 +1287,12 @@ export default function App() {
 
   const scheduleControlsHide = useCallback(() => {
     clearControlsHideTimer();
-    if (!isFullscreen || !isPlaying || !currentVideo) return;
+    if (!shouldAutoHideControls) return;
     controlsHideTimerRef.current = window.setTimeout(() => {
       setAreControlsVisible(false);
       controlsHideTimerRef.current = null;
     }, controlsAutoHideDelay);
-  }, [clearControlsHideTimer, currentVideo, isFullscreen, isPlaying]);
+  }, [clearControlsHideTimer, shouldAutoHideControls]);
 
   const revealControls = useCallback(() => {
     setAreControlsVisible(true);
@@ -2390,7 +2392,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!isFullscreen || !isPlaying) {
+    if (!shouldAutoHideControls) {
       setAreControlsVisible(true);
       clearControlsHideTimer();
       return;
@@ -2398,7 +2400,7 @@ export default function App() {
 
     scheduleControlsHide();
     return clearControlsHideTimer;
-  }, [clearControlsHideTimer, isFullscreen, isPlaying, scheduleControlsHide]);
+  }, [clearControlsHideTimer, scheduleControlsHide, shouldAutoHideControls]);
 
   useLayoutEffect(() => {
     const element = videoRef.current;
@@ -3309,7 +3311,7 @@ export default function App() {
           onDoubleClick={handlePlayerDoubleClick}
           onWheel={handlePlayerWheel}
           onMouseLeave={() => {
-            if (isFullscreen) scheduleControlsHide();
+            if (isFullscreen || isCinemaMode) scheduleControlsHide();
             stopRightMouseHoldSpeed();
           }}
           tabIndex={-1}

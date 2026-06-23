@@ -407,13 +407,15 @@ button {
     transform 180ms ease;
 }
 
-.player-frame.fullscreen.controls-hidden .control-bar {
+.player-frame.fullscreen.controls-hidden .control-bar,
+.app-shell.cinema-mode .player-frame.controls-hidden .control-bar {
   pointer-events: none;
   opacity: 0;
   transform: translateY(100%);
 }
 
-.player-frame.fullscreen.controls-hidden .video-element {
+.player-frame.fullscreen.controls-hidden .video-element,
+.app-shell.cinema-mode .player-frame.controls-hidden .video-element {
   cursor: none;
 }
 
