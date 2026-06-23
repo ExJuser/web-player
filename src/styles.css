@@ -612,7 +612,7 @@ button {
 .control-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
 }
 
 .timeline-row > span {
@@ -765,6 +765,137 @@ button {
   color: #dce2ec;
   font-size: 13px;
   white-space: nowrap;
+}
+
+.control-group {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #dce2ec;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.volume-control + .control-group,
+.control-group + .control-group,
+.control-group + .subtitle-control {
+  margin-left: 6px;
+}
+
+.control-group-label {
+  flex: none;
+}
+
+.control-select {
+  position: relative;
+  min-width: 58px;
+}
+
+.control-select-trigger {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 30px;
+  min-width: 58px;
+  padding: 0 8px 0 10px;
+  border: 1px solid #303743;
+  border-radius: 6px;
+  background: #20252d;
+  color: #f5f7fb;
+  cursor: pointer;
+  font-size: 13px;
+  text-align: left;
+  transition:
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease,
+    box-shadow 0.16s ease;
+}
+
+.control-select-trigger span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.control-select-trigger:hover,
+.control-select-trigger:focus-visible,
+.control-select-trigger[aria-expanded="true"] {
+  border-color: #38c7ee;
+  background: #07394a;
+  color: #ffffff;
+  box-shadow: 0 0 0 2px rgba(0, 161, 214, 0.18);
+}
+
+.control-select-chevron {
+  flex: none;
+  color: #79dfff;
+  transition: transform 0.16s ease;
+}
+
+.control-select-trigger[aria-expanded="true"] .control-select-chevron {
+  transform: rotate(180deg);
+}
+
+.control-select-list {
+  scrollbar-color: rgba(0, 161, 214, 0.82) rgba(15, 18, 23, 0.88);
+  scrollbar-width: thin;
+  position: absolute;
+  z-index: 12;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: grid;
+  width: max(100%, 126px);
+  max-height: min(320px, calc(100vh - 140px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 6px;
+  border: 1px solid #303743;
+  border-radius: 8px;
+  background: #1b2028;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.38);
+}
+
+.control-select-list::-webkit-scrollbar {
+  width: 10px;
+}
+
+.control-select-list::-webkit-scrollbar-track {
+  border-radius: 999px;
+  background: rgba(15, 18, 23, 0.88);
+}
+
+.control-select-list::-webkit-scrollbar-thumb {
+  min-height: 48px;
+  border: 2px solid rgba(15, 18, 23, 0.88);
+  border-radius: 999px;
+  background: rgba(0, 161, 214, 0.82);
+}
+
+.control-select-list button {
+  min-width: 0;
+  padding: 7px 9px;
+  border-radius: 5px;
+  background: transparent;
+  color: #dce2ec;
+  cursor: pointer;
+  font-size: 13px;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.control-select-list button:hover,
+.control-select-list button:focus-visible,
+.control-select-list button.active {
+  background: #126bd6;
+  color: white;
 }
 
 .volume-control input {
@@ -1176,12 +1307,12 @@ button {
 
 .playlist-select {
   display: grid;
-  grid-template-columns: 96px minmax(0, 1fr);
-  grid-template-rows: 54px;
+  grid-template-columns: 80px minmax(0, 1fr);
   align-items: center;
   gap: 10px;
   width: 100%;
   min-width: 0;
+  min-height: 45px;
   padding: 0;
   background: transparent;
   color: inherit;
@@ -1191,11 +1322,11 @@ button {
 
 .episode-thumbnail {
   display: flex;
-  place-self: center;
+  align-self: center;
   align-items: center;
   justify-content: center;
-  width: 96px;
-  height: 54px;
+  width: 80px;
+  height: 45px;
   flex: 0 0 auto;
   overflow: hidden;
   border-radius: 6px;
@@ -1210,6 +1341,7 @@ button {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: center center;
 }
 
 .playlist-item.active .episode-thumbnail {
@@ -1665,13 +1797,13 @@ button {
   }
 
   .playlist-select {
-    grid-template-columns: 84px minmax(0, 1fr);
-    grid-template-rows: 47px;
+    grid-template-columns: 72px minmax(0, 1fr);
+    min-height: 40px;
   }
 
   .episode-thumbnail {
-    width: 84px;
-    height: 47px;
+    width: 72px;
+    height: 40px;
   }
 
   .playlist-item > .episode-progress {
