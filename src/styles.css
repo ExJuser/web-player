@@ -826,51 +826,6 @@ button {
   gap: 10px;
 }
 
-.magnet-form {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
-}
-
-.magnet-form input {
-  min-width: 0;
-  height: 34px;
-  padding: 0 10px;
-  border: 1px solid #303743;
-  border-radius: 6px;
-  outline: 0;
-  background: #20252d;
-  color: #f5f7fb;
-}
-
-.magnet-form input:focus {
-  border-color: #00a1d6;
-}
-
-.magnet-form input::placeholder {
-  color: #737d8c;
-}
-
-.magnet-form button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  min-width: 86px;
-  height: 34px;
-  padding: 0 10px;
-  border-radius: 6px;
-  background: #00a1d6;
-  color: white;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.magnet-form button:disabled {
-  cursor: not-allowed;
-  opacity: 0.58;
-}
-
 .playlist-sort-select + .playlist-order-button,
 .playlist-filter + .playlist-clear-button {
   margin-left: 2px;
@@ -1566,14 +1521,6 @@ button {
   .playlist-tools {
     width: 100%;
     flex-wrap: wrap;
-  }
-
-  .magnet-form {
-    grid-template-columns: 1fr;
-  }
-
-  .magnet-form button {
-    width: 100%;
   }
 
   .playlist-filter {
