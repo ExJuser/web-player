@@ -306,25 +306,6 @@ function inferSeriesTitle(video: VideoItem) {
   );
 }
 
-const seasonEpisodePatterns = [
-  /\bS\d{1,2}\s*E\d{1,3}\b/i,
-  /\b\d{1,2}\s*x\s*\d{1,3}\b/i,
-  /第\s*\d{1,2}\s*[季部]\s*(?:第\s*)?\d{1,3}\s*[集话話]\b/i,
-];
-
-function findSeasonEpisodeMarker(name: string) {
-  for (const pattern of seasonEpisodePatterns) {
-    const match = pattern.exec(name);
-    if (match?.[0] && typeof match.index === "number") {
-      return {
-        start: match.index,
-        end: match.index + match[0].length,
-      };
-    }
-  }
-  return null;
-}
-
 function seriesKeyFromTitle(title: string) {
   return title.trim().toLowerCase();
 }
@@ -1171,6 +1152,7 @@ export default function App() {
   const [isDragActive, setIsDragActive] = useState(false);
   const [isFolderDialogOpen, setIsFolderDialogOpen] = useState(false);
   const [isShortcutDialogOpen, setIsShortcutDialogOpen] = useState(false);
+  const [isSeriesMenuOpen, setIsSeriesMenuOpen] = useState(false);
   const [isPrivacyMode, setIsPrivacyMode] = useState(false);
   const [deleteCandidate, setDeleteCandidate] = useState<VideoItem | null>(null);
   const [skipFolderAccessPrompt, setSkipFolderAccessPrompt] = useState(
@@ -1566,6 +1548,7 @@ export default function App() {
 
   const toggleSeriesMode = useCallback(() => {
     const nextSeriesMode = !playerPreferencesRef.current.isSeriesMode;
+    setIsSeriesMenuOpen(false);
     const currentSeriesKey =
       currentVideo && nextSeriesMode
         ? seriesKeyFromTitle(seriesTitleByVideoId.get(currentVideo.id) ?? inferSeriesTitle(currentVideo))
@@ -1583,9 +1566,31 @@ export default function App() {
         ...playerPreferencesRef.current,
         selectedSeriesKey: nextSeriesKey,
       });
+      setIsSeriesMenuOpen(false);
     },
     [replacePlayerPreferences],
   );
+
+  useEffect(() => {
+    if (!isSeriesMenuOpen) return;
+
+    const closeSeriesMenu = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Element) || !target.closest(".series-menu")) {
+        setIsSeriesMenuOpen(false);
+      }
+    };
+    const closeSeriesMenuOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsSeriesMenuOpen(false);
+    };
+
+    document.addEventListener("pointerdown", closeSeriesMenu);
+    document.addEventListener("keydown", closeSeriesMenuOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeSeriesMenu);
+      document.removeEventListener("keydown", closeSeriesMenuOnEscape);
+    };
+  }, [isSeriesMenuOpen]);
 
   const toggleCinemaMode = useCallback(() => {
     replacePlayerPreferences({
@@ -3750,20 +3755,49 @@ export default function App() {
               追番
             </button>
             {isSeriesMode ? (
-              <select
-                className="series-select"
-                aria-label="选择系列"
-                value={selectedSeriesKey}
-                onChange={(event) => updateSelectedSeries(event.target.value)}
-                disabled={!seriesOptions.length}
-              >
-                <option value="all">全部系列</option>
-                {seriesOptions.map((series) => (
-                  <option key={series.key} value={series.key}>
-                    {series.title} ({series.count})
-                  </option>
-                ))}
-              </select>
+              <div className="series-menu">
+                <button
+                  className="series-menu-trigger"
+                  type="button"
+                  onClick={() => setIsSeriesMenuOpen((isOpen) => !isOpen)}
+                  disabled={!seriesOptions.length}
+                  aria-haspopup="listbox"
+                  aria-expanded={isSeriesMenuOpen}
+                  aria-label="选择系列"
+                  title="选择系列"
+                >
+                  <span>
+                    {selectedSeriesKey === "all"
+                      ? "全部系列"
+                      : seriesOptions.find((series) => series.key === selectedSeriesKey)?.title ?? "全部系列"}
+                  </span>
+                </button>
+                {isSeriesMenuOpen ? (
+                  <div className="series-menu-list" role="listbox" aria-label="选择系列">
+                    <button
+                      className={selectedSeriesKey === "all" ? "active" : ""}
+                      type="button"
+                      role="option"
+                      aria-selected={selectedSeriesKey === "all"}
+                      onClick={() => updateSelectedSeries("all")}
+                    >
+                      全部系列
+                    </button>
+                    {seriesOptions.map((series) => (
+                      <button
+                        key={series.key}
+                        className={selectedSeriesKey === series.key ? "active" : ""}
+                        type="button"
+                        role="option"
+                        aria-selected={selectedSeriesKey === series.key}
+                        onClick={() => updateSelectedSeries(series.key)}
+                      >
+                        {series.title} ({series.count})
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
             ) : null}
             <select
               className="playlist-sort-select"
@@ -3854,7 +3888,6 @@ export default function App() {
             const playlistIndex = playlistIndexById.get(video.id) ?? 0;
             const isFavorite = favoriteVideoIds.has(video.id);
             const seriesTitle = isSeriesMode ? seriesTitleByVideoId.get(video.id) : "";
-            const seasonEpisodeMarker = isSeriesMode ? findSeasonEpisodeMarker(video.name) : null;
             return (
               <div
                 key={video.id}
@@ -3874,19 +3907,7 @@ export default function App() {
                     )}
                   </span>
                   <span className="episode-main">
-                    <strong>
-                      {seasonEpisodeMarker ? (
-                        <>
-                          {video.name.slice(0, seasonEpisodeMarker.start)}
-                          <mark className="episode-marker">
-                            {video.name.slice(seasonEpisodeMarker.start, seasonEpisodeMarker.end)}
-                          </mark>
-                          {video.name.slice(seasonEpisodeMarker.end)}
-                        </>
-                      ) : (
-                        video.name
-                      )}
-                    </strong>
+                    <strong>{video.name}</strong>
                     <small>{video.relativePath}</small>
                     {seriesTitle ? <small className="episode-series">{seriesTitle}</small> : null}
                     {isCompleted ? (
