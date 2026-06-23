@@ -176,7 +176,7 @@ const rightKeyHoldDelay = 350;
 const doubleClickFeedbackDelay = 650;
 const mediaScanBatchSize = 150;
 const mediaScanBatchDelay = 500;
-const playlistItemHeight = 86;
+const playlistItemHeight = 76;
 const playlistVirtualOverscan = 10;
 const thumbnailCacheTimeout = 3000;
 const thumbnailGenerationTimeout = 12000;
@@ -370,18 +370,20 @@ function parsePlayerPreferences(source: unknown): PlayerPreferences {
         ? preferences.isPlaylistSortReversed
         : defaultPlayerPreferences.isPlaylistSortReversed,
     shortcuts: parseShortcuts(preferences.shortcuts),
-    isSeriesMode:
-      typeof preferences.isSeriesMode === "boolean"
-        ? preferences.isSeriesMode
-        : defaultPlayerPreferences.isSeriesMode,
-    selectedSeriesKey:
-      typeof preferences.selectedSeriesKey === "string" && preferences.selectedSeriesKey
-        ? preferences.selectedSeriesKey
-        : defaultPlayerPreferences.selectedSeriesKey,
+    isSeriesMode: defaultPlayerPreferences.isSeriesMode,
+    selectedSeriesKey: defaultPlayerPreferences.selectedSeriesKey,
     isCinemaMode:
       typeof preferences.isCinemaMode === "boolean"
         ? preferences.isCinemaMode
         : defaultPlayerPreferences.isCinemaMode,
+  };
+}
+
+function getPersistedPlayerPreferences(preferences: PlayerPreferences): PlayerPreferences {
+  return {
+    ...preferences,
+    isSeriesMode: defaultPlayerPreferences.isSeriesMode,
+    selectedSeriesKey: defaultPlayerPreferences.selectedSeriesKey,
   };
 }
 
@@ -416,7 +418,12 @@ async function savePlayerDataStore(directory: FileSystemDirectoryHandle, store: 
   const writable = await handle.createWritable();
   await writable.write(
     JSON.stringify(
-      { version: 3, items: store.progress, favorites: store.favorites, preferences: store.preferences },
+      {
+        version: 3,
+        items: store.progress,
+        favorites: store.favorites,
+        preferences: getPersistedPlayerPreferences(store.preferences),
+      },
       null,
       2,
     ),
@@ -631,20 +638,219 @@ function getShortcutConflict(shortcuts: ShortcutMap, action: ShortcutAction, nex
   );
 }
 
+type ControlSelectValue = string | number;
+
+type ControlSelectOption<T extends ControlSelectValue> = {
+  value: T;
+  label: string;
+};
+
+type ControlSelectProps<T extends ControlSelectValue> = {
+  label: string;
+  ariaLabel: string;
+  value: T;
+  options: ControlSelectOption<T>[];
+  onChange: (value: T) => void;
+  className?: string;
+};
+
+function ControlSelect<T extends ControlSelectValue>({
+  label,
+  ariaLabel,
+  value,
+  options,
+  onChange,
+  className = "",
+}: ControlSelectProps<T>) {
+  const [isOpen, setIsOpen] = useState(false);
+  const selectRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const selectedOption = options.find((option) => option.value === value) ?? options[0];
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const closeOnPointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node) || !selectRef.current?.contains(target)) {
+        setIsOpen(false);
+      }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsOpen(false);
+        triggerRef.current?.focus();
+      }
+    };
+
+    document.addEventListener("pointerdown", closeOnPointerDown);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnPointerDown);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [isOpen]);
+
+  const selectOption = (nextValue: T) => {
+    onChange(nextValue);
+    setIsOpen(false);
+    window.requestAnimationFrame(() => triggerRef.current?.focus());
+  };
+
+  return (
+    <div className={`control-group ${className}`.trim()}>
+      <span className="control-group-label">{label}</span>
+      <div className="control-select" ref={selectRef}>
+        <button
+          ref={triggerRef}
+          className="control-select-trigger"
+          type="button"
+          aria-haspopup="listbox"
+          aria-expanded={isOpen}
+          aria-label={ariaLabel}
+          title={ariaLabel}
+          onClick={() => setIsOpen((open) => !open)}
+        >
+          <span>{selectedOption?.label ?? ""}</span>
+          <ChevronDown className="control-select-chevron" size={15} aria-hidden="true" />
+        </button>
+        {isOpen ? (
+          <div className="control-select-list" role="listbox" aria-label={ariaLabel}>
+            {options.map((option) => (
+              <button
+                key={String(option.value)}
+                className={option.value === value ? "active" : ""}
+                type="button"
+                role="option"
+                aria-selected={option.value === value}
+                onClick={() => selectOption(option.value)}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+const cjkNumberValues: Record<string, number> = {
+  "\u96f6": 0,
+  "\u3007": 0,
+  "\u4e00": 1,
+  "\u4e8c": 2,
+  "\u4e24": 2,
+  "\u5169": 2,
+  "\u4e09": 3,
+  "\u56db": 4,
+  "\u4e94": 5,
+  "\u516d": 6,
+  "\u4e03": 7,
+  "\u516b": 8,
+  "\u4e5d": 9,
+};
+
+const cjkNumberUnits: Record<string, number> = {
+  "\u5341": 10,
+  "\u767e": 100,
+  "\u5343": 1000,
+};
+
+function parseNumberishText(value: string) {
+  const normalized = value.trim();
+  const digitMatch = normalized.match(/\d+/);
+  if (digitMatch) return Number(digitMatch[0]);
+
+  let total = 0;
+  let current = 0;
+  let hasNumber = false;
+
+  for (const char of normalized) {
+    const digitValue = cjkNumberValues[char];
+    if (digitValue !== undefined) {
+      current = digitValue;
+      hasNumber = true;
+      continue;
+    }
+
+    const unitValue = cjkNumberUnits[char];
+    if (unitValue !== undefined) {
+      total += (current || 1) * unitValue;
+      current = 0;
+      hasNumber = true;
+    }
+  }
+
+  return hasNumber ? total + current : null;
+}
+
+function parseSeasonNumber(segment: string) {
+  const normalized = segment
+    .normalize("NFKC")
+    .replace(/[\u3010\u3011\[\]\(\)\uff08\uff09]/g, " ")
+    .trim();
+  const cjkMatch = normalized.match(
+    /\u7b2c\s*([\d\u96f6\u3007\u4e00\u4e8c\u4e24\u5169\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341\u767e\u5343]+)\s*[\u5b63\u671f\u90e8]/,
+  );
+  if (cjkMatch) return parseNumberishText(cjkMatch[1]);
+
+  const latinMatch = normalized.match(/(?:^|[\s._-])(?:s|season)\s*0*(\d{1,3})(?:$|[\s._-])/i);
+  if (latinMatch) return Number(latinMatch[1]);
+
+  return null;
+}
+
+function splitRelativePath(path: string) {
+  return path.replace(/\\/g, "/").split("/").filter(Boolean);
+}
+
+function hasSeasonDirectory(video: VideoItem) {
+  return splitRelativePath(video.relativePath).slice(0, -1).some((segment) => parseSeasonNumber(segment) !== null);
+}
+
+function compareNaturalRelativePath(aPath: string, bPath: string) {
+  const aSegments = splitRelativePath(aPath);
+  const bSegments = splitRelativePath(bPath);
+  const length = Math.max(aSegments.length, bSegments.length);
+
+  for (let index = 0; index < length; index += 1) {
+    const aSegment = aSegments[index];
+    const bSegment = bSegments[index];
+    if (aSegment === undefined) return -1;
+    if (bSegment === undefined) return 1;
+
+    const aSeasonNumber = parseSeasonNumber(aSegment);
+    const bSeasonNumber = parseSeasonNumber(bSegment);
+    if (aSeasonNumber !== null && bSeasonNumber !== null && aSeasonNumber !== bSeasonNumber) {
+      return aSeasonNumber - bSeasonNumber;
+    }
+
+    const result = collator.compare(aSegment, bSegment);
+    if (result !== 0) return result;
+  }
+
+  return 0;
+}
+
 function compareVideos(a: VideoItem, b: VideoItem, mode: PlaylistSortMode) {
   if (mode === "modified") {
-    return b.lastModified - a.lastModified || collator.compare(a.relativePath, b.relativePath);
+    return b.lastModified - a.lastModified || compareNaturalRelativePath(a.relativePath, b.relativePath);
   }
 
   if (mode === "path") {
-    return collator.compare(a.relativePath, b.relativePath);
+    return compareNaturalRelativePath(a.relativePath, b.relativePath);
   }
 
   if (mode === "size") {
-    return b.size - a.size || collator.compare(a.relativePath, b.relativePath);
+    return b.size - a.size || compareNaturalRelativePath(a.relativePath, b.relativePath);
   }
 
-  return collator.compare(a.name, b.name) || collator.compare(a.relativePath, b.relativePath);
+  if (hasSeasonDirectory(a) || hasSeasonDirectory(b)) {
+    return compareNaturalRelativePath(a.relativePath, b.relativePath) || collator.compare(a.name, b.name);
+  }
+
+  return collator.compare(a.name, b.name) || compareNaturalRelativePath(a.relativePath, b.relativePath);
 }
 
 function getSortedVideos(videos: VideoItem[], mode: PlaylistSortMode, isReversed: boolean) {
@@ -683,8 +889,8 @@ function mergeMediaBatch(collection: MediaCollection, batch: MediaScanBatch): Me
 function sortMediaCollection(collection: MediaCollection): MediaCollection {
   return {
     ...collection,
-    videos: [...collection.videos].sort((a, b) => collator.compare(a.relativePath, b.relativePath)),
-    subtitles: [...collection.subtitles].sort((a, b) => collator.compare(a.relativePath, b.relativePath)),
+    videos: [...collection.videos].sort((a, b) => compareNaturalRelativePath(a.relativePath, b.relativePath)),
+    subtitles: [...collection.subtitles].sort((a, b) => compareNaturalRelativePath(a.relativePath, b.relativePath)),
   };
 }
 
@@ -3589,66 +3795,38 @@ export default function App() {
                 />
               </label>
 
-              <select
-                aria-label="播放速度"
-                className="rate-select"
+              <ControlSelect
+                label="播放速度"
+                ariaLabel="播放速度"
                 value={effectivePlaybackRate}
-                onChange={(event) => setPlaybackRate(Number(event.target.value))}
-              >
-                {playbackRateOptions.map((rate) => (
-                  <option key={rate} value={rate}>
-                    {rate}x
-                  </option>
-                ))}
-              </select>
+                options={playbackRateOptions.map((rate) => ({ value: rate, label: `${rate}x` }))}
+                onChange={setPlaybackRate}
+                className="rate-control"
+              />
 
-              <label className="settings-control">
-                队列
-                <select
-                  aria-label="播放队列模式"
-                  className="compact-select"
-                  value={playbackMode}
-                  onChange={(event) => setPlaybackMode(event.target.value as PlaybackMode)}
-                >
-                  {playbackModeOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <ControlSelect
+                label="播放模式"
+                ariaLabel="播放模式"
+                value={playbackMode}
+                options={playbackModeOptions}
+                onChange={setPlaybackMode}
+              />
 
-              <label className="settings-control">
-                快进
-                <select
-                  aria-label="快进快退时间"
-                  className="compact-select"
-                  value={seekStep}
-                  onChange={(event) => setSeekStep(Number(event.target.value))}
-                >
-                  {seekSteps.map((step) => (
-                    <option key={step} value={step}>
-                      {step}s
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <ControlSelect
+                label="快进/快退"
+                ariaLabel="快进/快退时间"
+                value={seekStep}
+                options={seekSteps.map((step) => ({ value: step, label: `${step}s` }))}
+                onChange={setSeekStep}
+              />
 
-              <label className="settings-control">
-                长按右方向
-                <select
-                  aria-label="长按右方向键倍速"
-                  className="compact-select"
-                  value={holdPlaybackRate}
-                  onChange={(event) => setHoldPlaybackRate(Number(event.target.value))}
-                >
-                  {holdRates.map((rate) => (
-                    <option key={rate} value={rate}>
-                      {rate}x
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <ControlSelect
+                label="长按右方向"
+                ariaLabel="长按右方向键倍速"
+                value={holdPlaybackRate}
+                options={holdRates.map((rate) => ({ value: rate, label: `${rate}x` }))}
+                onChange={setHoldPlaybackRate}
+              />
 
               <label className="subtitle-control">
                 <Subtitles size={18} />
