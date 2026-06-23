@@ -1,5 +1,6 @@
 import {
   ArrowDownUp,
+  ArrowUp,
   CheckCircle2,
   FolderOpen,
   EyeOff,
@@ -302,6 +303,25 @@ function inferSeriesTitle(video: VideoItem) {
       .replace(/\s+/g, " ")
       .trim() || baseNameWithoutExtension(video.name)
   );
+}
+
+const seasonEpisodePatterns = [
+  /\bS\d{1,2}\s*E\d{1,3}\b/i,
+  /\b\d{1,2}\s*x\s*\d{1,3}\b/i,
+  /第\s*\d{1,2}\s*[季部]\s*(?:第\s*)?\d{1,3}\s*[集话話]\b/i,
+];
+
+function findSeasonEpisodeMarker(name: string) {
+  for (const pattern of seasonEpisodePatterns) {
+    const match = pattern.exec(name);
+    if (match?.[0] && typeof match.index === "number") {
+      return {
+        start: match.index,
+        end: match.index + match[0].length,
+      };
+    }
+  }
+  return null;
 }
 
 function seriesKeyFromTitle(title: string) {
@@ -1202,8 +1222,8 @@ export default function App() {
   subtitlesRef.current = subtitles;
 
   const playlistVideos = useMemo(
-    () => getSortedVideos(videos, playlistSortMode, isPlaylistSortReversed),
-    [isPlaylistSortReversed, playlistSortMode, videos],
+    () => getSortedVideos(videos, isSeriesMode ? "name" : playlistSortMode, isSeriesMode ? false : isPlaylistSortReversed),
+    [isPlaylistSortReversed, isSeriesMode, playlistSortMode, videos],
   );
   const seriesOptions = useMemo(() => {
     const seriesByKey = new Map<string, { key: string; title: string; count: number }>();
@@ -2305,6 +2325,22 @@ export default function App() {
       playlistAutoScrollTimerRef.current = null;
     }, 700);
   }, [currentVideoId, visibleVideoIndexById]);
+
+  const scrollPlaylistToTop = useCallback((behavior: ScrollBehavior = "smooth") => {
+    const playlist = playlistRef.current;
+    if (!playlist) return;
+    isPlaylistAutoScrollingRef.current = true;
+    playlist.scrollTo({ top: 0, behavior });
+    setPlaylistViewport((previous) => ({ ...previous, scrollTop: 0 }));
+
+    if (playlistAutoScrollTimerRef.current) {
+      window.clearTimeout(playlistAutoScrollTimerRef.current);
+    }
+    playlistAutoScrollTimerRef.current = window.setTimeout(() => {
+      isPlaylistAutoScrollingRef.current = false;
+      playlistAutoScrollTimerRef.current = null;
+    }, 700);
+  }, []);
 
   useEffect(() => {
     if (!currentVideoId || !playlistRef.current) return;
@@ -3668,10 +3704,9 @@ export default function App() {
       </section>
 
       {!isPrivacyMode && !isCinemaMode ? (
-      <aside className="playlist-panel">
+      <aside className="playlist-panel" aria-label={isSeriesMode ? "追番列表" : "播放列表"}>
         <div className="playlist-header">
           <div className="playlist-title-row">
-            <h2>{isSeriesMode ? "追番列表" : "播放列表"}</h2>
             <span>
               {videos.length
                 ? playlistFilter === "favorites"
@@ -3682,7 +3717,7 @@ export default function App() {
                 : "等待选择文件夹"}
             </span>
           </div>
-          <div className="playlist-tools">
+          <div className={`playlist-tools ${isSeriesMode ? "series-mode" : ""}`}>
             <button
               className={`series-mode-button ${isSeriesMode ? "active" : ""}`}
               type="button"
@@ -3732,6 +3767,16 @@ export default function App() {
               aria-label={isPlaylistSortReversed ? "切换为正序" : "切换为倒序"}
             >
               <ArrowDownUp size={16} />
+            </button>
+            <button
+              className="playlist-top-button"
+              type="button"
+              onClick={() => scrollPlaylistToTop()}
+              disabled={!visibleVideos.length || playlistViewport.scrollTop <= 0}
+              title="回到顶部"
+              aria-label="回到顶部"
+            >
+              <ArrowUp size={16} />
             </button>
             <button
               className="playlist-locate-button"
@@ -3788,6 +3833,7 @@ export default function App() {
             const playlistIndex = playlistIndexById.get(video.id) ?? 0;
             const isFavorite = favoriteVideoIds.has(video.id);
             const seriesTitle = isSeriesMode ? seriesTitleByVideoId.get(video.id) : "";
+            const seasonEpisodeMarker = isSeriesMode ? findSeasonEpisodeMarker(video.name) : null;
             return (
               <div
                 key={video.id}
@@ -3807,7 +3853,19 @@ export default function App() {
                     )}
                   </span>
                   <span className="episode-main">
-                    <strong>{video.name}</strong>
+                    <strong>
+                      {seasonEpisodeMarker ? (
+                        <>
+                          {video.name.slice(0, seasonEpisodeMarker.start)}
+                          <mark className="episode-marker">
+                            {video.name.slice(seasonEpisodeMarker.start, seasonEpisodeMarker.end)}
+                          </mark>
+                          {video.name.slice(seasonEpisodeMarker.end)}
+                        </>
+                      ) : (
+                        video.name
+                      )}
+                    </strong>
                     <small>{video.relativePath}</small>
                     {seriesTitle ? <small className="episode-series">{seriesTitle}</small> : null}
                     {isCompleted ? (

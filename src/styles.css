@@ -134,7 +134,7 @@ button {
 .playlist-title-row {
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 12px;
 }
 
@@ -904,6 +904,7 @@ button {
 }
 
 .playlist-order-button,
+.playlist-top-button,
 .playlist-locate-button {
   display: inline-flex;
   align-items: center;
@@ -918,6 +919,7 @@ button {
 }
 
 .playlist-order-button:hover,
+.playlist-top-button:hover,
 .playlist-locate-button:hover {
   background: #2a303a;
 }
@@ -929,11 +931,17 @@ button {
 }
 
 .playlist-order-button:disabled,
+.playlist-top-button:disabled,
 .playlist-locate-button:disabled {
   cursor: not-allowed;
   border-color: #303743;
   background: #191d23;
   color: #5f6875;
+}
+
+.playlist-tools.series-mode .playlist-sort-select,
+.playlist-tools.series-mode .playlist-order-button {
+  display: none;
 }
 
 .playlist-filter {
@@ -1123,6 +1131,15 @@ button {
 .episode-main strong {
   font-size: 14px;
   font-weight: 600;
+}
+
+.episode-marker {
+  display: inline;
+  margin: 0 2px;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: rgba(0, 161, 214, 0.22);
+  color: #79dfff;
 }
 
 .episode-main small {
