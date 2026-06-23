@@ -2,6 +2,7 @@ import {
   ArrowDownUp,
   ArrowUp,
   CheckCircle2,
+  ChevronDown,
   FolderOpen,
   EyeOff,
   Keyboard,
@@ -1549,6 +1550,7 @@ export default function App() {
   const toggleSeriesMode = useCallback(() => {
     const nextSeriesMode = !playerPreferencesRef.current.isSeriesMode;
     setIsSeriesMenuOpen(false);
+    if (nextSeriesMode) setPlaylistFilter("all");
     const currentSeriesKey =
       currentVideo && nextSeriesMode
         ? seriesKeyFromTitle(seriesTitleByVideoId.get(currentVideo.id) ?? inferSeriesTitle(currentVideo))
@@ -3761,6 +3763,7 @@ export default function App() {
                       ? "全部系列"
                       : seriesOptions.find((series) => series.key === selectedSeriesKey)?.title ?? "全部系列"}
                   </span>
+                  <ChevronDown className="series-menu-chevron" size={15} aria-hidden="true" />
                 </button>
                 {isSeriesMenuOpen ? (
                   <div className="series-menu-list" role="listbox" aria-label="选择系列">
@@ -3833,24 +3836,26 @@ export default function App() {
             >
               <LocateFixed size={16} />
             </button>
-            <div className="playlist-filter" aria-label="播放列表筛选">
-              <button
-                className={playlistFilter === "all" ? "active" : ""}
-                type="button"
-                onClick={() => setPlaylistFilter("all")}
-                disabled={!videos.length}
-              >
-                全部
-              </button>
-              <button
-                className={playlistFilter === "favorites" ? "active" : ""}
-                type="button"
-                onClick={() => setPlaylistFilter("favorites")}
-                disabled={!videos.length}
-              >
-                <Star size={14} />
-              </button>
-            </div>
+            {!isSeriesMode ? (
+              <div className="playlist-filter" aria-label="播放列表筛选">
+                <button
+                  className={playlistFilter === "all" ? "active" : ""}
+                  type="button"
+                  onClick={() => setPlaylistFilter("all")}
+                  disabled={!videos.length}
+                >
+                  全部
+                </button>
+                <button
+                  className={playlistFilter === "favorites" ? "active" : ""}
+                  type="button"
+                  onClick={() => setPlaylistFilter("favorites")}
+                  disabled={!videos.length}
+                >
+                  <Star size={14} />
+                </button>
+              </div>
+            ) : null}
             <button
               className="playlist-clear-button icon-only"
               type="button"
