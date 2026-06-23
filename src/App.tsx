@@ -910,6 +910,16 @@ function getVideoElementMetadata(element: HTMLVideoElement): VideoMetadata {
   };
 }
 
+function getLandscapeDisplaySize(width?: number, height?: number) {
+  if (!width || !height) return null;
+  return width >= height ? { width, height } : { width: height, height: width };
+}
+
+function getLandscapeDisplayAspectRatio(width?: number, height?: number) {
+  const displaySize = getLandscapeDisplaySize(width, height);
+  return displaySize ? displaySize.width / displaySize.height : 16 / 9;
+}
+
 async function loadVideoMetadata(video: VideoItem) {
   const element = document.createElement("video");
   const cleanup = () => {
@@ -986,8 +996,9 @@ async function createVideoThumbnailBlob(video: VideoItem) {
     }
 
     const metadata = getVideoElementMetadata(element);
-    const width = metadata.width;
-    const height = metadata.height;
+    const displaySize = getLandscapeDisplaySize(metadata.width, metadata.height);
+    const width = displaySize?.width;
+    const height = displaySize?.height;
     if (!width || !height) {
       throw new Error("Unable to create thumbnail.");
     }
@@ -1026,7 +1037,15 @@ async function createVideoThumbnailBlob(video: VideoItem) {
 
       context.fillStyle = "#050607";
       context.fillRect(0, 0, canvas.width, canvas.height);
-      context.drawImage(element, drawLeft, drawTop, drawWidth, drawHeight);
+      context.save();
+      if (metadata.width && metadata.height && metadata.width < metadata.height) {
+        context.translate(drawLeft + drawWidth / 2, drawTop + drawHeight / 2);
+        context.rotate(Math.PI / 2);
+        context.drawImage(element, -drawHeight / 2, -drawWidth / 2, drawHeight, drawWidth);
+      } else {
+        context.drawImage(element, drawLeft, drawTop, drawWidth, drawHeight);
+      }
+      context.restore();
 
       const blob = await encodeCanvasAsJpeg(canvas);
       if (!fallbackBlob) fallbackBlob = blob;
@@ -1213,6 +1232,13 @@ export default function App() {
     () => videos.find((item) => item.id === currentVideoId) ?? null,
     [currentVideoId, videos],
   );
+  const shouldRotateCurrentVideo = Boolean(
+    currentVideo?.width && currentVideo.height && currentVideo.width < currentVideo.height,
+  );
+  const currentVideoDisplayAspectRatio = currentVideo
+    ? getLandscapeDisplayAspectRatio(currentVideo.width, currentVideo.height)
+    : 16 / 9;
+  const currentVideoSourceAspectRatio = currentVideo?.width && currentVideo.height ? currentVideo.width / currentVideo.height : 9 / 16;
   const favoritePlaylistVideos = useMemo(
     () => seriesFilteredVideos.filter((video) => favoriteVideoIds.has(video.id)),
     [favoriteVideoIds, seriesFilteredVideos],
@@ -2417,7 +2443,7 @@ export default function App() {
     const handleLoadedMetadata = () => {
       setDuration(element.duration || 0);
       if (element.videoWidth > 0 && element.videoHeight > 0) {
-        setVideoAspectRatio(element.videoWidth / element.videoHeight);
+        setVideoAspectRatio(getLandscapeDisplayAspectRatio(element.videoWidth, element.videoHeight));
       }
       updateVideoMetadata(currentVideo.id, {
         duration: element.duration || undefined,
@@ -2594,8 +2620,9 @@ export default function App() {
     const drawFrame = () => {
       if (timelineFrameRequestRef.current !== requestId) return;
       const context = canvas.getContext("2d");
-      const sourceWidth = previewVideo.videoWidth;
-      const sourceHeight = previewVideo.videoHeight;
+      const displaySize = getLandscapeDisplaySize(previewVideo.videoWidth, previewVideo.videoHeight);
+      const sourceWidth = displaySize?.width;
+      const sourceHeight = displaySize?.height;
       if (!context || !sourceWidth || !sourceHeight) return;
 
       const canvasWidth = canvas.width;
@@ -2608,7 +2635,15 @@ export default function App() {
 
       context.fillStyle = "#050607";
       context.fillRect(0, 0, canvasWidth, canvasHeight);
-      context.drawImage(previewVideo, drawLeft, drawTop, drawWidth, drawHeight);
+      context.save();
+      if (previewVideo.videoWidth > 0 && previewVideo.videoHeight > 0 && previewVideo.videoWidth < previewVideo.videoHeight) {
+        context.translate(drawLeft + drawWidth / 2, drawTop + drawHeight / 2);
+        context.rotate(Math.PI / 2);
+        context.drawImage(previewVideo, -drawHeight / 2, -drawWidth / 2, drawHeight, drawWidth);
+      } else {
+        context.drawImage(previewVideo, drawLeft, drawTop, drawWidth, drawHeight);
+      }
+      context.restore();
       const imageUrl = canvas.toDataURL("image/jpeg", 0.78);
       setTimelinePreview((previous) =>
         previous.isVisible ? { ...previous, imageUrl, isLoadingFrame: false } : previous,
@@ -3320,7 +3355,15 @@ export default function App() {
             {currentVideo ? (
               <video
                 ref={videoRef}
-                className="video-element"
+                className={`video-element ${shouldRotateCurrentVideo ? "landscape-rotated" : ""}`}
+                style={
+                  shouldRotateCurrentVideo
+                    ? ({
+                        "--landscape-display-aspect-ratio": currentVideoDisplayAspectRatio,
+                        "--landscape-source-aspect-ratio": currentVideoSourceAspectRatio,
+                      } as React.CSSProperties)
+                    : undefined
+                }
                 onClick={togglePlay}
                 onPlay={() => setIsPlaying(true)}
                 onPause={() => {
