@@ -11,6 +11,7 @@ import {
   PictureInPicture2,
   Play,
   RotateCcw,
+  RotateCw,
   ShieldCheck,
   SkipForward,
   Star,
@@ -1203,6 +1204,7 @@ export default function App() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [areControlsVisible, setAreControlsVisible] = useState(true);
   const [videoAspectRatio, setVideoAspectRatio] = useState(16 / 9);
+  const [videoRotation, setVideoRotation] = useState(0);
   const [adaptiveColumns, setAdaptiveColumns] = useState<{
     playerWidth: number;
     playerHeight: number;
@@ -1252,13 +1254,12 @@ export default function App() {
     () => videos.find((item) => item.id === currentVideoId) ?? null,
     [currentVideoId, videos],
   );
-  const shouldRotateCurrentVideo = Boolean(
+  const shouldStretchPortraitVideo = Boolean(
     currentVideo?.width && currentVideo.height && currentVideo.width < currentVideo.height,
   );
-  const currentVideoDisplayAspectRatio = currentVideo
-    ? getLandscapeDisplayAspectRatio(currentVideo.width, currentVideo.height)
-    : 16 / 9;
   const currentVideoSourceAspectRatio = currentVideo?.width && currentVideo.height ? currentVideo.width / currentVideo.height : 9 / 16;
+  const normalizedVideoRotation = ((videoRotation % 360) + 360) % 360;
+  const isVideoSideways = normalizedVideoRotation === 90 || normalizedVideoRotation === 270;
   const favoritePlaylistVideos = useMemo(
     () => seriesFilteredVideos.filter((video) => favoriteVideoIds.has(video.id)),
     [favoriteVideoIds, seriesFilteredVideos],
@@ -2444,6 +2445,10 @@ export default function App() {
   }, [currentVideo?.id, currentVideo?.url]);
 
   useEffect(() => {
+    setVideoRotation(0);
+  }, [currentVideo?.id]);
+
+  useEffect(() => {
     const handleFullscreenChange = () => {
       setIsFullscreen(document.fullscreenElement === playerRef.current);
       setAreControlsVisible(true);
@@ -3289,6 +3294,11 @@ export default function App() {
     }
   };
 
+  const rotateVideoClockwise = () => {
+    if (!currentVideo) return;
+    setVideoRotation((rotation) => (rotation + 90) % 360);
+  };
+
   const handleTimeUpdate = () => {
     const element = videoRef.current;
     if (!element || !currentVideo) return;
@@ -3391,12 +3401,12 @@ export default function App() {
             {currentVideo ? (
               <video
                 ref={videoRef}
-                className={`video-element ${shouldRotateCurrentVideo ? "landscape-rotated" : ""}`}
+                className={`video-element ${shouldStretchPortraitVideo ? "portrait-stretched" : ""} ${normalizedVideoRotation ? "manual-rotated" : ""} ${isVideoSideways ? "sideways" : ""}`}
                 style={
-                  shouldRotateCurrentVideo
+                  shouldStretchPortraitVideo || normalizedVideoRotation
                     ? ({
-                        "--landscape-display-aspect-ratio": currentVideoDisplayAspectRatio,
                         "--landscape-source-aspect-ratio": currentVideoSourceAspectRatio,
+                        "--video-rotation": `${normalizedVideoRotation}deg`,
                       } as React.CSSProperties)
                     : undefined
                 }
@@ -3672,6 +3682,17 @@ export default function App() {
 
               <button className="icon-button" type="button" onClick={togglePictureInPicture} disabled={!currentVideo} title="画中画">
                 <PictureInPicture2 size={20} />
+              </button>
+              <button
+                className={`icon-button ${normalizedVideoRotation ? "active" : ""}`}
+                type="button"
+                onClick={rotateVideoClockwise}
+                disabled={!currentVideo}
+                title={`旋转视频${normalizedVideoRotation ? ` (${normalizedVideoRotation}deg)` : ""}`}
+                aria-label={`旋转视频${normalizedVideoRotation ? `, 当前 ${normalizedVideoRotation} 度` : ""}`}
+                aria-pressed={normalizedVideoRotation !== 0}
+              >
+                <RotateCw size={20} />
               </button>
               <button className="icon-button" type="button" onClick={toggleShortcutDialog} title="快捷键帮助">
                 <Keyboard size={20} />

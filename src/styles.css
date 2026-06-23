@@ -334,6 +334,7 @@ button {
   min-height: 0;
   overflow: hidden;
   background: #050607;
+  container-type: size;
 }
 
 .video-element,
@@ -354,12 +355,19 @@ button {
   cursor: pointer;
 }
 
-.video-element.landscape-rotated {
-  width: min(100%, calc(100vh * var(--landscape-source-aspect-ratio, 0.5625)));
-  height: min(100%, calc(100vw / var(--landscape-source-aspect-ratio, 0.5625)));
+.video-element.portrait-stretched {
+  object-fit: fill;
+}
+
+.video-element.manual-rotated {
+  transform: rotate(var(--video-rotation, 0deg));
+}
+
+.video-element.manual-rotated.sideways {
+  width: min(100cqh, calc(100cqw * var(--landscape-source-aspect-ratio, 1.7778)));
+  height: auto;
   flex: 0 0 auto;
-  aspect-ratio: var(--landscape-source-aspect-ratio, 0.5625);
-  transform: rotate(90deg);
+  aspect-ratio: var(--landscape-source-aspect-ratio, 1.7778);
 }
 
 .empty-player {
