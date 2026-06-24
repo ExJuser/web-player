@@ -2011,6 +2011,8 @@ export default function App() {
       setPlaylistSortMode(nextDataStore.preferences.playlistSortMode);
       setIsPlaylistSortReversed(nextDataStore.preferences.isPlaylistSortReversed);
       setShortcuts(nextDataStore.preferences.shortcuts);
+      setIsSeriesMode(nextDataStore.preferences.isSeriesMode);
+      setSelectedSeriesKey(nextDataStore.preferences.selectedSeriesKey);
       setIsCinemaMode(nextDataStore.preferences.isCinemaMode);
       setVolume(nextDataStore.settings.volume);
       setSkipFolderAccessPrompt(nextDataStore.settings.skipFolderAccessPrompt);
@@ -2070,6 +2072,8 @@ export default function App() {
       favoriteVideoIdsRef.current = new Set();
       setProgressStore({});
       setFavoriteVideoIds(new Set());
+      setIsSeriesMode(playerPreferencesRef.current.isSeriesMode);
+      setSelectedSeriesKey(playerPreferencesRef.current.selectedSeriesKey);
       revokeVideoUrls(videosRef.current);
       subtitlesRef.current.forEach((subtitle) => {
         if (subtitle.url) URL.revokeObjectURL(subtitle.url);
@@ -2088,7 +2092,15 @@ export default function App() {
           : "没有找到可播放的视频文件",
       );
     },
-    [isPlaylistSortReversed, playlistSortMode, revokeVideoUrls],
+    [
+      isCinemaMode,
+      isPlaylistSortReversed,
+      isSeriesMode,
+      playlistSortMode,
+      revokeVideoUrls,
+      selectedSeriesKey,
+      shortcuts,
+    ],
   );
 
   const chooseFolderWithFileInput = () => {
