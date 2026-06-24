@@ -179,6 +179,11 @@ button {
   max-width: 100%;
 }
 
+.app-shell.home-view .current-video-title {
+  font-size: 15px;
+  line-height: 1.4;
+}
+
 .current-video-meta {
   display: flex;
   min-width: 0;
@@ -194,13 +199,13 @@ button {
   align-items: center;
   gap: 5px;
   min-width: 0;
-  min-height: 21px;
-  padding: 0 7px;
+  min-height: 24px;
+  padding: 0 8px;
   border: 1px solid #2b323d;
   border-radius: 6px;
   background: #20252d;
   color: #dce2ec;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1;
 }
 
@@ -927,6 +932,9 @@ button {
   min-height: 96px;
   max-height: 180px;
   overflow: auto;
+  scrollbar-color: rgba(142, 151, 165, 0.58) rgba(20, 22, 26, 0.35);
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
   padding: 10px;
   border: 1px solid #2b323d;
   border-radius: 8px;
@@ -1044,6 +1052,61 @@ button {
   max-height: 330px;
   overflow: auto;
   padding-right: 2px;
+}
+
+.library-folder-result {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px;
+  border: 0;
+  border-radius: 8px;
+  background: #20252d;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.library-folder-result:hover {
+  background: #17242d;
+}
+
+.library-folder-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgba(121, 223, 255, 0.24);
+  border-radius: 8px;
+  background: rgba(0, 161, 214, 0.12);
+  color: #79dfff;
+}
+
+.library-folder-copy {
+  min-width: 0;
+}
+
+.library-folder-copy strong,
+.library-folder-copy small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.library-folder-copy strong {
+  color: #f5f7fb;
+  font-size: 14px;
+}
+
+.library-folder-copy small {
+  margin-top: 4px;
+  color: #8e97a5;
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 .empty-list.compact {
@@ -2921,6 +2984,42 @@ button {
 .app-shell.theme-light .delete-file-preview {
   border-color: #d7e0ea;
   background: #f8fafc;
+}
+
+.app-shell.theme-light .library-folder-result:hover {
+  background: #eef8fc;
+}
+
+.app-shell.theme-light .library-folder-icon {
+  border-color: rgba(0, 161, 214, 0.28);
+  background: #e1f5fd;
+  color: #0077a8;
+}
+
+.app-shell.theme-light .library-folder-copy strong {
+  color: #172033;
+}
+
+.app-shell.theme-light .library-folder-copy small {
+  color: #475467;
+}
+
+.app-shell.theme-light .home-recap-output {
+  color: #243044;
+  scrollbar-color: #98a2b3 #eef2f6;
+}
+
+.app-shell.theme-light .home-recap-output::-webkit-scrollbar-track {
+  background: rgba(226, 232, 240, 0.72);
+}
+
+.app-shell.theme-light .home-recap-output::-webkit-scrollbar-thumb {
+  border-color: rgba(226, 232, 240, 0.72);
+  background: rgba(100, 116, 139, 0.52);
+}
+
+.app-shell.theme-light .home-recap-output::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 161, 214, 0.62);
 }
 
 .app-shell.theme-light .library-search-form input,
