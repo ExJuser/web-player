@@ -782,6 +782,11 @@ button {
   margin-top: 8px;
 }
 
+.home-resume-actions .primary-button,
+.home-resume-actions .secondary-button {
+  height: 38px;
+}
+
 .home-section {
   display: grid;
   gap: 12px;

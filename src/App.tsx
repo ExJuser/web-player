@@ -760,6 +760,12 @@ type AiStreamEvent =
   | { type: "error"; error: string }
   | { type: "done" };
 
+type ExtractedEmbeddedSubtitle = {
+  id: string;
+  format: "vtt";
+  text: string;
+};
+
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, {
     ...init,
@@ -2489,15 +2495,24 @@ export default function App() {
         (Number.parseFloat(frameStyles.borderLeftWidth) || 0) + (Number.parseFloat(frameStyles.borderRightWidth) || 0);
       const frameBorderY =
         (Number.parseFloat(frameStyles.borderTopWidth) || 0) + (Number.parseFloat(frameStyles.borderBottomWidth) || 0);
-      const maxFrameHeight = Math.max(240, playerColumn.clientHeight - topBarHeight - playerColumnGap);
-      const maxVideoHeight = Math.max(180, maxFrameHeight - controlsHeight - frameBorderY);
+      const maxFrameHeight = Math.max(240, Math.floor(playerColumn.clientHeight - topBarHeight - playerColumnGap));
+      const maxVideoHeight = Math.max(180, Math.floor(maxFrameHeight - controlsHeight - frameBorderY));
       const minPlayerWidth = 420;
       const minPlaylistWidth = 280;
-      const desiredPlayerWidth = maxVideoHeight * videoAspectRatio + frameBorderX;
-      const maxPlayerWidth = Math.max(minPlayerWidth, availableWidth - gap - minPlaylistWidth);
-      const playerWidth = clamp(desiredPlayerWidth, minPlayerWidth, maxPlayerWidth);
-      const videoWidth = Math.max(0, playerWidth - frameBorderX);
-      const videoHeight = Math.min(maxVideoHeight, videoWidth / videoAspectRatio);
+      const activeVideoAspectRatio = Number.isFinite(videoAspectRatio) && videoAspectRatio > 0 ? videoAspectRatio : 16 / 9;
+      const minVideoWidth = Math.max(1, Math.round(minPlayerWidth - frameBorderX));
+      const maxVideoWidth = Math.max(minVideoWidth, Math.floor(availableWidth - gap - minPlaylistWidth - frameBorderX));
+      let videoHeight = maxVideoHeight;
+      let videoWidth = Math.round(videoHeight * activeVideoAspectRatio);
+      if (videoWidth > maxVideoWidth) {
+        videoWidth = maxVideoWidth;
+        videoHeight = Math.round(videoWidth / activeVideoAspectRatio);
+      }
+      if (videoWidth < minVideoWidth) {
+        videoWidth = minVideoWidth;
+        videoHeight = Math.round(videoWidth / activeVideoAspectRatio);
+      }
+      const playerWidth = videoWidth + frameBorderX;
       const playerHeight = videoHeight + controlsHeight + frameBorderY;
       const playlistWidth = Math.max(minPlaylistWidth, Math.round(availableWidth - gap - playerWidth));
 
@@ -3528,6 +3543,72 @@ export default function App() {
     input.click();
   }, [currentVideo]);
 
+  const probeEmbeddedSubtitleTracksForVideo = useCallback(async (video: VideoItem, rootId: string) => {
+    const payload = await fetchJson<{ tracks: EmbeddedSubtitleTrack[] }>("/api/subtitles/embedded/probe", {
+      method: "POST",
+      body: JSON.stringify({
+        rootId,
+        relativePath: video.relativePath,
+      }),
+    });
+    return payload.tracks;
+  }, []);
+
+  const loadEmbeddedSubtitleForVideo = useCallback(
+    async (video: VideoItem, rootId: string, track: EmbeddedSubtitleTrack, options?: { select?: boolean }) => {
+      if (!track.extractable) return null;
+      const existing = subtitlesRef.current.find(
+        (subtitle) =>
+          subtitle.source === "embedded" &&
+          subtitle.videoId === video.id &&
+          subtitle.embeddedTrack?.streamIndex === track.streamIndex,
+      );
+      if (existing) {
+        if (options?.select) setSelectedSubtitleId(existing.id);
+        return existing;
+      }
+
+      const payload = await fetchJson<ExtractedEmbeddedSubtitle>("/api/subtitles/embedded/extract", {
+        method: "POST",
+        body: JSON.stringify({
+          rootId,
+          relativePath: video.relativePath,
+          streamIndex: track.streamIndex,
+        }),
+      });
+      const language = track.language ? ` ${track.language}` : "";
+      const title = track.title ? ` ${track.title}` : "";
+      const subtitle: SubtitleItem = {
+        id: `embedded:${video.id}:${payload.id}`,
+        name: `内封字幕${language}${title}`.trim(),
+        relativePath: `${video.relativePath}#subtitle-${track.streamIndex}`,
+        url: "",
+        source: "embedded",
+        rawText: payload.text,
+        format: payload.format,
+        videoId: video.id,
+        embeddedTrack: track,
+      };
+      const subtitleWithUrl = {
+        ...subtitle,
+        url: await createSubtitleUrl(subtitle),
+      };
+      setSubtitles((previous) => {
+        previous
+          .filter((item) => item.id === subtitleWithUrl.id)
+          .forEach((item) => {
+            if (item.url) URL.revokeObjectURL(item.url);
+          });
+        const nextSubtitles = [...previous.filter((item) => item.id !== subtitleWithUrl.id), subtitleWithUrl];
+        subtitlesRef.current = nextSubtitles;
+        return nextSubtitles;
+      });
+      if (options?.select) setSelectedSubtitleId(subtitleWithUrl.id);
+      return subtitleWithUrl;
+    },
+    [],
+  );
+
   const probeEmbeddedSubtitles = useCallback(async () => {
     if (!currentVideo || !currentMediaRootId) {
       setEmbeddedSubtitleMessage("当前视频没有匹配到 config/app.json 中的媒体根路径。");
@@ -3540,22 +3621,16 @@ export default function App() {
     setIsEmbeddedSubtitleLoading(true);
     setEmbeddedSubtitleMessage("正在检测内封字幕...");
     try {
-      const payload = await fetchJson<{ tracks: EmbeddedSubtitleTrack[] }>("/api/subtitles/embedded/probe", {
-        method: "POST",
-        body: JSON.stringify({
-          rootId: currentMediaRootId,
-          relativePath: currentVideo.relativePath,
-        }),
-      });
-      setEmbeddedSubtitleTracks(payload.tracks);
+      const tracks = await probeEmbeddedSubtitleTracksForVideo(currentVideo, currentMediaRootId);
+      setEmbeddedSubtitleTracks(tracks);
       setIsEmbeddedSubtitleDialogOpen(true);
-      setEmbeddedSubtitleMessage(payload.tracks.length ? "" : "没有检测到内封字幕轨。");
+      setEmbeddedSubtitleMessage(tracks.length ? "" : "没有检测到内封字幕轨。");
     } catch (error) {
       setEmbeddedSubtitleMessage(error instanceof Error ? error.message : "检测内封字幕失败。");
     } finally {
       setIsEmbeddedSubtitleLoading(false);
     }
-  }, [currentMediaRootId, currentVideo, localConfig]);
+  }, [currentMediaRootId, currentVideo, localConfig, probeEmbeddedSubtitleTracksForVideo]);
 
   const extractEmbeddedSubtitle = useCallback(
     async (track: EmbeddedSubtitleTrack) => {
@@ -3563,40 +3638,7 @@ export default function App() {
       setIsEmbeddedSubtitleLoading(true);
       setEmbeddedSubtitleMessage("正在提取内封字幕...");
       try {
-        const payload = await fetchJson<{ id: string; format: "vtt"; text: string }>("/api/subtitles/embedded/extract", {
-          method: "POST",
-          body: JSON.stringify({
-            rootId: currentMediaRootId,
-            relativePath: currentVideo.relativePath,
-            streamIndex: track.streamIndex,
-          }),
-        });
-        const language = track.language ? ` ${track.language}` : "";
-        const title = track.title ? ` ${track.title}` : "";
-        const subtitle: SubtitleItem = {
-          id: `embedded:${currentVideo.id}:${payload.id}`,
-          name: `内封字幕${language}${title}`.trim(),
-          relativePath: `${currentVideo.relativePath}#subtitle-${track.streamIndex}`,
-          url: "",
-          source: "embedded",
-          rawText: payload.text,
-          format: payload.format,
-          videoId: currentVideo.id,
-          embeddedTrack: track,
-        };
-        const subtitleWithUrl = {
-          ...subtitle,
-          url: await createSubtitleUrl(subtitle),
-        };
-        setSubtitles((previous) => {
-          previous
-            .filter((item) => item.id === subtitleWithUrl.id)
-            .forEach((item) => {
-              if (item.url) URL.revokeObjectURL(item.url);
-            });
-          return [...previous.filter((item) => item.id !== subtitleWithUrl.id), subtitleWithUrl];
-        });
-        setSelectedSubtitleId(subtitleWithUrl.id);
+        await loadEmbeddedSubtitleForVideo(currentVideo, currentMediaRootId, track, { select: true });
         setIsEmbeddedSubtitleDialogOpen(false);
         setEmbeddedSubtitleMessage("已加载内封字幕。");
       } catch (error) {
@@ -3605,7 +3647,7 @@ export default function App() {
         setIsEmbeddedSubtitleLoading(false);
       }
     },
-    [currentMediaRootId, currentVideo],
+    [currentMediaRootId, currentVideo, loadEmbeddedSubtitleForVideo],
   );
 
   const loadSubtitleSummary = useCallback(async () => {
@@ -3771,10 +3813,6 @@ export default function App() {
       setHomeProgressRecapMessage("未配置 DEEPSEEK_API_KEY。");
       return;
     }
-    if (!homeRecapSubtitle) {
-      setHomeProgressRecapMessage("当前视频没有可用于回顾的字幕。");
-      return;
-    }
     const progress = homeRecapCard.progress;
     if (!progress || !isResumableProgress(progress)) {
       setHomeProgressRecapMessage("当前没有可回顾的观看进度。");
@@ -3786,7 +3824,20 @@ export default function App() {
     setHomeProgressRecapMessage("正在生成无剧透回顾...");
     setHomeProgressRecapVideoId(homeRecapCard.video.id);
     try {
-      const subtitleText = await readSubtitleText(homeRecapSubtitle);
+      let recapSubtitle = homeRecapSubtitle;
+      if (!recapSubtitle) {
+        if (!homeRecapMediaRootId || !localConfig?.ffmpeg.ffmpeg || !localConfig.ffmpeg.ffprobe) {
+          throw new Error("当前视频没有可用于回顾的字幕。");
+        }
+        setHomeProgressRecapMessage("正在提取内封字幕...");
+        const tracks = await probeEmbeddedSubtitleTracksForVideo(homeRecapCard.video, homeRecapMediaRootId);
+        const textTrack = tracks.find((track) => track.extractable);
+        if (!textTrack) throw new Error("当前视频没有可提取的文本内封字幕。");
+        recapSubtitle = await loadEmbeddedSubtitleForVideo(homeRecapCard.video, homeRecapMediaRootId, textTrack);
+        if (!recapSubtitle) throw new Error("当前视频没有可用于回顾的字幕。");
+        setHomeProgressRecapMessage("正在生成无剧透回顾...");
+      }
+      const subtitleText = await readSubtitleText(recapSubtitle);
       const cues = parseSubtitleCues(subtitleText);
       if (!cues.length) throw new Error("当前字幕没有可回顾的文本片段。");
       const viewedText = createViewedSubtitleText(cues, progress.currentTime);
