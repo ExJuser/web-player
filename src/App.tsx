@@ -69,6 +69,8 @@ import {
   mediaScanBatchDelay,
   playlistItemHeight,
   playlistVirtualOverscan,
+  thumbnailWidth,
+  thumbnailHeight,
   thumbnailCacheTimeout,
   thumbnailGenerationTimeout,
   thumbnailEncodeTimeout,
@@ -939,7 +941,7 @@ function encodeCanvasAsJpeg(canvas: HTMLCanvasElement) {
           resolve(blob);
         },
         "image/jpeg",
-        0.76,
+        0.82,
       );
     }),
     thumbnailEncodeTimeout,
@@ -973,8 +975,8 @@ async function createVideoThumbnailBlob(video: VideoItem) {
       throw new Error("Unable to create thumbnail.");
     }
 
-    canvas.width = 192;
-    canvas.height = 108;
+    canvas.width = thumbnailWidth;
+    canvas.height = thumbnailHeight;
     const context = canvas.getContext("2d");
     if (!context) {
       throw new Error("Unable to create thumbnail.");
@@ -1353,6 +1355,29 @@ export default function App() {
     if (sourceIndex < 0 || sourceIndex >= seriesVideos.length - 1) return null;
     return createHomeVideoCard(seriesVideos[sourceIndex + 1]);
   }, [createHomeVideoCard, currentVideo, playlistVideos, primaryResumeCard, recentHomeCards, seriesTitleByVideoId]);
+  const isHomeViewVisible = activeView === "home" && !isPrivacyMode && !isCinemaMode && !isFullscreen;
+  const firstPlayableHomeCard = playlistVideos[0] ? createHomeVideoCard(playlistVideos[0]) : null;
+  const primaryHomeCard = primaryResumeCard ?? firstPlayableHomeCard;
+  const thumbnailQueueVideoIds = useMemo(() => {
+    const queuedVideos = isHomeViewVisible
+      ? [
+          primaryHomeCard?.video,
+          nextEpisodeCard?.video,
+          ...recentHomeCards.map((card) => card.video),
+          ...favoriteHomeCards.map((card) => card.video),
+          ...visibleVideos,
+        ]
+      : visibleVideos;
+    const seenIds = new Set<string>();
+    const ids: string[] = [];
+    queuedVideos.forEach((video) => {
+      if (!video || seenIds.has(video.id)) return;
+      seenIds.add(video.id);
+      ids.push(video.id);
+    });
+    return ids;
+  }, [favoriteHomeCards, isHomeViewVisible, nextEpisodeCard, primaryHomeCard, recentHomeCards, visibleVideos]);
+  const thumbnailQueueVideoIdsKey = useMemo(() => thumbnailQueueVideoIds.join("\n"), [thumbnailQueueVideoIds]);
   const libraryStats = useMemo(() => {
     const completed = videos.filter((video) => progressStore[video.id]?.completed).length;
     const unfinished = videos.filter((video) => isResumableProgress(progressStore[video.id])).length;
@@ -2472,7 +2497,7 @@ export default function App() {
     const runId = thumbnailLoadRunIdRef.current + 1;
     thumbnailLoadRunIdRef.current = runId;
     let isCancelled = false;
-    const orderedVideoIds = visibleVideos.map((video) => video.id);
+    const orderedVideoIds = thumbnailQueueVideoIdsKey ? thumbnailQueueVideoIdsKey.split("\n") : [];
     const videoById = new Map(videosRef.current.map((video) => [video.id, video]));
 
     if (isScanning || isMainVideoLoading || !orderedVideoIds.length) {
@@ -2519,7 +2544,7 @@ export default function App() {
     return () => {
       isCancelled = true;
     };
-  }, [isMainVideoLoading, isScanning, setVideoThumbnailState, updateVideoMetadata, visibleVideoIdsKey]);
+  }, [isMainVideoLoading, isScanning, setVideoThumbnailState, thumbnailQueueVideoIdsKey, updateVideoMetadata]);
 
   const scrollToCurrentPlaylistItem = useCallback((behavior: ScrollBehavior = "smooth") => {
     const playlist = playlistRef.current;
@@ -3705,9 +3730,6 @@ export default function App() {
   };
 
   const progressPercent = duration ? Math.min(100, (currentTime / duration) * 100) : 0;
-  const isHomeViewVisible = activeView === "home" && !isPrivacyMode && !isCinemaMode && !isFullscreen;
-  const firstPlayableHomeCard = playlistVideos[0] ? createHomeVideoCard(playlistVideos[0]) : null;
-  const primaryHomeCard = primaryResumeCard ?? firstPlayableHomeCard;
   const primaryHomeTitle = primaryResumeCard ? "继续观看" : videos.length ? "开始观看" : "准备播放";
   const primaryHomeAction = primaryResumeCard ? "继续播放" : "播放第一个视频";
   const formatHomeProgressLabel = (card: HomeVideoCard) => {

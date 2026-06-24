@@ -14,6 +14,7 @@ import {
   RECENT_FOLDER_DB_NAME,
   RECENT_FOLDER_KEY,
   RECENT_FOLDER_STORE_NAME,
+  thumbnailCacheVersion,
   defaultPlayerSettings,
   defaultPlayerPreferences,
   defaultShortcuts
@@ -247,12 +248,12 @@ async function runObjectStoreRequest<T>(
 
 function createThumbnailId(libraryId: string, videoId: string) {
   let hash = 2166136261;
-  const value = `${libraryId}|${videoId}`;
+  const value = `${thumbnailCacheVersion}|${libraryId}|${videoId}`;
   for (let index = 0; index < value.length; index += 1) {
     hash ^= value.charCodeAt(index);
     hash = Math.imul(hash, 16777619);
   }
-  return `${libraryId}.${(hash >>> 0).toString(36)}`;
+  return `${libraryId}.${thumbnailCacheVersion}.${(hash >>> 0).toString(36)}`;
 }
 
 export async function readCachedThumbnail(libraryId: string | null, videoId: string) {
