@@ -581,6 +581,7 @@ function formatResolution(width?: number, height?: number) {
 
 function videoMetadataRows(video: VideoItem) {
   return [
+    ["文件名", video.name],
     ["大小", formatFileSize(video.size)],
     ["时长", video.duration ? formatTime(video.duration) : "读取中"],
     ["分辨率", formatResolution(video.width, video.height)],
@@ -3560,19 +3561,20 @@ export default function App() {
         <header className="top-bar" ref={topBarRef}>
           <div className="video-summary">
             {currentVideo && !isPrivacyMode ? null : <h1>{isPrivacyMode ? "在线视频播放器" : "本地视频播放器"}</h1>}
-            <p className="current-video-title">
-              {isPrivacyMode ? "正在播放：推荐视频" : currentVideo ? currentVideo.relativePath : message}
-            </p>
             {currentVideo && !isPrivacyMode ? (
               <dl className="current-video-meta">
                 {videoMetadataRows(currentVideo).map(([label, value]) => (
-                  <div key={label}>
+                  <div key={label} className={label === "文件名" ? "current-video-file-chip" : undefined}>
                     <dt>{label}</dt>
                     <dd>{value}</dd>
                   </div>
                 ))}
               </dl>
-            ) : null}
+            ) : (
+              <p className="current-video-title">
+                {isPrivacyMode ? "正在播放：推荐视频" : currentVideo ? currentVideo.relativePath : message}
+              </p>
+            )}
           </div>
           <div className="top-actions">
             {!isPrivacyMode ? (

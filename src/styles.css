@@ -121,7 +121,7 @@ button {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  min-height: 40px;
+  min-height: 36px;
 }
 
 .playlist-header {
@@ -157,7 +157,8 @@ button {
   flex: 1;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px 12px;
+  justify-content: flex-start;
+  gap: 5px 8px;
 }
 
 .top-bar p,
@@ -176,31 +177,51 @@ button {
 
 .current-video-meta {
   display: flex;
+  min-width: 0;
+  flex: 1;
   flex-wrap: wrap;
-  gap: 6px;
+  justify-content: flex-start;
+  gap: 5px;
   margin: 0;
 }
 
 .current-video-meta div {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  min-height: 22px;
+  gap: 5px;
+  min-width: 0;
+  min-height: 21px;
   padding: 0 7px;
   border: 1px solid #2b323d;
   border-radius: 6px;
   background: #20252d;
   color: #dce2ec;
-  font-size: 12px;
+  font-size: 11px;
+  line-height: 1;
 }
 
 .current-video-meta dt,
 .current-video-meta dd {
   margin: 0;
+  white-space: nowrap;
 }
 
 .current-video-meta dt {
   color: #8e97a5;
+}
+
+.current-video-meta dd {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.current-video-file-chip {
+  max-width: min(520px, 100%);
+  flex: 1 1 240px;
+}
+
+.current-video-file-chip dd {
+  min-width: 0;
 }
 
 .primary-button {
