@@ -5679,83 +5679,77 @@ export default function App() {
     ) : null}
     {isCacheStatusDialogOpen ? (
       <div className="modal-backdrop" role="presentation" onMouseDown={() => setIsCacheStatusDialogOpen(false)}>
-        <section
+        <div
           aria-labelledby="cache-status-title"
           aria-modal="true"
-          className="cache-status-dialog"
+          className="cache-status-modal-shell"
           role="dialog"
           onMouseDown={(event) => event.stopPropagation()}
         >
-          <button
-            aria-label="关闭"
-            className="dialog-close"
-            type="button"
-            onClick={() => setIsCacheStatusDialogOpen(false)}
-          >
-            <X size={18} />
-          </button>
-          <div className="cache-status-dialog-header">
-            <div className="dialog-icon">
-              <HardDrive size={28} />
-            </div>
-            <div>
-              <h2 id="cache-status-title">本地缓存状态</h2>
-              <span>{cacheStatus?.rootPath || ".local-web-player-data"}</span>
-            </div>
-          </div>
-
-          <div className="cache-status-overview">
-            <div>
-              <strong>{cacheStatus ? formatFileSize(cacheStatus.totalBytes) : "0 B"}</strong>
-              <span>总大小</span>
-            </div>
-            <div>
-              <strong>{cacheStatus?.totalFiles ?? 0}</strong>
-              <span>文件数</span>
-            </div>
-            <div>
-              <strong>{cacheStatus?.items.length ?? 0}</strong>
-              <span>缓存种类</span>
-            </div>
-            <div>
-              <strong>{cacheStatus?.updatedAt ? formatModifiedTime(cacheStatus.updatedAt) : "暂无缓存"}</strong>
-              <span>最近更新</span>
-            </div>
-          </div>
-
-          {cacheStatusMessage ? <div className="ai-empty-state">{cacheStatusMessage}</div> : null}
-          {isCacheStatusLoading && !cacheStatus ? <div className="ai-loading">正在读取缓存状态...</div> : null}
-
-          <div className="cache-status-list">
-            {(cacheStatus?.items ?? []).map((item) => (
-              <div className="cache-status-row" key={item.id}>
-                <div>
-                  <strong>{item.label}</strong>
-                  <span>{item.path}</span>
-                  {item.error ? <small>{item.error}</small> : null}
-                </div>
-                <dl>
-                  <div>
-                    <dt>大小</dt>
-                    <dd>{formatFileSize(item.bytes)}</dd>
-                  </div>
-                  <div>
-                    <dt>数量</dt>
-                    <dd>{item.files}</dd>
-                  </div>
-                  <div>
-                    <dt>更新</dt>
-                    <dd>{item.updatedAt ? formatModifiedTime(item.updatedAt) : "暂无缓存"}</dd>
-                  </div>
-                </dl>
+          <section className="cache-status-dialog">
+            <div className="cache-status-dialog-header">
+              <div className="dialog-icon">
+                <HardDrive size={28} />
               </div>
-            ))}
-            {!cacheStatus?.items.length && !isCacheStatusLoading ? (
-              <div className="ai-empty-state">暂无缓存状态。</div>
-            ) : null}
-          </div>
+              <div>
+                <h2 id="cache-status-title">本地缓存状态</h2>
+                <span>{cacheStatus?.rootPath || ".local-web-player-data"}</span>
+              </div>
+            </div>
 
-          <div className="dialog-actions">
+            <div className="cache-status-overview">
+              <div>
+                <strong>{cacheStatus ? formatFileSize(cacheStatus.totalBytes) : "0 B"}</strong>
+                <span>总大小</span>
+              </div>
+              <div>
+                <strong>{cacheStatus?.totalFiles ?? 0}</strong>
+                <span>文件数</span>
+              </div>
+              <div>
+                <strong>{cacheStatus?.items.length ?? 0}</strong>
+                <span>缓存种类</span>
+              </div>
+              <div>
+                <strong>{cacheStatus?.updatedAt ? formatModifiedTime(cacheStatus.updatedAt) : "暂无缓存"}</strong>
+                <span>最近更新</span>
+              </div>
+            </div>
+
+            {cacheStatusMessage ? <div className="ai-empty-state">{cacheStatusMessage}</div> : null}
+            {isCacheStatusLoading && !cacheStatus ? <div className="ai-loading">正在读取缓存状态...</div> : null}
+
+            <div className="cache-status-list">
+              {(cacheStatus?.items ?? []).map((item) => (
+                <div className="cache-status-row" key={item.id}>
+                  <div>
+                    <strong>{item.label}</strong>
+                    <span>{item.path}</span>
+                    {item.error ? <small>{item.error}</small> : null}
+                  </div>
+                  <dl>
+                    <div>
+                      <dt>大小</dt>
+                      <dd>{formatFileSize(item.bytes)}</dd>
+                    </div>
+                    <div>
+                      <dt>数量</dt>
+                      <dd>{item.files}</dd>
+                    </div>
+                    <div>
+                      <dt>更新</dt>
+                      <dd>{item.updatedAt ? formatModifiedTime(item.updatedAt) : "暂无缓存"}</dd>
+                    </div>
+                  </dl>
+                </div>
+              ))}
+              {!cacheStatus?.items.length && !isCacheStatusLoading ? (
+                <div className="ai-empty-state">暂无缓存状态。</div>
+              ) : null}
+            </div>
+          </section>
+
+          <div className="cache-status-dialog-actions">
             <button className="secondary-button" type="button" onClick={() => void loadCacheStatus()} disabled={isCacheStatusLoading}>
               <RefreshCw size={17} />
               重新检查
@@ -5764,7 +5758,7 @@ export default function App() {
               关闭
             </button>
           </div>
-        </section>
+        </div>
       </div>
     ) : null}
     {isAiPanelOpen ? (

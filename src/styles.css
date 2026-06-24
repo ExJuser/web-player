@@ -2153,6 +2153,12 @@ button {
   margin-top: 2px;
 }
 
+.dialog-actions .primary-button,
+.dialog-actions .secondary-button,
+.dialog-actions .danger-button {
+  height: 38px;
+}
+
 .shortcut-dialog {
   position: relative;
   width: min(660px, 100%);
@@ -2278,12 +2284,19 @@ button {
   padding: 24px;
 }
 
+.cache-status-modal-shell {
+  display: grid;
+  gap: 12px;
+  width: min(760px, calc(100vw - 32px));
+  max-height: min(860px, calc(100vh - 32px));
+}
+
 .cache-status-dialog {
   position: relative;
   display: grid;
   gap: 16px;
-  width: min(760px, calc(100vw - 32px));
-  max-height: min(780px, calc(100vh - 32px));
+  width: 100%;
+  max-height: min(780px, calc(100vh - 90px));
   overflow: auto;
   scrollbar-color: rgba(0, 161, 214, 0.72) rgba(15, 18, 23, 0.42);
   scrollbar-gutter: stable;
@@ -2321,7 +2334,6 @@ button {
   grid-template-columns: 52px minmax(0, 1fr);
   align-items: center;
   gap: 14px;
-  padding-right: 42px;
 }
 
 .cache-status-dialog-header h2 {
@@ -2448,6 +2460,22 @@ button {
   margin-top: 4px;
   color: #f5f7fb;
   font-size: 12px;
+}
+
+.cache-status-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.cache-status-dialog-actions .primary-button,
+.cache-status-dialog-actions .secondary-button {
+  height: 38px;
+}
+
+.cache-status-dialog-actions .secondary-button {
+  gap: 12px;
+  padding: 0 16px;
 }
 
 .ai-subtitle-dialog {
@@ -3406,6 +3434,15 @@ button {
 
   .cache-status-dialog {
     padding: 18px;
+  }
+
+  .cache-status-dialog-actions {
+    flex-direction: column-reverse;
+  }
+
+  .cache-status-dialog-actions .primary-button,
+  .cache-status-dialog-actions .secondary-button {
+    width: 100%;
   }
 
   .cache-status-overview {
