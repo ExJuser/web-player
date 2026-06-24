@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { access, mkdir, readFile, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
@@ -87,6 +87,71 @@ async function writeJsonFile(filePath, payload) {
 
 function hashValue(value) {
   return createHash("sha256").update(value).digest("hex");
+}
+
+async function getPathStats(targetPath) {
+  try {
+    const entryStat = await stat(targetPath);
+    if (!entryStat.isDirectory()) {
+      return {
+        bytes: entryStat.size,
+        files: entryStat.isFile() ? 1 : 0,
+        updatedAt: entryStat.mtimeMs,
+      };
+    }
+
+    let bytes = 0;
+    let files = 0;
+    let updatedAt = null;
+    const entries = await readdir(targetPath, { withFileTypes: true });
+    for (const entry of entries) {
+      const childStats = await getPathStats(path.join(targetPath, entry.name));
+      bytes += childStats.bytes;
+      files += childStats.files;
+      updatedAt = Math.max(updatedAt ?? 0, childStats.updatedAt ?? 0) || null;
+    }
+    return { bytes, files, updatedAt };
+  } catch (error) {
+    if (error && error.code === "ENOENT") {
+      return { bytes: 0, files: 0, updatedAt: null };
+    }
+    return {
+      bytes: 0,
+      files: 0,
+      updatedAt: null,
+      error: error instanceof Error ? error.message : "Unable to inspect cache path.",
+    };
+  }
+}
+
+async function createCacheStatus() {
+  const definitions = [
+    { id: "libraries", label: "播放数据", path: librariesRoot },
+    { id: "thumbnails", label: "视频缩略图", path: thumbnailsRoot },
+    { id: "subtitles", label: "内封字幕", path: embeddedSubtitlesRoot },
+    { id: "ai-summaries", label: "AI 字幕总结", path: path.join(aiRoot, "summaries") },
+    { id: "ai-qa", label: "AI 字幕问答", path: path.join(aiRoot, "qa") },
+    { id: "ai-recaps", label: "AI 进度回顾", path: path.join(aiRoot, "recaps") },
+    { id: "index", label: "索引数据", path: indexPath },
+  ];
+
+  const items = await Promise.all(
+    definitions.map(async (definition) => ({
+      ...definition,
+      ...(await getPathStats(definition.path)),
+    })),
+  );
+  const totalBytes = items.reduce((sum, item) => sum + item.bytes, 0);
+  const totalFiles = items.reduce((sum, item) => sum + item.files, 0);
+  const updatedAt = items.reduce((latest, item) => Math.max(latest, item.updatedAt ?? 0), 0) || null;
+
+  return {
+    rootPath: dataRoot,
+    totalBytes,
+    totalFiles,
+    updatedAt,
+    items,
+  };
 }
 
 function normalizeMediaRoots(config) {
@@ -570,6 +635,11 @@ function playerDataApiPlugin(env) {
     try {
       if (url.pathname === "/api/local-config" && request.method === "GET") {
         sendJson(response, 200, publicLocalConfig(await loadAppConfig(), await getTools(), env));
+        return;
+      }
+
+      if (url.pathname === "/api/cache-status" && request.method === "GET") {
+        sendJson(response, 200, await createCacheStatus());
         return;
       }
 

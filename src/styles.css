@@ -878,6 +878,58 @@ button {
   font-size: 12px;
 }
 
+.cache-status-card {
+  align-content: start;
+}
+
+.cache-status-summary {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+
+.cache-status-summary > svg {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  padding: 8px;
+  border: 1px solid rgba(0, 161, 214, 0.32);
+  border-radius: 8px;
+  background: rgba(0, 161, 214, 0.13);
+  color: #57cdf5;
+}
+
+.cache-status-summary div {
+  min-width: 0;
+}
+
+.cache-status-summary strong,
+.cache-status-summary span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cache-status-summary strong {
+  color: #f5f7fb;
+  font-size: 20px;
+  line-height: 1.1;
+}
+
+.cache-status-summary span {
+  margin-top: 5px;
+  color: #8e97a5;
+  font-size: 12px;
+}
+
+.cache-status-button {
+  width: 100%;
+}
+
 .player-overlay-feedback {
   position: absolute;
   top: 50%;
@@ -2040,6 +2092,155 @@ button {
   padding: 24px;
 }
 
+.cache-status-dialog {
+  position: relative;
+  display: grid;
+  gap: 16px;
+  width: min(760px, calc(100vw - 32px));
+  max-height: min(780px, calc(100vh - 32px));
+  overflow: auto;
+  padding: 24px;
+  border: 1px solid #2d3440;
+  border-radius: 8px;
+  background: #151922;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.45);
+  color: #f5f7fb;
+}
+
+.cache-status-dialog-header {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+  padding-right: 42px;
+}
+
+.cache-status-dialog-header h2 {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.2;
+}
+
+.cache-status-dialog-header span {
+  display: block;
+  overflow: hidden;
+  margin-top: 6px;
+  color: #9aa4b2;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cache-status-overview {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid #242a31;
+  border-radius: 8px;
+  background: #242a31;
+}
+
+.cache-status-overview div {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 13px;
+  background: #1d222c;
+}
+
+.cache-status-overview strong,
+.cache-status-overview span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cache-status-overview strong {
+  color: #f5f7fb;
+  font-size: 18px;
+  line-height: 1.1;
+}
+
+.cache-status-overview span {
+  color: #8e97a5;
+  font-size: 12px;
+}
+
+.cache-status-list {
+  display: grid;
+  gap: 8px;
+}
+
+.cache-status-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 42%);
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid #2d3440;
+  border-radius: 8px;
+  background: #1d222c;
+}
+
+.cache-status-row > div {
+  min-width: 0;
+}
+
+.cache-status-row strong,
+.cache-status-row span,
+.cache-status-row small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cache-status-row strong {
+  color: #f5f7fb;
+  font-size: 14px;
+}
+
+.cache-status-row span,
+.cache-status-row small {
+  margin-top: 5px;
+  color: #8e97a5;
+  font-size: 12px;
+}
+
+.cache-status-row small {
+  color: #ffb3b3;
+}
+
+.cache-status-row dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0;
+}
+
+.cache-status-row dl div {
+  min-width: 0;
+}
+
+.cache-status-row dt,
+.cache-status-row dd {
+  overflow: hidden;
+  margin: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cache-status-row dt {
+  color: #8e97a5;
+  font-size: 11px;
+}
+
+.cache-status-row dd {
+  margin-top: 4px;
+  color: #f5f7fb;
+  font-size: 12px;
+}
+
 .ai-subtitle-dialog {
   position: relative;
   width: min(720px, calc(100vw - 32px));
@@ -2339,6 +2540,18 @@ button {
 
   .shortcut-dialog {
     padding: 18px;
+  }
+
+  .cache-status-dialog {
+    padding: 18px;
+  }
+
+  .cache-status-overview {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .cache-status-row {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .shortcut-grid {
