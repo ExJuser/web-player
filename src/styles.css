@@ -140,7 +140,7 @@ button {
 
 .playlist-title-row span {
   flex-shrink: 0;
-  text-align: right;
+  text-align: center;
 }
 
 .top-bar h1,
@@ -216,8 +216,8 @@ button {
 }
 
 .current-video-file-chip {
-  max-width: min(520px, 100%);
-  flex: 1 1 240px;
+  max-width: min(360px, 100%);
+  flex: 0 1 auto;
 }
 
 .current-video-file-chip dd {
@@ -922,6 +922,67 @@ button {
 .volume-control input {
   width: 112px;
   accent-color: #00a1d6;
+}
+
+.fine-rate-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 230px;
+  color: #dce2ec;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.fine-rate-input {
+  width: 45px;
+  height: 26px;
+  padding: 0 4px;
+  border: 1px solid #303743;
+  border-radius: 6px;
+  background: #20252d;
+  color: #f5f7fb;
+  font: inherit;
+  appearance: textfield;
+  text-align: right;
+}
+
+.fine-rate-input:focus-visible {
+  border-color: #38c7ee;
+  outline: 0;
+  box-shadow: 0 0 0 2px rgba(56, 199, 238, 0.18);
+}
+
+.fine-rate-input::-webkit-outer-spin-button,
+.fine-rate-input::-webkit-inner-spin-button {
+  margin: 0;
+  appearance: none;
+}
+
+.fine-rate-input:disabled {
+  cursor: not-allowed;
+  color: #5f6875;
+  background: #191d23;
+}
+
+.fine-rate-control .fine-rate-label {
+  width: auto;
+  text-align: left;
+}
+
+.fine-rate-suffix {
+  margin-left: -4px;
+}
+
+.fine-rate-slider {
+  width: 112px;
+  accent-color: #00a1d6;
+}
+
+.fine-rate-slider:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
 }
 
 .volume-toggle {
