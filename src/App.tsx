@@ -4327,6 +4327,15 @@ export default function App() {
                 首页
               </button>
             ) : null}
+            <button
+              className="icon-button theme-toggle"
+              type="button"
+              onClick={toggleTheme}
+              title={theme === "dark" ? "切换到白天模式" : "切换到黑夜模式"}
+              aria-label={theme === "dark" ? "切换到白天模式" : "切换到黑夜模式"}
+            >
+              {theme === "dark" ? <Sun size={17} /> : <Moon size={17} />}
+            </button>
             {!isPrivacyMode ? (
               <button className="primary-button" type="button" onClick={requestFolderAccess} disabled={isScanning}>
                 <FolderOpen size={18} />

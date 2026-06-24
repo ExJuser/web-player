@@ -2547,6 +2547,654 @@ button {
   resize: none;
 }
 
+:root[data-theme="light"] {
+  color: #172033;
+  background: #eef3f8;
+}
+
+:root[data-theme="light"] body {
+  background: #eef3f8;
+}
+
+.app-shell.theme-light {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.86), transparent 260px),
+    #eef3f8;
+  color: #172033;
+}
+
+.app-shell.theme-light.privacy-mode {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.78), transparent 240px),
+    #eef3f8;
+}
+
+.app-shell.theme-light.cinema-mode,
+.app-shell.theme-light.cinema-mode .player-frame,
+.app-shell.theme-light.cinema-mode .player-viewport {
+  background: #000;
+  color: #f5f7fb;
+}
+
+.app-shell.theme-light .top-bar p,
+.app-shell.theme-light .playlist-header span,
+.app-shell.theme-light .home-empty-state,
+.app-shell.theme-light .home-resume-copy > span:not(.home-section-eyebrow),
+.app-shell.theme-light .home-resume-copy small,
+.app-shell.theme-light .home-next-card small,
+.app-shell.theme-light .home-list-copy small,
+.app-shell.theme-light .home-section-header span,
+.app-shell.theme-light .episode-main small,
+.app-shell.theme-light .cache-status-summary span,
+.app-shell.theme-light .cache-status-overview span,
+.app-shell.theme-light .cache-status-row span,
+.app-shell.theme-light .cache-status-row small,
+.app-shell.theme-light .cache-status-row dt,
+.app-shell.theme-light .ai-empty-state,
+.app-shell.theme-light .ai-loading,
+.app-shell.theme-light .ai-recap-meta,
+.app-shell.theme-light .ai-dialog-header span,
+.app-shell.theme-light .shortcut-dialog-note,
+.app-shell.theme-light .shortcut-dialog-footer span,
+.app-shell.theme-light .shortcut-group h3,
+.app-shell.theme-light .dialog-copy p,
+.app-shell.theme-light .current-video-meta dt,
+.app-shell.theme-light .timeline-row > span,
+.app-shell.theme-light .timeline-preview-placeholder,
+.app-shell.theme-light .empty-list {
+  color: #667085;
+}
+
+.app-shell.theme-light .top-bar h1,
+.app-shell.theme-light .playlist-header h2,
+.app-shell.theme-light .home-empty-state h2,
+.app-shell.theme-light .home-resume-copy h2,
+.app-shell.theme-light .home-section-header h2,
+.app-shell.theme-light .home-next-card strong,
+.app-shell.theme-light .home-list-copy strong,
+.app-shell.theme-light .home-stats strong,
+.app-shell.theme-light .home-recap-target strong,
+.app-shell.theme-light .cache-status-summary strong,
+.app-shell.theme-light .cache-status-overview strong,
+.app-shell.theme-light .cache-status-row strong,
+.app-shell.theme-light .cache-status-row dd,
+.app-shell.theme-light .dialog-copy h2,
+.app-shell.theme-light .shortcut-dialog-title,
+.app-shell.theme-light .shortcut-key-button,
+.app-shell.theme-light .shortcut-group dd,
+.app-shell.theme-light .embedded-subtitle-track,
+.app-shell.theme-light .ai-output,
+.app-shell.theme-light .ai-question-input,
+.app-shell.theme-light .current-video-meta dd {
+  color: #172033;
+}
+
+.app-shell.theme-light .home-section-eyebrow,
+.app-shell.theme-light .home-resume-copy p,
+.app-shell.theme-light .episode-main .episode-series {
+  color: #0077b6;
+}
+
+.app-shell.theme-light .current-video-meta div,
+.app-shell.theme-light .secondary-button,
+.app-shell.theme-light .icon-button,
+.app-shell.theme-light .playlist-sort-select,
+.app-shell.theme-light .playlist-order-button,
+.app-shell.theme-light .playlist-top-button,
+.app-shell.theme-light .playlist-locate-button,
+.app-shell.theme-light .playlist-clear-button,
+.app-shell.theme-light .series-mode-button,
+.app-shell.theme-light .auto-next-actions button,
+.app-shell.theme-light .shortcut-key-button,
+.app-shell.theme-light .permission-notes span,
+.app-shell.theme-light .episode-action-button {
+  border-color: #cfd8e3;
+  background: #ffffff;
+  color: #243044;
+}
+
+.app-shell.theme-light .theme-toggle {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+}
+
+.app-shell.theme-light .theme-toggle,
+.app-shell.theme-light .icon-button.privacy-toggle.active,
+.app-shell.theme-light .icon-button.cinema-toggle.active,
+.app-shell.theme-light .playlist-order-button.active,
+.app-shell.theme-light .series-mode-button.active {
+  border-color: #00a1d6;
+  background: #e1f5fd;
+  color: #0077a8;
+}
+
+.app-shell.theme-light .secondary-button:hover,
+.app-shell.theme-light .icon-button:hover,
+.app-shell.theme-light .dialog-close:hover,
+.app-shell.theme-light .playlist-order-button:hover,
+.app-shell.theme-light .playlist-top-button:hover,
+.app-shell.theme-light .playlist-locate-button:hover,
+.app-shell.theme-light .playlist-clear-button:hover,
+.app-shell.theme-light .episode-action-button:hover {
+  background: #e8eef6;
+}
+
+.app-shell.theme-light .secondary-button:disabled,
+.app-shell.theme-light .icon-button:disabled,
+.app-shell.theme-light .playlist-sort-select:disabled,
+.app-shell.theme-light .playlist-order-button:disabled,
+.app-shell.theme-light .playlist-top-button:disabled,
+.app-shell.theme-light .playlist-locate-button:disabled,
+.app-shell.theme-light .playlist-clear-button:disabled,
+.app-shell.theme-light .series-mode-button:disabled,
+.app-shell.theme-light .episode-action-button:disabled {
+  border-color: #d8e0ea;
+  background: #eef2f6;
+  color: #98a2b3;
+}
+
+.app-shell.theme-light .player-frame {
+  border-color: #cbd5e1;
+  background: #050607;
+}
+
+.app-shell.theme-light .player-viewport,
+.app-shell.theme-light .video-element,
+.app-shell.theme-light .empty-player,
+.app-shell.theme-light .timeline-preview-frame {
+  background: #050607;
+}
+
+.app-shell.theme-light .control-bar {
+  border-top-color: #d7e0ea;
+  background: #ffffff;
+}
+
+.app-shell.theme-light .volume-control,
+.app-shell.theme-light .settings-control,
+.app-shell.theme-light .subtitle-control,
+.app-shell.theme-light .control-group {
+  color: #243044;
+}
+
+.app-shell.theme-light .control-group-label {
+  color: #667085;
+}
+
+.app-shell.theme-light .control-select-trigger,
+.app-shell.theme-light .subtitle-select,
+.app-shell.theme-light .rate-select,
+.app-shell.theme-light .compact-select {
+  border-color: #cfd8e3;
+  background: #ffffff;
+  color: #172033;
+}
+
+.app-shell.theme-light .control-select-trigger:hover,
+.app-shell.theme-light .control-select-trigger:focus-visible,
+.app-shell.theme-light .control-select-trigger[aria-expanded="true"] {
+  border-color: #00a1d6;
+  background: #e1f5fd;
+  color: #005f86;
+  box-shadow: 0 0 0 2px rgba(0, 161, 214, 0.16);
+}
+
+.app-shell.theme-light .control-select-chevron {
+  color: #0077a8;
+}
+
+.app-shell.theme-light .control-select-list {
+  scrollbar-color: rgba(100, 116, 139, 0.52) rgba(226, 232, 240, 0.72);
+  border-color: #d7e0ea;
+  background: #ffffff;
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.14);
+}
+
+.app-shell.theme-light .control-select-list::-webkit-scrollbar-track {
+  background: rgba(226, 232, 240, 0.72);
+}
+
+.app-shell.theme-light .control-select-list::-webkit-scrollbar-thumb {
+  border-color: rgba(226, 232, 240, 0.72);
+  background: rgba(100, 116, 139, 0.52);
+}
+
+.app-shell.theme-light .control-select-list button {
+  color: #243044;
+}
+
+.app-shell.theme-light .control-select-list button:hover,
+.app-shell.theme-light .control-select-list button:focus-visible,
+.app-shell.theme-light .control-select-list button.active {
+  background: #e1f5fd;
+  color: #0077a8;
+}
+
+.app-shell.theme-light .subtitle-select:disabled,
+.app-shell.theme-light .volume-toggle:disabled {
+  border-color: #d8e0ea;
+  background: #eef2f6;
+  color: #98a2b3;
+}
+
+.app-shell.theme-light .timeline {
+  background: linear-gradient(90deg, #00a1d6 var(--progress), #d7e0ea var(--progress));
+}
+
+.app-shell.theme-light .home-primary-column,
+.app-shell.theme-light .home-side-column,
+.app-shell.theme-light .playlist,
+.app-shell.theme-light .cache-status-dialog {
+  scrollbar-color: rgba(100, 116, 139, 0.52) rgba(226, 232, 240, 0.72);
+}
+
+.app-shell.theme-light .home-resume-card,
+.app-shell.theme-light .home-section,
+.app-shell.theme-light .home-stats,
+.app-shell.theme-light .playlist-item,
+.app-shell.theme-light .folder-dialog,
+.app-shell.theme-light .delete-dialog,
+.app-shell.theme-light .shortcut-dialog,
+.app-shell.theme-light .embedded-subtitle-dialog,
+.app-shell.theme-light .cache-status-dialog,
+.app-shell.theme-light .ai-subtitle-dialog {
+  border-color: #d7e0ea;
+  background: #ffffff;
+  box-shadow: 0 22px 60px rgba(15, 23, 42, 0.12);
+}
+
+.app-shell.theme-light .home-card-thumbnail,
+.app-shell.theme-light .episode-thumbnail {
+  border-color: #d7e0ea;
+  background: #e8eef6;
+  color: #667085;
+}
+
+.app-shell.theme-light .playlist-item {
+  color: #172033;
+}
+
+.app-shell.theme-light .episode-main strong {
+  color: #172033;
+}
+
+.app-shell.theme-light .episode-main small {
+  color: #475467;
+}
+
+.app-shell.theme-light .playlist-item:hover .episode-main strong,
+.app-shell.theme-light .playlist-item.active .episode-main strong {
+  color: #0f2437;
+}
+
+.app-shell.theme-light .playlist-item:hover .episode-main small,
+.app-shell.theme-light .playlist-item.active .episode-main small {
+  color: #344054;
+}
+
+.app-shell.theme-light .playlist-item.active .episode-thumbnail:not(.has-image) {
+  background: #00a1d6;
+  color: #ffffff;
+}
+
+.app-shell.theme-light .home-list-card,
+.app-shell.theme-light .home-stats div,
+.app-shell.theme-light .home-recap-output,
+.app-shell.theme-light .library-search-answer,
+.app-shell.theme-light .cache-status-overview div,
+.app-shell.theme-light .cache-status-row,
+.app-shell.theme-light .embedded-subtitle-track,
+.app-shell.theme-light .ai-tabs,
+.app-shell.theme-light .ai-output,
+.app-shell.theme-light .ai-empty-state,
+.app-shell.theme-light .ai-loading,
+.app-shell.theme-light .ai-question-input,
+.app-shell.theme-light .delete-file-preview {
+  border-color: #d7e0ea;
+  background: #f8fafc;
+}
+
+.app-shell.theme-light .library-search-form input,
+.app-shell.theme-light .library-search-status {
+  border-color: #cfd8e3;
+  background: #ffffff;
+  color: #243044;
+}
+
+.app-shell.theme-light .library-search-form input::placeholder {
+  color: #98a2b3;
+}
+
+.app-shell.theme-light .library-search-form button:disabled {
+  background: #eef2f6;
+  color: #98a2b3;
+}
+
+.app-shell.theme-light .library-search-status {
+  color: #667085;
+}
+
+.app-shell.theme-light .library-search-status.local {
+  border-color: rgba(0, 161, 214, 0.28);
+  background: #e1f5fd;
+  color: #0077a8;
+}
+
+.app-shell.theme-light .library-search-status.ai {
+  border-color: rgba(0, 161, 214, 0.32);
+  background: #e1f5fd;
+  color: #005f86;
+}
+
+.app-shell.theme-light .library-search-answer {
+  color: #243044;
+}
+
+.app-shell.theme-light .library-search-results {
+  scrollbar-color: rgba(100, 116, 139, 0.52) rgba(226, 232, 240, 0.72);
+}
+
+.app-shell.theme-light .home-list-card:hover,
+.app-shell.theme-light .playlist-item:hover,
+.app-shell.theme-light .playlist-item.active {
+  border-color: #00a1d6;
+  background: #eef8fc;
+}
+
+.app-shell.theme-light .home-progress {
+  background: #d7e0ea;
+}
+
+.app-shell.theme-light .playlist-panel {
+  border-left-color: #d7e0ea;
+}
+
+.app-shell.theme-light .playlist-filter {
+  border-color: #cfd8e3;
+  background: #eef2f6;
+}
+
+.app-shell.theme-light .playlist-filter button {
+  color: #667085;
+}
+
+.app-shell.theme-light .playlist-filter button.active,
+.app-shell.theme-light .ai-tabs button.active,
+.app-shell.theme-light .auto-next-actions button:first-child {
+  background: #00a1d6;
+  color: #ffffff;
+}
+
+.app-shell.theme-light .ai-tabs button {
+  color: #667085;
+}
+
+.app-shell.theme-light .series-menu-trigger {
+  border-color: #cfd8e3;
+  background: #ffffff;
+  color: #243044;
+}
+
+.app-shell.theme-light .series-menu-list {
+  border-color: #d7e0ea;
+  background: #ffffff;
+  box-shadow: 0 20px 48px rgba(15, 23, 42, 0.16);
+}
+
+.app-shell.theme-light .series-menu-list button {
+  color: #243044;
+}
+
+.app-shell.theme-light .series-menu-list button:hover,
+.app-shell.theme-light .series-menu-list button.active {
+  background: #e1f5fd;
+  color: #0077a8;
+}
+
+.app-shell.theme-light .empty-list {
+  border-color: #cbd5e1;
+}
+
+.app-shell.theme-light .modal-backdrop {
+  background: rgba(15, 23, 42, 0.28);
+}
+
+.app-shell.theme-light .dialog-icon,
+.app-shell.theme-light .cache-status-summary > svg,
+.app-shell.theme-light .home-recap-target > svg {
+  border-color: rgba(0, 161, 214, 0.28);
+  background: rgba(0, 161, 214, 0.1);
+  color: #0077a8;
+}
+
+.app-shell.theme-light .dialog-icon.danger {
+  border-color: rgba(217, 63, 63, 0.26);
+  background: rgba(217, 63, 63, 0.1);
+  color: #b42318;
+}
+
+.app-shell.theme-light .episode-action-button.favorite.active {
+  background: rgba(217, 119, 6, 0.12);
+  color: #b54708;
+}
+
+.app-shell.theme-light .episode-action-button.danger {
+  color: #b42318;
+}
+
+.app-shell.theme-light .episode-action-button.danger:hover {
+  background: rgba(217, 63, 63, 0.1);
+  color: #b42318;
+}
+
+.app-shell.theme-light .cache-status-overview {
+  border-color: #d7e0ea;
+  background: #d7e0ea;
+}
+
+.app-shell.theme-light .drop-overlay,
+.app-shell.theme-light .auto-next-prompt,
+.app-shell.theme-light .timeline-preview,
+.app-shell.theme-light .timeline-preview::after,
+.app-shell.theme-light .double-click-feedback,
+.app-shell.theme-light .player-overlay-feedback,
+.app-shell.theme-light .privacy-cover {
+  color: #f5f7fb;
+}
+
+.app-shell.theme-light.cinema-mode .top-bar,
+.app-shell.theme-light .player-frame.fullscreen .control-bar,
+.app-shell.theme-light.cinema-mode .control-bar {
+  color: #f5f7fb;
+}
+
+.app-shell.theme-light.cinema-mode .theme-toggle,
+.app-shell.theme-light .player-frame.fullscreen .icon-button,
+.app-shell.theme-light.cinema-mode .icon-button {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(32, 37, 45, 0.82);
+  color: #f5f7fb;
+}
+
+.app-shell.theme-light .player-frame.fullscreen .volume-control,
+.app-shell.theme-light .player-frame.fullscreen .settings-control,
+.app-shell.theme-light .player-frame.fullscreen .subtitle-control,
+.app-shell.theme-light .player-frame.fullscreen .control-group,
+.app-shell.theme-light.cinema-mode .volume-control,
+.app-shell.theme-light.cinema-mode .settings-control,
+.app-shell.theme-light.cinema-mode .subtitle-control,
+.app-shell.theme-light.cinema-mode .control-group {
+  color: #dce2ec;
+}
+
+.app-shell.theme-light .player-frame.fullscreen .control-group-label,
+.app-shell.theme-light.cinema-mode .control-group-label {
+  color: #aab1bd;
+}
+
+.app-shell.theme-light .player-frame.fullscreen .control-select-trigger,
+.app-shell.theme-light .player-frame.fullscreen .subtitle-select,
+.app-shell.theme-light .player-frame.fullscreen .rate-select,
+.app-shell.theme-light .player-frame.fullscreen .compact-select,
+.app-shell.theme-light.cinema-mode .control-select-trigger,
+.app-shell.theme-light.cinema-mode .subtitle-select,
+.app-shell.theme-light.cinema-mode .rate-select,
+.app-shell.theme-light.cinema-mode .compact-select {
+  border-color: #303743;
+  background: #20252d;
+  color: #f5f7fb;
+}
+
+.app-shell.theme-light .player-frame.fullscreen .control-select-trigger:hover,
+.app-shell.theme-light .player-frame.fullscreen .control-select-trigger:focus-visible,
+.app-shell.theme-light .player-frame.fullscreen .control-select-trigger[aria-expanded="true"],
+.app-shell.theme-light.cinema-mode .control-select-trigger:hover,
+.app-shell.theme-light.cinema-mode .control-select-trigger:focus-visible,
+.app-shell.theme-light.cinema-mode .control-select-trigger[aria-expanded="true"] {
+  border-color: #38c7ee;
+  background: #07394a;
+  color: #ffffff;
+  box-shadow: 0 0 0 2px rgba(0, 161, 214, 0.18);
+}
+
+.app-shell.theme-light .player-frame.fullscreen .control-select-chevron,
+.app-shell.theme-light.cinema-mode .control-select-chevron {
+  color: #79dfff;
+}
+
+.app-shell.theme-light .player-frame.fullscreen .control-select-list,
+.app-shell.theme-light.cinema-mode .control-select-list {
+  scrollbar-color: rgba(0, 161, 214, 0.82) rgba(15, 18, 23, 0.88);
+  border-color: #303743;
+  background: #1b2028;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.38);
+}
+
+.app-shell.theme-light .player-frame.fullscreen .control-select-list button,
+.app-shell.theme-light.cinema-mode .control-select-list button {
+  color: #dce2ec;
+}
+
+.app-shell.theme-light .player-frame.fullscreen .control-select-list button:hover,
+.app-shell.theme-light .player-frame.fullscreen .control-select-list button:focus-visible,
+.app-shell.theme-light .player-frame.fullscreen .control-select-list button.active,
+.app-shell.theme-light.cinema-mode .control-select-list button:hover,
+.app-shell.theme-light.cinema-mode .control-select-list button:focus-visible,
+.app-shell.theme-light.cinema-mode .control-select-list button.active {
+  background: #126bd6;
+  color: white;
+}
+
+:root[data-theme="light"] .modal-backdrop {
+  background: rgba(15, 23, 42, 0.28);
+}
+
+:root[data-theme="light"] .folder-dialog,
+:root[data-theme="light"] .delete-dialog,
+:root[data-theme="light"] .shortcut-dialog,
+:root[data-theme="light"] .embedded-subtitle-dialog,
+:root[data-theme="light"] .cache-status-dialog,
+:root[data-theme="light"] .ai-subtitle-dialog {
+  border-color: #d7e0ea;
+  background: #ffffff;
+  box-shadow: 0 22px 60px rgba(15, 23, 42, 0.14);
+  color: #172033;
+}
+
+:root[data-theme="light"] .dialog-copy h2,
+:root[data-theme="light"] .shortcut-dialog-title,
+:root[data-theme="light"] .shortcut-key-button,
+:root[data-theme="light"] .shortcut-group dd,
+:root[data-theme="light"] .cache-status-dialog-header h2,
+:root[data-theme="light"] .cache-status-overview strong,
+:root[data-theme="light"] .cache-status-row strong,
+:root[data-theme="light"] .cache-status-row dd,
+:root[data-theme="light"] .embedded-subtitle-track,
+:root[data-theme="light"] .ai-output,
+:root[data-theme="light"] .ai-question-input {
+  color: #172033;
+}
+
+:root[data-theme="light"] .dialog-copy p,
+:root[data-theme="light"] .shortcut-dialog-note,
+:root[data-theme="light"] .shortcut-dialog-footer span,
+:root[data-theme="light"] .shortcut-group h3,
+:root[data-theme="light"] .cache-status-dialog-header span,
+:root[data-theme="light"] .cache-status-overview span,
+:root[data-theme="light"] .cache-status-row span,
+:root[data-theme="light"] .cache-status-row small,
+:root[data-theme="light"] .cache-status-row dt,
+:root[data-theme="light"] .embedded-subtitle-track span,
+:root[data-theme="light"] .ai-dialog-header span,
+:root[data-theme="light"] .ai-empty-state,
+:root[data-theme="light"] .ai-loading,
+:root[data-theme="light"] .ai-recap-meta {
+  color: #667085;
+}
+
+:root[data-theme="light"] .secondary-button,
+:root[data-theme="light"] .dialog-close,
+:root[data-theme="light"] .shortcut-key-button,
+:root[data-theme="light"] .permission-notes span {
+  border-color: #cfd8e3;
+  background: #ffffff;
+  color: #243044;
+}
+
+:root[data-theme="light"] .secondary-button:hover,
+:root[data-theme="light"] .dialog-close:hover,
+:root[data-theme="light"] .shortcut-key-button:hover,
+:root[data-theme="light"] .shortcut-key-button.recording {
+  border-color: #00a1d6;
+  background: #e1f5fd;
+  color: #0077a8;
+}
+
+:root[data-theme="light"] .delete-file-preview,
+:root[data-theme="light"] .cache-status-overview div,
+:root[data-theme="light"] .cache-status-row,
+:root[data-theme="light"] .embedded-subtitle-track,
+:root[data-theme="light"] .ai-tabs,
+:root[data-theme="light"] .ai-output,
+:root[data-theme="light"] .ai-empty-state,
+:root[data-theme="light"] .ai-loading,
+:root[data-theme="light"] .ai-question-input {
+  border-color: #d7e0ea;
+  background: #f8fafc;
+}
+
+:root[data-theme="light"] .cache-status-overview {
+  border-color: #d7e0ea;
+  background: #d7e0ea;
+}
+
+:root[data-theme="light"] .dialog-icon,
+:root[data-theme="light"] .cache-status-dialog .dialog-icon {
+  border-color: rgba(0, 161, 214, 0.28);
+  background: rgba(0, 161, 214, 0.1);
+  color: #0077a8;
+}
+
+:root[data-theme="light"] .dialog-icon.danger {
+  border-color: rgba(217, 63, 63, 0.26);
+  background: rgba(217, 63, 63, 0.1);
+  color: #b42318;
+}
+
+:root[data-theme="light"] .dialog-check {
+  color: #243044;
+}
+
+:root[data-theme="light"] .ai-tabs button {
+  color: #667085;
+}
+
+:root[data-theme="light"] .ai-tabs button.active {
+  background: #00a1d6;
+  color: #ffffff;
+}
+
 @media (max-width: 980px) {
   .app-shell {
     --player-frame-height: 100%;
