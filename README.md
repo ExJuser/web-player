@@ -1,6 +1,6 @@
 # Local Web Player
 
-Local Web Player is a browser-based local video player built with React, TypeScript, and Vite. It scans videos from a folder selected by the user, plays them directly in the browser, and stores playback progress and preferences locally.
+Local Web Player is a browser-based local video player built with React, TypeScript, and Vite. It scans videos from a folder selected by the user, plays them directly in the browser, and stores playback progress and preferences in the project data folder.
 
 The app is designed for personal local media libraries. It does not upload video files to a server.
 
@@ -100,19 +100,18 @@ This app works with local browser APIs and local files:
 
 - Video files are played from the folder or files selected by the user.
 - Video files are not uploaded by this app.
-- Playback progress and favorites are saved to `.local-web-player-progress.json` inside the selected folder when write permission is available.
-- Recent folder handles and generated thumbnails are stored in the browser's IndexedDB.
-- Volume and folder prompt preferences are stored in browser storage.
+- Playback progress, favorites, player preferences, volume, folder prompt preferences, and generated thumbnails are saved under `.local-web-player-data/` in this project folder.
+- The selected media folder is not written to for playback progress, favorites, preferences, or thumbnails.
+- Recent folder handles are still stored in the browser's IndexedDB because browsers do not expose a serializable file-system handle format.
 
-If you clear browser site data, cached folder handles, thumbnails, and browser-only preferences may be removed.
+The app must be opened through `npm run dev` or `npm run preview` so the local project-data API can write `.local-web-player-data/`. Opening the built HTML directly cannot persist project-folder data.
 
 ## Browser Permissions
 
-The app may request read/write access to the selected folder. Write access is used for:
+The app requests read access to scan and play the selected folder. Write access to the media folder is only used for:
 
-- Saving playback progress and favorites.
-- Saving player preferences.
 - Deleting a local video file when the user confirms deletion.
+- Importing and removing the legacy `.local-web-player-progress.json` file after project-folder data has been saved.
 
 Deletion is only attempted after user confirmation and only when the browser grants the required folder permission.
 
@@ -167,6 +166,7 @@ The repository ignores local dependency folders, build output, npm cache, logs, 
 ```text
 node_modules/
 dist/
+.local-web-player-data/
 .npm-cache/
 *.log
 *.tsbuildinfo
@@ -177,7 +177,7 @@ Before publishing a fork or modified version, keep secrets such as API keys, tok
 ## Known Notes
 
 - Folder selection depends on browser support for `showDirectoryPicker`.
-- Local progress saving depends on write permission for the selected folder.
+- Project-folder persistence depends on running the local Vite/Node service.
 - Some media formats may depend on the browser's built-in codec support.
 - Large folders may take time to scan and generate thumbnails.
 

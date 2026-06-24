@@ -35,6 +35,8 @@ import type {
   MediaScanBatch,
   PlaybackMode,
   PlaybackProgress,
+  PlayerDataStore,
+  PlayerLibraryMetadata,
   PlayerPreferences,
   PlaylistFilter,
   PlaylistSortMode,
@@ -51,8 +53,6 @@ import {
   MIN_LOCAL_VIDEO_SIZE_BYTES,
   IGNORED_VIDEO_BASENAMES,
   PROGRESS_FILE_NAME,
-  FOLDER_ACCESS_PROMPT_KEY,
-  VOLUME_STORAGE_KEY,
   collator,
   rates,
   seekSteps,
@@ -73,6 +73,7 @@ import {
   thumbnailEncodeTimeout,
   playlistScrollFrameDelay,
   defaultShortcuts,
+  defaultPlayerSettings,
   defaultPlayerPreferences,
   shortcutGroups
 } from "./playerConstants";
@@ -148,11 +149,67 @@ function createVideoId(relativePath: string, file: File) {
   return `${relativePath}|${file.size}|${file.lastModified}`;
 }
 
+function hashString(value: string) {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+function sanitizeLibraryName(name: string) {
+  return (
+    name
+      .trim()
+      .replace(/[^A-Za-z0-9._~-]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 48) || "library"
+  );
+}
+
+function createLibraryMetadata(directory: FileSystemDirectoryHandle, media: MediaCollection): PlayerLibraryMetadata {
+  const fingerprint = [
+    directory.name,
+    media.videos.length,
+    ...media.videos
+      .map((video) => `${video.relativePath}|${video.size}|${video.lastModified}`)
+      .sort((a, b) => collator.compare(a, b)),
+  ].join("\n");
+  const id = `${sanitizeLibraryName(directory.name)}-${hashString(fingerprint)}`;
+  return {
+    id,
+    name: directory.name,
+    videoCount: media.videos.length,
+    scannedFiles: media.scannedFiles,
+    updatedAt: Date.now(),
+  };
+}
+
+function hasStoredData(store: PlayerDataStore) {
+  return Boolean(
+    Object.keys(store.progress).length ||
+      store.favorites.length ||
+      JSON.stringify(store.preferences) !== JSON.stringify(defaultPlayerPreferences),
+  );
+}
+
+async function ensureDirectoryReadPermission(directory: FileSystemDirectoryHandle) {
+  const descriptor = { mode: "read" as const };
+  const currentPermission = await directory.queryPermission?.(descriptor);
+  if (currentPermission === "granted") return true;
+  const nextPermission = await directory.requestPermission?.(descriptor);
+  return nextPermission !== "denied";
+}
+
 import { ControlSelect } from "./ControlSelect";
 import {
   clearRecentFolderHandle,
+  createDefaultPlayerDataStore,
   createProgress,
+  deleteLegacyPlayerDataStore,
   ensureDirectoryPermission,
+  loadLegacyPlayerDataStore,
   loadPlayerDataStore,
   readCachedThumbnail,
   readRecentFolderHandle,
@@ -239,8 +296,7 @@ function clamp(value: number, min: number, max: number) {
 }
 
 function readStoredVolume() {
-  const storedVolume = Number(localStorage.getItem(VOLUME_STORAGE_KEY));
-  return Number.isFinite(storedVolume) ? clamp(storedVolume, 0, 1) : 0.85;
+  return defaultPlayerSettings.volume;
 }
 
 function isFormControl(target: EventTarget | null) {
@@ -817,9 +873,9 @@ async function createVideoThumbnailBlob(video: VideoItem) {
   }
 }
 
-async function loadVideoThumbnail(video: VideoItem) {
+async function loadVideoThumbnail(libraryId: string | null, video: VideoItem) {
   const cachedThumbnail = await withTimeout(
-    readCachedThumbnail(video.id),
+    readCachedThumbnail(libraryId, video.id),
     thumbnailCacheTimeout,
     "Timed out reading cached thumbnail.",
   ).catch(() => null);
@@ -832,7 +888,7 @@ async function loadVideoThumbnail(video: VideoItem) {
     thumbnailGenerationTimeout,
     "Timed out creating thumbnail.",
   );
-  void writeCachedThumbnail(video.id, thumbnailBlob).catch(() => undefined);
+  void writeCachedThumbnail(libraryId, video.id, thumbnailBlob).catch(() => undefined);
   return { thumbnailUrl: URL.createObjectURL(thumbnailBlob), metadata };
 }
 
@@ -859,8 +915,11 @@ export default function App() {
   const rightMouseHoldTimerRef = useRef<number | null>(null);
   const rightMousePointerIdRef = useRef<number | null>(null);
   const directoryRef = useRef<FileSystemDirectoryHandle | null>(null);
+  const libraryIdRef = useRef<string | null>(null);
+  const libraryMetadataRef = useRef<PlayerLibraryMetadata | undefined>(undefined);
   const progressStoreRef = useRef<ProgressStore>({});
   const playerPreferencesRef = useRef<PlayerPreferences>(defaultPlayerPreferences);
+  const playerSettingsRef = useRef(defaultPlayerSettings);
   const favoriteVideoIdsRef = useRef(new Set<string>());
   const videosRef = useRef<VideoItem[]>([]);
   const subtitlesRef = useRef<SubtitleItem[]>([]);
@@ -883,6 +942,7 @@ export default function App() {
   const startFromBeginningVideoIdRef = useRef<string | null>(null);
   const [videos, setVideos] = useState<VideoItem[]>([]);
   const [subtitles, setSubtitles] = useState<SubtitleItem[]>([]);
+  const [libraryId, setLibraryId] = useState<string | null>(null);
   const [currentVideoId, setCurrentVideoId] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<ActiveView>("home");
   const [selectedSubtitleId, setSelectedSubtitleId] = useState<string>("off");
@@ -909,9 +969,7 @@ export default function App() {
   const [isSeriesMenuOpen, setIsSeriesMenuOpen] = useState(false);
   const [isPrivacyMode, setIsPrivacyMode] = useState(false);
   const [deleteCandidate, setDeleteCandidate] = useState<VideoItem | null>(null);
-  const [skipFolderAccessPrompt, setSkipFolderAccessPrompt] = useState(
-    () => localStorage.getItem(FOLDER_ACCESS_PROMPT_KEY) === "true",
-  );
+  const [skipFolderAccessPrompt, setSkipFolderAccessPrompt] = useState(defaultPlayerSettings.skipFolderAccessPrompt);
   const [message, setMessage] = useState("选择一个本地文件夹开始播放");
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -958,6 +1016,28 @@ export default function App() {
   isMainVideoLoadingRef.current = isMainVideoLoading;
   videosRef.current = videos;
   subtitlesRef.current = subtitles;
+
+  const buildPlayerDataStore = useCallback(
+    (overrides?: Partial<PlayerDataStore>): PlayerDataStore => ({
+      version: 4,
+      progress: progressStoreRef.current,
+      favorites: Array.from(favoriteVideoIdsRef.current),
+      preferences: playerPreferencesRef.current,
+      settings: playerSettingsRef.current,
+      metadata: libraryMetadataRef.current,
+      ...overrides,
+    }),
+    [],
+  );
+
+  const saveCurrentPlayerDataStore = useCallback(
+    async (overrides?: Partial<PlayerDataStore>) => {
+      const currentLibraryId = libraryIdRef.current;
+      if (!currentLibraryId) return;
+      await savePlayerDataStore(currentLibraryId, buildPlayerDataStore(overrides));
+    },
+    [buildPlayerDataStore],
+  );
 
   const playlistVideos = useMemo(
     () => getSortedVideos(videos, isSeriesMode ? "name" : playlistSortMode, isSeriesMode ? false : isPlaylistSortReversed),
@@ -1246,8 +1326,7 @@ export default function App() {
 
       const previous = progressStoreRef.current[video.id];
       const progress = createProgress(currentTime, duration, completed ?? previous?.completed ?? false);
-      const directory = directoryRef.current;
-      if (!progress || !directory) return;
+      if (!progress) return;
 
       const nextStore = {
         ...progressStoreRef.current,
@@ -1256,56 +1335,44 @@ export default function App() {
       progressStoreRef.current = nextStore;
       setProgressStore(nextStore);
 
-      savePlayerDataStore(directory, {
+      saveCurrentPlayerDataStore({
         progress: nextStore,
-        favorites: Array.from(favoriteVideoIdsRef.current),
-        preferences: playerPreferencesRef.current,
       }).catch(() => {
-        setMessage(`无法写入 ${PROGRESS_FILE_NAME}，请重新选择文件夹并允许保存进度。`);
+        setMessage("无法写入项目数据目录，请确认通过 npm run dev 或 npm run preview 启动。");
       });
     },
-    [],
+    [saveCurrentPlayerDataStore],
   );
 
   const replaceProgressStore = useCallback((nextStore: ProgressStore, successMessage?: string) => {
-    const directory = directoryRef.current;
-    if (!directory) return;
-
     progressStoreRef.current = nextStore;
     setProgressStore(nextStore);
 
-    savePlayerDataStore(directory, {
+    saveCurrentPlayerDataStore({
       progress: nextStore,
-      favorites: Array.from(favoriteVideoIdsRef.current),
-      preferences: playerPreferencesRef.current,
     })
       .then(() => {
         if (successMessage) setMessage(successMessage);
       })
       .catch(() => {
-        setMessage(`无法写入 ${PROGRESS_FILE_NAME}，请重新选择文件夹并允许保存进度。`);
+        setMessage("无法写入项目数据目录，请确认通过 npm run dev 或 npm run preview 启动。");
       });
-  }, []);
+  }, [saveCurrentPlayerDataStore]);
 
   const replaceFavorites = useCallback((nextFavorites: Set<string>, successMessage?: string) => {
-    const directory = directoryRef.current;
-    if (!directory) return;
-
     favoriteVideoIdsRef.current = nextFavorites;
     setFavoriteVideoIds(new Set(nextFavorites));
 
-    savePlayerDataStore(directory, {
-      progress: progressStoreRef.current,
+    saveCurrentPlayerDataStore({
       favorites: Array.from(nextFavorites),
-      preferences: playerPreferencesRef.current,
     })
       .then(() => {
         if (successMessage) setMessage(successMessage);
       })
       .catch(() => {
-        setMessage(`无法写入 ${PROGRESS_FILE_NAME}，请重新选择文件夹并允许保存收藏。`);
+        setMessage("无法写入项目数据目录，请确认通过 npm run dev 或 npm run preview 启动。");
       });
-  }, []);
+  }, [saveCurrentPlayerDataStore]);
 
   const replacePlayerPreferences = useCallback((nextPreferences: PlayerPreferences) => {
     playerPreferencesRef.current = nextPreferences;
@@ -1316,17 +1383,12 @@ export default function App() {
     setSelectedSeriesKey(nextPreferences.selectedSeriesKey);
     setIsCinemaMode(nextPreferences.isCinemaMode);
 
-    const directory = directoryRef.current;
-    if (!directory) return;
-
-    savePlayerDataStore(directory, {
-      progress: progressStoreRef.current,
-      favorites: Array.from(favoriteVideoIdsRef.current),
+    saveCurrentPlayerDataStore({
       preferences: nextPreferences,
     }).catch(() => {
-      setMessage(`无法写入 ${PROGRESS_FILE_NAME}，请重新选择文件夹并允许保存排序设置。`);
+      setMessage("无法写入项目数据目录，请确认通过 npm run dev 或 npm run preview 启动。");
     });
-  }, []);
+  }, [saveCurrentPlayerDataStore]);
 
   const updatePlaylistSortMode = useCallback(
     (nextMode: PlaylistSortMode) => {
@@ -1581,11 +1643,14 @@ export default function App() {
           setIsPlaying(false);
         }
 
-        if (rootDirectory) {
-          await savePlayerDataStore(rootDirectory, {
+        if (libraryIdRef.current) {
+          await savePlayerDataStore(libraryIdRef.current, {
+            version: 4,
             progress: nextProgressStore,
             favorites: Array.from(nextFavoriteVideoIds),
             preferences: playerPreferencesRef.current,
+            settings: playerSettingsRef.current,
+            metadata: libraryMetadataRef.current,
           });
         }
 
@@ -1845,8 +1910,8 @@ export default function App() {
       setIsScanning(true);
       setMessage(options?.restored ? "正在恢复上次文件夹..." : "正在扫描视频文件...");
 
-      const canUseDirectory = await ensureDirectoryPermission(directory);
-      if (!canUseDirectory) {
+      const canReadDirectory = await ensureDirectoryReadPermission(directory);
+      if (!canReadDirectory) {
         if (options?.remember) {
           await clearRecentFolderHandle().catch(() => undefined);
         }
@@ -1854,26 +1919,23 @@ export default function App() {
         return;
       }
 
-      const dataStorePromise = loadPlayerDataStore(directory);
       let media = createEmptyMediaCollection();
-      let hasSelectedInitialVideo = false;
       directoryRef.current = directory;
-      const nextDataStore = await dataStorePromise;
-      progressStoreRef.current = nextDataStore.progress;
-      playerPreferencesRef.current = nextDataStore.preferences;
-      favoriteVideoIdsRef.current = new Set(nextDataStore.favorites);
-      setProgressStore(nextDataStore.progress);
-      setPlaylistSortMode(nextDataStore.preferences.playlistSortMode);
-      setIsPlaylistSortReversed(nextDataStore.preferences.isPlaylistSortReversed);
-      setFavoriteVideoIds(new Set(nextDataStore.favorites));
+      libraryIdRef.current = null;
+      libraryMetadataRef.current = undefined;
+      setLibraryId(null);
       revokeVideoUrls(videosRef.current);
       subtitlesRef.current.forEach((subtitle) => {
         if (subtitle.url) URL.revokeObjectURL(subtitle.url);
       });
       videosRef.current = [];
       subtitlesRef.current = [];
+      progressStoreRef.current = {};
+      favoriteVideoIdsRef.current = new Set();
       setVideos([]);
       setSubtitles([]);
+      setProgressStore({});
+      setFavoriteVideoIds(new Set());
       setSelectedSubtitleId("off");
       setPlaylistFilter("all");
       setCurrentVideoId(null);
@@ -1890,12 +1952,6 @@ export default function App() {
         setMessage(
           `正在扫描，已找到 ${media.videos.length} 个视频，已过滤 ${media.filteredSmallVideos} 个小视频，已检查 ${media.scannedFiles} 个媒体文件`,
         );
-
-        if (!hasSelectedInitialVideo && media.videos.length) {
-          const resumeTarget = getLatestResumableVideo(media.videos, nextDataStore.progress);
-          setCurrentVideoId(resumeTarget?.video.id ?? media.videos[0]?.id ?? null);
-          hasSelectedInitialVideo = true;
-        }
       }
 
       media = sortMediaCollection(media);
@@ -1914,6 +1970,52 @@ export default function App() {
       subtitlesRef.current = media.subtitles;
       setVideos(media.videos);
       setSubtitles(media.subtitles);
+
+      const metadata = createLibraryMetadata(directory, media);
+      libraryIdRef.current = metadata.id;
+      libraryMetadataRef.current = metadata;
+      setLibraryId(metadata.id);
+
+      let isProjectStorageAvailable = true;
+      let nextDataStore = await loadPlayerDataStore(metadata.id, metadata).catch(() => {
+        isProjectStorageAvailable = false;
+        return createDefaultPlayerDataStore(metadata);
+      });
+      const legacyDataStore = await loadLegacyPlayerDataStore(directory);
+      if (isProjectStorageAvailable && legacyDataStore && !hasStoredData(nextDataStore)) {
+        nextDataStore = {
+          ...legacyDataStore,
+          version: 4,
+          settings: nextDataStore.settings,
+          metadata,
+        };
+        try {
+          await savePlayerDataStore(metadata.id, nextDataStore);
+          await deleteLegacyPlayerDataStore(directory);
+        } catch {
+          setMessage(`已导入旧进度，但无法删除资源库里的 ${PROGRESS_FILE_NAME}。`);
+        }
+      } else if (isProjectStorageAvailable) {
+        nextDataStore = {
+          ...nextDataStore,
+          metadata,
+        };
+        savePlayerDataStore(metadata.id, nextDataStore).catch(() => undefined);
+      }
+
+      progressStoreRef.current = nextDataStore.progress;
+      playerPreferencesRef.current = nextDataStore.preferences;
+      playerSettingsRef.current = nextDataStore.settings;
+      favoriteVideoIdsRef.current = new Set(nextDataStore.favorites);
+      setProgressStore(nextDataStore.progress);
+      setPlaylistSortMode(nextDataStore.preferences.playlistSortMode);
+      setIsPlaylistSortReversed(nextDataStore.preferences.isPlaylistSortReversed);
+      setShortcuts(nextDataStore.preferences.shortcuts);
+      setIsCinemaMode(nextDataStore.preferences.isCinemaMode);
+      setVolume(nextDataStore.settings.volume);
+      setSkipFolderAccessPrompt(nextDataStore.settings.skipFolderAccessPrompt);
+      setFavoriteVideoIds(new Set(nextDataStore.favorites));
+
       if (media.videos.length) {
         const resumeTarget = getLatestResumableVideo(media.videos, nextDataStore.progress);
         const sortedVideos = getSortedVideos(
@@ -1928,6 +2030,10 @@ export default function App() {
           ? `${options?.restored ? "已恢复" : "已加载"} ${media.videos.length} 个视频，已过滤 ${media.filteredSmallVideos} 个 50 MB 以下小视频`
           : "这个文件夹里没有可播放的视频文件",
       );
+
+      if (!isProjectStorageAvailable) {
+        setMessage("已加载视频，但无法连接项目数据 API；本次播放不会持久化进度。");
+      }
 
       if (options?.remember) {
         await writeRecentFolderHandle(directory).catch(() => undefined);
@@ -1949,6 +2055,9 @@ export default function App() {
         })),
       );
       directoryRef.current = null;
+      libraryIdRef.current = null;
+      libraryMetadataRef.current = undefined;
+      setLibraryId(null);
       progressStoreRef.current = {};
       playerPreferencesRef.current = {
         playlistSortMode,
@@ -2018,7 +2127,7 @@ export default function App() {
     }
 
     try {
-      const directory = await window.showDirectoryPicker({ mode: "readwrite" });
+      const directory = await window.showDirectoryPicker({ mode: "read" });
       await loadDirectoryMedia(directory, { remember: true });
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
@@ -2096,11 +2205,13 @@ export default function App() {
 
   const updateSkipFolderAccessPrompt = (checked: boolean) => {
     setSkipFolderAccessPrompt(checked);
-    if (checked) {
-      localStorage.setItem(FOLDER_ACCESS_PROMPT_KEY, "true");
-    } else {
-      localStorage.removeItem(FOLDER_ACCESS_PROMPT_KEY);
-    }
+    playerSettingsRef.current = {
+      ...playerSettingsRef.current,
+      skipFolderAccessPrompt: checked,
+    };
+    saveCurrentPlayerDataStore({ settings: playerSettingsRef.current }).catch(() => {
+      setMessage("无法写入项目数据目录，请确认通过 npm run dev 或 npm run preview 启动。");
+    });
   };
 
   useEffect(() => {
@@ -2128,7 +2239,7 @@ export default function App() {
         setVideoThumbnailState(video.id, "loading");
 
         try {
-          const { thumbnailUrl, metadata } = await loadVideoThumbnail(video);
+          const { thumbnailUrl, metadata } = await loadVideoThumbnail(libraryIdRef.current, video);
           if (isCancelled || thumbnailLoadRunIdRef.current !== runId) {
             URL.revokeObjectURL(thumbnailUrl);
             const currentVideo = videosRef.current.find((item) => item.id === video.id);
@@ -2390,8 +2501,12 @@ export default function App() {
     if (!element) return;
     element.volume = volume;
     element.muted = isMuted;
-    localStorage.setItem(VOLUME_STORAGE_KEY, String(volume));
-  }, [currentVideo, isMuted, volume]);
+    playerSettingsRef.current = {
+      ...playerSettingsRef.current,
+      volume,
+    };
+    saveCurrentPlayerDataStore({ settings: playerSettingsRef.current }).catch(() => undefined);
+  }, [currentVideo, isMuted, saveCurrentPlayerDataStore, volume]);
 
   useEffect(() => {
     const element = videoRef.current;

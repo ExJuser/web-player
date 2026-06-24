@@ -61,10 +61,26 @@ export type PlaybackProgress = {
 
 export type ProgressStore = Record<string, PlaybackProgress>;
 
+export type PlayerPersistentSettings = {
+  volume: number;
+  skipFolderAccessPrompt: boolean;
+};
+
+export type PlayerLibraryMetadata = {
+  id: string;
+  name: string;
+  videoCount: number;
+  scannedFiles: number;
+  updatedAt: number;
+};
+
 export type PlayerDataStore = {
+  version?: number;
   progress: ProgressStore;
   favorites: string[];
   preferences: PlayerPreferences;
+  settings: PlayerPersistentSettings;
+  metadata?: PlayerLibraryMetadata;
 };
 
 export type PlaylistFilter = "all" | "favorites";

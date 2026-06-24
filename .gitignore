@@ -3,6 +3,7 @@ dist/
 coverage/
 .npm-cache/
 .cache/
+.local-web-player-data/
 
 .agents/
 .codex/

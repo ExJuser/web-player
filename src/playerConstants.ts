@@ -5,11 +5,8 @@ export const SUBTITLE_EXTENSIONS = new Set([".srt", ".vtt"]);
 export const MIN_LOCAL_VIDEO_SIZE_BYTES = 50 * 1024 * 1024;
 export const IGNORED_VIDEO_BASENAMES = new Set(["theme_video", "trailer"]);
 export const PROGRESS_FILE_NAME = ".local-web-player-progress.json";
-export const FOLDER_ACCESS_PROMPT_KEY = "local-web-player:skip-folder-access-prompt";
-export const VOLUME_STORAGE_KEY = "local-web-player:volume";
 export const RECENT_FOLDER_DB_NAME = "local-web-player";
 export const RECENT_FOLDER_STORE_NAME = "handles";
-export const THUMBNAIL_STORE_NAME = "thumbnails";
 export const RECENT_FOLDER_KEY = "recent-folder";
 export const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
 export const rates = [0.5, 1, 1.25, 1.5, 1.75, 2, 2.5, 3];
@@ -64,6 +61,11 @@ export const defaultPlayerPreferences: PlayerPreferences = {
   isSeriesMode: false,
   selectedSeriesKey: "all",
   isCinemaMode: false,
+};
+
+export const defaultPlayerSettings = {
+  volume: 0.85,
+  skipFolderAccessPrompt: false,
 };
 
 export const shortcutGroups: Array<{ title: string; items: Array<{ action: ShortcutAction; label: string }> }> = [

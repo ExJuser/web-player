@@ -2,6 +2,8 @@ import type {
   FileSystemDirectoryHandle,
   PlaybackProgress,
   PlayerDataStore,
+  PlayerLibraryMetadata,
+  PlayerPersistentSettings,
   PlayerPreferences,
   ProgressStore,
   ShortcutAction,
@@ -12,7 +14,7 @@ import {
   RECENT_FOLDER_DB_NAME,
   RECENT_FOLDER_KEY,
   RECENT_FOLDER_STORE_NAME,
-  THUMBNAIL_STORE_NAME,
+  defaultPlayerSettings,
   defaultPlayerPreferences,
   defaultShortcuts
 } from "./playerConstants";
@@ -81,6 +83,20 @@ export function parsePlayerPreferences(source: unknown): PlayerPreferences {
   };
 }
 
+export function parsePlayerSettings(source: unknown): PlayerPersistentSettings {
+  if (!source || typeof source !== "object" || Array.isArray(source)) return defaultPlayerSettings;
+  const settings = source as Partial<PlayerPersistentSettings>;
+  return {
+    volume: typeof settings.volume === "number" && Number.isFinite(settings.volume)
+      ? Math.min(1, Math.max(0, settings.volume))
+      : defaultPlayerSettings.volume,
+    skipFolderAccessPrompt:
+      typeof settings.skipFolderAccessPrompt === "boolean"
+        ? settings.skipFolderAccessPrompt
+        : defaultPlayerSettings.skipFolderAccessPrompt,
+  };
+}
+
 export function getPersistedPlayerPreferences(preferences: PlayerPreferences): PlayerPreferences {
   return {
     ...preferences,
@@ -90,7 +106,15 @@ export function getPersistedPlayerPreferences(preferences: PlayerPreferences): P
 }
 
 export function parsePlayerDataStore(raw: string): PlayerDataStore {
-  const parsed = JSON.parse(raw) as { items?: unknown; favorites?: unknown; preferences?: unknown };
+  const parsed = JSON.parse(raw) as {
+    version?: unknown;
+    items?: unknown;
+    progress?: unknown;
+    favorites?: unknown;
+    preferences?: unknown;
+    settings?: unknown;
+    metadata?: unknown;
+  };
   const progressSource = parsed && typeof parsed === "object" && parsed.items ? parsed.items : parsed;
   const favorites =
     parsed && typeof parsed === "object" && Array.isArray(parsed.favorites)
@@ -98,39 +122,88 @@ export function parsePlayerDataStore(raw: string): PlayerDataStore {
       : [];
 
   return {
+    version: typeof parsed?.version === "number" ? parsed.version : undefined,
     progress: parseProgressItems(progressSource),
     favorites,
     preferences: parsePlayerPreferences(parsed?.preferences),
+    settings: parsePlayerSettings(parsed?.settings),
+    metadata:
+      parsed?.metadata && typeof parsed.metadata === "object" && !Array.isArray(parsed.metadata)
+        ? (parsed.metadata as PlayerLibraryMetadata)
+        : undefined,
   };
 }
 
-export async function loadPlayerDataStore(directory: FileSystemDirectoryHandle): Promise<PlayerDataStore> {
+export function createDefaultPlayerDataStore(metadata?: PlayerLibraryMetadata): PlayerDataStore {
+  return {
+    version: 4,
+    progress: {},
+    favorites: [],
+    preferences: defaultPlayerPreferences,
+    settings: defaultPlayerSettings,
+    metadata,
+  };
+}
+
+function createApiUrl(path: string) {
+  return `/api/player-data/${path}`;
+}
+
+async function readApiError(response: Response) {
+  try {
+    const payload = (await response.json()) as { error?: string };
+    return payload.error || response.statusText;
+  } catch {
+    return response.statusText;
+  }
+}
+
+export async function loadPlayerDataStore(libraryId: string, metadata?: PlayerLibraryMetadata): Promise<PlayerDataStore> {
+  const response = await fetch(createApiUrl(`libraries/${encodeURIComponent(libraryId)}`), {
+    headers: { Accept: "application/json" },
+  });
+  if (response.status === 404) return createDefaultPlayerDataStore(metadata);
+  if (!response.ok) throw new Error(await readApiError(response));
+  const raw = JSON.stringify(await response.json());
+  const parsed = parsePlayerDataStore(raw);
+  return {
+    ...parsed,
+    metadata: parsed.metadata ?? metadata,
+  };
+}
+
+export async function loadLegacyPlayerDataStore(directory: FileSystemDirectoryHandle): Promise<PlayerDataStore | null> {
   try {
     const handle = await directory.getFileHandle(PROGRESS_FILE_NAME);
     const file = await handle.getFile();
     return parsePlayerDataStore(await file.text());
   } catch {
-    return { progress: {}, favorites: [], preferences: defaultPlayerPreferences };
+    return null;
   }
 }
 
-export async function savePlayerDataStore(directory: FileSystemDirectoryHandle, store: PlayerDataStore) {
-  const handle = await directory.getFileHandle(PROGRESS_FILE_NAME, { create: true });
-  if (!handle.createWritable) throw new Error("The selected folder does not allow file writes.");
-  const writable = await handle.createWritable();
-  await writable.write(
-    JSON.stringify(
-      {
-        version: 3,
-        items: store.progress,
-        favorites: store.favorites,
-        preferences: getPersistedPlayerPreferences(store.preferences),
-      },
-      null,
-      2,
-    ),
-  );
-  await writable.close();
+export async function deleteLegacyPlayerDataStore(directory: FileSystemDirectoryHandle) {
+  if (!directory.removeEntry) throw new Error("The selected folder does not allow removing legacy progress data.");
+  await directory.removeEntry(PROGRESS_FILE_NAME);
+}
+
+export async function savePlayerDataStore(libraryId: string, store: PlayerDataStore) {
+  const response = await fetch(createApiUrl(`libraries/${encodeURIComponent(libraryId)}`), {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify({
+      version: 4,
+      items: store.progress,
+      favorites: store.favorites,
+      preferences: getPersistedPlayerPreferences(store.preferences),
+      settings: parsePlayerSettings(store.settings),
+      metadata: store.metadata,
+    }),
+  });
+  if (!response.ok) throw new Error(await readApiError(response));
 }
 
 export function openRecentFolderDatabase() {
@@ -139,9 +212,6 @@ export function openRecentFolderDatabase() {
     request.onupgradeneeded = () => {
       if (!request.result.objectStoreNames.contains(RECENT_FOLDER_STORE_NAME)) {
         request.result.createObjectStore(RECENT_FOLDER_STORE_NAME);
-      }
-      if (!request.result.objectStoreNames.contains(THUMBNAIL_STORE_NAME)) {
-        request.result.createObjectStore(THUMBNAIL_STORE_NAME);
       }
     };
     request.onsuccess = () => resolve(request.result);
@@ -175,16 +245,32 @@ async function runObjectStoreRequest<T>(
   });
 }
 
-export async function readCachedThumbnail(videoId: string) {
-  if (!("indexedDB" in window)) return null;
-  return (await runObjectStoreRequest<Blob | undefined>(THUMBNAIL_STORE_NAME, "readonly", (store) =>
-    store.get(videoId),
-  )) ?? null;
+function createThumbnailId(libraryId: string, videoId: string) {
+  let hash = 2166136261;
+  const value = `${libraryId}|${videoId}`;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `${libraryId}.${(hash >>> 0).toString(36)}`;
 }
 
-export async function writeCachedThumbnail(videoId: string, thumbnail: Blob) {
-  if (!("indexedDB" in window)) return;
-  await runObjectStoreRequest<IDBValidKey>(THUMBNAIL_STORE_NAME, "readwrite", (store) => store.put(thumbnail, videoId));
+export async function readCachedThumbnail(libraryId: string | null, videoId: string) {
+  if (!libraryId) return null;
+  const response = await fetch(createApiUrl(`thumbnails/${encodeURIComponent(createThumbnailId(libraryId, videoId))}`));
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error(await readApiError(response));
+  return response.blob();
+}
+
+export async function writeCachedThumbnail(libraryId: string | null, videoId: string, thumbnail: Blob) {
+  if (!libraryId) return;
+  const response = await fetch(createApiUrl(`thumbnails/${encodeURIComponent(createThumbnailId(libraryId, videoId))}`), {
+    method: "PUT",
+    headers: { "Content-Type": thumbnail.type || "application/octet-stream" },
+    body: thumbnail,
+  });
+  if (!response.ok) throw new Error(await readApiError(response));
 }
 
 export async function readRecentFolderHandle() {
