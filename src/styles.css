@@ -884,6 +884,71 @@ button {
   font-size: 12px;
 }
 
+.media-library-card {
+  display: grid;
+  gap: 12px;
+}
+
+.media-library-current {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+
+.media-library-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid rgba(121, 223, 255, 0.28);
+  border-radius: 8px;
+  background: rgba(0, 161, 214, 0.12);
+  color: #79dfff;
+}
+
+.media-library-current div,
+.media-library-row {
+  min-width: 0;
+}
+
+.media-library-current strong,
+.media-library-row strong {
+  display: block;
+  margin-bottom: 5px;
+  overflow: hidden;
+  color: #f5f7fb;
+  font-size: 13px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.media-library-current code,
+.media-library-row code {
+  display: block;
+  overflow: hidden;
+  color: #aab1bd;
+  font-family: "Cascadia Code", "Consolas", monospace;
+  font-size: 12px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.media-library-list {
+  display: grid;
+  gap: 8px;
+}
+
+.media-library-row {
+  padding: 10px;
+  border: 1px solid #2b323d;
+  border-radius: 8px;
+  background: #20252d;
+}
+
 .home-recap-card {
   align-content: start;
 }
@@ -2971,6 +3036,7 @@ button {
 .app-shell.theme-light .home-list-card,
 .app-shell.theme-light .library-folder-result,
 .app-shell.theme-light .home-stats div,
+.app-shell.theme-light .media-library-row,
 .app-shell.theme-light .home-recap-output,
 .app-shell.theme-light .library-search-answer,
 .app-shell.theme-light .cache-status-overview div,
@@ -2994,6 +3060,22 @@ button {
   border-color: rgba(0, 161, 214, 0.28);
   background: #e1f5fd;
   color: #0077a8;
+}
+
+.app-shell.theme-light .media-library-icon {
+  border-color: rgba(0, 161, 214, 0.28);
+  background: #e1f5fd;
+  color: #0077a8;
+}
+
+.app-shell.theme-light .media-library-current strong,
+.app-shell.theme-light .media-library-row strong {
+  color: #172033;
+}
+
+.app-shell.theme-light .media-library-current code,
+.app-shell.theme-light .media-library-row code {
+  color: #475467;
 }
 
 .app-shell.theme-light .library-folder-copy strong {

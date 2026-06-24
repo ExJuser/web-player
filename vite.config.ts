@@ -186,6 +186,7 @@ function publicLocalConfig(config, tools, env) {
     id: root.id,
     label: root.label,
     basename: root.basename,
+    path: root.path,
   }));
   return {
     mediaRoots: roots,

@@ -686,7 +686,7 @@ function srtToVtt(raw: string) {
 }
 
 type LocalConfig = {
-  mediaRoots: Array<{ id: string; label: string; basename: string }>;
+  mediaRoots: Array<{ id: string; label: string; basename: string; path: string }>;
   ffmpeg: { ffmpeg: boolean; ffprobe: boolean };
   ai: { configured: boolean; model: string };
   bangumi: { configured: boolean; proxyConfigured: boolean };
@@ -1848,6 +1848,17 @@ export default function App() {
     [adaptiveColumns],
   );
   const currentMediaRootId = currentVideo?.mediaRootId ?? mediaRootId;
+  const currentMediaLibraryRoot = useMemo(() => {
+    const roots = localConfig?.mediaRoots ?? [];
+    if (currentMediaRootId) {
+      return roots.find((root) => root.id === currentMediaRootId) ?? null;
+    }
+
+    const currentDirectoryName = directoryRef.current?.name;
+    if (!currentDirectoryName) return null;
+    const matches = roots.filter((root) => root.basename === currentDirectoryName);
+    return matches.length === 1 ? matches[0] : null;
+  }, [currentMediaRootId, localConfig]);
   const canUseEmbeddedSubtitles = Boolean(
     currentVideo && currentMediaRootId && localConfig?.ffmpeg.ffmpeg && localConfig.ffmpeg.ffprobe,
   );
@@ -4842,6 +4853,35 @@ export default function App() {
                   <strong>{libraryStats.favorites}</strong>
                   <span>收藏</span>
                 </div>
+              </section>
+
+              <section className="home-section media-library-card">
+                <div className="home-section-header">
+                  <h2>本地媒体库</h2>
+                  <span>{currentMediaLibraryRoot ? "当前地址" : `${localConfig?.mediaRoots.length ?? 0} 个配置`}</span>
+                </div>
+                {currentMediaLibraryRoot ? (
+                  <div className="media-library-current">
+                    <span className="media-library-icon" aria-hidden="true">
+                      <HardDrive size={18} />
+                    </span>
+                    <div>
+                      <strong>{currentMediaLibraryRoot.label}</strong>
+                      <code>{currentMediaLibraryRoot.path}</code>
+                    </div>
+                  </div>
+                ) : localConfig?.mediaRoots.length ? (
+                  <div className="media-library-list">
+                    {localConfig.mediaRoots.map((root) => (
+                      <div className="media-library-row" key={root.id}>
+                        <strong>{root.label}</strong>
+                        <code>{root.path}</code>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="empty-list compact">尚未配置本地媒体库地址。</div>
+                )}
               </section>
 
               {homeRecapCard ? (
