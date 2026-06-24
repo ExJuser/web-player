@@ -1919,6 +1919,7 @@ export default function App() {
           mediaRoots: [],
           ffmpeg: { ffmpeg: false, ffprobe: false },
           ai: { configured: false, model: "deepseek-chat" },
+          bangumi: { configured: false, proxyConfigured: false },
         });
       });
     return () => {
@@ -2163,6 +2164,122 @@ export default function App() {
     },
     [replacePlayerPreferences],
   );
+
+  useEffect(() => {
+    bangumiMatchRunIdRef.current += 1;
+    setBangumiMatchesBySeriesKey({});
+  }, [libraryId]);
+
+  const createBangumiMatchPayload = useCallback(
+    (series: { key: string; title: string }) => {
+      const seriesVideos = playlistVideos
+        .filter((video) => seriesKeyFromTitle(seriesTitleByVideoId.get(video.id) ?? inferSeriesTitle(video)) === series.key)
+        .slice(0, 8);
+      return {
+        libraryId,
+        seriesKey: series.key,
+        title: series.title,
+        sampleVideoNames: seriesVideos.map((video) => video.name),
+        sampleRelativePaths: seriesVideos.map((video) => video.relativePath),
+      };
+    },
+    [libraryId, playlistVideos, seriesTitleByVideoId],
+  );
+
+  useEffect(() => {
+    if (!isSeriesMode || !localConfig?.bangumi.configured || !libraryId || !seriesOptions.length) return;
+
+    const runId = bangumiMatchRunIdRef.current + 1;
+    bangumiMatchRunIdRef.current = runId;
+    let isCancelled = false;
+    const orderedSeries = [
+      ...(activeBangumiSeries ? [activeBangumiSeries] : []),
+      ...seriesOptions.filter((series) => series.key !== activeBangumiSeries?.key),
+    ];
+
+    const loadSeriesMatch = async (series: { key: string; title: string }) => {
+      const existing = bangumiMatchesBySeriesKeyRef.current[series.key];
+      if (existing?.title === series.title && ["loading", "matched", "none", "error"].includes(existing.status)) return;
+
+      setBangumiMatchesBySeriesKey((previous) => ({
+        ...previous,
+        [series.key]: {
+          status: "loading",
+          seriesKey: series.key,
+          title: series.title,
+          subject: null,
+          confidence: "none",
+          source: "none",
+          candidates: [],
+        },
+      }));
+
+      try {
+        const match = await fetchJson<BangumiSeriesMatch>("/api/bangumi/series/match", {
+          method: "POST",
+          body: JSON.stringify(createBangumiMatchPayload(series)),
+        });
+        if (isCancelled || bangumiMatchRunIdRef.current !== runId) return;
+        setBangumiMatchesBySeriesKey((previous) => ({
+          ...previous,
+          [series.key]: match,
+        }));
+      } catch (error) {
+        if (isCancelled || bangumiMatchRunIdRef.current !== runId) return;
+        setBangumiMatchesBySeriesKey((previous) => ({
+          ...previous,
+          [series.key]: {
+            status: "error",
+            seriesKey: series.key,
+            title: series.title,
+            subject: null,
+            confidence: "none",
+            source: "error",
+            candidates: [],
+            error: error instanceof Error ? error.message : "Bangumi 匹配失败",
+          },
+        }));
+      }
+    };
+
+    void (async () => {
+      for (const series of orderedSeries) {
+        if (isCancelled || bangumiMatchRunIdRef.current !== runId) return;
+        await loadSeriesMatch(series);
+      }
+    })();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [
+    activeBangumiSeries,
+    createBangumiMatchPayload,
+    isSeriesMode,
+    libraryId,
+    localConfig?.bangumi.configured,
+    seriesOptions,
+    seriesOptionsKey,
+  ]);
+
+  const canOpenBangumiSubject = Boolean(activeBangumiMatch?.status === "matched" && activeBangumiMatch.subject?.url);
+  const bangumiButtonTitle = useMemo(() => {
+    if (!isSeriesMode) return "Bangumi";
+    if (!localConfig?.bangumi.configured) return "未配置 Bangumi";
+    if (!activeBangumiSeries) return "没有可匹配的追番系列";
+    if (!activeBangumiMatch || activeBangumiMatch.status === "loading") return `正在匹配 ${activeBangumiSeries.title}`;
+    if (activeBangumiMatch.status === "matched" && activeBangumiMatch.subject) {
+      return `打开 Bangumi：${activeBangumiMatch.subject.nameCn || activeBangumiMatch.subject.name || activeBangumiSeries.title}`;
+    }
+    if (activeBangumiMatch.status === "none") return `未匹配到 Bangumi 条目：${activeBangumiSeries.title}`;
+    return activeBangumiMatch.error || `Bangumi 匹配失败：${activeBangumiSeries.title}`;
+  }, [activeBangumiMatch, activeBangumiSeries, isSeriesMode, localConfig?.bangumi.configured]);
+
+  const openBangumiSubject = useCallback(() => {
+    const url = activeBangumiMatch?.subject?.url;
+    if (!url) return;
+    window.open(url, "_blank", "noopener,noreferrer");
+  }, [activeBangumiMatch]);
 
   useEffect(() => {
     if (!isSeriesMenuOpen) return;
