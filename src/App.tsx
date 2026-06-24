@@ -24,226 +24,59 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
-type FileSystemDirectoryHandle = {
-  values(): AsyncIterable<FileSystemDirectoryHandle | FileSystemFileHandle>;
-  getFileHandle(name: string, options?: { create?: boolean }): Promise<FileSystemFileHandle>;
-  removeEntry?(name: string, options?: { recursive?: boolean }): Promise<void>;
-  queryPermission?(descriptor?: { mode?: "read" | "readwrite" }): Promise<PermissionState>;
-  requestPermission?(descriptor?: { mode?: "read" | "readwrite" }): Promise<PermissionState>;
-  kind: "directory";
-  name: string;
-};
+import type {
+  ActiveView,
+  AutoNextPrompt,
+  DataTransferItemWithHandle,
+  FileSystemDirectoryHandle,
+  FileSystemFileHandle,
+  HomeVideoCard,
+  MediaCollection,
+  MediaScanBatch,
+  PlaybackMode,
+  PlaybackProgress,
+  PlayerPreferences,
+  PlaylistFilter,
+  PlaylistSortMode,
+  ProgressStore,
+  ShortcutAction,
+  ShortcutMap,
+  SubtitleItem,
+  VideoItem,
+  VideoMetadata
+} from "./playerTypes";
+import {
+  VIDEO_EXTENSIONS,
+  SUBTITLE_EXTENSIONS,
+  MIN_LOCAL_VIDEO_SIZE_BYTES,
+  IGNORED_VIDEO_BASENAMES,
+  PROGRESS_FILE_NAME,
+  FOLDER_ACCESS_PROMPT_KEY,
+  VOLUME_STORAGE_KEY,
+  collator,
+  rates,
+  seekSteps,
+  holdRates,
+  playbackModeOptions,
+  playlistSortOptions,
+  volumeStep,
+  controlsAutoHideDelay,
+  autoNextPromptSeconds,
+  rightKeyHoldDelay,
+  doubleClickFeedbackDelay,
+  mediaScanBatchSize,
+  mediaScanBatchDelay,
+  playlistItemHeight,
+  playlistVirtualOverscan,
+  thumbnailCacheTimeout,
+  thumbnailGenerationTimeout,
+  thumbnailEncodeTimeout,
+  playlistScrollFrameDelay,
+  defaultShortcuts,
+  defaultPlayerPreferences,
+  shortcutGroups
+} from "./playerConstants";
 
-type FileSystemFileHandle = {
-  getFile(): Promise<File>;
-  createWritable?(): Promise<LocalWritableFileStream>;
-  kind: "file";
-  name: string;
-};
-
-type DataTransferItemWithHandle = DataTransferItem & {
-  getAsFileSystemHandle?: () => Promise<FileSystemDirectoryHandle | FileSystemFileHandle | null>;
-};
-
-type LocalWritableFileStream = {
-  write(data: string): Promise<void>;
-  close(): Promise<void>;
-};
-
-type VideoItem = {
-  id: string;
-  name: string;
-  relativePath: string;
-  file?: File;
-  url: string;
-  size: number;
-  lastModified: number;
-  source?: "local";
-  duration?: number;
-  width?: number;
-  height?: number;
-  thumbnailUrl?: string;
-  thumbnailStatus?: "idle" | "loading" | "ready" | "failed";
-  parentDirectory?: FileSystemDirectoryHandle;
-};
-
-type VideoMetadata = Pick<VideoItem, "duration" | "width" | "height">;
-
-type SubtitleItem = {
-  id: string;
-  name: string;
-  relativePath: string;
-  file: File;
-  url: string;
-  isManual?: boolean;
-};
-
-type PlaybackProgress = {
-  currentTime: number;
-  duration: number;
-  updatedAt: number;
-  completed: boolean;
-};
-
-type ProgressStore = Record<string, PlaybackProgress>;
-
-type PlayerDataStore = {
-  progress: ProgressStore;
-  favorites: string[];
-  preferences: PlayerPreferences;
-};
-
-type PlaylistFilter = "all" | "favorites";
-type PlaylistSortMode = "name" | "path" | "modified" | "size";
-type PlaybackMode = "sequential" | "single-loop" | "list-loop" | "shuffle" | "favorites-only";
-type AutoNextPrompt = {
-  nextVideoId: string;
-  nextVideoName: string;
-  remainingSeconds: number;
-};
-type ShortcutAction =
-  | "togglePlay"
-  | "seekBackward"
-  | "seekForward"
-  | "holdSpeed"
-  | "volumeUp"
-  | "volumeDown"
-  | "toggleMute"
-  | "toggleFullscreen"
-  | "toggleFavorite"
-  | "markCompleted"
-  | "playNext"
-  | "togglePrivacy"
-  | "toggleCinema"
-  | "toggleShortcuts";
-type ShortcutMap = Record<ShortcutAction, string>;
-
-type PlayerPreferences = {
-  playlistSortMode: PlaylistSortMode;
-  isPlaylistSortReversed: boolean;
-  shortcuts: ShortcutMap;
-  isSeriesMode: boolean;
-  selectedSeriesKey: string;
-  isCinemaMode: boolean;
-};
-
-type MediaCollection = {
-  videos: VideoItem[];
-  subtitles: SubtitleItem[];
-  scannedFiles: number;
-  filteredSmallVideos: number;
-};
-
-type MediaScanBatch = {
-  videos: VideoItem[];
-  subtitles: SubtitleItem[];
-  scannedFiles: number;
-  filteredSmallVideos: number;
-};
-
-const VIDEO_EXTENSIONS = new Set([".mp4", ".webm", ".ogg", ".mov", ".m4v", ".mkv"]);
-const SUBTITLE_EXTENSIONS = new Set([".srt", ".vtt"]);
-const MIN_LOCAL_VIDEO_SIZE_BYTES = 50 * 1024 * 1024;
-const IGNORED_VIDEO_BASENAMES = new Set(["theme_video", "trailer"]);
-const PROGRESS_FILE_NAME = ".local-web-player-progress.json";
-const FOLDER_ACCESS_PROMPT_KEY = "local-web-player:skip-folder-access-prompt";
-const VOLUME_STORAGE_KEY = "local-web-player:volume";
-const RECENT_FOLDER_DB_NAME = "local-web-player";
-const RECENT_FOLDER_STORE_NAME = "handles";
-const THUMBNAIL_STORE_NAME = "thumbnails";
-const RECENT_FOLDER_KEY = "recent-folder";
-const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
-const rates = [0.5, 1, 1.25, 1.5, 1.75, 2, 2.5, 3];
-const seekSteps = [5, 10, 15];
-const holdRates = [1.5, 2, 2.5, 3, 4];
-const playbackModeOptions: Array<{ value: PlaybackMode; label: string }> = [
-  { value: "sequential", label: "顺序播放" },
-  { value: "single-loop", label: "单集循环" },
-  { value: "list-loop", label: "列表循环" },
-  { value: "shuffle", label: "随机播放" },
-  { value: "favorites-only", label: "只播收藏" },
-];
-const playlistSortOptions: Array<{ value: PlaylistSortMode; label: string }> = [
-  { value: "size", label: "大小" },
-  { value: "name", label: "文件名" },
-  { value: "path", label: "路径" },
-  { value: "modified", label: "修改时间" },
-];
-const volumeStep = 0.05;
-const controlsAutoHideDelay = 2500;
-const autoNextPromptSeconds = 5;
-const rightKeyHoldDelay = 350;
-const doubleClickFeedbackDelay = 650;
-const mediaScanBatchSize = 150;
-const mediaScanBatchDelay = 500;
-const playlistItemHeight = 76;
-const playlistVirtualOverscan = 10;
-const thumbnailCacheTimeout = 3000;
-const thumbnailGenerationTimeout = 12000;
-const thumbnailEncodeTimeout = 3000;
-const playlistScrollFrameDelay = 16;
-const defaultShortcuts: ShortcutMap = {
-  togglePlay: "Space",
-  seekBackward: "ArrowLeft",
-  seekForward: "ArrowRight",
-  holdSpeed: "ArrowRight",
-  volumeUp: "ArrowUp",
-  volumeDown: "ArrowDown",
-  toggleMute: "KeyM",
-  toggleFullscreen: "KeyF",
-  toggleFavorite: "KeyS",
-  markCompleted: "KeyC",
-  playNext: "KeyN",
-  togglePrivacy: "KeyP",
-  toggleCinema: "KeyT",
-  toggleShortcuts: "Slash",
-};
-const defaultPlayerPreferences: PlayerPreferences = {
-  playlistSortMode: "name",
-  isPlaylistSortReversed: false,
-  shortcuts: defaultShortcuts,
-  isSeriesMode: false,
-  selectedSeriesKey: "all",
-  isCinemaMode: false,
-};
-
-const shortcutGroups: Array<{ title: string; items: Array<{ action: ShortcutAction; label: string }> }> = [
-  {
-    title: "播放",
-    items: [
-      { action: "togglePlay", label: "播放 / 暂停" },
-      { action: "seekBackward", label: "快退" },
-      { action: "seekForward", label: "快进" },
-      { action: "holdSpeed", label: "按住临时倍速" },
-      { action: "playNext", label: "下一集" },
-    ],
-  },
-  {
-    title: "播放状态",
-    items: [
-      { action: "toggleFullscreen", label: "进入 / 退出全屏" },
-      { action: "toggleFavorite", label: "收藏 / 取消收藏" },
-      { action: "markCompleted", label: "标记看完" },
-      { action: "toggleMute", label: "静音 / 取消静音" },
-    ],
-  },
-  {
-    title: "音量与界面",
-    items: [
-      { action: "volumeUp", label: "调高音量" },
-      { action: "volumeDown", label: "调低音量" },
-      { action: "togglePrivacy", label: "隐私模式 / 快速清屏" },
-      { action: "toggleCinema", label: "影院模式" },
-      { action: "toggleShortcuts", label: "打开快捷键设置" },
-    ],
-  },
-];
-
-declare global {
-  interface Window {
-    showDirectoryPicker?: (options?: { mode?: "read" | "readwrite" }) => Promise<FileSystemDirectoryHandle>;
-  }
-}
 
 function isVideoFile(name: string) {
   return hasExtension(name, VIDEO_EXTENSIONS);
@@ -315,228 +148,19 @@ function createVideoId(relativePath: string, file: File) {
   return `${relativePath}|${file.size}|${file.lastModified}`;
 }
 
-function createProgress(currentTime: number, duration: number, completed = false): PlaybackProgress | null {
-  if (!Number.isFinite(currentTime) || !Number.isFinite(duration)) return null;
-  return {
-    currentTime,
-    duration,
-    updatedAt: Date.now(),
-    completed,
-  };
-}
+import { ControlSelect } from "./ControlSelect";
+import {
+  clearRecentFolderHandle,
+  createProgress,
+  ensureDirectoryPermission,
+  loadPlayerDataStore,
+  readCachedThumbnail,
+  readRecentFolderHandle,
+  savePlayerDataStore,
+  writeCachedThumbnail,
+  writeRecentFolderHandle
+} from "./playerStorage";
 
-function parseProgressItems(source: unknown): ProgressStore {
-  if (!source || typeof source !== "object" || Array.isArray(source)) return {};
-
-  const store: ProgressStore = {};
-  for (const [key, value] of Object.entries(source)) {
-    if (!value || typeof value !== "object") continue;
-    const progress = value as PlaybackProgress;
-    if (
-      Number.isFinite(progress.currentTime) &&
-      Number.isFinite(progress.duration) &&
-      Number.isFinite(progress.updatedAt) &&
-      typeof progress.completed === "boolean"
-    ) {
-      store[key] = progress;
-    }
-  }
-  return store;
-}
-
-function parseShortcuts(source: unknown): ShortcutMap {
-  if (!source || typeof source !== "object" || Array.isArray(source)) return defaultShortcuts;
-  const shortcuts = source as Partial<ShortcutMap>;
-  return Object.fromEntries(
-    (Object.keys(defaultShortcuts) as ShortcutAction[]).map((action) => [
-      action,
-      typeof shortcuts[action] === "string" && shortcuts[action] ? shortcuts[action] : defaultShortcuts[action],
-    ]),
-  ) as ShortcutMap;
-}
-
-function parsePlayerPreferences(source: unknown): PlayerPreferences {
-  if (!source || typeof source !== "object" || Array.isArray(source)) return defaultPlayerPreferences;
-  const preferences = source as Partial<PlayerPreferences>;
-  return {
-    playlistSortMode:
-      preferences.playlistSortMode === "path" ||
-      preferences.playlistSortMode === "modified" ||
-      preferences.playlistSortMode === "size"
-        ? preferences.playlistSortMode
-        : defaultPlayerPreferences.playlistSortMode,
-    isPlaylistSortReversed:
-      typeof preferences.isPlaylistSortReversed === "boolean"
-        ? preferences.isPlaylistSortReversed
-        : defaultPlayerPreferences.isPlaylistSortReversed,
-    shortcuts: parseShortcuts(preferences.shortcuts),
-    isSeriesMode: defaultPlayerPreferences.isSeriesMode,
-    selectedSeriesKey: defaultPlayerPreferences.selectedSeriesKey,
-    isCinemaMode:
-      typeof preferences.isCinemaMode === "boolean"
-        ? preferences.isCinemaMode
-        : defaultPlayerPreferences.isCinemaMode,
-  };
-}
-
-function getPersistedPlayerPreferences(preferences: PlayerPreferences): PlayerPreferences {
-  return {
-    ...preferences,
-    isSeriesMode: defaultPlayerPreferences.isSeriesMode,
-    selectedSeriesKey: defaultPlayerPreferences.selectedSeriesKey,
-  };
-}
-
-function parsePlayerDataStore(raw: string): PlayerDataStore {
-  const parsed = JSON.parse(raw) as { items?: unknown; favorites?: unknown; preferences?: unknown };
-  const progressSource = parsed && typeof parsed === "object" && parsed.items ? parsed.items : parsed;
-  const favorites =
-    parsed && typeof parsed === "object" && Array.isArray(parsed.favorites)
-      ? parsed.favorites.filter((id): id is string => typeof id === "string")
-      : [];
-
-  return {
-    progress: parseProgressItems(progressSource),
-    favorites,
-    preferences: parsePlayerPreferences(parsed?.preferences),
-  };
-}
-
-async function loadPlayerDataStore(directory: FileSystemDirectoryHandle): Promise<PlayerDataStore> {
-  try {
-    const handle = await directory.getFileHandle(PROGRESS_FILE_NAME);
-    const file = await handle.getFile();
-    return parsePlayerDataStore(await file.text());
-  } catch {
-    return { progress: {}, favorites: [], preferences: defaultPlayerPreferences };
-  }
-}
-
-async function savePlayerDataStore(directory: FileSystemDirectoryHandle, store: PlayerDataStore) {
-  const handle = await directory.getFileHandle(PROGRESS_FILE_NAME, { create: true });
-  if (!handle.createWritable) throw new Error("The selected folder does not allow file writes.");
-  const writable = await handle.createWritable();
-  await writable.write(
-    JSON.stringify(
-      {
-        version: 3,
-        items: store.progress,
-        favorites: store.favorites,
-        preferences: getPersistedPlayerPreferences(store.preferences),
-      },
-      null,
-      2,
-    ),
-  );
-  await writable.close();
-}
-
-function openRecentFolderDatabase() {
-  return new Promise<IDBDatabase>((resolve, reject) => {
-    const request = indexedDB.open(RECENT_FOLDER_DB_NAME, 2);
-    request.onupgradeneeded = () => {
-      if (!request.result.objectStoreNames.contains(RECENT_FOLDER_STORE_NAME)) {
-        request.result.createObjectStore(RECENT_FOLDER_STORE_NAME);
-      }
-      if (!request.result.objectStoreNames.contains(THUMBNAIL_STORE_NAME)) {
-        request.result.createObjectStore(THUMBNAIL_STORE_NAME);
-      }
-    };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
-}
-
-async function readCachedThumbnail(videoId: string) {
-  if (!("indexedDB" in window)) return null;
-  const database = await openRecentFolderDatabase();
-  return new Promise<Blob | null>((resolve, reject) => {
-    const transaction = database.transaction(THUMBNAIL_STORE_NAME, "readonly");
-    const request = transaction.objectStore(THUMBNAIL_STORE_NAME).get(videoId);
-    request.onsuccess = () => resolve((request.result as Blob | undefined) ?? null);
-    request.onerror = () => reject(request.error);
-    transaction.oncomplete = () => database.close();
-    transaction.onerror = () => {
-      database.close();
-      reject(transaction.error);
-    };
-  });
-}
-
-async function writeCachedThumbnail(videoId: string, thumbnail: Blob) {
-  if (!("indexedDB" in window)) return;
-  const database = await openRecentFolderDatabase();
-  return new Promise<void>((resolve, reject) => {
-    const transaction = database.transaction(THUMBNAIL_STORE_NAME, "readwrite");
-    transaction.objectStore(THUMBNAIL_STORE_NAME).put(thumbnail, videoId);
-    transaction.oncomplete = () => {
-      database.close();
-      resolve();
-    };
-    transaction.onerror = () => {
-      database.close();
-      reject(transaction.error);
-    };
-  });
-}
-
-async function readRecentFolderHandle() {
-  if (!("indexedDB" in window)) return null;
-  const database = await openRecentFolderDatabase();
-  return new Promise<FileSystemDirectoryHandle | null>((resolve, reject) => {
-    const transaction = database.transaction(RECENT_FOLDER_STORE_NAME, "readonly");
-    const request = transaction.objectStore(RECENT_FOLDER_STORE_NAME).get(RECENT_FOLDER_KEY);
-    request.onsuccess = () => resolve((request.result as FileSystemDirectoryHandle | undefined) ?? null);
-    request.onerror = () => reject(request.error);
-    transaction.oncomplete = () => database.close();
-    transaction.onerror = () => {
-      database.close();
-      reject(transaction.error);
-    };
-  });
-}
-
-async function writeRecentFolderHandle(directory: FileSystemDirectoryHandle) {
-  if (!("indexedDB" in window)) return;
-  const database = await openRecentFolderDatabase();
-  return new Promise<void>((resolve, reject) => {
-    const transaction = database.transaction(RECENT_FOLDER_STORE_NAME, "readwrite");
-    transaction.objectStore(RECENT_FOLDER_STORE_NAME).put(directory, RECENT_FOLDER_KEY);
-    transaction.oncomplete = () => {
-      database.close();
-      resolve();
-    };
-    transaction.onerror = () => {
-      database.close();
-      reject(transaction.error);
-    };
-  });
-}
-
-async function clearRecentFolderHandle() {
-  if (!("indexedDB" in window)) return;
-  const database = await openRecentFolderDatabase();
-  return new Promise<void>((resolve, reject) => {
-    const transaction = database.transaction(RECENT_FOLDER_STORE_NAME, "readwrite");
-    transaction.objectStore(RECENT_FOLDER_STORE_NAME).delete(RECENT_FOLDER_KEY);
-    transaction.oncomplete = () => {
-      database.close();
-      resolve();
-    };
-    transaction.onerror = () => {
-      database.close();
-      reject(transaction.error);
-    };
-  });
-}
-
-async function ensureDirectoryPermission(directory: FileSystemDirectoryHandle) {
-  const descriptor = { mode: "readwrite" as const };
-  const currentPermission = await directory.queryPermission?.(descriptor);
-  if (currentPermission === "granted") return true;
-  const nextPermission = await directory.requestPermission?.(descriptor);
-  return nextPermission !== "denied";
-}
 
 function formatTime(seconds: number) {
   if (!Number.isFinite(seconds)) return "00:00";
@@ -563,15 +187,30 @@ function formatFileSize(bytes: number) {
   return `${value.toFixed(digits)} ${units[unitIndex]}`;
 }
 
+const modifiedTimeFormatter = new Intl.DateTimeFormat(undefined, {
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
 function formatModifiedTime(value: number) {
   if (!Number.isFinite(value) || value <= 0) return "未知时间";
-  return new Intl.DateTimeFormat(undefined, {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(value);
+  return modifiedTimeFormatter.format(value);
+}
+
+function formatRelativeTime(value: number) {
+  if (!Number.isFinite(value) || value <= 0) return "刚刚";
+  const diffSeconds = Math.max(0, Math.floor((Date.now() - value) / 1000));
+  if (diffSeconds < 60) return "刚刚";
+  const diffMinutes = Math.floor(diffSeconds / 60);
+  if (diffMinutes < 60) return `${diffMinutes} 分钟前`;
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours} 小时前`;
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays < 7) return `${diffDays} 天前`;
+  return formatModifiedTime(value);
 }
 
 function formatResolution(width?: number, height?: number) {
@@ -636,103 +275,6 @@ function getShortcutConflict(shortcuts: ShortcutMap, action: ShortcutAction, nex
         (action === "seekForward" && candidate === "holdSpeed") ||
         (action === "holdSpeed" && candidate === "seekForward")
       ),
-  );
-}
-
-type ControlSelectValue = string | number;
-
-type ControlSelectOption<T extends ControlSelectValue> = {
-  value: T;
-  label: string;
-};
-
-type ControlSelectProps<T extends ControlSelectValue> = {
-  label: string;
-  ariaLabel: string;
-  value: T;
-  options: ControlSelectOption<T>[];
-  onChange: (value: T) => void;
-  className?: string;
-};
-
-function ControlSelect<T extends ControlSelectValue>({
-  label,
-  ariaLabel,
-  value,
-  options,
-  onChange,
-  className = "",
-}: ControlSelectProps<T>) {
-  const [isOpen, setIsOpen] = useState(false);
-  const selectRef = useRef<HTMLDivElement | null>(null);
-  const triggerRef = useRef<HTMLButtonElement | null>(null);
-  const selectedOption = options.find((option) => option.value === value) ?? options[0];
-
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const closeOnPointerDown = (event: PointerEvent) => {
-      const target = event.target;
-      if (!(target instanceof Node) || !selectRef.current?.contains(target)) {
-        setIsOpen(false);
-      }
-    };
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setIsOpen(false);
-        triggerRef.current?.focus();
-      }
-    };
-
-    document.addEventListener("pointerdown", closeOnPointerDown);
-    document.addEventListener("keydown", closeOnEscape);
-    return () => {
-      document.removeEventListener("pointerdown", closeOnPointerDown);
-      document.removeEventListener("keydown", closeOnEscape);
-    };
-  }, [isOpen]);
-
-  const selectOption = (nextValue: T) => {
-    onChange(nextValue);
-    setIsOpen(false);
-    window.requestAnimationFrame(() => triggerRef.current?.focus());
-  };
-
-  return (
-    <div className={`control-group ${className}`.trim()}>
-      <span className="control-group-label">{label}</span>
-      <div className="control-select" ref={selectRef}>
-        <button
-          ref={triggerRef}
-          className="control-select-trigger"
-          type="button"
-          aria-haspopup="listbox"
-          aria-expanded={isOpen}
-          aria-label={ariaLabel}
-          title={ariaLabel}
-          onClick={() => setIsOpen((open) => !open)}
-        >
-          <span>{selectedOption?.label ?? ""}</span>
-          <ChevronDown className="control-select-chevron" size={15} aria-hidden="true" />
-        </button>
-        {isOpen ? (
-          <div className="control-select-list" role="listbox" aria-label={ariaLabel}>
-            {options.map((option) => (
-              <button
-                key={String(option.value)}
-                className={option.value === value ? "active" : ""}
-                type="button"
-                role="option"
-                aria-selected={option.value === value}
-                onClick={() => selectOption(option.value)}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-        ) : null}
-      </div>
-    </div>
   );
 }
 
@@ -859,13 +401,15 @@ function getSortedVideos(videos: VideoItem[], mode: PlaylistSortMode, isReversed
   return isReversed ? sorted.reverse() : sorted;
 }
 
+function isResumableProgress(progress?: PlaybackProgress) {
+  if (!progress || progress.completed || progress.currentTime < 1) return false;
+  return progress.currentTime < Math.max(0, progress.duration - 8);
+}
+
 function getLatestResumableVideo(videos: VideoItem[], progressStore: ProgressStore) {
   return videos
     .map((video) => ({ video, progress: progressStore[video.id] }))
-    .filter(({ progress }) => {
-      if (!progress || progress.completed || progress.currentTime < 1) return false;
-      return progress.currentTime < Math.max(0, progress.duration - 8);
-    })
+    .filter(({ progress }) => isResumableProgress(progress))
     .sort((a, b) => b.progress.updatedAt - a.progress.updatedAt)[0];
 }
 
@@ -1336,9 +880,11 @@ export default function App() {
   const didRightMouseHoldRef = useRef(false);
   const didHoldSpeedStartPlaybackRef = useRef(false);
   const wasHoldSpeedPlaybackPausedRef = useRef(false);
+  const startFromBeginningVideoIdRef = useRef<string | null>(null);
   const [videos, setVideos] = useState<VideoItem[]>([]);
   const [subtitles, setSubtitles] = useState<SubtitleItem[]>([]);
   const [currentVideoId, setCurrentVideoId] = useState<string | null>(null);
+  const [activeView, setActiveView] = useState<ActiveView>("home");
   const [selectedSubtitleId, setSelectedSubtitleId] = useState<string>("off");
   const [progressStore, setProgressStore] = useState<ProgressStore>({});
   const [favoriteVideoIds, setFavoriteVideoIds] = useState<Set<string>>(() => new Set());
@@ -1485,6 +1031,83 @@ export default function App() {
     () => !!currentVideoId && visibleVideos.some((video) => video.id === currentVideoId),
     [currentVideoId, visibleVideos],
   );
+  const createHomeVideoCard = useCallback(
+    (video: VideoItem): HomeVideoCard => {
+      const progress = progressStore[video.id];
+      const progressDuration = progress?.duration && progress.duration > 0 ? progress.duration : video.duration || 0;
+      const progressPercent = progressDuration
+        ? clamp(((progress?.currentTime ?? 0) / progressDuration) * 100, 0, 100)
+        : 0;
+      return {
+        video,
+        progress,
+        progressPercent,
+        seriesTitle: seriesTitleByVideoId.get(video.id) ?? inferSeriesTitle(video),
+      };
+    },
+    [progressStore, seriesTitleByVideoId],
+  );
+  const resumableHomeCards = useMemo(
+    () =>
+      videos
+        .map(createHomeVideoCard)
+        .filter((card) => isResumableProgress(card.progress))
+        .sort((a, b) => (b.progress?.updatedAt ?? 0) - (a.progress?.updatedAt ?? 0)),
+    [createHomeVideoCard, videos],
+  );
+  const primaryResumeCard = resumableHomeCards[0] ?? null;
+  const recentHomeCards = useMemo(
+    () =>
+      videos
+        .map(createHomeVideoCard)
+        .filter((card) => Boolean(card.progress))
+        .sort((a, b) => {
+          const aCompleted = a.progress?.completed ? 1 : 0;
+          const bCompleted = b.progress?.completed ? 1 : 0;
+          return aCompleted - bCompleted || (b.progress?.updatedAt ?? 0) - (a.progress?.updatedAt ?? 0);
+        })
+        .slice(0, 6),
+    [createHomeVideoCard, videos],
+  );
+  const favoriteHomeCards = useMemo(
+    () =>
+      videos
+        .filter((video) => favoriteVideoIds.has(video.id))
+        .map(createHomeVideoCard)
+        .sort((a, b) => {
+          const statusRank = (card: HomeVideoCard) =>
+            card.progress?.completed ? 2 : card.progress ? 0 : 1;
+          return (
+            statusRank(a) - statusRank(b) ||
+            (b.progress?.updatedAt ?? b.video.lastModified) - (a.progress?.updatedAt ?? a.video.lastModified) ||
+            compareNaturalRelativePath(a.video.relativePath, b.video.relativePath)
+          );
+        })
+        .slice(0, 6),
+    [createHomeVideoCard, favoriteVideoIds, videos],
+  );
+  const nextEpisodeCard = useMemo(() => {
+    const sourceVideo = primaryResumeCard?.video ?? recentHomeCards[0]?.video ?? currentVideo;
+    if (!sourceVideo) return null;
+    const sourceSeriesKey = seriesKeyFromTitle(seriesTitleByVideoId.get(sourceVideo.id) ?? inferSeriesTitle(sourceVideo));
+    const seriesVideos = playlistVideos.filter(
+      (video) => seriesKeyFromTitle(seriesTitleByVideoId.get(video.id) ?? inferSeriesTitle(video)) === sourceSeriesKey,
+    );
+    if (seriesVideos.length < 2) return null;
+    const sourceIndex = seriesVideos.findIndex((video) => video.id === sourceVideo.id);
+    if (sourceIndex < 0 || sourceIndex >= seriesVideos.length - 1) return null;
+    return createHomeVideoCard(seriesVideos[sourceIndex + 1]);
+  }, [createHomeVideoCard, currentVideo, playlistVideos, primaryResumeCard, recentHomeCards, seriesTitleByVideoId]);
+  const libraryStats = useMemo(() => {
+    const completed = videos.filter((video) => progressStore[video.id]?.completed).length;
+    const unfinished = videos.filter((video) => isResumableProgress(progressStore[video.id])).length;
+    return {
+      total: videos.length,
+      unfinished,
+      completed,
+      favorites: favoriteVideoIds.size,
+    };
+  }, [favoriteVideoIds.size, progressStore, videos]);
   const currentVideoSubtitles = useMemo(() => {
     if (!currentVideo) return [];
     const currentBasePath = basePathOf(currentVideo.relativePath);
@@ -2025,6 +1648,7 @@ export default function App() {
       cancelAutoNextPrompt();
       persistCurrentProgress();
       resetHoldSpeedState();
+      setActiveView("player");
       pendingAutoPlayVideoIdRef.current = videoId;
       isMainVideoLoadingRef.current = true;
       setIsMainVideoLoading(true);
@@ -2047,8 +1671,25 @@ export default function App() {
     [cancelAutoNextPrompt, focusPlayer, persistCurrentProgress, resetHoldSpeedState],
   );
 
+  const openVideoFromHome = useCallback(
+    (video: VideoItem, options?: { fromBeginning?: boolean }) => {
+      startFromBeginningVideoIdRef.current = options?.fromBeginning ? video.id : null;
+      selectVideo(video.id);
+    },
+    [selectVideo],
+  );
+
+  const showHomeView = useCallback(() => {
+    persistCurrentProgress();
+    videoRef.current?.pause();
+    cancelAutoNextPrompt();
+    resetHoldSpeedState();
+    setAreControlsVisible(true);
+    setActiveView("home");
+  }, [cancelAutoNextPrompt, persistCurrentProgress, resetHoldSpeedState]);
+
   useEffect(() => {
-    if (isFullscreen) {
+    if (isFullscreen || activeView === "home") {
       setAdaptiveColumns(null);
       return;
     }
@@ -2113,7 +1754,7 @@ export default function App() {
       resizeObserver.disconnect();
       window.removeEventListener("resize", updateAdaptiveColumns);
     };
-  }, [isFullscreen, videoAspectRatio]);
+  }, [activeView, isFullscreen, videoAspectRatio]);
 
   const getNextVideoId = useCallback(
     (mode: PlaybackMode) => {
@@ -2236,6 +1877,7 @@ export default function App() {
       setSelectedSubtitleId("off");
       setPlaylistFilter("all");
       setCurrentVideoId(null);
+      setActiveView("home");
 
       for await (const batch of collectVideos(directory)) {
         media = mergeMediaBatch(media, batch);
@@ -2329,6 +1971,7 @@ export default function App() {
       setSubtitles(nextSubtitles);
       setSelectedSubtitleId("off");
       setPlaylistFilter("all");
+      setActiveView("home");
       setCurrentVideoId(getSortedVideos(media.videos, playlistSortMode, isPlaylistSortReversed)[0]?.id ?? null);
       setMessage(
         media.videos.length
@@ -2465,6 +2108,7 @@ export default function App() {
     thumbnailLoadRunIdRef.current = runId;
     let isCancelled = false;
     const orderedVideoIds = visibleVideos.map((video) => video.id);
+    const videoById = new Map(videosRef.current.map((video) => [video.id, video]));
 
     if (isScanning || isMainVideoLoading || !orderedVideoIds.length) {
       return () => {
@@ -2476,7 +2120,7 @@ export default function App() {
       for (const videoId of orderedVideoIds) {
         if (isCancelled || thumbnailLoadRunIdRef.current !== runId) return;
 
-        const video = videosRef.current.find((item) => item.id === videoId);
+        const video = videoById.get(videoId);
         if (!video || video.thumbnailStatus === "ready" || video.thumbnailStatus === "loading") {
           continue;
         }
@@ -2680,8 +2324,12 @@ export default function App() {
     setIsMainVideoLoading(true);
 
     const progress = progressStoreRef.current[currentVideo.id];
+    const shouldStartFromBeginning = startFromBeginningVideoIdRef.current === currentVideo.id;
+    if (shouldStartFromBeginning) {
+      startFromBeginningVideoIdRef.current = null;
+    }
     const resumeAt =
-      progress && !progress.completed && progress.currentTime < Math.max(0, progress.duration - 8)
+      !shouldStartFromBeginning && progress && !progress.completed && progress.currentTime < Math.max(0, progress.duration - 8)
         ? progress.currentTime
         : 0;
 
@@ -2735,7 +2383,7 @@ export default function App() {
       element.removeEventListener("canplay", handleCanPlay);
       element.removeEventListener("error", handleError);
     };
-  }, [currentVideo?.id, currentVideo?.url, updateVideoMetadata]);
+  }, [activeView, currentVideo?.id, currentVideo?.url, updateVideoMetadata]);
 
   useEffect(() => {
     const element = videoRef.current;
@@ -3540,11 +3188,51 @@ export default function App() {
   };
 
   const progressPercent = duration ? Math.min(100, (currentTime / duration) * 100) : 0;
+  const isHomeViewVisible = activeView === "home" && !isPrivacyMode && !isCinemaMode && !isFullscreen;
+  const firstPlayableHomeCard = playlistVideos[0] ? createHomeVideoCard(playlistVideos[0]) : null;
+  const primaryHomeCard = primaryResumeCard ?? firstPlayableHomeCard;
+  const primaryHomeTitle = primaryResumeCard ? "继续观看" : videos.length ? "开始观看" : "准备播放";
+  const primaryHomeAction = primaryResumeCard ? "继续播放" : "播放第一个视频";
+  const formatHomeProgressLabel = (card: HomeVideoCard) => {
+    if (card.progress?.completed) return "已看完";
+    if (!card.progress) return "未开始";
+    const total = card.progress.duration || card.video.duration || 0;
+    return `${formatTime(card.progress.currentTime)} / ${formatTime(total)}`;
+  };
+  const formatHomeMeta = (card: HomeVideoCard) => {
+    if (card.progress?.updatedAt) return `${formatHomeProgressLabel(card)} · ${formatRelativeTime(card.progress.updatedAt)}`;
+    if (card.video.duration) return `未开始 · ${formatTime(card.video.duration)}`;
+    return "未开始";
+  };
+  const homeCardThumbnail = (card: HomeVideoCard, fallbackIndex?: number) => (
+    <span className={`home-card-thumbnail ${card.video.thumbnailUrl ? "has-image" : ""}`} aria-hidden="true">
+      {card.video.thumbnailUrl ? (
+        <img src={card.video.thumbnailUrl} alt="" draggable={false} />
+      ) : (
+        <span>{typeof fallbackIndex === "number" ? String(fallbackIndex + 1).padStart(2, "0") : <Play size={24} />}</span>
+      )}
+    </span>
+  );
+  const renderHomeListCard = (card: HomeVideoCard, index: number) => (
+    <button
+      key={card.video.id}
+      className="home-list-card"
+      type="button"
+      onClick={() => openVideoFromHome(card.video)}
+      title={videoMetadataTitle(card.video)}
+    >
+      {homeCardThumbnail(card, index)}
+      <span className="home-list-copy">
+        <strong>{card.video.name}</strong>
+        <small>{formatHomeMeta(card)}</small>
+      </span>
+    </button>
+  );
 
   return (
     <>
     <main
-      className={`app-shell ${isDragActive ? "drag-active" : ""} ${isPrivacyMode ? "privacy-mode" : ""} ${isCinemaMode ? "cinema-mode" : ""}`}
+      className={`app-shell ${isDragActive ? "drag-active" : ""} ${isPrivacyMode ? "privacy-mode" : ""} ${isCinemaMode ? "cinema-mode" : ""} ${isHomeViewVisible ? "home-view" : ""}`}
       ref={appShellRef}
       style={shellStyle}
       onDragOver={handleDragOver}
@@ -3560,8 +3248,8 @@ export default function App() {
       <section className="player-column" ref={playerColumnRef}>
         <header className="top-bar" ref={topBarRef}>
           <div className="video-summary">
-            {currentVideo && !isPrivacyMode ? null : <h1>{isPrivacyMode ? "在线视频播放器" : "本地视频播放器"}</h1>}
-            {currentVideo && !isPrivacyMode ? (
+            {currentVideo && !isPrivacyMode && !isHomeViewVisible ? null : <h1>{isPrivacyMode ? "在线视频播放器" : "本地视频播放器"}</h1>}
+            {currentVideo && !isPrivacyMode && !isHomeViewVisible ? (
               <dl className="current-video-meta">
                 {videoMetadataRows(currentVideo).map(([label, value]) => (
                   <div key={label} className={label === "文件名" ? "current-video-file-chip" : undefined}>
@@ -3577,6 +3265,11 @@ export default function App() {
             )}
           </div>
           <div className="top-actions">
+            {!isPrivacyMode && videos.length && !isHomeViewVisible ? (
+              <button className="secondary-button top-home-button" type="button" onClick={showHomeView}>
+                首页
+              </button>
+            ) : null}
             {!isPrivacyMode ? (
               <button className="primary-button" type="button" onClick={requestFolderAccess} disabled={isScanning}>
                 <FolderOpen size={18} />
@@ -3586,8 +3279,116 @@ export default function App() {
           </div>
         </header>
 
+        {isHomeViewVisible ? (
+          <section className="home-dashboard" aria-label="继续观看首页">
+            <div className="home-primary-column">
+              <section className={`home-resume-card ${primaryHomeCard ? "" : "empty"}`}>
+                {primaryHomeCard ? (
+                  <>
+                    {homeCardThumbnail(primaryHomeCard)}
+                    <div className="home-resume-copy">
+                      <span className="home-section-eyebrow">{primaryHomeTitle}</span>
+                      <h2>{primaryHomeCard.video.name}</h2>
+                      <p>{primaryHomeCard.seriesTitle}</p>
+                      <span>{primaryHomeCard.video.relativePath}</span>
+                      <div className="home-progress" aria-label={formatHomeProgressLabel(primaryHomeCard)}>
+                        <span style={{ width: `${primaryHomeCard.progressPercent}%` }} />
+                      </div>
+                      <small>{formatHomeMeta(primaryHomeCard)}</small>
+                      <div className="home-resume-actions">
+                        <button className="primary-button" type="button" onClick={() => openVideoFromHome(primaryHomeCard.video)}>
+                          <Play size={18} />
+                          {primaryHomeAction}
+                        </button>
+                        <button
+                          className="secondary-button"
+                          type="button"
+                          onClick={() => openVideoFromHome(primaryHomeCard.video, { fromBeginning: true })}
+                        >
+                          <RotateCcw size={17} />
+                          从头播放
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="home-empty-state">
+                    <FolderOpen size={42} />
+                    <h2>选择一个本地文件夹开始播放</h2>
+                    <p>播放器会在本地扫描视频、匹配字幕，并在允许写入时保存观看进度。</p>
+                    <button className="primary-button" type="button" onClick={requestFolderAccess} disabled={isScanning}>
+                      <FolderOpen size={18} />
+                      {isScanning ? "扫描中" : "选择文件夹"}
+                    </button>
+                  </div>
+                )}
+              </section>
+
+              {nextEpisodeCard ? (
+                <section className="home-section">
+                  <div className="home-section-header">
+                    <h2>下一集</h2>
+                    <span>{nextEpisodeCard.seriesTitle}</span>
+                  </div>
+                  <div className="home-next-card">
+                    {homeCardThumbnail(nextEpisodeCard)}
+                    <div>
+                      <strong>{nextEpisodeCard.video.name}</strong>
+                      <small>{nextEpisodeCard.video.relativePath}</small>
+                    </div>
+                    <button className="secondary-button" type="button" onClick={() => openVideoFromHome(nextEpisodeCard.video)}>
+                      播放
+                    </button>
+                  </div>
+                </section>
+              ) : null}
+
+              {recentHomeCards.length ? (
+                <section className="home-section">
+                  <div className="home-section-header">
+                    <h2>最近观看</h2>
+                    <span>{recentHomeCards.length} 个记录</span>
+                  </div>
+                  <div className="home-list-grid">{recentHomeCards.map(renderHomeListCard)}</div>
+                </section>
+              ) : null}
+            </div>
+
+            <aside className="home-side-column">
+              <section className="home-stats">
+                <div>
+                  <strong>{libraryStats.total}</strong>
+                  <span>视频</span>
+                </div>
+                <div>
+                  <strong>{libraryStats.unfinished}</strong>
+                  <span>未看完</span>
+                </div>
+                <div>
+                  <strong>{libraryStats.completed}</strong>
+                  <span>已看完</span>
+                </div>
+                <div>
+                  <strong>{libraryStats.favorites}</strong>
+                  <span>收藏</span>
+                </div>
+              </section>
+
+              {favoriteHomeCards.length ? (
+                <section className="home-section">
+                  <div className="home-section-header">
+                    <h2>收藏 / 稍后看</h2>
+                    <span>{favoriteHomeCards.length} 个</span>
+                  </div>
+                  <div className="home-compact-list">{favoriteHomeCards.map(renderHomeListCard)}</div>
+                </section>
+              ) : null}
+            </aside>
+          </section>
+        ) : null}
+
         <div
-          className={`player-frame ${isFullscreen ? "fullscreen" : ""} ${areControlsVisible ? "" : "controls-hidden"}`}
+          className={`player-frame ${isHomeViewVisible ? "home-hidden" : ""} ${isFullscreen ? "fullscreen" : ""} ${areControlsVisible ? "" : "controls-hidden"}`}
           ref={playerRef}
           onMouseMove={revealControls}
           onContextMenu={handlePlayerContextMenu}
@@ -3903,7 +3704,7 @@ export default function App() {
         </div>
       </section>
 
-      {!isPrivacyMode && !isCinemaMode ? (
+      {!isHomeViewVisible && !isPrivacyMode && !isCinemaMode ? (
       <aside className="playlist-panel" aria-label={isSeriesMode ? "追番列表" : "播放列表"}>
         <div className="playlist-header">
           <div className="playlist-title-row">
