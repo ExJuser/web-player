@@ -53,6 +53,10 @@ button {
     #15181d;
 }
 
+.app-shell.home-view {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .app-shell.cinema-mode {
   grid-template-columns: minmax(0, 1fr);
   gap: 0;
@@ -246,6 +250,11 @@ button {
   flex-shrink: 0;
 }
 
+.top-home-button {
+  min-width: 68px;
+  height: 34px;
+}
+
 .icon-button.privacy-toggle.active {
   border-color: #00a1d6;
   background: #07394a;
@@ -337,6 +346,10 @@ button {
   border: 0;
   border-radius: 0;
   background: #000;
+}
+
+.player-frame.home-hidden {
+  display: none;
 }
 
 .app-shell.cinema-mode .player-frame {
@@ -588,6 +601,262 @@ button {
 
 .auto-next-actions button:hover {
   filter: brightness(1.1);
+}
+
+.home-dashboard {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+  gap: 14px;
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+}
+
+.home-primary-column,
+.home-side-column {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  gap: 14px;
+  overflow: auto;
+  padding-right: 4px;
+  scrollbar-color: rgba(142, 151, 165, 0.58) rgba(20, 22, 26, 0.35);
+  scrollbar-width: thin;
+}
+
+.home-side-column {
+  padding-right: 0;
+}
+
+.home-resume-card,
+.home-section,
+.home-stats {
+  border: 1px solid #242a31;
+  border-radius: 8px;
+  background: #1a1e24;
+}
+
+.home-resume-card {
+  display: grid;
+  grid-template-columns: minmax(240px, 38%) minmax(0, 1fr);
+  gap: 18px;
+  min-height: 260px;
+  padding: 16px;
+}
+
+.home-resume-card.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.home-empty-state {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  max-width: 520px;
+  color: #aab1bd;
+  text-align: center;
+}
+
+.home-empty-state h2,
+.home-resume-copy h2,
+.home-section-header h2 {
+  margin: 0;
+  color: #f5f7fb;
+  letter-spacing: 0;
+}
+
+.home-empty-state h2 {
+  font-size: 22px;
+}
+
+.home-empty-state p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.home-card-thumbnail {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  aspect-ratio: 16 / 9;
+  background: #262d36;
+  color: #aab1bd;
+  font-weight: 700;
+}
+
+.home-card-thumbnail img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.home-resume-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+}
+
+.home-section-eyebrow {
+  color: #79dfff;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.home-resume-copy h2 {
+  overflow: hidden;
+  font-size: 24px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.home-resume-copy p,
+.home-resume-copy > span:not(.home-section-eyebrow),
+.home-resume-copy small,
+.home-next-card small,
+.home-list-copy small,
+.home-section-header span {
+  overflow: hidden;
+  margin: 0;
+  color: #8e97a5;
+  font-size: 13px;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.home-resume-copy p {
+  color: #79dfff;
+}
+
+.home-progress {
+  width: 100%;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 99px;
+  background: #343b45;
+}
+
+.home-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #00a1d6;
+}
+
+.home-resume-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.home-section {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.home-section-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.home-section-header h2 {
+  font-size: 16px;
+}
+
+.home-next-card {
+  display: grid;
+  grid-template-columns: 132px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.home-next-card strong,
+.home-list-copy strong {
+  display: block;
+  overflow: hidden;
+  color: #f5f7fb;
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.home-list-grid,
+.home-compact-list {
+  display: grid;
+  gap: 8px;
+}
+
+.home-list-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.home-list-card {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 8px;
+  border-radius: 8px;
+  background: #20252d;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.home-list-card:hover {
+  background: #17242d;
+}
+
+.home-list-card .home-card-thumbnail {
+  border-radius: 6px;
+}
+
+.home-list-copy {
+  min-width: 0;
+}
+
+.home-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+}
+
+.home-stats div {
+  display: grid;
+  gap: 4px;
+  padding: 14px;
+  background: #20252d;
+}
+
+.home-stats strong {
+  color: #f5f7fb;
+  font-size: 24px;
+  line-height: 1;
+}
+
+.home-stats span {
+  color: #8e97a5;
+  font-size: 12px;
 }
 
 .player-overlay-feedback {
@@ -1757,6 +2026,20 @@ button {
     border-top: 1px solid #262c35;
     padding: 14px 0 0;
   }
+
+  .home-dashboard {
+    grid-template-columns: 1fr;
+    overflow: visible;
+  }
+
+  .home-primary-column,
+  .home-side-column {
+    overflow: visible;
+  }
+
+  .home-resume-card {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 @media (max-width: 640px) {
@@ -1782,6 +2065,10 @@ button {
     width: 100%;
   }
 
+  .top-home-button {
+    flex: 0 0 78px;
+  }
+
   .top-actions .primary-button {
     flex: 1;
   }
@@ -1798,6 +2085,41 @@ button {
   .playlist-tools {
     width: 100%;
     flex-wrap: wrap;
+  }
+
+  .home-dashboard {
+    gap: 12px;
+  }
+
+  .home-resume-card,
+  .home-section {
+    padding: 12px;
+  }
+
+  .home-resume-copy h2 {
+    font-size: 19px;
+  }
+
+  .home-resume-actions .primary-button,
+  .home-resume-actions .secondary-button {
+    width: 100%;
+  }
+
+  .home-list-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .home-next-card {
+    grid-template-columns: 92px minmax(0, 1fr);
+  }
+
+  .home-next-card .secondary-button {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  .home-list-card {
+    grid-template-columns: 82px minmax(0, 1fr);
   }
 
   .playlist-filter {
