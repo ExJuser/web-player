@@ -5436,8 +5436,8 @@ export default function App() {
               className="playlist-clear-button icon-only"
               type="button"
               onClick={clearFolderProgress}
-              disabled={!videos.length || !Object.keys(progressStore).length}
-              title="清空当前文件夹观看记录"
+              disabled={!canClearPlaylistProgress}
+              title={clearPlaylistProgressTitle}
             >
               <Trash2 size={16} />
             </button>
