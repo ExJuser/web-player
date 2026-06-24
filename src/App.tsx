@@ -1098,15 +1098,13 @@ function getVideoElementMetadata(element: HTMLVideoElement): VideoMetadata {
 
 const widescreenAspectRatio = 16 / 9;
 
-function getLandscapeDisplaySize(width?: number, height?: number) {
+function getVideoDisplaySize(width?: number, height?: number) {
   if (!width || !height) return null;
-  if (width < height) return { width: Math.round(width * widescreenAspectRatio), height: width };
   return { width, height };
 }
 
-function getLandscapeDisplayAspectRatio(width?: number, height?: number) {
-  const displaySize = getLandscapeDisplaySize(width, height);
-  return displaySize ? displaySize.width / displaySize.height : widescreenAspectRatio;
+function getPlayerFrameAspectRatio() {
+  return widescreenAspectRatio;
 }
 
 async function loadVideoMetadata(video: VideoItem) {
@@ -1185,7 +1183,7 @@ async function createVideoThumbnailBlob(video: VideoItem) {
     }
 
     const metadata = getVideoElementMetadata(element);
-    const displaySize = getLandscapeDisplaySize(metadata.width, metadata.height);
+    const displaySize = getVideoDisplaySize(metadata.width, metadata.height);
     const width = displaySize?.width;
     const height = displaySize?.height;
     if (!width || !height) {
@@ -1226,15 +1224,7 @@ async function createVideoThumbnailBlob(video: VideoItem) {
 
       context.fillStyle = "#050607";
       context.fillRect(0, 0, canvas.width, canvas.height);
-      context.save();
-      if (metadata.width && metadata.height && metadata.width < metadata.height) {
-        context.translate(drawLeft + drawWidth / 2, drawTop + drawHeight / 2);
-        context.rotate(Math.PI / 2);
-        context.drawImage(element, -drawHeight / 2, -drawWidth / 2, drawHeight, drawWidth);
-      } else {
-        context.drawImage(element, drawLeft, drawTop, drawWidth, drawHeight);
-      }
-      context.restore();
+      context.drawImage(element, drawLeft, drawTop, drawWidth, drawHeight);
 
       const blob = await encodeCanvasAsJpeg(canvas);
       if (!fallbackBlob) fallbackBlob = blob;
@@ -1516,9 +1506,6 @@ export default function App() {
   }, [activeSeriesProgressVideoIds, isSeriesMode, progressStore, videos.length]);
   const clearPlaylistProgressTitle =
     isSeriesMode && activeBangumiSeries ? `清除《${activeBangumiSeries.title}》观看记录` : "清空当前文件夹观看记录";
-  const shouldStretchPortraitVideo = Boolean(
-    currentVideo?.width && currentVideo.height && currentVideo.width < currentVideo.height,
-  );
   const currentVideoSourceAspectRatio = currentVideo?.width && currentVideo.height ? currentVideo.width / currentVideo.height : 9 / 16;
   const normalizedVideoRotation = ((videoRotation % 360) + 360) % 360;
   const isVideoSideways = normalizedVideoRotation === 90 || normalizedVideoRotation === 270;
@@ -3354,7 +3341,7 @@ export default function App() {
     const handleLoadedMetadata = () => {
       setDuration(element.duration || 0);
       if (element.videoWidth > 0 && element.videoHeight > 0) {
-        setVideoAspectRatio(getLandscapeDisplayAspectRatio(element.videoWidth, element.videoHeight));
+        setVideoAspectRatio(getPlayerFrameAspectRatio());
       }
       updateVideoMetadata(currentVideo.id, {
         duration: element.duration || undefined,
@@ -3535,7 +3522,7 @@ export default function App() {
     const drawFrame = () => {
       if (timelineFrameRequestRef.current !== requestId) return;
       const context = canvas.getContext("2d");
-      const displaySize = getLandscapeDisplaySize(previewVideo.videoWidth, previewVideo.videoHeight);
+      const displaySize = getVideoDisplaySize(previewVideo.videoWidth, previewVideo.videoHeight);
       const sourceWidth = displaySize?.width;
       const sourceHeight = displaySize?.height;
       if (!context || !sourceWidth || !sourceHeight) return;
@@ -3550,15 +3537,7 @@ export default function App() {
 
       context.fillStyle = "#050607";
       context.fillRect(0, 0, canvasWidth, canvasHeight);
-      context.save();
-      if (previewVideo.videoWidth > 0 && previewVideo.videoHeight > 0 && previewVideo.videoWidth < previewVideo.videoHeight) {
-        context.translate(drawLeft + drawWidth / 2, drawTop + drawHeight / 2);
-        context.rotate(Math.PI / 2);
-        context.drawImage(previewVideo, -drawHeight / 2, -drawWidth / 2, drawHeight, drawWidth);
-      } else {
-        context.drawImage(previewVideo, drawLeft, drawTop, drawWidth, drawHeight);
-      }
-      context.restore();
+      context.drawImage(previewVideo, drawLeft, drawTop, drawWidth, drawHeight);
       const imageUrl = canvas.toDataURL("image/jpeg", 0.78);
       setTimelinePreview((previous) =>
         previous.isVisible ? { ...previous, imageUrl, isLoadingFrame: false } : previous,
@@ -4986,9 +4965,9 @@ export default function App() {
             {currentVideo ? (
               <video
                 ref={videoRef}
-                className={`video-element ${shouldStretchPortraitVideo ? "portrait-stretched" : ""} ${normalizedVideoRotation ? "manual-rotated" : ""} ${isVideoSideways ? "sideways" : ""}`}
+                className={`video-element ${normalizedVideoRotation ? "manual-rotated" : ""} ${isVideoSideways ? "sideways" : ""}`}
                 style={
-                  shouldStretchPortraitVideo || normalizedVideoRotation
+                  normalizedVideoRotation
                     ? ({
                         "--landscape-source-aspect-ratio": currentVideoSourceAspectRatio,
                         "--video-rotation": `${normalizedVideoRotation}deg`,

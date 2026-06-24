@@ -408,10 +408,6 @@ button {
     0 0 10px rgba(0, 0, 0, 0.58);
 }
 
-.video-element.portrait-stretched {
-  object-fit: fill;
-}
-
 .video-element.manual-rotated {
   transform: rotate(var(--video-rotation, 0deg));
 }
