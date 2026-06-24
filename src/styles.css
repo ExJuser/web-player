@@ -391,6 +391,7 @@ button {
 
 .video-element::cue {
   background: transparent;
+  background-color: transparent;
   color: #f8fafc;
   font-family:
     Inter,
@@ -398,7 +399,7 @@ button {
     "PingFang SC",
     "Microsoft YaHei",
     sans-serif;
-  font-size: clamp(13px, 1.35cqh, 18px);
+  font-size: 18px;
   font-weight: 600;
   line-height: 1.25;
   text-shadow:
@@ -2236,7 +2237,7 @@ button {
   }
 
   .video-element::cue {
-    font-size: clamp(12px, 1.55cqh, 16px);
+    font-size: 16px;
   }
 
   .control-spacer {

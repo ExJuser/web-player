@@ -748,13 +748,17 @@ function normalizeSubtitleText(raw: string) {
   return raw.replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
 }
 
+function stripVttStyleBlocks(raw: string) {
+  return raw.replace(/(?:^|\n)STYLE(?:[^\n]*)\n[\s\S]*?(?=\n{2,}(?:NOTE|STYLE|REGION|\d{0,6}\n?[^\n]*-->|$))/gi, "\n").trim();
+}
+
 async function createSubtitleUrl(subtitle: SubtitleItem) {
   const rawText = subtitle.rawText ?? (subtitle.file ? await subtitle.file.text() : "");
   if (rawText) {
     const normalizedText = normalizeSubtitleText(rawText);
     const vtt =
       subtitle.format === "vtt" || normalizedText.startsWith("WEBVTT")
-        ? normalizedText
+        ? stripVttStyleBlocks(normalizedText)
         : srtToVtt(normalizedText);
     return URL.createObjectURL(new Blob([vtt], { type: "text/vtt" }));
   }
