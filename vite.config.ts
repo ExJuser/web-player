@@ -2,7 +2,10 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { access, mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
+import http from "node:http";
+import https from "node:https";
 import path from "node:path";
+import tls from "node:tls";
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 
@@ -11,6 +14,8 @@ const librariesRoot = path.join(dataRoot, "libraries");
 const thumbnailsRoot = path.join(dataRoot, "thumbnails");
 const embeddedSubtitlesRoot = path.join(dataRoot, "subtitles");
 const aiRoot = path.join(dataRoot, "ai");
+const bangumiRoot = path.join(dataRoot, "bangumi");
+const bangumiMatchesRoot = path.join(bangumiRoot, "matches");
 const indexPath = path.join(dataRoot, "index.json");
 const appConfigPath = path.resolve(__dirname, "config", "app.json");
 const videoExtensions = new Set([".mp4", ".webm", ".ogg", ".mov", ".m4v", ".mkv"]);
@@ -126,6 +131,7 @@ async function getPathStats(targetPath) {
 
 async function createCacheStatus() {
   const definitions = [
+    { id: "bangumi-matches", label: "Bangumi 匹配", path: bangumiMatchesRoot },
     { id: "libraries", label: "播放数据", path: librariesRoot },
     { id: "thumbnails", label: "视频缩略图", path: thumbnailsRoot },
     { id: "subtitles", label: "内封字幕", path: embeddedSubtitlesRoot },
@@ -187,6 +193,10 @@ function publicLocalConfig(config, tools, env) {
     ai: {
       configured: Boolean(env.DEEPSEEK_API_KEY),
       model: env.DEEPSEEK_MODEL || "deepseek-chat",
+    },
+    bangumi: {
+      configured: Boolean(env.BANGUMI_USER_AGENT && env.BANGUMI_ACCESS_TOKEN),
+      proxyConfigured: Boolean(env.BANGUMI_LENS_PROXY),
     },
   };
 }
@@ -323,9 +333,10 @@ function chunkText(text, size = 12000) {
   return chunks;
 }
 
-async function callDeepSeek(env, messages) {
+async function callDeepSeek(env, messages, options = {}) {
   if (!env.DEEPSEEK_API_KEY) throw new Error("DEEPSEEK_API_KEY is not configured.");
   const baseUrl = (env.DEEPSEEK_BASE_URL || env.DEEPSEEK_API_BASE_URL || "https://api.deepseek.com").replace(/\/+$/, "");
+  const responseFormat = options && typeof options.responseFormat === "object" ? options.responseFormat : null;
   const response = await fetch(`${baseUrl}/chat/completions`, {
     method: "POST",
     headers: {
@@ -336,6 +347,7 @@ async function callDeepSeek(env, messages) {
       model: env.DEEPSEEK_MODEL || "deepseek-chat",
       temperature: 0.3,
       messages,
+      ...(responseFormat ? { response_format: responseFormat } : {}),
     }),
   });
   if (!response.ok) {
@@ -617,6 +629,16 @@ function parseAiJsonObject(text) {
   }
 }
 
+function normalizeAiLibrarySearchAnswer(parsed, matchIds) {
+  const answer = typeof parsed?.answer === "string" ? parsed.answer.trim() : "";
+  const nested = parseAiJsonObject(answer);
+  if (nested && typeof nested.answer === "string") {
+    return normalizeAiLibrarySearchAnswer(nested, matchIds);
+  }
+  if (answer && !/^\s*\{[\s\S]*\}\s*$/.test(answer)) return answer.slice(0, 240);
+  return matchIds.length ? "AI 已匹配到本地文件夹。" : "AI 未找到明确匹配，已保留本地结果。";
+}
+
 function normalizeLibrarySearchCandidates(source) {
   const candidates = Array.isArray(source) ? source : [];
   return candidates
@@ -646,24 +668,429 @@ async function searchLibraryWithAi(env, payload) {
     )
     .join("\n");
 
-  const raw = await callDeepSeek(env, [
-    {
-      role: "system",
-      content:
-        "你是本地片库搜索助手。只能从用户提供的候选视频中选择，不能编造片名或使用候选外内容。请返回严格 JSON：{\"answer\":\"简短中文理由\",\"matchIds\":[\"候选 id\"]}。matchIds 最多 5 个。",
-    },
-    {
-      role: "user",
-      content: `搜索需求：${query}\n\n候选片库：\n${catalog}`,
-    },
-  ]);
-  const parsed = parseAiJsonObject(raw);
+  const raw = await callDeepSeek(
+    env,
+    [
+      {
+        role: "system",
+        content:
+          "你是本地片库搜索助手。只能从用户提供的候选视频中选择，不能编造片名或使用候选外内容。请返回严格 JSON：{\"answer\":\"简短中文理由\",\"matchIds\":[\"候选 id\"]}。matchIds 最多 5 个。",
+      },
+      {
+        role: "user",
+        content: `搜索需求：${query}\n\n候选片库：\n${catalog}`,
+      },
+    ],
+    { responseFormat: { type: "json_object" } },
+  );
+  const parsed = parseAiJsonObject(raw) ?? {};
   const candidateIds = new Set(candidates.map((candidate) => candidate.id));
   const matchIds = Array.isArray(parsed?.matchIds)
     ? parsed.matchIds.filter((id) => typeof id === "string" && candidateIds.has(id)).slice(0, 5)
     : [];
-  const answer = typeof parsed?.answer === "string" && parsed.answer.trim() ? parsed.answer.trim() : raw.trim();
+  const answer = normalizeAiLibrarySearchAnswer(parsed, matchIds);
   return { answer, matchIds };
+}
+
+function createBodyBuffer(body) {
+  if (body === undefined || body === null) return null;
+  return Buffer.isBuffer(body) ? body : Buffer.from(String(body));
+}
+
+function collectJsonResponse(response, requestLabel) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let size = 0;
+    response.on("data", (chunk) => {
+      size += chunk.length;
+      if (size > 4 * 1024 * 1024) {
+        reject(new Error("Bangumi response is too large."));
+        response.destroy();
+        return;
+      }
+      chunks.push(chunk);
+    });
+    response.on("end", () => {
+      const text = Buffer.concat(chunks).toString("utf8");
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        reject(new Error(`Bangumi API ${response.statusCode}: ${text.slice(0, 300) || response.statusMessage || requestLabel}`));
+        return;
+      }
+      try {
+        resolve(JSON.parse(text || "{}"));
+      } catch {
+        reject(new Error("Bangumi returned invalid JSON."));
+      }
+    });
+    response.on("error", reject);
+  });
+}
+
+function requestJsonDirect(urlString, options) {
+  const target = new URL(urlString);
+  const bodyBuffer = createBodyBuffer(options.body);
+  const headers = {
+    ...options.headers,
+    ...(bodyBuffer ? { "Content-Length": String(bodyBuffer.length) } : {}),
+  };
+  const client = target.protocol === "https:" ? https : http;
+  return new Promise((resolve, reject) => {
+    const request = client.request(
+      target,
+      {
+        method: options.method || "GET",
+        headers,
+      },
+      (response) => {
+        collectJsonResponse(response, urlString).then(resolve, reject);
+      },
+    );
+    request.setTimeout(options.timeoutMs ?? 12000, () => request.destroy(new Error("Bangumi request timed out.")));
+    request.on("error", reject);
+    request.end(bodyBuffer ?? undefined);
+  });
+}
+
+function createProxyAuthorization(proxy) {
+  if (!proxy.username) return {};
+  const credentials = Buffer.from(`${decodeURIComponent(proxy.username)}:${decodeURIComponent(proxy.password)}`).toString("base64");
+  return { "Proxy-Authorization": `Basic ${credentials}` };
+}
+
+function requestJsonViaHttpProxy(urlString, options) {
+  const target = new URL(urlString);
+  const proxy = new URL(options.proxyUrl);
+  if (target.protocol !== "https:") throw new Error("Bangumi proxy requests only support HTTPS targets.");
+  if (proxy.protocol !== "http:") throw new Error("BANGUMI_LENS_PROXY must use the http:// scheme.");
+
+  const bodyBuffer = createBodyBuffer(options.body);
+  const headers = {
+    ...options.headers,
+    ...(bodyBuffer ? { "Content-Length": String(bodyBuffer.length) } : {}),
+  };
+  const connectPath = `${target.hostname}:${target.port || 443}`;
+
+  return new Promise((resolve, reject) => {
+    let innerRequest = null;
+    const fail = (error) => {
+      if (innerRequest) innerRequest.destroy(error);
+      reject(error);
+    };
+    const connectRequest = http.request({
+      host: proxy.hostname,
+      port: Number(proxy.port || 80),
+      method: "CONNECT",
+      path: connectPath,
+      headers: {
+        Host: connectPath,
+        ...createProxyAuthorization(proxy),
+      },
+    });
+    connectRequest.setTimeout(options.timeoutMs ?? 12000, () =>
+      connectRequest.destroy(new Error("Bangumi proxy connection timed out.")),
+    );
+    connectRequest.on("connect", (response, socket) => {
+      if (response.statusCode !== 200) {
+        socket.destroy();
+        fail(new Error(`Bangumi proxy CONNECT failed with ${response.statusCode}.`));
+        return;
+      }
+      const tlsSocket = tls.connect({ socket, servername: target.hostname });
+      innerRequest = https.request(
+        {
+          host: target.hostname,
+          port: Number(target.port || 443),
+          method: options.method || "GET",
+          path: `${target.pathname}${target.search}`,
+          headers,
+          createConnection: () => tlsSocket,
+        },
+        (response) => {
+          collectJsonResponse(response, urlString).then(resolve, fail);
+        },
+      );
+      innerRequest.setTimeout(options.timeoutMs ?? 12000, () =>
+        innerRequest.destroy(new Error("Bangumi request timed out.")),
+      );
+      innerRequest.on("error", fail);
+      innerRequest.end(bodyBuffer ?? undefined);
+    });
+    connectRequest.on("error", fail);
+    connectRequest.end();
+  });
+}
+
+function requestJsonWithOptionalProxy(urlString, options) {
+  if (options.proxyUrl) return requestJsonViaHttpProxy(urlString, options);
+  return requestJsonDirect(urlString, options);
+}
+
+async function requestBangumiJson(env, pathname, payload) {
+  const userAgent = typeof env.BANGUMI_USER_AGENT === "string" ? env.BANGUMI_USER_AGENT.trim() : "";
+  const token = typeof env.BANGUMI_ACCESS_TOKEN === "string" ? env.BANGUMI_ACCESS_TOKEN.trim() : "";
+  if (!userAgent || !token) throw new Error("Bangumi is not configured.");
+
+  return requestJsonWithOptionalProxy(`https://api.bgm.tv${pathname}`, {
+    method: "POST",
+    proxyUrl: typeof env.BANGUMI_LENS_PROXY === "string" && env.BANGUMI_LENS_PROXY.trim() ? env.BANGUMI_LENS_PROXY.trim() : "",
+    timeoutMs: 12000,
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      "User-Agent": userAgent,
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+function normalizeBangumiTitle(value) {
+  return String(value || "")
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/\[[^\]]*]/g, " ")
+    .replace(/【[^】]*】/g, " ")
+    .replace(/\([^)]*\)/g, " ")
+    .replace(/（[^）]*）/g, " ")
+    .replace(/\b(?:s|season)\s*\d{1,2}\b/gi, " ")
+    .replace(/\b(?:ep?|episode)\s*\d{1,4}\b/gi, " ")
+    .replace(/\b(?:1080p|2160p|720p|4k|8k|x264|x265|h264|h265|hevc|avc|aac|web-dl|bdrip|bluray)\b/gi, " ")
+    .replace(/[._\-:：/\\|]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function compactBangumiTitle(value) {
+  return normalizeBangumiTitle(value).replace(/[^\p{L}\p{N}]+/gu, "");
+}
+
+function bigrams(value) {
+  if (value.length <= 1) return value ? [value] : [];
+  const parts = [];
+  for (let index = 0; index < value.length - 1; index += 1) {
+    parts.push(value.slice(index, index + 2));
+  }
+  return parts;
+}
+
+function diceCoefficient(a, b) {
+  if (!a || !b) return 0;
+  if (a === b) return 1;
+  const aParts = bigrams(a);
+  const bParts = bigrams(b);
+  const bCounts = new Map();
+  bParts.forEach((part) => bCounts.set(part, (bCounts.get(part) ?? 0) + 1));
+  let overlap = 0;
+  aParts.forEach((part) => {
+    const count = bCounts.get(part) ?? 0;
+    if (count > 0) {
+      overlap += 1;
+      bCounts.set(part, count - 1);
+    }
+  });
+  return (2 * overlap) / (aParts.length + bParts.length);
+}
+
+function scoreBangumiSubject(title, subject) {
+  const target = normalizeBangumiTitle(title);
+  const targetCompact = compactBangumiTitle(title);
+  const names = [subject.name, subject.nameCn].filter(Boolean);
+  let best = 0;
+  names.forEach((name) => {
+    const normalized = normalizeBangumiTitle(name);
+    const compact = compactBangumiTitle(name);
+    if (!normalized || !compact) return;
+    if (normalized === target) best = Math.max(best, 100);
+    if (compact === targetCompact) best = Math.max(best, 96);
+    if (normalized.startsWith(target) || target.startsWith(normalized)) best = Math.max(best, 88);
+    if (normalized.includes(target) || target.includes(normalized)) best = Math.max(best, 82);
+    best = Math.max(best, Math.round(diceCoefficient(targetCompact, compact) * 75));
+  });
+  return best;
+}
+
+function normalizeBangumiSubject(raw, title) {
+  const id = Number(raw?.id);
+  if (!Number.isInteger(id) || id <= 0) return null;
+  const subject = {
+    id,
+    name: typeof raw?.name === "string" ? raw.name : "",
+    nameCn: typeof raw?.name_cn === "string" ? raw.name_cn : "",
+    url: `https://bgm.tv/subject/${id}`,
+    score: Number.isFinite(Number(raw?.rating?.score)) ? Number(raw.rating.score) : undefined,
+    rank: Number.isFinite(Number(raw?.rank)) ? Number(raw.rank) : undefined,
+    date: typeof raw?.date === "string" ? raw.date : undefined,
+    summary: typeof raw?.summary === "string" ? raw.summary.slice(0, 240) : undefined,
+  };
+  return {
+    ...subject,
+    matchScore: scoreBangumiSubject(title, subject),
+  };
+}
+
+function normalizeBangumiSearchPayload(payload, title) {
+  const subjects = Array.isArray(payload?.data) ? payload.data : Array.isArray(payload) ? payload : [];
+  return subjects.map((subject) => normalizeBangumiSubject(subject, title)).filter(Boolean);
+}
+
+async function searchBangumiSubjects(env, title) {
+  const queries = Array.from(new Set([title.trim(), normalizeBangumiTitle(title)].filter(Boolean))).slice(0, 2);
+  const subjectsById = new Map();
+  for (const query of queries) {
+    const payload = await requestBangumiJson(env, "/v0/search/subjects?limit=5", {
+      keyword: query,
+      sort: "match",
+      filter: { type: [2] },
+    });
+    normalizeBangumiSearchPayload(payload, title).forEach((subject) => {
+      const existing = subjectsById.get(subject.id);
+      if (!existing || subject.matchScore > existing.matchScore) {
+        subjectsById.set(subject.id, subject);
+      }
+    });
+  }
+  return Array.from(subjectsById.values()).sort((a, b) => b.matchScore - a.matchScore || (b.score ?? 0) - (a.score ?? 0));
+}
+
+function publicBangumiCandidate(candidate) {
+  return {
+    id: candidate.id,
+    name: candidate.name,
+    nameCn: candidate.nameCn,
+    url: candidate.url,
+    score: candidate.score,
+    rank: candidate.rank,
+    date: candidate.date,
+    matchScore: candidate.matchScore,
+  };
+}
+
+function createBangumiMatchResult(payload, status, overrides = {}) {
+  return {
+    status,
+    seriesKey: payload.seriesKey,
+    title: payload.title,
+    subject: null,
+    confidence: "none",
+    source: status === "error" ? "error" : "none",
+    candidates: [],
+    updatedAt: Date.now(),
+    ...overrides,
+  };
+}
+
+async function selectBangumiCandidateWithAi(env, title, samples, candidates) {
+  if (!env.DEEPSEEK_API_KEY || !candidates.length) return null;
+  const catalog = candidates
+    .slice(0, 5)
+    .map(
+      (candidate, index) =>
+        `${index + 1}. id=${candidate.id} | name=${candidate.name || "-"} | name_cn=${candidate.nameCn || "-"} | date=${candidate.date || "-"} | rank=${candidate.rank ?? "-"} | matchScore=${candidate.matchScore}`,
+    )
+    .join("\n");
+  const raw = await callDeepSeek(env, [
+    {
+      role: "system",
+      content:
+        "You match a local anime series title to one Bangumi candidate. Return strict JSON only: {\"subjectId\":123,\"confidence\":\"medium\",\"reason\":\"short Chinese reason\"}. Use null subjectId if no candidate is reliable. Never invent ids.",
+    },
+    {
+      role: "user",
+      content: `Local series title: ${title}\nSample files:\n${samples.slice(0, 8).join("\n") || "-"}\n\nBangumi candidates:\n${catalog}`,
+    },
+  ]);
+  const parsed = parseAiJsonObject(raw);
+  const selectedId = Number(parsed?.subjectId ?? parsed?.id);
+  return candidates.find((candidate) => candidate.id === selectedId) ?? null;
+}
+
+function normalizeBangumiMatchPayload(payload) {
+  const libraryId = typeof payload?.libraryId === "string" ? payload.libraryId.trim().slice(0, 160) : "";
+  const seriesKey = typeof payload?.seriesKey === "string" ? payload.seriesKey.trim().slice(0, 240) : "";
+  const title = typeof payload?.title === "string" ? payload.title.trim().slice(0, 240) : "";
+  const sampleVideoNames = Array.isArray(payload?.sampleVideoNames)
+    ? payload.sampleVideoNames.filter((item) => typeof item === "string").map((item) => item.slice(0, 240)).slice(0, 8)
+    : [];
+  const sampleRelativePaths = Array.isArray(payload?.sampleRelativePaths)
+    ? payload.sampleRelativePaths.filter((item) => typeof item === "string").map((item) => item.slice(0, 360)).slice(0, 8)
+    : [];
+  return {
+    libraryId,
+    seriesKey,
+    title,
+    sampleVideoNames,
+    sampleRelativePaths,
+    force: Boolean(payload?.force),
+  };
+}
+
+async function matchBangumiSeries(env, rawPayload) {
+  const payload = normalizeBangumiMatchPayload(rawPayload);
+  if (!payload.libraryId || !payload.seriesKey || !payload.title) {
+    return createBangumiMatchResult(payload, "error", { error: "Bangumi match payload is incomplete." });
+  }
+
+  const cacheId = hashValue(`bangumi|${payload.libraryId}|${payload.seriesKey}|${payload.title}`);
+  const cachePath = path.join(bangumiMatchesRoot, `${cacheId}.json`);
+  if (!payload.force) {
+    const cached = await readJsonFile(cachePath, null);
+    if (cached?.status) return { ...cached, source: "cache" };
+  }
+
+  if (!env.BANGUMI_USER_AGENT || !env.BANGUMI_ACCESS_TOKEN) {
+    return createBangumiMatchResult(payload, "error", { error: "Bangumi is not configured." });
+  }
+
+  try {
+    const candidates = await searchBangumiSubjects(env, payload.title);
+    if (!candidates.length) {
+      const result = createBangumiMatchResult(payload, "none");
+      await writeJsonFile(cachePath, result);
+      return result;
+    }
+
+    const top = candidates[0];
+    const next = candidates[1];
+    const gap = top.matchScore - (next?.matchScore ?? 0);
+    if (top.matchScore >= 92 || (top.matchScore >= 82 && gap >= 18)) {
+      const result = createBangumiMatchResult(payload, "matched", {
+        subject: publicBangumiCandidate(top),
+        confidence: "high",
+        source: "bangumi",
+        candidates: candidates.slice(0, 5).map(publicBangumiCandidate),
+      });
+      await writeJsonFile(cachePath, result);
+      return result;
+    }
+
+    const aiSelected = await selectBangumiCandidateWithAi(
+      env,
+      payload.title,
+      [...payload.sampleVideoNames, ...payload.sampleRelativePaths],
+      candidates,
+    );
+    if (aiSelected) {
+      const result = createBangumiMatchResult(payload, "matched", {
+        subject: publicBangumiCandidate(aiSelected),
+        confidence: "medium",
+        source: "ai",
+        candidates: candidates.slice(0, 5).map(publicBangumiCandidate),
+      });
+      await writeJsonFile(cachePath, result);
+      return result;
+    }
+
+    const result = createBangumiMatchResult(payload, "none", {
+      confidence: top.matchScore >= 60 ? "low" : "none",
+      candidates: candidates.slice(0, 5).map(publicBangumiCandidate),
+    });
+    await writeJsonFile(cachePath, result);
+    return result;
+  } catch (error) {
+    return createBangumiMatchResult(payload, "error", {
+      error: error instanceof Error ? error.message : "Failed to match Bangumi subject.",
+    });
+  }
 }
 
 async function updateIndex(libraryId, metadata) {
@@ -740,6 +1167,12 @@ function playerDataApiPlugin(env) {
       if (url.pathname === "/api/ai/library/search" && request.method === "POST") {
         const payload = JSON.parse((await readBody(request)).toString("utf8"));
         sendJson(response, 200, await searchLibraryWithAi(env, payload));
+        return;
+      }
+
+      if (url.pathname === "/api/bangumi/series/match" && request.method === "POST") {
+        const payload = JSON.parse((await readBody(request)).toString("utf8"));
+        sendJson(response, 200, await matchBangumiSeries(env, payload));
         return;
       }
 

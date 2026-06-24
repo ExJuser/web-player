@@ -1677,6 +1677,7 @@ button {
 
 .playlist-order-button,
 .playlist-top-button,
+.bangumi-link-button,
 .playlist-locate-button {
   display: inline-flex;
   align-items: center;
@@ -1692,11 +1693,13 @@ button {
 
 .playlist-order-button:hover,
 .playlist-top-button:hover,
+.bangumi-link-button:hover,
 .playlist-locate-button:hover {
   background: #2a303a;
 }
 
-.playlist-order-button.active {
+.playlist-order-button.active,
+.bangumi-link-button.active {
   border-color: #00a1d6;
   background: #07394a;
   color: #79dfff;
@@ -1704,11 +1707,22 @@ button {
 
 .playlist-order-button:disabled,
 .playlist-top-button:disabled,
+.bangumi-link-button:disabled,
 .playlist-locate-button:disabled {
   cursor: not-allowed;
   border-color: #303743;
   background: #191d23;
   color: #5f6875;
+}
+
+.bangumi-link-button.loading svg {
+  animation: bangumi-link-spin 0.9s linear infinite;
+}
+
+@keyframes bangumi-link-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .playlist-tools.series-mode .playlist-sort-select,
@@ -2666,6 +2680,7 @@ button {
 .app-shell.theme-light .playlist-sort-select,
 .app-shell.theme-light .playlist-order-button,
 .app-shell.theme-light .playlist-top-button,
+.app-shell.theme-light .bangumi-link-button,
 .app-shell.theme-light .playlist-locate-button,
 .app-shell.theme-light .playlist-clear-button,
 .app-shell.theme-light .series-mode-button,
@@ -2688,6 +2703,7 @@ button {
 .app-shell.theme-light .icon-button.privacy-toggle.active,
 .app-shell.theme-light .icon-button.cinema-toggle.active,
 .app-shell.theme-light .playlist-order-button.active,
+.app-shell.theme-light .bangumi-link-button.active,
 .app-shell.theme-light .series-mode-button.active {
   border-color: #00a1d6;
   background: #e1f5fd;
@@ -2699,6 +2715,7 @@ button {
 .app-shell.theme-light .dialog-close:hover,
 .app-shell.theme-light .playlist-order-button:hover,
 .app-shell.theme-light .playlist-top-button:hover,
+.app-shell.theme-light .bangumi-link-button:hover,
 .app-shell.theme-light .playlist-locate-button:hover,
 .app-shell.theme-light .playlist-clear-button:hover,
 .app-shell.theme-light .episode-action-button:hover {

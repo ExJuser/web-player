@@ -181,6 +181,16 @@ DEEPSEEK_BASE_URL=https://api.deepseek.com
 DEEPSEEK_MODEL=deepseek-chat
 ```
 
+Bangumi matching in series mode uses the local Vite API proxy. Configure these values in your shell or `.env.local` before starting the dev server:
+
+```text
+BANGUMI_USER_AGENT=local/bangumi-lens/0.1.0 (https://github.com/local/web-player)
+BANGUMI_ACCESS_TOKEN=your_bangumi_access_token
+BANGUMI_LENS_PROXY=http://127.0.0.1:7897
+```
+
+Keep `BANGUMI_ACCESS_TOKEN` in local environment files only. The app exposes only Bangumi configuration status to the browser, not the token or request headers.
+
 ## Build
 
 Create a production build:

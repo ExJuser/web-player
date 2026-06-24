@@ -689,6 +689,7 @@ type LocalConfig = {
   mediaRoots: Array<{ id: string; label: string; basename: string }>;
   ffmpeg: { ffmpeg: boolean; ffprobe: boolean };
   ai: { configured: boolean; model: string };
+  bangumi: { configured: boolean; proxyConfigured: boolean };
 };
 
 type CacheStatusItem = {
@@ -739,6 +740,29 @@ type LibrarySearchCandidate = {
 type LibraryAiSearchResponse = {
   answer: string;
   matchIds: string[];
+};
+
+type BangumiSubject = {
+  id: number;
+  name: string;
+  nameCn: string;
+  url: string;
+  score?: number;
+  rank?: number;
+  date?: string;
+  matchScore?: number;
+};
+
+type BangumiSeriesMatch = {
+  status: "loading" | "matched" | "none" | "error";
+  seriesKey: string;
+  title: string;
+  subject: BangumiSubject | null;
+  confidence: "high" | "medium" | "low" | "none";
+  source: "bangumi" | "ai" | "cache" | "none" | "error";
+  candidates: BangumiSubject[];
+  error?: string;
+  updatedAt?: number;
 };
 
 type SubtitleCue = {
@@ -1072,14 +1096,17 @@ function getVideoElementMetadata(element: HTMLVideoElement): VideoMetadata {
   };
 }
 
+const widescreenAspectRatio = 16 / 9;
+
 function getLandscapeDisplaySize(width?: number, height?: number) {
   if (!width || !height) return null;
-  return width >= height ? { width, height } : { width: height, height: width };
+  if (width < height) return { width: Math.round(width * widescreenAspectRatio), height: width };
+  return { width, height };
 }
 
 function getLandscapeDisplayAspectRatio(width?: number, height?: number) {
   const displaySize = getLandscapeDisplaySize(width, height);
-  return displaySize ? displaySize.width / displaySize.height : 16 / 9;
+  return displaySize ? displaySize.width / displaySize.height : widescreenAspectRatio;
 }
 
 async function loadVideoMetadata(video: VideoItem) {
@@ -1276,6 +1303,8 @@ export default function App() {
   const videosRef = useRef<VideoItem[]>([]);
   const subtitlesRef = useRef<SubtitleItem[]>([]);
   const localConfigRef = useRef<LocalConfig | null>(null);
+  const bangumiMatchesBySeriesKeyRef = useRef<Record<string, BangumiSeriesMatch>>({});
+  const bangumiMatchRunIdRef = useRef(0);
   const thumbnailLoadRunIdRef = useRef(0);
   const isScanningRef = useRef(false);
   const isMainVideoLoadingRef = useRef(false);
@@ -1319,6 +1348,7 @@ export default function App() {
   const [librarySearchMessage, setLibrarySearchMessage] = useState("");
   const [librarySearchMode, setLibrarySearchMode] = useState<LibrarySearchMode>("idle");
   const [isLibrarySearchLoading, setIsLibrarySearchLoading] = useState(false);
+  const [bangumiMatchesBySeriesKey, setBangumiMatchesBySeriesKey] = useState<Record<string, BangumiSeriesMatch>>({});
   const [cacheStatus, setCacheStatus] = useState<CacheStatus | null>(null);
   const [cacheStatusMessage, setCacheStatusMessage] = useState("");
   const [isCacheStatusLoading, setIsCacheStatusLoading] = useState(false);
@@ -1400,6 +1430,7 @@ export default function App() {
   videosRef.current = videos;
   subtitlesRef.current = subtitles;
   localConfigRef.current = localConfig;
+  bangumiMatchesBySeriesKeyRef.current = bangumiMatchesBySeriesKey;
 
   const buildPlayerDataStore = useCallback(
     (overrides?: Partial<PlayerDataStore>): PlayerDataStore => ({
@@ -1875,8 +1906,12 @@ export default function App() {
     fetchJson<LocalConfig>("/api/local-config")
       .then((config) => {
         if (isCancelled) return;
-        setLocalConfig(config);
-        localConfigRef.current = config;
+        const normalizedConfig = {
+          ...config,
+          bangumi: config.bangumi ?? { configured: false, proxyConfigured: false },
+        };
+        setLocalConfig(normalizedConfig);
+        localConfigRef.current = normalizedConfig;
       })
       .catch(() => {
         if (isCancelled) return;
@@ -4579,7 +4614,6 @@ export default function App() {
       <section className="player-column" ref={playerColumnRef}>
         <header className="top-bar" ref={topBarRef}>
           <div className="video-summary">
-            {currentVideo && !isPrivacyMode && !isHomeViewVisible ? null : <h1>{isPrivacyMode ? "在线视频播放器" : "本地视频播放器"}</h1>}
             {currentVideo && !isPrivacyMode && !isHomeViewVisible ? (
               <dl className="current-video-meta">
                 {videoMetadataRows(currentVideo).map(([label, value]) => (
@@ -5225,6 +5259,18 @@ export default function App() {
                   </div>
                 ) : null}
               </div>
+            ) : null}
+            {isSeriesMode ? (
+              <button
+                className={`bangumi-link-button ${canOpenBangumiSubject ? "active" : ""} ${activeBangumiMatch?.status === "loading" ? "loading" : ""}`}
+                type="button"
+                onClick={openBangumiSubject}
+                disabled={!canOpenBangumiSubject}
+                title={bangumiButtonTitle}
+                aria-label={bangumiButtonTitle}
+              >
+                {activeBangumiMatch?.status === "loading" ? <RefreshCw size={16} /> : <ExternalLink size={16} />}
+              </button>
             ) : null}
             <select
               className="playlist-sort-select"
