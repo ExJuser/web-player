@@ -670,6 +670,13 @@ type SubtitleContextChunk = {
   text: string;
 };
 
+type AiStreamEvent =
+  | { type: "delta"; text: string }
+  | { type: "result"; text: string }
+  | { type: "message"; text: string }
+  | { type: "error"; error: string }
+  | { type: "done" };
+
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, {
     ...init,
@@ -690,6 +697,51 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
     throw new Error(message);
   }
   return response.json() as Promise<T>;
+}
+
+async function readAiStream(url: string, init: RequestInit, onEvent: (event: AiStreamEvent) => void) {
+  const response = await fetch(url, {
+    ...init,
+    headers: {
+      Accept: "application/x-ndjson",
+      ...(init.body ? { "Content-Type": "application/json" } : {}),
+      ...(init.headers ?? {}),
+    },
+  });
+  if (!response.ok) {
+    let message = response.statusText;
+    try {
+      const payload = (await response.json()) as { error?: string };
+      message = payload.error || message;
+    } catch {
+      // Keep status text when the local API does not return JSON.
+    }
+    throw new Error(message);
+  }
+  if (!response.body) throw new Error("浏览器不支持流式响应。");
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  const readLine = (line: string) => {
+    const trimmed = line.trim();
+    if (!trimmed) return;
+    const event = JSON.parse(trimmed) as AiStreamEvent;
+    if (event.type === "error") throw new Error(event.error);
+    onEvent(event);
+  };
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split(/\r?\n/);
+    buffer = lines.pop() ?? "";
+    lines.forEach(readLine);
+  }
+  buffer += decoder.decode();
+  if (buffer.trim()) readLine(buffer);
 }
 
 function normalizeSubtitleText(raw: string) {
@@ -3157,18 +3209,35 @@ export default function App() {
     setIsAiPanelOpen(true);
     setIsAiLoading(true);
     setAiMessage("正在生成字幕总结...");
+    setSubtitleSummary("");
     try {
       const subtitleText = await readSubtitleText(selectedSubtitle);
       if (!subtitleText) throw new Error("当前字幕没有可分析的文本。");
-      const payload = await fetchJson<{ summary: string }>("/api/ai/subtitles/summarize", {
-        method: "POST",
-        body: JSON.stringify({
-          videoName: currentVideo.name,
-          subtitleId: selectedSubtitle.id,
-          subtitleText,
-        }),
-      });
-      setSubtitleSummary(payload.summary);
+      await readAiStream(
+        "/api/ai/subtitles/summarize",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            videoName: currentVideo.name,
+            subtitleId: selectedSubtitle.id,
+            subtitleText,
+          }),
+        },
+        (event) => {
+          if (event.type === "message") {
+            setAiMessage(event.text);
+            return;
+          }
+          if (event.type === "result") {
+            setSubtitleSummary(event.text);
+            return;
+          }
+          if (event.type === "delta") {
+            setAiMessage("");
+            setSubtitleSummary((previous) => previous + event.text);
+          }
+        },
+      );
       setAiMessage("");
     } catch (error) {
       setAiMessage(error instanceof Error ? error.message : "生成字幕总结失败。");
@@ -3192,19 +3261,36 @@ export default function App() {
     setIsAiPanelOpen(true);
     setIsAiLoading(true);
     setAiMessage("正在根据字幕片段回答...");
+    setSubtitleAnswer("");
     try {
       const subtitleText = await readSubtitleText(selectedSubtitle);
       const cues = parseSubtitleCues(subtitleText);
       if (!cues.length) throw new Error("当前字幕没有可检索的文本片段。");
-      const payload = await fetchJson<{ answer: string }>("/api/ai/subtitles/ask", {
-        method: "POST",
-        body: JSON.stringify({
-          videoName: currentVideo.name,
-          question,
-          chunks: selectRelevantSubtitleChunks(question, cues, currentTime),
-        }),
-      });
-      setSubtitleAnswer(payload.answer);
+      await readAiStream(
+        "/api/ai/subtitles/ask",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            videoName: currentVideo.name,
+            question,
+            chunks: selectRelevantSubtitleChunks(question, cues, currentTime),
+          }),
+        },
+        (event) => {
+          if (event.type === "message") {
+            setAiMessage(event.text);
+            return;
+          }
+          if (event.type === "result") {
+            setSubtitleAnswer(event.text);
+            return;
+          }
+          if (event.type === "delta") {
+            setAiMessage("");
+            setSubtitleAnswer((previous) => previous + event.text);
+          }
+        },
+      );
       setAiMessage("");
     } catch (error) {
       setAiMessage(error instanceof Error ? error.message : "字幕问答失败。");

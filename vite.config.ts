@@ -22,6 +22,17 @@ function sendJson(response, status, payload) {
   response.end(JSON.stringify(payload));
 }
 
+function sendNdjson(response, status) {
+  response.statusCode = status;
+  response.setHeader("Content-Type", "application/x-ndjson; charset=utf-8");
+  response.setHeader("Cache-Control", "no-cache, no-transform");
+  response.setHeader("X-Accel-Buffering", "no");
+}
+
+function writeStreamEvent(response, payload) {
+  response.write(`${JSON.stringify(payload)}\n`);
+}
+
 function sendBlob(response, status, buffer) {
   response.statusCode = status;
   response.setHeader("Content-Type", "image/jpeg");
@@ -270,6 +281,67 @@ async function callDeepSeek(env, messages) {
   return payload?.choices?.[0]?.message?.content?.trim() || "";
 }
 
+async function streamDeepSeek(env, messages, onDelta) {
+  if (!env.DEEPSEEK_API_KEY) throw new Error("DEEPSEEK_API_KEY is not configured.");
+  const baseUrl = (env.DEEPSEEK_BASE_URL || env.DEEPSEEK_API_BASE_URL || "https://api.deepseek.com").replace(/\/+$/, "");
+  const response = await fetch(`${baseUrl}/chat/completions`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${env.DEEPSEEK_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: env.DEEPSEEK_MODEL || "deepseek-chat",
+      temperature: 0.3,
+      stream: true,
+      messages,
+    }),
+  });
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => response.statusText);
+    throw new Error(errorText || response.statusText);
+  }
+  if (!response.body) throw new Error("Streaming response is unavailable.");
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let output = "";
+
+  const handleBlock = (block) => {
+    const lines = block
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line.startsWith("data:"));
+    for (const line of lines) {
+      const data = line.slice(5).trim();
+      if (!data || data === "[DONE]") continue;
+      try {
+        const payload = JSON.parse(data);
+        const delta = payload?.choices?.[0]?.delta?.content || "";
+        if (delta) {
+          output += delta;
+          onDelta(delta);
+        }
+      } catch {
+        // Ignore malformed SSE keepalive chunks.
+      }
+    }
+  };
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const blocks = buffer.split(/\r?\n\r?\n/);
+    buffer = blocks.pop() ?? "";
+    blocks.forEach(handleBlock);
+  }
+  buffer += decoder.decode();
+  if (buffer.trim()) handleBlock(buffer);
+  return output.trim();
+}
+
 async function summarizeSubtitle(env, payload) {
   const subtitleText = typeof payload?.subtitleText === "string" ? payload.subtitleText.trim() : "";
   if (!subtitleText) throw new Error("Subtitle text is required.");
@@ -299,6 +371,61 @@ async function summarizeSubtitle(env, payload) {
   return result;
 }
 
+async function streamSubtitleSummary(env, payload, response) {
+  sendNdjson(response, 200);
+  try {
+    const subtitleText = typeof payload?.subtitleText === "string" ? payload.subtitleText.trim() : "";
+    if (!subtitleText) throw new Error("Subtitle text is required.");
+    const cacheId = hashValue(`summary|${payload?.videoName || ""}|${subtitleText}`);
+    const cachePath = path.join(aiRoot, "summaries", `${cacheId}.json`);
+    const cached = await readJsonFile(cachePath, null);
+    if (cached?.summary) {
+      writeStreamEvent(response, { type: "result", text: cached.summary });
+      writeStreamEvent(response, { type: "done" });
+      return;
+    }
+
+    const chunks = chunkText(subtitleText);
+    const parts = [];
+    for (let index = 0; index < chunks.length; index += 1) {
+      if (chunks.length > 1) {
+        writeStreamEvent(response, { type: "message", text: `正在分析第 ${index + 1}/${chunks.length} 段字幕...` });
+      }
+      parts.push(
+        await callDeepSeek(env, [
+          { role: "system", content: "你是一个视频字幕分析助手。只根据字幕内容总结，不要编造。输出简洁中文，控制在 80-120 字。" },
+          { role: "user", content: `视频：${payload?.videoName || "未命名"}\n\n请概括这段字幕的关键事件、人物关系和情绪变化：\n\n${chunks[index]}` },
+        ]),
+      );
+    }
+
+    if (chunks.length > 1) {
+      writeStreamEvent(response, { type: "message", text: "正在合并字幕总结..." });
+    }
+    const messages =
+      parts.length === 1
+        ? [
+            { role: "system", content: "你是一个视频字幕分析助手。只根据字幕内容总结，不要编造。输出简洁中文，控制在 180-260 字。" },
+            { role: "user", content: `视频：${payload?.videoName || "未命名"}\n\n请总结这段字幕的主要内容、人物关系、情绪基调和关键词：\n\n${subtitleText}` },
+          ]
+        : [
+            { role: "system", content: "你是一个视频字幕分析助手。请合并分段摘要，避免重复，不要加入字幕外信息。输出简洁中文，控制在 180-260 字。" },
+            { role: "user", content: `视频：${payload?.videoName || "未命名"}\n\n请合并以下分段摘要，输出本集概要、关键事件、人物关系、情绪基调和关键词：\n\n${parts.join("\n\n---\n\n")}` },
+          ];
+    let summary = "";
+    summary = await streamDeepSeek(env, messages, (delta) => {
+      writeStreamEvent(response, { type: "delta", text: delta });
+    });
+    const result = { summary, updatedAt: Date.now() };
+    await writeJsonFile(cachePath, result);
+    writeStreamEvent(response, { type: "done" });
+  } catch (error) {
+    writeStreamEvent(response, { type: "error", error: error instanceof Error ? error.message : "Failed to summarize subtitles." });
+  } finally {
+    response.end();
+  }
+}
+
 async function askSubtitleQuestion(env, payload) {
   const question = typeof payload?.question === "string" ? payload.question.trim() : "";
   const chunks = Array.isArray(payload?.chunks) ? payload.chunks : [];
@@ -318,6 +445,49 @@ async function askSubtitleQuestion(env, payload) {
   const result = { answer, updatedAt: Date.now() };
   await writeJsonFile(cachePath, result);
   return result;
+}
+
+async function streamSubtitleAnswer(env, payload, response) {
+  sendNdjson(response, 200);
+  try {
+    const question = typeof payload?.question === "string" ? payload.question.trim() : "";
+    const chunks = Array.isArray(payload?.chunks) ? payload.chunks : [];
+    if (!question) throw new Error("Question is required.");
+    if (!chunks.length) throw new Error("Relevant subtitle chunks are required.");
+    const context = chunks
+      .map((chunk) => `[${chunk.start || "?"} - ${chunk.end || "?"}]\n${chunk.text || ""}`)
+      .join("\n\n");
+    const cacheId = hashValue(`qa|${payload?.videoName || ""}|${question}|${context}`);
+    const cachePath = path.join(aiRoot, "qa", `${cacheId}.json`);
+    const cached = await readJsonFile(cachePath, null);
+    if (cached?.answer) {
+      writeStreamEvent(response, { type: "result", text: cached.answer });
+      writeStreamEvent(response, { type: "done" });
+      return;
+    }
+
+    const answer = await streamDeepSeek(
+      env,
+      [
+        {
+          role: "system",
+          content:
+            "你是一个视频字幕问答助手。只能根据给定字幕片段回答；如果片段不足以回答，请明确说明。回答要直接、简洁，控制在 120-220 字，必要时引用时间范围。",
+        },
+        { role: "user", content: `视频：${payload?.videoName || "未命名"}\n问题：${question}\n\n相关字幕片段：\n${context}` },
+      ],
+      (delta) => {
+        writeStreamEvent(response, { type: "delta", text: delta });
+      },
+    );
+    const result = { answer, updatedAt: Date.now() };
+    await writeJsonFile(cachePath, result);
+    writeStreamEvent(response, { type: "done" });
+  } catch (error) {
+    writeStreamEvent(response, { type: "error", error: error instanceof Error ? error.message : "Failed to answer subtitle question." });
+  } finally {
+    response.end();
+  }
 }
 
 async function updateIndex(libraryId, metadata) {
@@ -370,13 +540,13 @@ function playerDataApiPlugin(env) {
 
       if (url.pathname === "/api/ai/subtitles/summarize" && request.method === "POST") {
         const payload = JSON.parse((await readBody(request)).toString("utf8"));
-        sendJson(response, 200, await summarizeSubtitle(env, payload));
+        await streamSubtitleSummary(env, payload, response);
         return;
       }
 
       if (url.pathname === "/api/ai/subtitles/ask" && request.method === "POST") {
         const payload = JSON.parse((await readBody(request)).toString("utf8"));
-        sendJson(response, 200, await askSubtitleQuestion(env, payload));
+        await streamSubtitleAnswer(env, payload, response);
         return;
       }
 

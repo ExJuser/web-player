@@ -390,7 +390,7 @@ button {
 }
 
 .video-element::cue {
-  background: rgba(0, 0, 0, 0.28);
+  background: transparent;
   color: #f8fafc;
   font-family:
     Inter,
@@ -398,7 +398,7 @@ button {
     "PingFang SC",
     "Microsoft YaHei",
     sans-serif;
-  font-size: clamp(18px, 2.2cqh, 30px);
+  font-size: clamp(13px, 1.35cqh, 18px);
   font-weight: 600;
   line-height: 1.25;
   text-shadow:
@@ -2026,12 +2026,24 @@ button {
   line-height: 1.4;
 }
 
-.embedded-subtitle-dialog,
-.ai-subtitle-dialog {
+.embedded-subtitle-dialog {
   position: relative;
   width: min(720px, calc(100vw - 32px));
   max-height: min(760px, calc(100vh - 32px));
   overflow: auto;
+  border: 1px solid #2d3440;
+  border-radius: 16px;
+  background: #151922;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.45);
+  color: #f5f7fb;
+  padding: 24px;
+}
+
+.ai-subtitle-dialog {
+  position: relative;
+  width: min(720px, calc(100vw - 32px));
+  height: auto;
+  overflow: visible;
   border: 1px solid #2d3440;
   border-radius: 16px;
   background: #151922;
@@ -2130,6 +2142,7 @@ button {
   font-size: 14px;
   line-height: 1.6;
   padding: 14px;
+  overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
 
@@ -2141,6 +2154,7 @@ button {
 
 .ai-question-input {
   min-height: 108px;
+  max-height: 180px;
   border: 1px solid #2d3440;
   border-radius: 8px;
   background: #1d222c;
@@ -2148,7 +2162,7 @@ button {
   font: inherit;
   line-height: 1.5;
   padding: 12px;
-  resize: vertical;
+  resize: none;
 }
 
 @media (max-width: 980px) {
@@ -2222,7 +2236,7 @@ button {
   }
 
   .video-element::cue {
-    font-size: clamp(16px, 2.4cqh, 24px);
+    font-size: clamp(12px, 1.55cqh, 16px);
   }
 
   .control-spacer {
