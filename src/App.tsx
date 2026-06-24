@@ -3979,7 +3979,7 @@ export default function App() {
           method: "POST",
           body: JSON.stringify({
             videoName: homeRecapCard.video.name,
-            subtitleId: homeRecapSubtitle.id,
+            subtitleId: recapSubtitle.id,
             currentTime: progress.currentTime,
             viewedText,
           }),
