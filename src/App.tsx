@@ -153,9 +153,7 @@ const RECENT_FOLDER_STORE_NAME = "handles";
 const THUMBNAIL_STORE_NAME = "thumbnails";
 const RECENT_FOLDER_KEY = "recent-folder";
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
-const playbackRateMin = 0.5;
-const playbackRateMax = 3;
-const playbackRateStep = 0.05;
+const rates = [0.5, 1, 1.25, 1.5, 1.75, 2, 2.5, 3];
 const seekSteps = [5, 10, 15];
 const holdRates = [1.5, 2, 2.5, 3, 4];
 const playbackModeOptions: Array<{ value: PlaybackMode; label: string }> = [
@@ -550,10 +548,6 @@ function formatTime(seconds: number) {
     return `${hours}:${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
   }
   return `${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
-}
-
-function formatPlaybackRateInput(rate: number) {
-  return rate.toFixed(2).replace(/\.?0+$/, "");
 }
 
 function formatFileSize(bytes: number) {
@@ -1393,7 +1387,6 @@ export default function App() {
   const [volume, setVolume] = useState(readStoredVolume);
   const [isMuted, setIsMuted] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
-  const [playbackRateInput, setPlaybackRateInput] = useState(formatPlaybackRateInput(1));
   const [seekStep, setSeekStep] = useState(15);
   const [holdPlaybackRate, setHoldPlaybackRate] = useState(4);
   const [isHoldSpeedActive, setIsHoldSpeedActive] = useState(false);
@@ -1419,21 +1412,6 @@ export default function App() {
   isMainVideoLoadingRef.current = isMainVideoLoading;
   videosRef.current = videos;
   subtitlesRef.current = subtitles;
-
-  useEffect(() => {
-    setPlaybackRateInput(formatPlaybackRateInput(playbackRate));
-  }, [playbackRate]);
-
-  const commitPlaybackRateInput = useCallback(() => {
-    const nextRate = Number(playbackRateInput);
-    if (!Number.isFinite(nextRate)) {
-      setPlaybackRateInput(formatPlaybackRateInput(playbackRate));
-      return;
-    }
-    const clampedRate = Math.round(clamp(nextRate, playbackRateMin, playbackRateMax) * 100) / 100;
-    setPlaybackRate(clampedRate);
-    setPlaybackRateInput(formatPlaybackRateInput(clampedRate));
-  }, [playbackRate, playbackRateInput]);
 
   const playlistVideos = useMemo(
     () => getSortedVideos(videos, isSeriesMode ? "name" : playlistSortMode, isSeriesMode ? false : isPlaylistSortReversed),
@@ -1514,6 +1492,10 @@ export default function App() {
   }, [currentVideo, subtitles]);
   const selectedSubtitle = currentVideoSubtitles.find((subtitle) => subtitle.id === selectedSubtitleId) ?? null;
   const effectivePlaybackRate = isHoldSpeedActive ? holdPlaybackRate : playbackRate;
+  const playbackRateOptions = useMemo(() => {
+    if (rates.includes(effectivePlaybackRate)) return rates;
+    return [...rates, effectivePlaybackRate].sort((a, b) => a - b);
+  }, [effectivePlaybackRate]);
   const shellStyle = useMemo(
     () =>
       ({
@@ -3815,38 +3797,14 @@ export default function App() {
                 />
               </label>
 
-              <label className="fine-rate-control" title="精细调整播放速度">
-                <span className="fine-rate-label">播放速度</span>
-                <input
-                  className="fine-rate-input"
-                  aria-label="输入播放速度"
-                  type="number"
-                  min={playbackRateMin}
-                  max={playbackRateMax}
-                  step={playbackRateStep}
-                  value={playbackRateInput}
-                  onChange={(event) => setPlaybackRateInput(event.target.value)}
-                  onBlur={commitPlaybackRateInput}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.currentTarget.blur();
-                    }
-                  }}
-                  disabled={!currentVideo}
-                />
-                <span className="fine-rate-suffix">x</span>
-                <input
-                  className="fine-rate-slider"
-                  aria-label="精细调整播放速度"
-                  type="range"
-                  min={playbackRateMin}
-                  max={playbackRateMax}
-                  step={playbackRateStep}
-                  value={playbackRate}
-                  onChange={(event) => setPlaybackRate(Number(event.target.value))}
-                  disabled={!currentVideo}
-                />
-              </label>
+              <ControlSelect
+                label="播放速度"
+                ariaLabel="播放速度"
+                value={effectivePlaybackRate}
+                options={playbackRateOptions.map((rate) => ({ value: rate, label: `${rate}x` }))}
+                onChange={setPlaybackRate}
+                className="rate-control"
+              />
 
               {!isSeriesMode ? (
                 <ControlSelect
