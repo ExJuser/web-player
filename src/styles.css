@@ -2133,6 +2133,11 @@ button {
   margin-top: 0;
 }
 
+.ai-recap-meta {
+  color: #9aa4b2;
+  font-size: 13px;
+}
+
 .ai-output,
 .ai-empty-state,
 .ai-loading {

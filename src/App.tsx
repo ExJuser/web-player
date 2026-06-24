@@ -851,6 +851,14 @@ function createSubtitleContextChunks(cues: SubtitleCue[]) {
   return chunks;
 }
 
+function createViewedSubtitleText(cues: SubtitleCue[], currentTime: number) {
+  if (!Number.isFinite(currentTime) || currentTime <= 0) return "";
+  return cues
+    .filter((cue) => cue.start <= currentTime)
+    .map((cue) => `[${formatTime(cue.start)} - ${formatTime(cue.end)}] ${cue.text}`)
+    .join("\n");
+}
+
 function tokenizeQuestion(question: string) {
   const words = question.toLowerCase().match(/[a-z0-9_\u4e00-\u9fa5]{2,}/g) ?? [];
   return words.length ? words : [question.toLowerCase()].filter(Boolean);
@@ -1168,10 +1176,11 @@ export default function App() {
   const [embeddedSubtitleMessage, setEmbeddedSubtitleMessage] = useState("");
   const [isEmbeddedSubtitleLoading, setIsEmbeddedSubtitleLoading] = useState(false);
   const [isAiPanelOpen, setIsAiPanelOpen] = useState(false);
-  const [aiTab, setAiTab] = useState<"summary" | "qa">("summary");
+  const [aiTab, setAiTab] = useState<"summary" | "qa" | "recap">("summary");
   const [subtitleSummary, setSubtitleSummary] = useState("");
   const [subtitleQuestion, setSubtitleQuestion] = useState("");
   const [subtitleAnswer, setSubtitleAnswer] = useState("");
+  const [subtitleRecap, setSubtitleRecap] = useState("");
   const [aiMessage, setAiMessage] = useState("");
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [libraryId, setLibraryId] = useState<string | null>(null);
@@ -3303,6 +3312,57 @@ export default function App() {
     }
   }, [currentTime, currentVideo, localConfig, selectedSubtitle, subtitleQuestion]);
 
+  const loadProgressRecap = useCallback(async () => {
+    if (!selectedSubtitle || !currentVideo) return;
+    if (!localConfig?.ai.configured) {
+      setAiMessage("未配置 DEEPSEEK_API_KEY。");
+      return;
+    }
+    setAiTab("recap");
+    setIsAiPanelOpen(true);
+    setIsAiLoading(true);
+    setAiMessage("正在生成进度回顾...");
+    setSubtitleRecap("");
+    try {
+      const subtitleText = await readSubtitleText(selectedSubtitle);
+      const cues = parseSubtitleCues(subtitleText);
+      if (!cues.length) throw new Error("当前字幕没有可回顾的文本片段。");
+      const viewedText = createViewedSubtitleText(cues, currentTime);
+      if (!viewedText) throw new Error("当前时间前还没有可回顾的字幕内容。");
+      await readAiStream(
+        "/api/ai/subtitles/recap",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            videoName: currentVideo.name,
+            subtitleId: selectedSubtitle.id,
+            currentTime,
+            viewedText,
+          }),
+        },
+        (event) => {
+          if (event.type === "message") {
+            setAiMessage(event.text);
+            return;
+          }
+          if (event.type === "result") {
+            setSubtitleRecap(event.text);
+            return;
+          }
+          if (event.type === "delta") {
+            setAiMessage("");
+            setSubtitleRecap((previous) => previous + event.text);
+          }
+        },
+      );
+      setAiMessage("");
+    } catch (error) {
+      setAiMessage(error instanceof Error ? error.message : "生成进度回顾失败。");
+    } finally {
+      setIsAiLoading(false);
+    }
+  }, [currentTime, currentVideo, localConfig, selectedSubtitle]);
+
   const toggleShortcutDialog = useCallback(() => {
     setIsShortcutDialogOpen((open) => !open);
   }, []);
@@ -4765,6 +4825,9 @@ export default function App() {
               <button className={aiTab === "qa" ? "active" : ""} type="button" onClick={() => setAiTab("qa")}>
                 问答
               </button>
+              <button className={aiTab === "recap" ? "active" : ""} type="button" onClick={() => setAiTab("recap")}>
+                回顾
+              </button>
             </div>
           </div>
           {!selectedSubtitle ? (
@@ -4779,6 +4842,16 @@ export default function App() {
                 </button>
               </div>
               <div className="ai-output">{subtitleSummary || aiMessage || "还没有生成总结。"}</div>
+            </div>
+          ) : aiTab === "recap" ? (
+            <div className="ai-panel-body">
+              <div className="ai-recap-meta">截至当前时间 {formatTime(currentTime)}</div>
+              <div className="dialog-actions compact">
+                <button className="primary-button" type="button" onClick={() => void loadProgressRecap()} disabled={isAiLoading}>
+                  {subtitleRecap ? "重新回顾" : "生成回顾"}
+                </button>
+              </div>
+              <div className="ai-output">{subtitleRecap || aiMessage || "还没有生成进度回顾。"}</div>
             </div>
           ) : (
             <form

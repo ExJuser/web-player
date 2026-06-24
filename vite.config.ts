@@ -490,6 +490,53 @@ async function streamSubtitleAnswer(env, payload, response) {
   }
 }
 
+async function streamProgressRecap(env, payload, response) {
+  sendNdjson(response, 200);
+  try {
+    const viewedText = typeof payload?.viewedText === "string" ? payload.viewedText.trim() : "";
+    const currentTime = Number(payload?.currentTime);
+    const subtitleId = typeof payload?.subtitleId === "string" ? payload.subtitleId : "";
+    if (!viewedText) throw new Error("Viewed subtitle text is required.");
+    if (!Number.isFinite(currentTime) || currentTime < 0) throw new Error("Current time is required.");
+
+    const recapEndSeconds = Math.floor(currentTime);
+    const cacheId = hashValue(`recap|${payload?.videoName || ""}|${subtitleId}|${recapEndSeconds}|${viewedText}`);
+    const cachePath = path.join(aiRoot, "recaps", `${cacheId}.json`);
+    const cached = await readJsonFile(cachePath, null);
+    if (cached?.recap) {
+      writeStreamEvent(response, { type: "result", text: cached.recap });
+      writeStreamEvent(response, { type: "done" });
+      return;
+    }
+
+    writeStreamEvent(response, { type: "message", text: "正在生成无剧透进度回顾..." });
+    const recap = await streamDeepSeek(
+      env,
+      [
+        {
+          role: "system",
+          content:
+            "你是视频字幕进度回顾助手。只能基于用户提供的已观看字幕内容回答，不得推断、补充或暗示后续剧情，不得提及尚未在字幕中出现的事件。请用简洁中文输出 120-220 字。",
+        },
+        {
+          role: "user",
+          content: `视频：${payload?.videoName || "未命名"}\n看到这里为止：${recapEndSeconds} 秒\n\n请生成“看到这里为止”的无剧透回顾，概括已发生的关键事件、人物关系和当前悬念。只使用下面这些字幕：\n\n${viewedText}`,
+        },
+      ],
+      (delta) => {
+        writeStreamEvent(response, { type: "delta", text: delta });
+      },
+    );
+    const result = { recap, updatedAt: Date.now() };
+    await writeJsonFile(cachePath, result);
+    writeStreamEvent(response, { type: "done" });
+  } catch (error) {
+    writeStreamEvent(response, { type: "error", error: error instanceof Error ? error.message : "Failed to generate progress recap." });
+  } finally {
+    response.end();
+  }
+}
+
 async function updateIndex(libraryId, metadata) {
   await mkdir(dataRoot, { recursive: true });
   const index = await readJsonFile(indexPath, { version: 1, libraries: {} });
@@ -547,6 +594,12 @@ function playerDataApiPlugin(env) {
       if (url.pathname === "/api/ai/subtitles/ask" && request.method === "POST") {
         const payload = JSON.parse((await readBody(request)).toString("utf8"));
         await streamSubtitleAnswer(env, payload, response);
+        return;
+      }
+
+      if (url.pathname === "/api/ai/subtitles/recap" && request.method === "POST") {
+        const payload = JSON.parse((await readBody(request)).toString("utf8"));
+        await streamProgressRecap(env, payload, response);
         return;
       }
 
