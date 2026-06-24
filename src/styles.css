@@ -2050,6 +2050,7 @@ button {
   background: #151922;
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.45);
   color: #f5f7fb;
+  font-size: 16px;
   padding: 24px;
 }
 
@@ -2081,7 +2082,7 @@ button {
 .embedded-subtitle-track span,
 .ai-dialog-header span {
   color: #9aa4b2;
-  font-size: 13px;
+  font-size: 15px;
 }
 
 .ai-dialog-header {
@@ -2095,7 +2096,7 @@ button {
 
 .ai-dialog-header h2 {
   margin: 0 0 6px;
-  font-size: 22px;
+  font-size: 26px;
   line-height: 1.2;
 }
 
@@ -2140,7 +2141,7 @@ button {
   border-radius: 8px;
   background: #1d222c;
   color: #f5f7fb;
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1.6;
   padding: 14px;
   overflow-wrap: anywhere;
