@@ -14,12 +14,15 @@ import {
   Play,
   RotateCcw,
   RotateCw,
+  Search,
   ShieldCheck,
   SkipForward,
   Star,
   Subtitles,
   Trash2,
   RefreshCw,
+  Moon,
+  Sun,
   X,
   VolumeX,
   Volume2,
@@ -302,6 +305,16 @@ function clamp(value: number, min: number, max: number) {
 
 function readStoredVolume() {
   return defaultPlayerSettings.volume;
+}
+
+type AppTheme = "dark" | "light";
+
+const appThemeStorageKey = "local-web-player-theme";
+
+function readStoredTheme(): AppTheme {
+  if (typeof window === "undefined") return "dark";
+  const storedTheme = window.localStorage.getItem(appThemeStorageKey);
+  return storedTheme === "light" ? "light" : "dark";
 }
 
 function isFormControl(target: EventTarget | null) {
@@ -678,6 +691,29 @@ type CacheStatus = {
   items: CacheStatusItem[];
 };
 
+type LibrarySearchMode = "idle" | "local" | "ai" | "empty";
+
+type LibrarySearchResult = {
+  card: HomeVideoCard;
+  score: number;
+  reason: string;
+};
+
+type LibrarySearchCandidate = {
+  id: string;
+  name: string;
+  relativePath: string;
+  seriesTitle: string;
+  progressLabel: string;
+  isFavorite: boolean;
+  isCompleted: boolean;
+};
+
+type LibraryAiSearchResponse = {
+  answer: string;
+  matchIds: string[];
+};
+
 type SubtitleCue = {
   start: number;
   end: number;
@@ -882,6 +918,43 @@ function createViewedSubtitleText(cues: SubtitleCue[], currentTime: number) {
 function tokenizeQuestion(question: string) {
   const words = question.toLowerCase().match(/[a-z0-9_\u4e00-\u9fa5]{2,}/g) ?? [];
   return words.length ? words : [question.toLowerCase()].filter(Boolean);
+}
+
+function normalizeLibrarySearchText(value: string) {
+  return value
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
+}
+
+function tokenizeLibrarySearchQuery(query: string) {
+  return normalizeLibrarySearchText(query).split(/\s+/).filter((token) => token.length >= 2);
+}
+
+function hasAiLibrarySearchIntent(query: string) {
+  return /推荐|想看|适合|类似|风格|氛围|剧情|讲什么|没看完|未看完|收藏|最近|下一集|轻松|治愈|热血|悬疑|搞笑|短一点|长一点|随机|帮我|找.*(?:片段|台词|场景|类型|感觉)/i.test(
+    query,
+  );
+}
+
+function shouldUseAiLibrarySearch(query: string, localResults: LibrarySearchResult[]) {
+  if (hasAiLibrarySearchIntent(query)) return true;
+  const normalizedQuery = normalizeLibrarySearchText(query);
+  const tokens = tokenizeLibrarySearchQuery(query);
+  const strongestLocalScore = localResults[0]?.score ?? 0;
+  if (strongestLocalScore >= 18) return false;
+  if (localResults.length > 0 && tokens.length <= 3 && normalizedQuery.length >= 2) return false;
+  return normalizedQuery.length >= 4;
+}
+
+function formatLibrarySearchProgressLabel(card: HomeVideoCard) {
+  if (card.progress?.completed) return "已看完";
+  if (card.progress) {
+    const total = card.progress.duration || card.video.duration || 0;
+    return `${formatTime(card.progress.currentTime)} / ${formatTime(total)}`;
+  }
+  return card.video.duration ? `未开始 / ${formatTime(card.video.duration)}` : "未开始";
 }
 
 function selectRelevantSubtitleChunks(question: string, cues: SubtitleCue[], currentTime: number) {
@@ -1203,6 +1276,16 @@ export default function App() {
   const [subtitleRecap, setSubtitleRecap] = useState("");
   const [aiMessage, setAiMessage] = useState("");
   const [isAiLoading, setIsAiLoading] = useState(false);
+  const [homeProgressRecap, setHomeProgressRecap] = useState("");
+  const [homeProgressRecapMessage, setHomeProgressRecapMessage] = useState("");
+  const [homeProgressRecapVideoId, setHomeProgressRecapVideoId] = useState("");
+  const [isHomeProgressRecapLoading, setIsHomeProgressRecapLoading] = useState(false);
+  const [librarySearchQuery, setLibrarySearchQuery] = useState("");
+  const [librarySearchResults, setLibrarySearchResults] = useState<LibrarySearchResult[]>([]);
+  const [librarySearchAnswer, setLibrarySearchAnswer] = useState("");
+  const [librarySearchMessage, setLibrarySearchMessage] = useState("");
+  const [librarySearchMode, setLibrarySearchMode] = useState<LibrarySearchMode>("idle");
+  const [isLibrarySearchLoading, setIsLibrarySearchLoading] = useState(false);
   const [cacheStatus, setCacheStatus] = useState<CacheStatus | null>(null);
   const [cacheStatusMessage, setCacheStatusMessage] = useState("");
   const [isCacheStatusLoading, setIsCacheStatusLoading] = useState(false);
@@ -1234,6 +1317,7 @@ export default function App() {
   const [isShortcutDialogOpen, setIsShortcutDialogOpen] = useState(false);
   const [isSeriesMenuOpen, setIsSeriesMenuOpen] = useState(false);
   const [isPrivacyMode, setIsPrivacyMode] = useState(false);
+  const [theme, setTheme] = useState<AppTheme>(readStoredTheme);
   const [deleteCandidate, setDeleteCandidate] = useState<VideoItem | null>(null);
   const [skipFolderAccessPrompt, setSkipFolderAccessPrompt] = useState(defaultPlayerSettings.skipFolderAccessPrompt);
   const [message, setMessage] = useState("选择一个本地文件夹开始播放");
@@ -1478,6 +1562,105 @@ export default function App() {
       favorites: favoriteVideoIds.size,
     };
   }, [favoriteVideoIds.size, progressStore, videos]);
+  const findMatchedSubtitleForVideo = useCallback(
+    (video: VideoItem) => {
+      const videoBasePath = basePathOf(video.relativePath);
+      return (
+        subtitles.find(
+          (subtitle) =>
+            !subtitle.isManual &&
+            (subtitle.videoId === video.id || basePathOf(subtitle.relativePath) === videoBasePath),
+        ) ?? null
+      );
+    },
+    [subtitles],
+  );
+  const homeRecapCard = primaryResumeCard;
+  const homeRecapVideoId = homeRecapCard?.video.id ?? "";
+  const homeRecapSubtitle = useMemo(
+    () => (homeRecapCard ? findMatchedSubtitleForVideo(homeRecapCard.video) : null),
+    [findMatchedSubtitleForVideo, homeRecapCard],
+  );
+  const searchLibraryLocally = useCallback(
+    (query: string, limit = 8): LibrarySearchResult[] => {
+      const normalizedQuery = normalizeLibrarySearchText(query);
+      const tokens = tokenizeLibrarySearchQuery(query);
+      if (!normalizedQuery) return [];
+
+      return videos
+        .map((video) => {
+          const card = createHomeVideoCard(video);
+          const searchable = [
+            video.name,
+            video.relativePath,
+            card.seriesTitle ?? "",
+            baseNameWithoutExtension(video.name),
+          ].map(normalizeLibrarySearchText);
+          let score = 0;
+          const reasons: string[] = [];
+
+          if (searchable[0].includes(normalizedQuery)) {
+            score += 18;
+            reasons.push("文件名匹配");
+          }
+          if (searchable[2].includes(normalizedQuery)) {
+            score += 16;
+            reasons.push("系列匹配");
+          }
+          if (searchable[1].includes(normalizedQuery)) {
+            score += 10;
+            reasons.push("路径匹配");
+          }
+
+          tokens.forEach((token) => {
+            if (searchable[0].includes(token)) score += 5;
+            if (searchable[2].includes(token)) score += 4;
+            if (searchable[1].includes(token)) score += 2;
+          });
+
+          if (score <= 0) return null;
+          if (favoriteVideoIds.has(video.id)) score += 1;
+          if (isResumableProgress(card.progress)) score += 1;
+          return {
+            card,
+            score,
+            reason: reasons[0] ?? "关键词匹配",
+          };
+        })
+        .filter((item): item is LibrarySearchResult => Boolean(item))
+        .sort((a, b) => b.score - a.score || compareNaturalRelativePath(a.card.video.relativePath, b.card.video.relativePath))
+        .slice(0, limit);
+    },
+    [createHomeVideoCard, favoriteVideoIds, videos],
+  );
+  const createLibrarySearchCandidates = useCallback(
+    (localResults: LibrarySearchResult[]): LibrarySearchCandidate[] => {
+      const candidates: LibrarySearchCandidate[] = [];
+      const seenIds = new Set<string>();
+      const addVideo = (video: VideoItem) => {
+        if (seenIds.has(video.id) || candidates.length >= 80) return;
+        seenIds.add(video.id);
+        const card = createHomeVideoCard(video);
+        candidates.push({
+          id: video.id,
+          name: video.name,
+          relativePath: video.relativePath,
+          seriesTitle: card.seriesTitle ?? "",
+          progressLabel: formatLibrarySearchProgressLabel(card),
+          isFavorite: favoriteVideoIds.has(video.id),
+          isCompleted: Boolean(card.progress?.completed),
+        });
+      };
+
+      localResults.forEach((result) => addVideo(result.card.video));
+      resumableHomeCards.forEach((card) => addVideo(card.video));
+      favoriteHomeCards.forEach((card) => addVideo(card.video));
+      recentHomeCards.forEach((card) => addVideo(card.video));
+      playlistVideos.forEach(addVideo);
+      return candidates;
+    },
+    [createHomeVideoCard, favoriteHomeCards, favoriteVideoIds, playlistVideos, recentHomeCards, resumableHomeCards],
+  );
   const currentVideoSubtitles = useMemo(() => {
     if (!currentVideo) return [];
     const currentBasePath = basePathOf(currentVideo.relativePath);
@@ -1831,6 +2014,15 @@ export default function App() {
     });
     focusPlayer();
   }, [focusPlayer, replacePlayerPreferences]);
+
+  const toggleTheme = useCallback(() => {
+    setTheme((currentTheme) => (currentTheme === "dark" ? "light" : "dark"));
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    window.localStorage.setItem(appThemeStorageKey, theme);
+  }, [theme]);
 
   const handleShortcutCapture = useCallback(
     (event: React.KeyboardEvent<HTMLButtonElement>, action: ShortcutAction) => {
@@ -3388,6 +3580,133 @@ export default function App() {
     }
   }, [currentTime, currentVideo, localConfig, selectedSubtitle]);
 
+  useEffect(() => {
+    setHomeProgressRecap("");
+    setHomeProgressRecapMessage("");
+    setHomeProgressRecapVideoId(homeRecapVideoId);
+  }, [homeRecapVideoId]);
+
+  const loadHomeProgressRecap = useCallback(async () => {
+    if (!homeRecapCard) return;
+    if (!localConfig?.ai.configured) {
+      setHomeProgressRecapMessage("未配置 DEEPSEEK_API_KEY。");
+      return;
+    }
+    if (!homeRecapSubtitle) {
+      setHomeProgressRecapMessage("当前视频没有可用于回顾的字幕。");
+      return;
+    }
+    const progress = homeRecapCard.progress;
+    if (!progress || !isResumableProgress(progress)) {
+      setHomeProgressRecapMessage("当前没有可回顾的观看进度。");
+      return;
+    }
+
+    setIsHomeProgressRecapLoading(true);
+    setHomeProgressRecap("");
+    setHomeProgressRecapMessage("正在生成无剧透回顾...");
+    setHomeProgressRecapVideoId(homeRecapCard.video.id);
+    try {
+      const subtitleText = await readSubtitleText(homeRecapSubtitle);
+      const cues = parseSubtitleCues(subtitleText);
+      if (!cues.length) throw new Error("当前字幕没有可回顾的文本片段。");
+      const viewedText = createViewedSubtitleText(cues, progress.currentTime);
+      if (!viewedText) throw new Error("当前进度前还没有可回顾的字幕内容。");
+      await readAiStream(
+        "/api/ai/subtitles/recap",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            videoName: homeRecapCard.video.name,
+            subtitleId: homeRecapSubtitle.id,
+            currentTime: progress.currentTime,
+            viewedText,
+          }),
+        },
+        (event) => {
+          if (event.type === "message") {
+            setHomeProgressRecapMessage(event.text);
+            return;
+          }
+          if (event.type === "result") {
+            setHomeProgressRecap(event.text);
+            return;
+          }
+          if (event.type === "delta") {
+            setHomeProgressRecapMessage("");
+            setHomeProgressRecap((previous) => previous + event.text);
+          }
+        },
+      );
+      setHomeProgressRecapMessage("");
+    } catch (error) {
+      setHomeProgressRecapMessage(error instanceof Error ? error.message : "生成无剧透回顾失败。");
+    } finally {
+      setIsHomeProgressRecapLoading(false);
+    }
+  }, [homeRecapCard, homeRecapSubtitle, localConfig]);
+
+  const runLibrarySearch = useCallback(async () => {
+    const query = librarySearchQuery.trim();
+    setLibrarySearchAnswer("");
+    if (!query) {
+      setLibrarySearchMode("idle");
+      setLibrarySearchMessage("输入片名、关键词或想看的内容。");
+      setLibrarySearchResults([]);
+      return;
+    }
+
+    const localResults = searchLibraryLocally(query);
+    setLibrarySearchResults(localResults);
+    const needsAi = Boolean(localConfig?.ai.configured) && shouldUseAiLibrarySearch(query, localResults);
+    if (!needsAi) {
+      setLibrarySearchMode(localResults.length ? "local" : "empty");
+      setLibrarySearchMessage(
+        localResults.length
+          ? "本地检索已命中，未调用大模型。"
+          : localConfig?.ai.configured
+            ? "本地没有找到匹配结果。"
+            : "本地没有找到匹配结果，且未配置 DEEPSEEK_API_KEY。",
+      );
+      return;
+    }
+
+    setIsLibrarySearchLoading(true);
+    setLibrarySearchMode("ai");
+    setLibrarySearchMessage("本地匹配不足，正在调用 AI 分析候选片库...");
+    try {
+      const candidates = createLibrarySearchCandidates(localResults);
+      if (!candidates.length) throw new Error("当前片库没有可搜索的视频。");
+      const response = await fetchJson<LibraryAiSearchResponse>("/api/ai/library/search", {
+        method: "POST",
+        body: JSON.stringify({ query, candidates }),
+      });
+      const candidateById = new Map(candidates.map((candidate) => [candidate.id, candidate]));
+      const aiResults = response.matchIds
+        .map((id) => candidateById.get(id))
+        .filter((candidate): candidate is LibrarySearchCandidate => Boolean(candidate))
+        .map((candidate, index) => {
+          const video = videos.find((item) => item.id === candidate.id);
+          if (!video) return null;
+          return {
+            card: createHomeVideoCard(video),
+            score: 100 - index,
+            reason: "AI 推荐",
+          };
+        })
+        .filter((item): item is LibrarySearchResult => Boolean(item));
+      setLibrarySearchResults(aiResults.length ? aiResults : localResults);
+      setLibrarySearchAnswer(response.answer);
+      setLibrarySearchMessage(aiResults.length ? "AI 已从本地候选中挑选结果。" : "AI 未返回明确条目，保留本地结果。");
+    } catch (error) {
+      setLibrarySearchMode(localResults.length ? "local" : "empty");
+      setLibrarySearchResults(localResults);
+      setLibrarySearchMessage(error instanceof Error ? error.message : "AI 搜索失败，已保留本地结果。");
+    } finally {
+      setIsLibrarySearchLoading(false);
+    }
+  }, [createHomeVideoCard, createLibrarySearchCandidates, librarySearchQuery, localConfig, searchLibraryLocally, videos]);
+
   const loadCacheStatus = useCallback(async () => {
     setIsCacheStatusLoading(true);
     setCacheStatusMessage("");
@@ -3970,7 +4289,7 @@ export default function App() {
   return (
     <>
     <main
-      className={`app-shell ${isDragActive ? "drag-active" : ""} ${isPrivacyMode ? "privacy-mode" : ""} ${isCinemaMode ? "cinema-mode" : ""} ${isHomeViewVisible ? "home-view" : ""}`}
+      className={`app-shell theme-${theme} ${isDragActive ? "drag-active" : ""} ${isPrivacyMode ? "privacy-mode" : ""} ${isCinemaMode ? "cinema-mode" : ""} ${isHomeViewVisible ? "home-view" : ""}`}
       ref={appShellRef}
       style={shellStyle}
       onDragOver={handleDragOver}
@@ -4110,6 +4429,75 @@ export default function App() {
                   <strong>{libraryStats.favorites}</strong>
                   <span>收藏</span>
                 </div>
+              </section>
+
+              {homeRecapCard ? (
+                <section className="home-section home-recap-card">
+                  <div className="home-section-header">
+                    <h2>无剧透回顾</h2>
+                    <span>{formatHomeProgressLabel(homeRecapCard)}</span>
+                  </div>
+                  <div className="home-recap-target">
+                    <Subtitles size={22} />
+                    <div>
+                      <strong>{homeRecapCard.video.name}</strong>
+                      <span>{homeRecapCard.seriesTitle}</span>
+                    </div>
+                  </div>
+                  <div className="home-recap-output">
+                    {homeProgressRecapVideoId === homeRecapVideoId && homeProgressRecap
+                      ? homeProgressRecap
+                      : homeProgressRecapMessage ||
+                        (homeRecapSubtitle
+                          ? "根据当前进度前的字幕生成回顾，不包含后续剧情。"
+                          : "没有匹配字幕，暂时无法生成回顾。")}
+                  </div>
+                  <button
+                    className="secondary-button home-recap-button"
+                    type="button"
+                    onClick={() => void loadHomeProgressRecap()}
+                    disabled={isHomeProgressRecapLoading || !localConfig?.ai.configured || !homeRecapSubtitle}
+                    title={!localConfig?.ai.configured ? "未配置 DEEPSEEK_API_KEY" : undefined}
+                  >
+                    {homeProgressRecap ? "重新生成" : isHomeProgressRecapLoading ? "生成中..." : "生成回顾"}
+                  </button>
+                </section>
+              ) : null}
+
+              <section className="home-section library-search-card">
+                <div className="home-section-header">
+                  <h2>片库搜索</h2>
+                  <span>{librarySearchMode === "ai" ? "AI 辅助" : "本地优先"}</span>
+                </div>
+                <form
+                  className="library-search-form"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void runLibrarySearch();
+                  }}
+                >
+                  <input
+                    type="search"
+                    value={librarySearchQuery}
+                    onChange={(event) => setLibrarySearchQuery(event.target.value)}
+                    placeholder="搜索片名，或描述想看的内容"
+                    aria-label="片库搜索"
+                  />
+                  <button type="submit" disabled={isLibrarySearchLoading || !videos.length} title="搜索片库">
+                    <Search size={17} />
+                  </button>
+                </form>
+                <div className={`library-search-status ${librarySearchMode}`}>
+                  {isLibrarySearchLoading ? "搜索中..." : librarySearchMessage || "明确片名会直接本地检索，复杂描述才调用 AI。"}
+                </div>
+                {librarySearchAnswer ? <div className="library-search-answer">{librarySearchAnswer}</div> : null}
+                {librarySearchResults.length ? (
+                  <div className="home-compact-list library-search-results">
+                    {librarySearchResults.map((result, index) => renderHomeListCard(result.card, index))}
+                  </div>
+                ) : librarySearchMode === "empty" ? (
+                  <div className="empty-list compact">没有找到匹配视频</div>
+                ) : null}
               </section>
 
               <section className="home-section cache-status-card">
@@ -4909,7 +5297,7 @@ export default function App() {
           </div>
 
           {cacheStatusMessage ? <div className="ai-empty-state">{cacheStatusMessage}</div> : null}
-          {isCacheStatusLoading ? <div className="ai-loading">正在读取缓存状态...</div> : null}
+          {isCacheStatusLoading && !cacheStatus ? <div className="ai-loading">正在读取缓存状态...</div> : null}
 
           <div className="cache-status-list">
             {(cacheStatus?.items ?? []).map((item) => (

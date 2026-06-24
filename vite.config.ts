@@ -602,6 +602,70 @@ async function streamProgressRecap(env, payload, response) {
   }
 }
 
+function parseAiJsonObject(text) {
+  const trimmed = String(text || "").trim();
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    const match = trimmed.match(/\{[\s\S]*\}/);
+    if (!match) return null;
+    try {
+      return JSON.parse(match[0]);
+    } catch {
+      return null;
+    }
+  }
+}
+
+function normalizeLibrarySearchCandidates(source) {
+  const candidates = Array.isArray(source) ? source : [];
+  return candidates
+    .map((candidate) => ({
+      id: typeof candidate?.id === "string" ? candidate.id.slice(0, 240) : "",
+      name: typeof candidate?.name === "string" ? candidate.name.slice(0, 240) : "",
+      relativePath: typeof candidate?.relativePath === "string" ? candidate.relativePath.slice(0, 360) : "",
+      seriesTitle: typeof candidate?.seriesTitle === "string" ? candidate.seriesTitle.slice(0, 160) : "",
+      progressLabel: typeof candidate?.progressLabel === "string" ? candidate.progressLabel.slice(0, 80) : "",
+      isFavorite: Boolean(candidate?.isFavorite),
+      isCompleted: Boolean(candidate?.isCompleted),
+    }))
+    .filter((candidate) => candidate.id && candidate.name)
+    .slice(0, 80);
+}
+
+async function searchLibraryWithAi(env, payload) {
+  const query = typeof payload?.query === "string" ? payload.query.trim().slice(0, 300) : "";
+  const candidates = normalizeLibrarySearchCandidates(payload?.candidates);
+  if (!query) throw new Error("Search query is required.");
+  if (!candidates.length) throw new Error("Library candidates are required.");
+
+  const catalog = candidates
+    .map(
+      (candidate, index) =>
+        `${index + 1}. id=${JSON.stringify(candidate.id)} | series=${candidate.seriesTitle || "未分组"} | name=${candidate.name} | path=${candidate.relativePath} | progress=${candidate.progressLabel || "未知"} | favorite=${candidate.isFavorite ? "yes" : "no"} | completed=${candidate.isCompleted ? "yes" : "no"}`,
+    )
+    .join("\n");
+
+  const raw = await callDeepSeek(env, [
+    {
+      role: "system",
+      content:
+        "你是本地片库搜索助手。只能从用户提供的候选视频中选择，不能编造片名或使用候选外内容。请返回严格 JSON：{\"answer\":\"简短中文理由\",\"matchIds\":[\"候选 id\"]}。matchIds 最多 5 个。",
+    },
+    {
+      role: "user",
+      content: `搜索需求：${query}\n\n候选片库：\n${catalog}`,
+    },
+  ]);
+  const parsed = parseAiJsonObject(raw);
+  const candidateIds = new Set(candidates.map((candidate) => candidate.id));
+  const matchIds = Array.isArray(parsed?.matchIds)
+    ? parsed.matchIds.filter((id) => typeof id === "string" && candidateIds.has(id)).slice(0, 5)
+    : [];
+  const answer = typeof parsed?.answer === "string" && parsed.answer.trim() ? parsed.answer.trim() : raw.trim();
+  return { answer, matchIds };
+}
+
 async function updateIndex(libraryId, metadata) {
   await mkdir(dataRoot, { recursive: true });
   const index = await readJsonFile(indexPath, { version: 1, libraries: {} });
@@ -670,6 +734,12 @@ function playerDataApiPlugin(env) {
       if (url.pathname === "/api/ai/subtitles/recap" && request.method === "POST") {
         const payload = JSON.parse((await readBody(request)).toString("utf8"));
         await streamProgressRecap(env, payload, response);
+        return;
+      }
+
+      if (url.pathname === "/api/ai/library/search" && request.method === "POST") {
+        const payload = JSON.parse((await readBody(request)).toString("utf8"));
+        sendJson(response, 200, await searchLibraryWithAi(env, payload));
         return;
       }
 
