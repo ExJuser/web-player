@@ -1,5 +1,44 @@
 {
   "server": {
     "port": 3001
+  },
+  "media": {
+    "roots": [
+      {
+        "id": "jav-e-pending",
+        "label": "JAV",
+        "path": "E:\\学习资料\\待整理"
+      },
+      {
+        "id": "jav-f-study",
+        "label": "JAV",
+        "path": "F:\\学习资料"
+      },
+      {
+        "id": "western-av-f",
+        "label": "WesternAV",
+        "path": "F:\\欧美"
+      },
+      {
+        "id": "chinese-av-f",
+        "label": "ChineseAV",
+        "path": "F:\\国产"
+      },
+      {
+        "id": "mmd-3d-f",
+        "label": "3D/MMD",
+        "path": "F:\\3D"
+      },
+      {
+        "id": "anime-g",
+        "label": "Anime",
+        "path": "G:\\番剧"
+      },
+      {
+        "id": "anime-h",
+        "label": "Anime",
+        "path": "H:\\Anime"
+      }
+    ]
   }
 }

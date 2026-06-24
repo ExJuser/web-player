@@ -39,6 +39,7 @@ export type VideoItem = {
   thumbnailUrl?: string;
   thumbnailStatus?: "idle" | "loading" | "ready" | "failed";
   parentDirectory?: FileSystemDirectoryHandle;
+  mediaRootId?: string;
 };
 
 export type VideoMetadata = Pick<VideoItem, "duration" | "width" | "height">;
@@ -47,9 +48,23 @@ export type SubtitleItem = {
   id: string;
   name: string;
   relativePath: string;
-  file: File;
+  file?: File;
   url: string;
   isManual?: boolean;
+  source?: "external" | "manual" | "embedded";
+  rawText?: string;
+  format?: "srt" | "vtt";
+  videoId?: string;
+  embeddedTrack?: EmbeddedSubtitleTrack;
+};
+
+export type EmbeddedSubtitleTrack = {
+  streamIndex: number;
+  codec: string;
+  language?: string;
+  title?: string;
+  extractable: boolean;
+  reason?: string;
 };
 
 export type PlaybackProgress = {

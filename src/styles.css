@@ -2008,6 +2008,130 @@ button {
   line-height: 1.4;
 }
 
+.embedded-subtitle-dialog,
+.ai-subtitle-dialog {
+  position: relative;
+  width: min(720px, calc(100vw - 32px));
+  max-height: min(760px, calc(100vh - 32px));
+  overflow: auto;
+  border: 1px solid #2d3440;
+  border-radius: 16px;
+  background: #151922;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.45);
+  color: #f5f7fb;
+  padding: 24px;
+}
+
+.embedded-subtitle-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.embedded-subtitle-track {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  border: 1px solid #2d3440;
+  border-radius: 8px;
+  background: #1d222c;
+  color: #f5f7fb;
+  cursor: pointer;
+  padding: 12px;
+  text-align: left;
+}
+
+.embedded-subtitle-track:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.embedded-subtitle-track span,
+.ai-dialog-header span {
+  color: #9aa4b2;
+  font-size: 13px;
+}
+
+.ai-dialog-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.ai-dialog-header h2 {
+  margin: 0 0 6px;
+  font-size: 22px;
+  line-height: 1.2;
+}
+
+.ai-tabs {
+  display: inline-flex;
+  border: 1px solid #2d3440;
+  border-radius: 8px;
+  background: #1d222c;
+  padding: 3px;
+}
+
+.ai-tabs button {
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #9aa4b2;
+  cursor: pointer;
+  font: inherit;
+  padding: 7px 12px;
+}
+
+.ai-tabs button.active {
+  background: #00a1d6;
+  color: #03131a;
+}
+
+.ai-panel-body {
+  display: grid;
+  gap: 12px;
+}
+
+.dialog-actions.compact {
+  justify-content: flex-start;
+  margin-top: 0;
+}
+
+.ai-output,
+.ai-empty-state,
+.ai-loading {
+  min-height: 120px;
+  border: 1px solid #2d3440;
+  border-radius: 8px;
+  background: #1d222c;
+  color: #f5f7fb;
+  font-size: 14px;
+  line-height: 1.6;
+  padding: 14px;
+  white-space: pre-wrap;
+}
+
+.ai-empty-state,
+.ai-loading {
+  min-height: auto;
+  color: #9aa4b2;
+}
+
+.ai-question-input {
+  min-height: 108px;
+  border: 1px solid #2d3440;
+  border-radius: 8px;
+  background: #1d222c;
+  color: #f5f7fb;
+  font: inherit;
+  line-height: 1.5;
+  padding: 12px;
+  resize: vertical;
+}
+
 @media (max-width: 980px) {
   .app-shell {
     --player-frame-height: 100%;

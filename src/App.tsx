@@ -28,6 +28,7 @@ import type {
   ActiveView,
   AutoNextPrompt,
   DataTransferItemWithHandle,
+  EmbeddedSubtitleTrack,
   FileSystemDirectoryHandle,
   FileSystemFileHandle,
   HomeVideoCard,
@@ -649,12 +650,171 @@ function srtToVtt(raw: string) {
   return `WEBVTT\n\n${cues.join("\n\n")}`;
 }
 
+type LocalConfig = {
+  mediaRoots: Array<{ id: string; label: string; basename: string }>;
+  ffmpeg: { ffmpeg: boolean; ffprobe: boolean };
+  ai: { configured: boolean; model: string };
+};
+
+type SubtitleCue = {
+  start: number;
+  end: number;
+  text: string;
+};
+
+type SubtitleContextChunk = {
+  start: string;
+  end: string;
+  text: string;
+};
+
+async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(url, {
+    ...init,
+    headers: {
+      Accept: "application/json",
+      ...(init?.body ? { "Content-Type": "application/json" } : {}),
+      ...(init?.headers ?? {}),
+    },
+  });
+  if (!response.ok) {
+    let message = response.statusText;
+    try {
+      const payload = (await response.json()) as { error?: string };
+      message = payload.error || message;
+    } catch {
+      // Keep status text when the local API does not return JSON.
+    }
+    throw new Error(message);
+  }
+  return response.json() as Promise<T>;
+}
+
+function normalizeSubtitleText(raw: string) {
+  return raw.replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
+}
+
 async function createSubtitleUrl(subtitle: SubtitleItem) {
-  if (extensionOf(subtitle.name) === ".srt") {
-    const vtt = srtToVtt(await subtitle.file.text());
+  const rawText = subtitle.rawText ?? (subtitle.file ? await subtitle.file.text() : "");
+  if (rawText) {
+    const normalizedText = normalizeSubtitleText(rawText);
+    const vtt =
+      subtitle.format === "vtt" || normalizedText.startsWith("WEBVTT")
+        ? normalizedText
+        : srtToVtt(normalizedText);
     return URL.createObjectURL(new Blob([vtt], { type: "text/vtt" }));
   }
+  if (!subtitle.file) throw new Error("Subtitle file is unavailable.");
   return URL.createObjectURL(subtitle.file);
+}
+
+async function readSubtitleText(subtitle: SubtitleItem) {
+  if (subtitle.rawText) return normalizeSubtitleText(subtitle.rawText);
+  if (!subtitle.file) return "";
+  return normalizeSubtitleText(await subtitle.file.text());
+}
+
+function parseSubtitleTimestamp(value: string) {
+  const normalized = value.trim().replace(",", ".");
+  const parts = normalized.split(":");
+  if (parts.length < 2) return 0;
+  const seconds = Number(parts.pop());
+  const minutes = Number(parts.pop());
+  const hours = parts.length ? Number(parts.pop()) : 0;
+  return (Number.isFinite(hours) ? hours : 0) * 3600 + (Number.isFinite(minutes) ? minutes : 0) * 60 + (Number.isFinite(seconds) ? seconds : 0);
+}
+
+function stripSubtitleMarkup(value: string) {
+  return value
+    .replace(/<[^>]+>/g, "")
+    .replace(/\{\\[^}]+}/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function parseSubtitleCues(rawText: string): SubtitleCue[] {
+  const normalized = normalizeSubtitleText(rawText).replace(/^WEBVTT[^\n]*\n+/i, "");
+  const blocks = normalized.split(/\n{2,}/);
+  return blocks
+    .map((block) => {
+      const lines = block.split("\n").map((line) => line.trim()).filter(Boolean);
+      const timeLineIndex = lines.findIndex((line) => line.includes("-->"));
+      if (timeLineIndex < 0) return null;
+      const [startValue, endValue] = lines[timeLineIndex].split("-->").map((part) => part.trim().split(/\s+/)[0]);
+      const text = stripSubtitleMarkup(lines.slice(timeLineIndex + 1).join(" "));
+      if (!text) return null;
+      return {
+        start: parseSubtitleTimestamp(startValue),
+        end: parseSubtitleTimestamp(endValue),
+        text,
+      };
+    })
+    .filter((cue): cue is SubtitleCue => Boolean(cue));
+}
+
+function createSubtitleContextChunks(cues: SubtitleCue[]) {
+  const chunks: SubtitleContextChunk[] = [];
+  let pending: SubtitleCue[] = [];
+  let pendingStart = 0;
+
+  cues.forEach((cue) => {
+    if (!pending.length) {
+      pending = [cue];
+      pendingStart = cue.start;
+      return;
+    }
+    const nextText = [...pending.map((item) => item.text), cue.text].join(" ");
+    if (cue.end - pendingStart > 90 || nextText.length > 1200) {
+      const last = pending[pending.length - 1];
+      chunks.push({
+        start: formatTime(pending[0].start),
+        end: formatTime(last.end),
+        text: pending.map((item) => item.text).join(" "),
+      });
+      pending = [cue];
+      pendingStart = cue.start;
+      return;
+    }
+    pending.push(cue);
+  });
+
+  if (pending.length) {
+    const last = pending[pending.length - 1];
+    chunks.push({
+      start: formatTime(pending[0].start),
+      end: formatTime(last.end),
+      text: pending.map((item) => item.text).join(" "),
+    });
+  }
+  return chunks;
+}
+
+function tokenizeQuestion(question: string) {
+  const words = question.toLowerCase().match(/[a-z0-9_\u4e00-\u9fa5]{2,}/g) ?? [];
+  return words.length ? words : [question.toLowerCase()].filter(Boolean);
+}
+
+function selectRelevantSubtitleChunks(question: string, cues: SubtitleCue[], currentTime: number) {
+  const chunks = createSubtitleContextChunks(cues);
+  const tokens = tokenizeQuestion(question);
+  const scored = chunks.map((chunk, index) => {
+    const haystack = chunk.text.toLowerCase();
+    const keywordScore = tokens.reduce((score, token) => score + (haystack.includes(token) ? 2 : 0), 0);
+    const start = parseSubtitleTimestamp(chunk.start);
+    const currentTimeScore = currentTime > 0 ? Math.max(0, 1 - Math.abs(start - currentTime) / 1800) : 0;
+    return { chunk, index, score: keywordScore + currentTimeScore };
+  });
+  const matches = scored
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .slice(0, 8)
+    .sort((a, b) => a.index - b.index)
+    .map((item) => item.chunk);
+  return matches.length ? matches : chunks.slice(0, 8);
 }
 
 function waitForMediaEvent(element: HTMLVideoElement, eventName: keyof HTMLMediaElementEventMap, timeout = 7000) {
@@ -923,6 +1083,7 @@ export default function App() {
   const favoriteVideoIdsRef = useRef(new Set<string>());
   const videosRef = useRef<VideoItem[]>([]);
   const subtitlesRef = useRef<SubtitleItem[]>([]);
+  const localConfigRef = useRef<LocalConfig | null>(null);
   const thumbnailLoadRunIdRef = useRef(0);
   const isScanningRef = useRef(false);
   const isMainVideoLoadingRef = useRef(false);
@@ -942,6 +1103,19 @@ export default function App() {
   const startFromBeginningVideoIdRef = useRef<string | null>(null);
   const [videos, setVideos] = useState<VideoItem[]>([]);
   const [subtitles, setSubtitles] = useState<SubtitleItem[]>([]);
+  const [localConfig, setLocalConfig] = useState<LocalConfig | null>(null);
+  const [mediaRootId, setMediaRootId] = useState<string | null>(null);
+  const [embeddedSubtitleTracks, setEmbeddedSubtitleTracks] = useState<EmbeddedSubtitleTrack[]>([]);
+  const [isEmbeddedSubtitleDialogOpen, setIsEmbeddedSubtitleDialogOpen] = useState(false);
+  const [embeddedSubtitleMessage, setEmbeddedSubtitleMessage] = useState("");
+  const [isEmbeddedSubtitleLoading, setIsEmbeddedSubtitleLoading] = useState(false);
+  const [isAiPanelOpen, setIsAiPanelOpen] = useState(false);
+  const [aiTab, setAiTab] = useState<"summary" | "qa">("summary");
+  const [subtitleSummary, setSubtitleSummary] = useState("");
+  const [subtitleQuestion, setSubtitleQuestion] = useState("");
+  const [subtitleAnswer, setSubtitleAnswer] = useState("");
+  const [aiMessage, setAiMessage] = useState("");
+  const [isAiLoading, setIsAiLoading] = useState(false);
   const [libraryId, setLibraryId] = useState<string | null>(null);
   const [currentVideoId, setCurrentVideoId] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<ActiveView>("home");
@@ -1016,6 +1190,7 @@ export default function App() {
   isMainVideoLoadingRef.current = isMainVideoLoading;
   videosRef.current = videos;
   subtitlesRef.current = subtitles;
+  localConfigRef.current = localConfig;
 
   const buildPlayerDataStore = useCallback(
     (overrides?: Partial<PlayerDataStore>): PlayerDataStore => ({
@@ -1191,7 +1366,12 @@ export default function App() {
   const currentVideoSubtitles = useMemo(() => {
     if (!currentVideo) return [];
     const currentBasePath = basePathOf(currentVideo.relativePath);
-    return subtitles.filter((subtitle) => subtitle.isManual || basePathOf(subtitle.relativePath) === currentBasePath);
+    return subtitles.filter(
+      (subtitle) =>
+        subtitle.isManual ||
+        subtitle.videoId === currentVideo.id ||
+        basePathOf(subtitle.relativePath) === currentBasePath,
+    );
   }, [currentVideo, subtitles]);
   const selectedSubtitle = currentVideoSubtitles.find((subtitle) => subtitle.id === selectedSubtitleId) ?? null;
   const effectivePlaybackRate = isHoldSpeedActive ? holdPlaybackRate : playbackRate;
@@ -1208,6 +1388,16 @@ export default function App() {
       }) as React.CSSProperties,
     [adaptiveColumns],
   );
+  const currentMediaRootId = currentVideo?.mediaRootId ?? mediaRootId;
+  const canUseEmbeddedSubtitles = Boolean(
+    currentVideo && currentMediaRootId && localConfig?.ffmpeg.ffmpeg && localConfig.ffmpeg.ffprobe,
+  );
+
+  const resolveMediaRootId = useCallback((directoryName: string) => {
+    const roots = localConfigRef.current?.mediaRoots ?? [];
+    const matches = roots.filter((root) => root.basename === directoryName);
+    return matches.length === 1 ? matches[0].id : null;
+  }, []);
 
   const clearControlsHideTimer = useCallback(() => {
     if (!controlsHideTimerRef.current) return;
@@ -1238,6 +1428,39 @@ export default function App() {
     setAreControlsVisible(true);
     scheduleControlsHide();
   }, [scheduleControlsHide]);
+
+  useEffect(() => {
+    let isCancelled = false;
+    fetchJson<LocalConfig>("/api/local-config")
+      .then((config) => {
+        if (isCancelled) return;
+        setLocalConfig(config);
+        localConfigRef.current = config;
+      })
+      .catch(() => {
+        if (isCancelled) return;
+        setLocalConfig({
+          mediaRoots: [],
+          ffmpeg: { ffmpeg: false, ffprobe: false },
+          ai: { configured: false, model: "deepseek-chat" },
+        });
+      });
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!localConfig || mediaRootId || !directoryRef.current) return;
+    const nextMediaRootId = resolveMediaRootId(directoryRef.current.name);
+    if (!nextMediaRootId) return;
+    setMediaRootId(nextMediaRootId);
+    setVideos((previous) => {
+      const nextVideos = previous.map((video) => ({ ...video, mediaRootId: nextMediaRootId }));
+      videosRef.current = nextVideos;
+      return nextVideos;
+    });
+  }, [localConfig, mediaRootId, resolveMediaRootId]);
 
   const keepControlsVisible = useCallback(() => {
     setAreControlsVisible(true);
@@ -1919,11 +2142,18 @@ export default function App() {
         return;
       }
 
+      const nextMediaRootId = resolveMediaRootId(directory.name);
       let media = createEmptyMediaCollection();
       directoryRef.current = directory;
       libraryIdRef.current = null;
       libraryMetadataRef.current = undefined;
       setLibraryId(null);
+      setMediaRootId(nextMediaRootId);
+      setEmbeddedSubtitleTracks([]);
+      setEmbeddedSubtitleMessage("");
+      setSubtitleSummary("");
+      setSubtitleAnswer("");
+      setAiMessage("");
       revokeVideoUrls(videosRef.current);
       subtitlesRef.current.forEach((subtitle) => {
         if (subtitle.url) URL.revokeObjectURL(subtitle.url);
@@ -1942,7 +2172,10 @@ export default function App() {
       setActiveView("home");
 
       for await (const batch of collectVideos(directory)) {
-        media = mergeMediaBatch(media, batch);
+        media = mergeMediaBatch(media, {
+          ...batch,
+          videos: batch.videos.map((video) => ({ ...video, mediaRootId: nextMediaRootId ?? undefined })),
+        });
         media = {
           ...media,
           videos: mergeVideoRuntimeState(media.videos, videosRef.current),
@@ -1957,7 +2190,10 @@ export default function App() {
       media = sortMediaCollection(media);
       media = {
         ...media,
-        videos: mergeVideoRuntimeState(media.videos, videosRef.current),
+        videos: mergeVideoRuntimeState(
+          media.videos.map((video) => ({ ...video, mediaRootId: nextMediaRootId ?? undefined })),
+          videosRef.current,
+        ),
       };
       const nextSubtitles = await Promise.all(
         media.subtitles.map(async (subtitle) => ({
@@ -2041,7 +2277,7 @@ export default function App() {
         await writeRecentFolderHandle(directory).catch(() => undefined);
       }
     },
-    [revokeVideoUrls],
+    [resolveMediaRootId, revokeVideoUrls],
   );
 
   const loadFileMedia = useCallback(
@@ -2060,6 +2296,12 @@ export default function App() {
       libraryIdRef.current = null;
       libraryMetadataRef.current = undefined;
       setLibraryId(null);
+      setMediaRootId(null);
+      setEmbeddedSubtitleTracks([]);
+      setEmbeddedSubtitleMessage("");
+      setSubtitleSummary("");
+      setSubtitleAnswer("");
+      setAiMessage("");
       progressStoreRef.current = {};
       playerPreferencesRef.current = {
         playlistSortMode,
@@ -2776,6 +3018,8 @@ export default function App() {
           file,
           url: "",
           isManual: true,
+          source: "manual",
+          videoId: currentVideo.id,
         };
         const subtitleWithUrl = {
           ...subtitle,
@@ -2797,6 +3041,152 @@ export default function App() {
     };
     input.click();
   }, [currentVideo]);
+
+  const probeEmbeddedSubtitles = useCallback(async () => {
+    if (!currentVideo || !currentMediaRootId) {
+      setEmbeddedSubtitleMessage("当前视频没有匹配到 config/app.json 中的媒体根路径。");
+      return;
+    }
+    if (!localConfig?.ffmpeg.ffmpeg || !localConfig.ffmpeg.ffprobe) {
+      setEmbeddedSubtitleMessage("未检测到系统 ffmpeg/ffprobe，请安装后重启开发服务。");
+      return;
+    }
+    setIsEmbeddedSubtitleLoading(true);
+    setEmbeddedSubtitleMessage("正在检测内封字幕...");
+    try {
+      const payload = await fetchJson<{ tracks: EmbeddedSubtitleTrack[] }>("/api/subtitles/embedded/probe", {
+        method: "POST",
+        body: JSON.stringify({
+          rootId: currentMediaRootId,
+          relativePath: currentVideo.relativePath,
+        }),
+      });
+      setEmbeddedSubtitleTracks(payload.tracks);
+      setIsEmbeddedSubtitleDialogOpen(true);
+      setEmbeddedSubtitleMessage(payload.tracks.length ? "" : "没有检测到内封字幕轨。");
+    } catch (error) {
+      setEmbeddedSubtitleMessage(error instanceof Error ? error.message : "检测内封字幕失败。");
+    } finally {
+      setIsEmbeddedSubtitleLoading(false);
+    }
+  }, [currentMediaRootId, currentVideo, localConfig]);
+
+  const extractEmbeddedSubtitle = useCallback(
+    async (track: EmbeddedSubtitleTrack) => {
+      if (!currentVideo || !currentMediaRootId || !track.extractable) return;
+      setIsEmbeddedSubtitleLoading(true);
+      setEmbeddedSubtitleMessage("正在提取内封字幕...");
+      try {
+        const payload = await fetchJson<{ id: string; format: "vtt"; text: string }>("/api/subtitles/embedded/extract", {
+          method: "POST",
+          body: JSON.stringify({
+            rootId: currentMediaRootId,
+            relativePath: currentVideo.relativePath,
+            streamIndex: track.streamIndex,
+          }),
+        });
+        const language = track.language ? ` ${track.language}` : "";
+        const title = track.title ? ` ${track.title}` : "";
+        const subtitle: SubtitleItem = {
+          id: `embedded:${currentVideo.id}:${payload.id}`,
+          name: `内封字幕${language}${title}`.trim(),
+          relativePath: `${currentVideo.relativePath}#subtitle-${track.streamIndex}`,
+          url: "",
+          source: "embedded",
+          rawText: payload.text,
+          format: payload.format,
+          videoId: currentVideo.id,
+          embeddedTrack: track,
+        };
+        const subtitleWithUrl = {
+          ...subtitle,
+          url: await createSubtitleUrl(subtitle),
+        };
+        setSubtitles((previous) => {
+          previous
+            .filter((item) => item.id === subtitleWithUrl.id)
+            .forEach((item) => {
+              if (item.url) URL.revokeObjectURL(item.url);
+            });
+          return [...previous.filter((item) => item.id !== subtitleWithUrl.id), subtitleWithUrl];
+        });
+        setSelectedSubtitleId(subtitleWithUrl.id);
+        setIsEmbeddedSubtitleDialogOpen(false);
+        setEmbeddedSubtitleMessage("已加载内封字幕。");
+      } catch (error) {
+        setEmbeddedSubtitleMessage(error instanceof Error ? error.message : "提取内封字幕失败。");
+      } finally {
+        setIsEmbeddedSubtitleLoading(false);
+      }
+    },
+    [currentMediaRootId, currentVideo],
+  );
+
+  const loadSubtitleSummary = useCallback(async () => {
+    if (!selectedSubtitle || !currentVideo) return;
+    if (!localConfig?.ai.configured) {
+      setAiMessage("未配置 DEEPSEEK_API_KEY。");
+      return;
+    }
+    setAiTab("summary");
+    setIsAiPanelOpen(true);
+    setIsAiLoading(true);
+    setAiMessage("正在生成字幕总结...");
+    try {
+      const subtitleText = await readSubtitleText(selectedSubtitle);
+      if (!subtitleText) throw new Error("当前字幕没有可分析的文本。");
+      const payload = await fetchJson<{ summary: string }>("/api/ai/subtitles/summarize", {
+        method: "POST",
+        body: JSON.stringify({
+          videoName: currentVideo.name,
+          subtitleId: selectedSubtitle.id,
+          subtitleText,
+        }),
+      });
+      setSubtitleSummary(payload.summary);
+      setAiMessage("");
+    } catch (error) {
+      setAiMessage(error instanceof Error ? error.message : "生成字幕总结失败。");
+    } finally {
+      setIsAiLoading(false);
+    }
+  }, [currentVideo, localConfig, selectedSubtitle]);
+
+  const askSubtitleQuestion = useCallback(async () => {
+    if (!selectedSubtitle || !currentVideo) return;
+    if (!localConfig?.ai.configured) {
+      setAiMessage("未配置 DEEPSEEK_API_KEY。");
+      return;
+    }
+    const question = subtitleQuestion.trim();
+    if (!question) {
+      setAiMessage("请输入问题。");
+      return;
+    }
+    setAiTab("qa");
+    setIsAiPanelOpen(true);
+    setIsAiLoading(true);
+    setAiMessage("正在根据字幕片段回答...");
+    try {
+      const subtitleText = await readSubtitleText(selectedSubtitle);
+      const cues = parseSubtitleCues(subtitleText);
+      if (!cues.length) throw new Error("当前字幕没有可检索的文本片段。");
+      const payload = await fetchJson<{ answer: string }>("/api/ai/subtitles/ask", {
+        method: "POST",
+        body: JSON.stringify({
+          videoName: currentVideo.name,
+          question,
+          chunks: selectRelevantSubtitleChunks(question, cues, currentTime),
+        }),
+      });
+      setSubtitleAnswer(payload.answer);
+      setAiMessage("");
+    } catch (error) {
+      setAiMessage(error instanceof Error ? error.message : "字幕问答失败。");
+    } finally {
+      setIsAiLoading(false);
+    }
+  }, [currentTime, currentVideo, localConfig, selectedSubtitle, subtitleQuestion]);
 
   const toggleShortcutDialog = useCallback(() => {
     setIsShortcutDialogOpen((open) => !open);
@@ -3785,6 +4175,29 @@ export default function App() {
                 </select>
               </label>
 
+              <button
+                className="icon-button"
+                type="button"
+                onClick={probeEmbeddedSubtitles}
+                disabled={!canUseEmbeddedSubtitles || isEmbeddedSubtitleLoading}
+                title={
+                  canUseEmbeddedSubtitles
+                    ? "检测内封字幕"
+                    : "需要在 config/app.json 配置媒体根路径，并安装 ffmpeg/ffprobe"
+                }
+              >
+                CC
+              </button>
+              <button
+                className={`icon-button ${isAiPanelOpen ? "active" : ""}`}
+                type="button"
+                onClick={() => setIsAiPanelOpen(true)}
+                disabled={!selectedSubtitle}
+                title={selectedSubtitle ? "字幕总结和问答" : "请先选择字幕"}
+              >
+                AI
+              </button>
+
               <span className="control-spacer" />
 
               <button className="icon-button" type="button" onClick={togglePictureInPicture} disabled={!currentVideo} title="画中画">
@@ -4167,6 +4580,118 @@ export default function App() {
               继续选择
             </button>
           </div>
+        </section>
+      </div>
+    ) : null}
+    {isEmbeddedSubtitleDialogOpen ? (
+      <div className="modal-backdrop" role="presentation" onMouseDown={() => setIsEmbeddedSubtitleDialogOpen(false)}>
+        <section
+          aria-labelledby="embedded-subtitle-title"
+          aria-modal="true"
+          className="embedded-subtitle-dialog"
+          role="dialog"
+          onMouseDown={(event) => event.stopPropagation()}
+        >
+          <button
+            aria-label="关闭"
+            className="dialog-close"
+            type="button"
+            onClick={() => setIsEmbeddedSubtitleDialogOpen(false)}
+          >
+            <X size={18} />
+          </button>
+          <div className="dialog-copy">
+            <h2 id="embedded-subtitle-title">内封字幕</h2>
+            <p>{embeddedSubtitleMessage || "选择一条文本字幕轨，播放器会提取为 WebVTT 并缓存到本地项目数据目录。"}</p>
+          </div>
+          <div className="embedded-subtitle-list">
+            {embeddedSubtitleTracks.map((track) => (
+              <button
+                key={track.streamIndex}
+                className="embedded-subtitle-track"
+                type="button"
+                onClick={() => void extractEmbeddedSubtitle(track)}
+                disabled={!track.extractable || isEmbeddedSubtitleLoading}
+              >
+                <strong>
+                  #{track.streamIndex} {track.language || "und"} {track.title || ""}
+                </strong>
+                <span>{track.codec}{track.extractable ? "" : ` · ${track.reason || "暂不支持"}`}</span>
+              </button>
+            ))}
+            {!embeddedSubtitleTracks.length ? <div className="ai-empty-state">没有可用的内封字幕轨。</div> : null}
+          </div>
+        </section>
+      </div>
+    ) : null}
+    {isAiPanelOpen ? (
+      <div className="modal-backdrop" role="presentation" onMouseDown={() => setIsAiPanelOpen(false)}>
+        <section
+          aria-labelledby="ai-subtitle-title"
+          aria-modal="true"
+          className="ai-subtitle-dialog"
+          role="dialog"
+          onMouseDown={(event) => event.stopPropagation()}
+        >
+          <button
+            aria-label="关闭"
+            className="dialog-close"
+            type="button"
+            onClick={() => setIsAiPanelOpen(false)}
+          >
+            <X size={18} />
+          </button>
+          <div className="ai-dialog-header">
+            <div>
+              <h2 id="ai-subtitle-title">AI 字幕助手</h2>
+              <span>{selectedSubtitle ? selectedSubtitle.name : "未选择字幕"}</span>
+            </div>
+            <div className="ai-tabs" role="tablist" aria-label="AI 字幕工具">
+              <button className={aiTab === "summary" ? "active" : ""} type="button" onClick={() => setAiTab("summary")}>
+                总结
+              </button>
+              <button className={aiTab === "qa" ? "active" : ""} type="button" onClick={() => setAiTab("qa")}>
+                问答
+              </button>
+            </div>
+          </div>
+          {!selectedSubtitle ? (
+            <div className="ai-empty-state">请先在播放器控制栏选择字幕。</div>
+          ) : !localConfig?.ai.configured ? (
+            <div className="ai-empty-state">未配置 DEEPSEEK_API_KEY。配置后重启开发服务即可使用。</div>
+          ) : aiTab === "summary" ? (
+            <div className="ai-panel-body">
+              <div className="dialog-actions compact">
+                <button className="primary-button" type="button" onClick={() => void loadSubtitleSummary()} disabled={isAiLoading}>
+                  {subtitleSummary ? "重新总结" : "生成总结"}
+                </button>
+              </div>
+              <div className="ai-output">{subtitleSummary || aiMessage || "还没有生成总结。"}</div>
+            </div>
+          ) : (
+            <form
+              className="ai-panel-body"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void askSubtitleQuestion();
+              }}
+            >
+              <textarea
+                className="ai-question-input"
+                value={subtitleQuestion}
+                onChange={(event) => setSubtitleQuestion(event.target.value)}
+                placeholder="基于当前字幕提问..."
+                rows={4}
+              />
+              <div className="dialog-actions compact">
+                <button className="primary-button" type="submit" disabled={isAiLoading || !subtitleQuestion.trim()}>
+                  提问
+                </button>
+              </div>
+              <div className="ai-output">{subtitleAnswer || aiMessage || "回答会显示在这里。"}</div>
+            </form>
+          )}
+          {isAiLoading ? <div className="ai-loading">处理中...</div> : null}
         </section>
       </div>
     ) : null}

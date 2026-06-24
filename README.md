@@ -143,11 +143,43 @@ The development and preview server port is configured in `config/app.json`:
 {
   "server": {
     "port": 3001
+  },
+  "media": {
+    "roots": []
   }
 }
 ```
 
 Change `server.port` if port `3001` is already in use.
+
+To enable embedded subtitle extraction, install `ffmpeg` and `ffprobe` on your system path, then add the local media folders that the app is allowed to read from:
+
+```json
+{
+  "server": {
+    "port": 3001
+  },
+  "media": {
+    "roots": [
+      {
+        "id": "anime",
+        "label": "Anime",
+        "path": "D:\\Media\\Anime"
+      }
+    ]
+  }
+}
+```
+
+When the selected browser folder name matches one configured media root basename, the player can detect and extract embedded text subtitles from videos in that root. Image subtitle formats such as PGS and VobSub are detected but not OCR'd.
+
+Subtitle summaries and Q&A use DeepSeek through the local Vite API proxy. Configure the API key in your shell or `.env.local` before starting the dev server:
+
+```text
+DEEPSEEK_API_KEY=your_api_key
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+DEEPSEEK_MODEL=deepseek-chat
+```
 
 ## Build
 
