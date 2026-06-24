@@ -2059,6 +2059,7 @@ button {
   justify-content: space-between;
   gap: 16px;
   margin-bottom: 18px;
+  padding-right: 44px;
 }
 
 .ai-dialog-header h2 {
@@ -2325,5 +2326,10 @@ button {
   .dialog-actions .secondary-button,
   .dialog-actions .danger-button {
     width: 100%;
+  }
+
+  .ai-dialog-header {
+    flex-wrap: wrap;
+    padding-right: 40px;
   }
 }
