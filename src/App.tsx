@@ -3,6 +3,8 @@ import {
   ArrowUp,
   CheckCircle2,
   ChevronDown,
+  ExternalLink,
+  Folder,
   FolderOpen,
   EyeOff,
   HardDrive,
@@ -130,6 +132,22 @@ function baseNameWithoutExtension(name: string) {
   const fileName = name.split(/[\\/]/).pop() || name;
   const dotIndex = fileName.lastIndexOf(".");
   return dotIndex >= 0 ? fileName.slice(0, dotIndex) : fileName;
+}
+
+function directoryPartsOf(path: string) {
+  return path.replace(/\\/g, "/").split("/").filter(Boolean).slice(0, -1);
+}
+
+function libraryFolderTitleForVideo(video: VideoItem) {
+  return directoryPartsOf(video.relativePath)[0] ?? inferSeriesTitle(video);
+}
+
+function libraryFolderKeyForVideo(video: VideoItem) {
+  return seriesKeyFromTitle(libraryFolderTitleForVideo(video));
+}
+
+function libraryFolderPathForVideo(video: VideoItem) {
+  return directoryPartsOf(video.relativePath)[0] ?? "";
 }
 
 function inferSeriesTitle(video: VideoItem) {
@@ -693,8 +711,17 @@ type CacheStatus = {
 
 type LibrarySearchMode = "idle" | "local" | "ai" | "empty";
 
+type LibraryFolderResultVideo = {
+  video: VideoItem;
+  progress?: PlaybackProgress;
+};
+
 type LibrarySearchResult = {
-  card: HomeVideoCard;
+  key: string;
+  title: string;
+  path: string;
+  videos: LibraryFolderResultVideo[];
+  representativeVideo: VideoItem;
   score: number;
   reason: string;
 };
@@ -1421,6 +1448,37 @@ export default function App() {
     () => videos.find((item) => item.id === currentVideoId) ?? null,
     [currentVideoId, videos],
   );
+  const seriesOptionsKey = useMemo(
+    () => seriesOptions.map((series) => `${series.key}\t${series.title}\t${series.count}`).join("\n"),
+    [seriesOptions],
+  );
+  const currentSeriesKey = useMemo(
+    () => (currentVideo ? seriesKeyFromTitle(seriesTitleByVideoId.get(currentVideo.id) ?? inferSeriesTitle(currentVideo)) : ""),
+    [currentVideo, seriesTitleByVideoId],
+  );
+  const activeBangumiSeries = useMemo(() => {
+    if (!isSeriesMode) return null;
+    if (selectedSeriesKey !== "all") {
+      return seriesOptions.find((series) => series.key === selectedSeriesKey) ?? null;
+    }
+    if (currentSeriesKey) {
+      return seriesOptions.find((series) => series.key === currentSeriesKey) ?? null;
+    }
+    return seriesOptions[0] ?? null;
+  }, [currentSeriesKey, isSeriesMode, selectedSeriesKey, seriesOptions]);
+  const activeBangumiMatch = activeBangumiSeries ? bangumiMatchesBySeriesKey[activeBangumiSeries.key] : null;
+  const activeSeriesProgressVideoIds = useMemo(() => {
+    if (!isSeriesMode || !activeBangumiSeries) return [];
+    return playlistVideos
+      .filter((video) => seriesKeyFromTitle(seriesTitleByVideoId.get(video.id) ?? inferSeriesTitle(video)) === activeBangumiSeries.key)
+      .map((video) => video.id);
+  }, [activeBangumiSeries, isSeriesMode, playlistVideos, seriesTitleByVideoId]);
+  const canClearPlaylistProgress = useMemo(() => {
+    if (isSeriesMode) return activeSeriesProgressVideoIds.some((videoId) => Boolean(progressStore[videoId]));
+    return Boolean(videos.length && Object.keys(progressStore).length);
+  }, [activeSeriesProgressVideoIds, isSeriesMode, progressStore, videos.length]);
+  const clearPlaylistProgressTitle =
+    isSeriesMode && activeBangumiSeries ? `清除《${activeBangumiSeries.title}》观看记录` : "清空当前文件夹观看记录";
   const shouldStretchPortraitVideo = Boolean(
     currentVideo?.width && currentVideo.height && currentVideo.width < currentVideo.height,
   );
@@ -1477,6 +1535,34 @@ export default function App() {
       };
     },
     [progressStore, seriesTitleByVideoId],
+  );
+  const videosByLibraryFolderKey = useMemo(() => {
+    const grouped = new Map<string, VideoItem[]>();
+    playlistVideos.forEach((video) => {
+      const key = libraryFolderKeyForVideo(video);
+      const existing = grouped.get(key);
+      if (existing) {
+        existing.push(video);
+      } else {
+        grouped.set(key, [video]);
+      }
+    });
+    return grouped;
+  }, [playlistVideos]);
+  const createLibraryFolderResult = useCallback(
+    (folderVideos: VideoItem[], representativeVideo: VideoItem, score: number, reason: string): LibrarySearchResult => {
+      const sortedVideos = [...folderVideos].sort((a, b) => compareNaturalRelativePath(a.relativePath, b.relativePath));
+      return {
+        key: libraryFolderKeyForVideo(representativeVideo),
+        title: libraryFolderTitleForVideo(representativeVideo),
+        path: libraryFolderPathForVideo(representativeVideo),
+        videos: sortedVideos.map((video) => ({ video, progress: progressStore[video.id] })),
+        representativeVideo,
+        score,
+        reason,
+      };
+    },
+    [progressStore],
   );
   const resumableHomeCards = useMemo(
     () =>
@@ -1581,57 +1667,105 @@ export default function App() {
     () => (homeRecapCard ? findMatchedSubtitleForVideo(homeRecapCard.video) : null),
     [findMatchedSubtitleForVideo, homeRecapCard],
   );
+  const homeRecapMediaRootId = homeRecapCard?.video.mediaRootId ?? mediaRootId;
+  const canUseHomeEmbeddedSubtitles = Boolean(
+    homeRecapCard && homeRecapMediaRootId && localConfig?.ffmpeg.ffmpeg && localConfig.ffmpeg.ffprobe,
+  );
+  const canUseHomeRecapSubtitle = Boolean(homeRecapSubtitle || canUseHomeEmbeddedSubtitles);
   const searchLibraryLocally = useCallback(
     (query: string, limit = 8): LibrarySearchResult[] => {
       const normalizedQuery = normalizeLibrarySearchText(query);
       const tokens = tokenizeLibrarySearchQuery(query);
       if (!normalizedQuery) return [];
 
-      return videos
-        .map((video) => {
-          const card = createHomeVideoCard(video);
-          const searchable = [
-            video.name,
-            video.relativePath,
-            card.seriesTitle ?? "",
-            baseNameWithoutExtension(video.name),
-          ].map(normalizeLibrarySearchText);
-          let score = 0;
-          const reasons: string[] = [];
+      const folderResults = new Map<string, LibrarySearchResult>();
+      videos.forEach((video) => {
+        const folderTitle = libraryFolderTitleForVideo(video);
+        const folderPath = libraryFolderPathForVideo(video);
+        const directoryParts = directoryPartsOf(video.relativePath);
+        const parentDirectory = directoryParts.at(-1) ?? "";
+        const directoryPath = directoryParts.join(" ");
+        const searchable = [
+          folderTitle,
+          folderPath,
+          parentDirectory,
+          directoryPath,
+          video.name,
+          video.relativePath,
+          baseNameWithoutExtension(video.name),
+        ].map(normalizeLibrarySearchText);
+        let score = 0;
+        const reasons: string[] = [];
 
-          if (searchable[0].includes(normalizedQuery)) {
-            score += 18;
-            reasons.push("文件名匹配");
-          }
-          if (searchable[2].includes(normalizedQuery)) {
-            score += 16;
-            reasons.push("系列匹配");
-          }
-          if (searchable[1].includes(normalizedQuery)) {
-            score += 10;
-            reasons.push("路径匹配");
-          }
+        if (searchable[0].includes(normalizedQuery)) {
+          score += 40;
+          reasons.push("文件夹匹配");
+        }
+        if (searchable[1].includes(normalizedQuery)) {
+          score += 32;
+          reasons.push("目录匹配");
+        }
+        if (searchable[2].includes(normalizedQuery)) {
+          score += 24;
+          reasons.push("文件夹匹配");
+        }
+        if (searchable[3].includes(normalizedQuery)) {
+          score += 18;
+          reasons.push("目录匹配");
+        }
+        if (searchable[4].includes(normalizedQuery)) {
+          score += 10;
+          reasons.push("文件名匹配");
+        }
+        if (searchable[5].includes(normalizedQuery)) {
+          score += 6;
+          reasons.push("路径匹配");
+        }
 
-          tokens.forEach((token) => {
-            if (searchable[0].includes(token)) score += 5;
-            if (searchable[2].includes(token)) score += 4;
-            if (searchable[1].includes(token)) score += 2;
-          });
+        tokens.forEach((token) => {
+          if (searchable[0].includes(token)) score += 10;
+          if (searchable[1].includes(token)) score += 8;
+          if (searchable[2].includes(token)) score += 6;
+          if (searchable[3].includes(token)) score += 5;
+          if (searchable[4].includes(token)) score += 2;
+          if (searchable[5].includes(token)) score += 1;
+        });
 
-          if (score <= 0) return null;
-          if (favoriteVideoIds.has(video.id)) score += 1;
-          if (isResumableProgress(card.progress)) score += 1;
-          return {
-            card,
+        const progress = progressStore[video.id];
+        if (score <= 0) return;
+        if (favoriteVideoIds.has(video.id)) score += 1;
+        if (isResumableProgress(progress)) score += 1;
+
+        const key = libraryFolderKeyForVideo(video);
+        const existing = folderResults.get(key);
+        if (existing) {
+          if (
+            score > existing.score ||
+            (score === existing.score &&
+              compareNaturalRelativePath(video.relativePath, existing.representativeVideo.relativePath) < 0)
+          ) {
+            existing.score = score;
+            existing.reason = reasons[0] ?? "关键词匹配";
+            existing.representativeVideo = video;
+          }
+          return;
+        }
+
+        folderResults.set(
+          key,
+          createLibraryFolderResult(
+            videosByLibraryFolderKey.get(key) ?? [video],
+            video,
             score,
-            reason: reasons[0] ?? "关键词匹配",
-          };
-        })
-        .filter((item): item is LibrarySearchResult => Boolean(item))
-        .sort((a, b) => b.score - a.score || compareNaturalRelativePath(a.card.video.relativePath, b.card.video.relativePath))
+            reasons[0] ?? "关键词匹配",
+          ),
+        );
+      });
+      return Array.from(folderResults.values())
+        .sort((a, b) => b.score - a.score || collator.compare(a.title, b.title))
         .slice(0, limit);
     },
-    [createHomeVideoCard, favoriteVideoIds, videos],
+    [createLibraryFolderResult, favoriteVideoIds, progressStore, videos, videosByLibraryFolderKey],
   );
   const createLibrarySearchCandidates = useCallback(
     (localResults: LibrarySearchResult[]): LibrarySearchCandidate[] => {
@@ -1652,7 +1786,10 @@ export default function App() {
         });
       };
 
-      localResults.forEach((result) => addVideo(result.card.video));
+      localResults.forEach((result) => {
+        addVideo(result.representativeVideo);
+        result.videos.forEach(({ video }) => addVideo(video));
+      });
       resumableHomeCards.forEach((card) => addVideo(card.video));
       favoriteHomeCards.forEach((card) => addVideo(card.video));
       recentHomeCards.forEach((card) => addVideo(card.video));
@@ -2201,13 +2338,40 @@ export default function App() {
 
   const clearFolderProgress = useCallback(() => {
     if (!videos.length) return;
+    if (isSeriesMode && activeBangumiSeries) {
+      const targetVideoIds = new Set(activeSeriesProgressVideoIds);
+      if (!targetVideoIds.size) return;
+
+      const nextStore = { ...progressStoreRef.current };
+      let didClear = false;
+      targetVideoIds.forEach((videoId) => {
+        clearedProgressVideoIdsRef.current.add(videoId);
+        if (nextStore[videoId]) {
+          delete nextStore[videoId];
+          didClear = true;
+        }
+      });
+      if (!didClear) return;
+
+      if (currentVideoId && targetVideoIds.has(currentVideoId)) {
+        const element = videoRef.current;
+        if (element && Number.isFinite(element.duration)) {
+          element.currentTime = 0;
+        }
+        setCurrentTime(0);
+      }
+
+      replaceProgressStore(nextStore, `已清除《${activeBangumiSeries.title}》的观看记录`);
+      return;
+    }
+
     const element = videoRef.current;
     if (element && Number.isFinite(element.duration)) {
       element.currentTime = 0;
     }
     setCurrentTime(0);
     replaceProgressStore({}, "已清空当前文件夹的观看记录");
-  }, [replaceProgressStore, videos.length]);
+  }, [activeBangumiSeries, activeSeriesProgressVideoIds, currentVideoId, isSeriesMode, replaceProgressStore, videos.length]);
 
   const persistCurrentProgress = useCallback(
     (completed = false) => {
@@ -2272,6 +2436,21 @@ export default function App() {
       selectVideo(video.id);
     },
     [selectVideo],
+  );
+
+  const openLibraryFolderFromSearch = useCallback(
+    (result: LibrarySearchResult) => {
+      const targetVideo = result.videos[0]?.video ?? result.representativeVideo;
+      setIsSeriesMenuOpen(false);
+      setPlaylistFilter("all");
+      replacePlayerPreferences({
+        ...playerPreferencesRef.current,
+        isSeriesMode: true,
+        selectedSeriesKey: result.key,
+      });
+      selectVideo(targetVideo.id);
+    },
+    [replacePlayerPreferences, selectVideo],
   );
 
   const showHomeView = useCallback(() => {
@@ -3644,7 +3823,14 @@ export default function App() {
     } finally {
       setIsHomeProgressRecapLoading(false);
     }
-  }, [homeRecapCard, homeRecapSubtitle, localConfig]);
+  }, [
+    homeRecapCard,
+    homeRecapMediaRootId,
+    homeRecapSubtitle,
+    loadEmbeddedSubtitleForVideo,
+    localConfig,
+    probeEmbeddedSubtitleTracksForVideo,
+  ]);
 
   const runLibrarySearch = useCallback(async () => {
     const query = librarySearchQuery.trim();
@@ -3682,19 +3868,21 @@ export default function App() {
         body: JSON.stringify({ query, candidates }),
       });
       const candidateById = new Map(candidates.map((candidate) => [candidate.id, candidate]));
-      const aiResults = response.matchIds
+      const aiResultsByKey = new Map<string, LibrarySearchResult>();
+      response.matchIds
         .map((id) => candidateById.get(id))
         .filter((candidate): candidate is LibrarySearchCandidate => Boolean(candidate))
-        .map((candidate, index) => {
+        .forEach((candidate, index) => {
           const video = videos.find((item) => item.id === candidate.id);
-          if (!video) return null;
-          return {
-            card: createHomeVideoCard(video),
-            score: 100 - index,
-            reason: "AI 推荐",
-          };
-        })
-        .filter((item): item is LibrarySearchResult => Boolean(item));
+          if (!video) return;
+          const key = libraryFolderKeyForVideo(video);
+          if (aiResultsByKey.has(key)) return;
+          aiResultsByKey.set(
+            key,
+            createLibraryFolderResult(videosByLibraryFolderKey.get(key) ?? [video], video, 100 - index, "AI 推荐"),
+          );
+        });
+      const aiResults = Array.from(aiResultsByKey.values());
       setLibrarySearchResults(aiResults.length ? aiResults : localResults);
       setLibrarySearchAnswer(response.answer);
       setLibrarySearchMessage(aiResults.length ? "AI 已从本地候选中挑选结果。" : "AI 未返回明确条目，保留本地结果。");
@@ -3705,7 +3893,15 @@ export default function App() {
     } finally {
       setIsLibrarySearchLoading(false);
     }
-  }, [createHomeVideoCard, createLibrarySearchCandidates, librarySearchQuery, localConfig, searchLibraryLocally, videos]);
+  }, [
+    createLibraryFolderResult,
+    createLibrarySearchCandidates,
+    librarySearchQuery,
+    localConfig,
+    searchLibraryLocally,
+    videos,
+    videosByLibraryFolderKey,
+  ]);
 
   const loadCacheStatus = useCallback(async () => {
     setIsCacheStatusLoading(true);
@@ -4285,6 +4481,33 @@ export default function App() {
       </span>
     </button>
   );
+  const renderLibraryFolderResult = (result: LibrarySearchResult) => {
+    const unfinishedCount = result.videos.filter(({ progress }) => !progress?.completed).length;
+    const resumableCount = result.videos.filter(({ progress }) => isResumableProgress(progress)).length;
+    const statusLabel = resumableCount
+      ? `${resumableCount} 个可继续`
+      : unfinishedCount
+        ? `${unfinishedCount} 个未看完`
+        : "已看完";
+    return (
+      <button
+        key={result.key}
+        className="library-folder-result"
+        type="button"
+        onClick={() => openLibraryFolderFromSearch(result)}
+        title={result.path || result.title}
+      >
+        <span className="library-folder-icon" aria-hidden="true">
+          <Folder size={20} />
+        </span>
+        <span className="library-folder-copy">
+          <strong>{result.title}</strong>
+          <small>{result.videos.length} 集 · {statusLabel} · {result.reason}</small>
+          {result.path ? <small>{result.path}</small> : null}
+        </span>
+      </button>
+    );
+  };
 
   return (
     <>
@@ -4459,13 +4682,15 @@ export default function App() {
                       : homeProgressRecapMessage ||
                         (homeRecapSubtitle
                           ? "根据当前进度前的字幕生成回顾，不包含后续剧情。"
+                          : canUseHomeEmbeddedSubtitles
+                            ? "可自动提取内封文本字幕，并根据当前进度生成回顾。"
                           : "没有匹配字幕，暂时无法生成回顾。")}
                   </div>
                   <button
                     className="secondary-button home-recap-button"
                     type="button"
                     onClick={() => void loadHomeProgressRecap()}
-                    disabled={isHomeProgressRecapLoading || !localConfig?.ai.configured || !homeRecapSubtitle}
+                    disabled={isHomeProgressRecapLoading || !localConfig?.ai.configured || !canUseHomeRecapSubtitle}
                     title={!localConfig?.ai.configured ? "未配置 DEEPSEEK_API_KEY" : undefined}
                   >
                     {homeProgressRecap ? "重新生成" : isHomeProgressRecapLoading ? "生成中..." : "生成回顾"}
@@ -4502,10 +4727,10 @@ export default function App() {
                 {librarySearchAnswer ? <div className="library-search-answer">{librarySearchAnswer}</div> : null}
                 {librarySearchResults.length ? (
                   <div className="home-compact-list library-search-results">
-                    {librarySearchResults.map((result, index) => renderHomeListCard(result.card, index))}
+                    {librarySearchResults.map(renderLibraryFolderResult)}
                   </div>
                 ) : librarySearchMode === "empty" ? (
-                  <div className="empty-list compact">没有找到匹配视频</div>
+                  <div className="empty-list compact">没有找到匹配文件夹</div>
                 ) : null}
               </section>
 

@@ -936,6 +936,26 @@ button {
   white-space: pre-wrap;
 }
 
+.home-recap-output::-webkit-scrollbar {
+  width: 10px;
+}
+
+.home-recap-output::-webkit-scrollbar-track {
+  border-radius: 999px;
+  background: rgba(20, 22, 26, 0.35);
+}
+
+.home-recap-output::-webkit-scrollbar-thumb {
+  min-height: 48px;
+  border: 2px solid rgba(20, 22, 26, 0.35);
+  border-radius: 999px;
+  background: rgba(142, 151, 165, 0.58);
+}
+
+.home-recap-output::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 161, 214, 0.72);
+}
+
 .home-recap-button {
   width: 100%;
 }
@@ -2685,6 +2705,7 @@ button {
 .app-shell.theme-light .playlist-sort-select:disabled,
 .app-shell.theme-light .playlist-order-button:disabled,
 .app-shell.theme-light .playlist-top-button:disabled,
+.app-shell.theme-light .bangumi-link-button:disabled,
 .app-shell.theme-light .playlist-locate-button:disabled,
 .app-shell.theme-light .playlist-clear-button:disabled,
 .app-shell.theme-light .series-mode-button:disabled,
@@ -2839,6 +2860,7 @@ button {
 }
 
 .app-shell.theme-light .home-list-card,
+.app-shell.theme-light .library-folder-result,
 .app-shell.theme-light .home-stats div,
 .app-shell.theme-light .home-recap-output,
 .app-shell.theme-light .library-search-answer,
