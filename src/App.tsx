@@ -2080,6 +2080,23 @@ export default function App() {
       });
   }, [saveCurrentPlayerDataStore]);
 
+  const clearCurrentLibraryRuntimeData = useCallback(() => {
+    progressStoreRef.current = {};
+    favoriteVideoIdsRef.current = new Set();
+    clearedProgressVideoIdsRef.current = new Set(videosRef.current.map((video) => video.id));
+    setProgressStore({});
+    setFavoriteVideoIds(new Set());
+    setHomeProgressRecap("");
+    setHomeProgressRecapMessage("");
+    setHomeProgressRecapVideoId("");
+
+    const element = videoRef.current;
+    if (element && Number.isFinite(element.duration)) {
+      element.currentTime = 0;
+    }
+    setCurrentTime(0);
+  }, []);
+
   const replacePlayerPreferences = useCallback((nextPreferences: PlayerPreferences) => {
     playerPreferencesRef.current = nextPreferences;
     setPlaylistSortMode(nextPreferences.playlistSortMode);
@@ -4173,13 +4190,16 @@ export default function App() {
       setCacheStatus(response.status);
       setSelectedCacheItemIds(new Set());
       setIsClearCacheConfirmOpen(false);
+      if (response.cleared.some((id) => id === "libraries" || id === "index")) {
+        clearCurrentLibraryRuntimeData();
+      }
       setCacheStatusMessage(`已清除 ${response.cleared.length} 项缓存。`);
     } catch (error) {
       setCacheStatusMessage(error instanceof Error ? error.message : "清除缓存失败。");
     } finally {
       setIsClearingCache(false);
     }
-  }, [selectedCacheItems]);
+  }, [clearCurrentLibraryRuntimeData, selectedCacheItems]);
 
   const openCacheStatusDialog = useCallback(() => {
     setIsCacheStatusDialogOpen(true);
