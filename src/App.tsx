@@ -710,6 +710,11 @@ type CacheStatus = {
   items: CacheStatusItem[];
 };
 
+type ClearCacheResponse = {
+  cleared: string[];
+  status: CacheStatus;
+};
+
 type LibrarySearchMode = "idle" | "local" | "ai" | "empty";
 
 type LibraryFolderResultVideo = {
@@ -1344,6 +1349,9 @@ export default function App() {
   const [isCacheStatusLoading, setIsCacheStatusLoading] = useState(false);
   const [hasLoadedCacheStatus, setHasLoadedCacheStatus] = useState(false);
   const [isCacheStatusDialogOpen, setIsCacheStatusDialogOpen] = useState(false);
+  const [selectedCacheItemIds, setSelectedCacheItemIds] = useState<Set<string>>(() => new Set());
+  const [isClearCacheConfirmOpen, setIsClearCacheConfirmOpen] = useState(false);
+  const [isClearingCache, setIsClearingCache] = useState(false);
   const [libraryId, setLibraryId] = useState<string | null>(null);
   const [currentVideoId, setCurrentVideoId] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<ActiveView>("home");
@@ -4110,6 +4118,69 @@ export default function App() {
     }
   }, []);
 
+  const cacheStatusItems = cacheStatus?.items ?? [];
+  const selectedCacheItems = useMemo(
+    () => cacheStatusItems.filter((item) => selectedCacheItemIds.has(item.id)),
+    [cacheStatusItems, selectedCacheItemIds],
+  );
+  const selectedCacheBytes = selectedCacheItems.reduce((sum, item) => sum + item.bytes, 0);
+  const selectedCacheFiles = selectedCacheItems.reduce((sum, item) => sum + item.files, 0);
+  const isAllCacheSelected = cacheStatusItems.length > 0 && cacheStatusItems.every((item) => selectedCacheItemIds.has(item.id));
+
+  useEffect(() => {
+    if (!cacheStatus) return;
+    const availableIds = new Set(cacheStatus.items.map((item) => item.id));
+    setSelectedCacheItemIds((previous) => {
+      const next = new Set(Array.from(previous).filter((id) => availableIds.has(id)));
+      return next.size === previous.size ? previous : next;
+    });
+  }, [cacheStatus]);
+
+  const toggleCacheItemSelection = useCallback((id: string, checked: boolean) => {
+    setSelectedCacheItemIds((previous) => {
+      const next = new Set(previous);
+      if (checked) {
+        next.add(id);
+      } else {
+        next.delete(id);
+      }
+      return next;
+    });
+  }, []);
+
+  const toggleAllCacheItems = useCallback(() => {
+    setSelectedCacheItemIds((previous) => {
+      if (!cacheStatusItems.length) return previous;
+      const shouldSelectAll = !cacheStatusItems.every((item) => previous.has(item.id));
+      return shouldSelectAll ? new Set(cacheStatusItems.map((item) => item.id)) : new Set();
+    });
+  }, [cacheStatusItems]);
+
+  const requestClearSelectedCache = useCallback(() => {
+    if (!selectedCacheItems.length) return;
+    setIsClearCacheConfirmOpen(true);
+  }, [selectedCacheItems.length]);
+
+  const confirmClearSelectedCache = useCallback(async () => {
+    if (!selectedCacheItems.length) return;
+    setIsClearingCache(true);
+    setCacheStatusMessage("");
+    try {
+      const response = await fetchJson<ClearCacheResponse>("/api/cache-status/clear", {
+        method: "POST",
+        body: JSON.stringify({ ids: selectedCacheItems.map((item) => item.id) }),
+      });
+      setCacheStatus(response.status);
+      setSelectedCacheItemIds(new Set());
+      setIsClearCacheConfirmOpen(false);
+      setCacheStatusMessage(`已清除 ${response.cleared.length} 项缓存。`);
+    } catch (error) {
+      setCacheStatusMessage(error instanceof Error ? error.message : "清除缓存失败。");
+    } finally {
+      setIsClearingCache(false);
+    }
+  }, [selectedCacheItems]);
+
   const openCacheStatusDialog = useCallback(() => {
     setIsCacheStatusDialogOpen(true);
     void loadCacheStatus();
@@ -4365,6 +4436,12 @@ export default function App() {
         return;
       }
 
+      if (event.key === "Escape" && isClearCacheConfirmOpen) {
+        event.preventDefault();
+        setIsClearCacheConfirmOpen(false);
+        return;
+      }
+
       if (event.key === "Escape" && isShortcutDialogOpen) {
         event.preventDefault();
         setIsShortcutDialogOpen(false);
@@ -4545,6 +4622,7 @@ export default function App() {
     deleteCandidate,
     exitPrivacyMode,
     isCinemaMode,
+    isClearCacheConfirmOpen,
     isPrivacyMode,
     isShortcutDialogOpen,
     markCurrentVideoCompleted,
@@ -5718,7 +5796,14 @@ export default function App() {
       </div>
     ) : null}
     {isCacheStatusDialogOpen ? (
-      <div className="modal-backdrop" role="presentation" onMouseDown={() => setIsCacheStatusDialogOpen(false)}>
+      <div
+        className="modal-backdrop"
+        role="presentation"
+        onMouseDown={() => {
+          setIsCacheStatusDialogOpen(false);
+          setIsClearCacheConfirmOpen(false);
+        }}
+      >
         <div
           aria-labelledby="cache-status-title"
           aria-modal="true"
@@ -5759,14 +5844,36 @@ export default function App() {
             {cacheStatusMessage ? <div className="ai-empty-state">{cacheStatusMessage}</div> : null}
             {isCacheStatusLoading && !cacheStatus ? <div className="ai-loading">正在读取缓存状态...</div> : null}
 
+            <div className="cache-status-toolbar">
+              <button
+                className={`cache-select-all-button ${isAllCacheSelected ? "active" : ""}`}
+                type="button"
+                onClick={toggleAllCacheItems}
+                disabled={!cacheStatusItems.length || isCacheStatusLoading || isClearingCache}
+              >
+                {isAllCacheSelected ? "取消全选" : "全选"}
+              </button>
+              <span>
+                已选择 {selectedCacheItems.length} 项 · {formatFileSize(selectedCacheBytes)} · {selectedCacheFiles} 个文件
+              </span>
+            </div>
+
             <div className="cache-status-list">
-              {(cacheStatus?.items ?? []).map((item) => (
-                <div className="cache-status-row" key={item.id}>
-                  <div>
+              {cacheStatusItems.map((item) => (
+                <label className={`cache-status-row ${selectedCacheItemIds.has(item.id) ? "selected" : ""}`} key={item.id}>
+                  <span className="cache-status-check">
+                    <input
+                      type="checkbox"
+                      checked={selectedCacheItemIds.has(item.id)}
+                      onChange={(event) => toggleCacheItemSelection(item.id, event.target.checked)}
+                      disabled={isClearingCache}
+                    />
+                  </span>
+                  <span className="cache-status-row-main">
                     <strong>{item.label}</strong>
                     <span>{item.path}</span>
                     {item.error ? <small>{item.error}</small> : null}
-                  </div>
+                  </span>
                   <dl>
                     <div>
                       <dt>大小</dt>
@@ -5781,7 +5888,7 @@ export default function App() {
                       <dd>{item.updatedAt ? formatModifiedTime(item.updatedAt) : "暂无缓存"}</dd>
                     </div>
                   </dl>
-                </div>
+                </label>
               ))}
               {!cacheStatus?.items.length && !isCacheStatusLoading ? (
                 <div className="ai-empty-state">暂无缓存状态。</div>
@@ -5794,11 +5901,61 @@ export default function App() {
               <RefreshCw size={17} />
               重新检查
             </button>
+            <button
+              className="danger-button"
+              type="button"
+              onClick={requestClearSelectedCache}
+              disabled={!selectedCacheItems.length || isClearingCache}
+            >
+              <Trash2 size={17} />
+              清除选中缓存
+            </button>
             <button className="primary-button" type="button" onClick={() => setIsCacheStatusDialogOpen(false)}>
               关闭
             </button>
           </div>
         </div>
+      </div>
+    ) : null}
+    {isClearCacheConfirmOpen ? (
+      <div className="modal-backdrop nested" role="presentation" onMouseDown={() => setIsClearCacheConfirmOpen(false)}>
+        <section
+          aria-labelledby="clear-cache-title"
+          aria-modal="true"
+          className="delete-dialog"
+          role="dialog"
+          onMouseDown={(event) => event.stopPropagation()}
+        >
+          <button
+            aria-label="关闭"
+            className="dialog-close"
+            type="button"
+            onClick={() => setIsClearCacheConfirmOpen(false)}
+            disabled={isClearingCache}
+          >
+            <X size={18} />
+          </button>
+          <div className="dialog-icon danger">
+            <Trash2 size={28} />
+          </div>
+          <div className="dialog-copy">
+            <h2 id="clear-cache-title">确认清除缓存？</h2>
+            <p>将删除选中的本地缓存文件。播放数据、缩略图、字幕和 AI 结果被清除后会在需要时重新生成。</p>
+          </div>
+          <div className="delete-file-preview">
+            <strong>{selectedCacheItems.length} 项缓存 · {formatFileSize(selectedCacheBytes)}</strong>
+            <span>{selectedCacheFiles} 个文件</span>
+          </div>
+          <div className="dialog-actions">
+            <button className="secondary-button" type="button" onClick={() => setIsClearCacheConfirmOpen(false)} disabled={isClearingCache}>
+              取消
+            </button>
+            <button className="danger-button" type="button" onClick={() => void confirmClearSelectedCache()} disabled={isClearingCache}>
+              <Trash2 size={18} />
+              {isClearingCache ? "正在清除..." : "确认清除"}
+            </button>
+          </div>
+        </section>
       </div>
     ) : null}
     {isAiPanelOpen ? (

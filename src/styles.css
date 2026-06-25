@@ -322,6 +322,11 @@ button {
   background: #f05252;
 }
 
+.danger-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
 .player-frame {
   position: relative;
   display: flex;
@@ -2521,17 +2526,82 @@ button {
   gap: 8px;
 }
 
+.cache-status-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 34px;
+}
+
+.cache-status-toolbar span {
+  overflow: hidden;
+  color: #8e97a5;
+  font-size: 13px;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cache-select-all-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 78px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid #303743;
+  border-radius: 6px;
+  background: #20252d;
+  color: #f5f7fb;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.cache-select-all-button:hover,
+.cache-select-all-button.active {
+  border-color: #00a1d6;
+  background: #07394a;
+  color: #79dfff;
+}
+
+.cache-select-all-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
 .cache-status-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(350px, 46%);
+  grid-template-columns: 24px minmax(0, 1fr) minmax(350px, 46%);
+  align-items: start;
   gap: 12px;
   padding: 12px;
   border: 1px solid #2d3440;
   border-radius: 8px;
   background: #1d222c;
+  cursor: pointer;
 }
 
-.cache-status-row > div {
+.cache-status-row.selected {
+  border-color: rgba(0, 161, 214, 0.76);
+  background: #17242d;
+}
+
+.cache-status-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+}
+
+.cache-status-check input {
+  width: 16px;
+  height: 16px;
+  accent-color: #00a1d6;
+}
+
+.cache-status-row-main {
   min-width: 0;
 }
 
@@ -3631,11 +3701,21 @@ button {
   }
 
   .cache-status-row {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: 24px minmax(0, 1fr);
   }
 
   .cache-status-row dl {
+    grid-column: 1 / -1;
     grid-template-columns: minmax(72px, 0.8fr) minmax(52px, 0.6fr) minmax(150px, 1.5fr);
+  }
+
+  .cache-status-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .cache-status-toolbar span {
+    text-align: left;
   }
 
   .shortcut-grid {

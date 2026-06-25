@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { access, mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import http from "node:http";
 import https from "node:https";
 import path from "node:path";
@@ -157,6 +157,37 @@ async function createCacheStatus() {
     totalFiles,
     updatedAt,
     items,
+  };
+}
+
+function assertCachePathIsSafe(targetPath) {
+  const resolvedDataRoot = path.resolve(dataRoot);
+  const resolvedTarget = path.resolve(targetPath);
+  const rootWithSeparator = resolvedDataRoot.endsWith(path.sep) ? resolvedDataRoot : `${resolvedDataRoot}${path.sep}`;
+  if (resolvedTarget !== resolvedDataRoot && !resolvedTarget.startsWith(rootWithSeparator)) {
+    throw new Error("Refusing to clear a path outside the local data directory.");
+  }
+}
+
+async function clearCacheItems(payload) {
+  const ids = Array.isArray(payload?.ids) ? payload.ids.filter((id) => typeof id === "string") : [];
+  const uniqueIds = Array.from(new Set(ids));
+  if (!uniqueIds.length) throw new Error("No cache items selected.");
+
+  const currentStatus = await createCacheStatus();
+  const itemsById = new Map(currentStatus.items.map((item) => [item.id, item]));
+  const invalidId = uniqueIds.find((id) => !itemsById.has(id));
+  if (invalidId) throw new Error("Unknown cache item.");
+
+  for (const id of uniqueIds) {
+    const item = itemsById.get(id);
+    assertCachePathIsSafe(item.path);
+    await rm(item.path, { recursive: true, force: true });
+  }
+
+  return {
+    cleared: uniqueIds,
+    status: await createCacheStatus(),
   };
 }
 
@@ -1132,6 +1163,12 @@ function playerDataApiPlugin(env) {
 
       if (url.pathname === "/api/cache-status" && request.method === "GET") {
         sendJson(response, 200, await createCacheStatus());
+        return;
+      }
+
+      if (url.pathname === "/api/cache-status/clear" && request.method === "POST") {
+        const payload = JSON.parse((await readBody(request)).toString("utf8"));
+        sendJson(response, 200, await clearCacheItems(payload));
         return;
       }
 
