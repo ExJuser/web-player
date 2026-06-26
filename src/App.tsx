@@ -54,6 +54,7 @@ import type {
   PlayerMediaRootStatus,
   PlayerPreferences,
   PhotoAlbum,
+  PhotoAlbumImage,
   PhotoAlbumProgress,
   PhotoAlbumSortMode,
   PhotoAlbumStore,
@@ -131,7 +132,7 @@ function isSubtitleFile(name: string) {
 }
 
 const PHOTO_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif", ".bmp"]);
-const photoAlbumPageSize = 48;
+const photoAlbumPageSize = 24;
 const cacheStatusPageSize = 10;
 const photoThumbnailWindowSize = 24;
 const photoAlbumSortOptions: Array<{ value: PhotoAlbumSortMode; label: string }> = [
@@ -745,16 +746,17 @@ function collectVideosFromFiles(files: FileList | File[]): MediaCollection {
   return sortMediaCollection(collection);
 }
 
-function collectPhotoAlbumsFromFiles(files: FileList | File[]) {
-  const albumImages = new Map<string, PhotoAlbum["images"]>();
-  const photoFiles = Array.from(files).filter((file) => isPhotoFile(file.name));
-  const firstRelativePath = (photoFiles[0] as (File & { webkitRelativePath?: string }) | undefined)?.webkitRelativePath ?? "";
-  const rootLabel = firstRelativePath.split("/").filter(Boolean)[0] || "写真集";
-  const rootId = `browser-photo:${sanitizeLibraryName(rootLabel)}-${hashString(rootLabel)}`;
+type BrowserPhotoFile = {
+  file: File;
+  relativePath: string;
+};
 
-  for (const file of photoFiles) {
-    const browserRelativePath = (file as File & { webkitRelativePath?: string }).webkitRelativePath;
-    const relativePath = (browserRelativePath || file.name).replace(/\\/g, "/");
+function collectPhotoAlbumsFromBrowserFiles(rootLabel: string, rootId: string, photoFiles: BrowserPhotoFile[]) {
+  const albumImages = new Map<string, PhotoAlbum["images"]>();
+
+  for (const photoFile of photoFiles) {
+    const { file } = photoFile;
+    const relativePath = photoFile.relativePath.replace(/\\/g, "/");
     const pathParts = relativePath.split("/").filter(Boolean);
     const scopedParts = pathParts[0] === rootLabel ? pathParts.slice(1) : pathParts;
     const name = scopedParts.at(-1) || file.name;
@@ -767,7 +769,8 @@ function collectPhotoAlbumsFromFiles(files: FileList | File[]) {
       id: createGlobalVideoId(rootId, imageRelativePath, file),
       name,
       relativePath: imageRelativePath,
-      url: URL.createObjectURL(file),
+      url: "",
+      file,
       size: file.size,
       lastModified: file.lastModified,
       mediaRootId: rootId,
@@ -787,7 +790,7 @@ function collectPhotoAlbumsFromFiles(files: FileList | File[]) {
       relativePath,
       mediaRootId: rootId,
       mediaRootLabel: rootLabel,
-      coverImageUrl: indexedImages[0]?.url ?? "",
+      coverImageUrl: "",
       imageCount: indexedImages.length,
       totalSize,
       updatedAt,
@@ -803,6 +806,31 @@ function collectPhotoAlbumsFromFiles(files: FileList | File[]) {
     albums,
     scannedFiles: photoFiles.length,
   };
+}
+
+async function collectPhotoAlbumsFromDirectory(directory: FileSystemDirectoryHandle) {
+  const photoFiles: BrowserPhotoFile[] = [];
+
+  async function walk(handle: FileSystemDirectoryHandle, segments: string[]) {
+    for await (const entry of handle.values()) {
+      if (entry.kind === "directory") {
+        await walk(entry, [...segments, entry.name]);
+      } else if (isPhotoFile(entry.name)) {
+        const file = await entry.getFile();
+        photoFiles.push({
+          file,
+          relativePath: [...segments, entry.name].join("/"),
+        });
+      }
+    }
+  }
+
+  await walk(directory, []);
+
+  const rootLabel = directory.name || "写真集";
+  const rootId = `browser-photo:${sanitizeLibraryName(rootLabel)}-${hashString(rootLabel)}`;
+
+  return collectPhotoAlbumsFromBrowserFiles(rootLabel, rootId, photoFiles);
 }
 
 function escapeVttText(text: string) {
@@ -1873,6 +1901,7 @@ export default function App() {
   const lastSubtitleSelectionVideoIdRef = useRef<string | null>(null);
   const selectedSubtitleIdRef = useRef("off");
   const photoAlbumsRef = useRef<PhotoAlbum[]>([]);
+  const photoObjectUrlsRef = useRef<Record<string, string>>({});
   const [videos, setVideos] = useState<VideoItem[]>([]);
   const [subtitles, setSubtitles] = useState<SubtitleItem[]>([]);
   const [localConfig, setLocalConfig] = useState<LocalConfig | null>(null);
@@ -1918,6 +1947,7 @@ export default function App() {
   const [photoRootStatuses, setPhotoRootStatuses] = useState<PlayerMediaRootStatus[]>([]);
   const [selectedPhotoAlbumId, setSelectedPhotoAlbumId] = useState<string | null>(null);
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
+  const [photoObjectUrls, setPhotoObjectUrls] = useState<Record<string, string>>({});
   const [photoAlbumProgress, setPhotoAlbumProgress] = useState<Record<string, PhotoAlbumProgress>>({});
   const [favoritePhotoAlbumIds, setFavoritePhotoAlbumIds] = useState<Set<string>>(() => new Set());
   const [photoAlbumSortMode, setPhotoAlbumSortMode] = useState<PhotoAlbumSortMode>(defaultPhotoAlbumPreferences.sortMode);
@@ -2100,13 +2130,13 @@ export default function App() {
     setTagMergeDecisions(nextDataStore.tagMergeDecisions);
   }, []);
 
-  const loadPhotoAlbumFiles = useCallback(
-    async (files: FileList | File[]) => {
+  const loadPhotoAlbumDirectory = useCallback(
+    async (directory: FileSystemDirectoryHandle) => {
       setIsPhotoAlbumsLoading(true);
       setPhotoAlbumMessage("正在扫描写真集...");
       try {
         const [scan, store] = await Promise.all([
-          Promise.resolve(collectPhotoAlbumsFromFiles(files)),
+          collectPhotoAlbumsFromDirectory(directory),
           loadPhotoAlbumStore().catch(() => ({
             version: 1,
             favorites: [],
@@ -2120,6 +2150,9 @@ export default function App() {
             if (isObjectUrl(image.url)) URL.revokeObjectURL(image.url);
           });
         });
+        Object.values(photoObjectUrlsRef.current).forEach((url) => URL.revokeObjectURL(url));
+        photoObjectUrlsRef.current = {};
+        setPhotoObjectUrls({});
         setPhotoAlbums(scan.albums);
         setPhotoAlbumPage(1);
         setPhotoRootStatuses([
@@ -2148,33 +2181,24 @@ export default function App() {
     [applyPhotoAlbumStore],
   );
 
-  const choosePhotoAlbumDirectory = useCallback(() => {
+  const choosePhotoAlbumDirectory = useCallback(async () => {
     if (isPhotoAlbumsLoading) return;
-    const input = document.createElement("input");
-    input.type = "file";
-    input.multiple = true;
-    input.accept = Array.from(PHOTO_EXTENSIONS).join(",");
-    input.style.display = "none";
-    input.setAttribute("webkitdirectory", "");
+    if (!window.showDirectoryPicker) {
+      setPhotoAlbumMessage("当前浏览器不支持无上传确认的文件夹选择，请使用支持 File System Access API 的浏览器。");
+      return;
+    }
 
-    input.onchange = async () => {
-      const files = input.files;
-      if (!files?.length) {
-        input.remove();
-        return;
+    try {
+      const directory = await window.showDirectoryPicker({ mode: "read" });
+      await loadPhotoAlbumDirectory(directory);
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        setPhotoAlbumMessage("已取消选择写真集文件夹。");
+      } else {
+        setPhotoAlbumMessage("选择写真集文件夹失败，请确认浏览器权限后重试。");
       }
-
-      try {
-        await loadPhotoAlbumFiles(files);
-      } finally {
-        input.remove();
-      }
-    };
-
-    input.addEventListener("cancel", () => input.remove(), { once: true });
-    document.body.append(input);
-    input.click();
-  }, [isPhotoAlbumsLoading, loadPhotoAlbumFiles]);
+    }
+  }, [isPhotoAlbumsLoading, loadPhotoAlbumDirectory]);
 
   const playlistVideos = useMemo(
     () => getSortedVideos(videos, isSeriesMode ? "name" : playlistSortMode, isSeriesMode ? false : isPlaylistSortReversed),
@@ -2463,6 +2487,50 @@ export default function App() {
     const start = Math.min(Math.max(currentPhotoIndex - halfWindow, 0), maxStart);
     return selectedPhotoAlbum.images.slice(start, start + photoThumbnailWindowSize);
   }, [currentPhotoIndex, selectedPhotoAlbum]);
+  useEffect(() => {
+    const neededImages = new Map<string, PhotoAlbumImage>();
+    if (activeView === "photos") {
+      pagedPhotoAlbums.forEach((album) => {
+        const coverImage = album.images[0];
+        if (coverImage?.file && !coverImage.url) neededImages.set(coverImage.id, coverImage);
+      });
+    } else if (activeView === "photoViewer" && selectedPhotoAlbum) {
+      const currentImage = selectedPhotoAlbum.images[currentPhotoIndex];
+      if (currentImage?.file && !currentImage.url) neededImages.set(currentImage.id, currentImage);
+      visiblePhotoThumbnails.forEach((image) => {
+        if (image.file && !image.url) neededImages.set(image.id, image);
+      });
+    }
+
+    const nextUrls = { ...photoObjectUrlsRef.current };
+    let didChange = false;
+
+    Object.entries(photoObjectUrlsRef.current).forEach(([id, url]) => {
+      if (!neededImages.has(id)) {
+        URL.revokeObjectURL(url);
+        delete nextUrls[id];
+        didChange = true;
+      }
+    });
+
+    neededImages.forEach((image, id) => {
+      if (!nextUrls[id] && image.file) {
+        nextUrls[id] = URL.createObjectURL(image.file);
+        didChange = true;
+      }
+    });
+
+    if (didChange) {
+      photoObjectUrlsRef.current = nextUrls;
+      setPhotoObjectUrls(nextUrls);
+    }
+  }, [activeView, currentPhotoIndex, pagedPhotoAlbums, selectedPhotoAlbum, visiblePhotoThumbnails]);
+  useEffect(() => {
+    return () => {
+      Object.values(photoObjectUrlsRef.current).forEach((url) => URL.revokeObjectURL(url));
+      photoObjectUrlsRef.current = {};
+    };
+  }, []);
   useEffect(() => {
     setPhotoAlbumPage((page) => Math.min(Math.max(page, 1), photoAlbumPageCount));
   }, [photoAlbumPageCount]);
@@ -3065,7 +3133,7 @@ export default function App() {
       setActiveView("home");
       setMessage(
         nextVideos.length
-          ? `已加载全局媒体库 ${nextVideos.length} 个视频，已过滤 ${scan.filteredSmallVideos} 个 50 MB 以下小视频`
+          ? `已加载全局媒体库 ${nextVideos.length} 个视频，已过滤 ${scan.filteredSmallVideos} 个小文件或特殊命名视频`
           : "没有可自动扫描的媒体文件；浏览器媒体库可能需要配置本机路径或重新授权。",
       );
     } catch (error) {
@@ -4250,7 +4318,7 @@ export default function App() {
           videos: batch.videos.map((video) => ({ ...video, mediaRootId: nextMediaRootId ?? undefined })),
         });
         setMessage(
-          `正在扫描，已找到 ${media.videos.length} 个视频，已过滤 ${media.filteredSmallVideos} 个小视频，已检查 ${media.scannedFiles} 个媒体文件`,
+          `正在扫描，已找到 ${media.videos.length} 个视频，已过滤 ${media.filteredSmallVideos} 个小文件或特殊命名视频，已检查 ${media.scannedFiles} 个媒体文件`,
         );
       }
 
@@ -4366,7 +4434,7 @@ export default function App() {
       }
       setMessage(
         media.videos.length
-          ? `${options?.restored ? "已恢复" : "已加载"} ${media.videos.length} 个视频，已过滤 ${media.filteredSmallVideos} 个 50 MB 以下小视频`
+          ? `${options?.restored ? "已恢复" : "已加载"} ${media.videos.length} 个视频，已过滤 ${media.filteredSmallVideos} 个小文件或特殊命名视频`
           : "这个文件夹里没有可播放的视频文件",
       );
 
@@ -4439,7 +4507,7 @@ export default function App() {
       setCurrentVideoId(getSortedVideos(media.videos, playlistSortMode, isPlaylistSortReversed)[0]?.id ?? null);
       setMessage(
         media.videos.length
-          ? `已加载 ${media.videos.length} 个视频，已过滤 ${media.filteredSmallVideos} 个 50 MB 以下小视频，${messageSuffix}`
+          ? `已加载 ${media.videos.length} 个视频，已过滤 ${media.filteredSmallVideos} 个小文件或特殊命名视频，${messageSuffix}`
           : "没有找到可播放的视频文件",
       );
     },
@@ -4454,38 +4522,15 @@ export default function App() {
     ],
   );
 
-  const chooseTemporaryFolderFilesWithFileInput = () => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.multiple = true;
-    input.accept = Array.from(new Set([...VIDEO_EXTENSIONS, ...SUBTITLE_EXTENSIONS])).join(",");
-    input.style.display = "none";
-    input.setAttribute("webkitdirectory", "");
-
-    input.onchange = async () => {
-      const files = input.files;
-      if (!files?.length) {
-        input.remove();
-        return;
-      }
-
-      try {
-        await loadFileMedia(files, "当前浏览器不支持新增全局媒体库，文件播放进度仅在本次会话保留");
-      } catch {
-        setMessage("无法读取选择的媒体文件");
-      } finally {
-        setIsScanning(false);
-        input.remove();
-      }
-    };
-
-    document.body.append(input);
-    input.click();
+  const showDirectoryPickerUnsupportedMessage = () => {
+    setIsScanning(false);
+    setIsFolderDialogOpen(false);
+    setMessage("当前浏览器不支持无上传确认的文件夹选择，请使用支持 File System Access API 的浏览器。");
   };
 
   const chooseMediaLibraryDirectory = async () => {
     if (!window.showDirectoryPicker) {
-      chooseTemporaryFolderFilesWithFileInput();
+      showDirectoryPickerUnsupportedMessage();
       return;
     }
 
@@ -4505,7 +4550,7 @@ export default function App() {
 
   const requestAddMediaLibrary = () => {
     if (!window.showDirectoryPicker) {
-      chooseTemporaryFolderFilesWithFileInput();
+      showDirectoryPickerUnsupportedMessage();
       return;
     }
 
@@ -6411,14 +6456,16 @@ export default function App() {
     if (!progress) return "未开始";
     return `看到 ${Math.min(progress.imageIndex + 1, album.imageCount)} / ${album.imageCount}`;
   };
+  const getPhotoImageUrl = (image?: PhotoAlbumImage | null) => (image ? image.url || photoObjectUrls[image.id] || "" : "");
   const renderPhotoAlbumCard = (album: PhotoAlbum) => {
     const progress = photoAlbumProgress[album.id];
     const progressPercent = progress ? Math.min(100, ((progress.imageIndex + 1) / Math.max(album.imageCount, 1)) * 100) : 0;
     const isFavorite = favoritePhotoAlbumIds.has(album.id);
+    const coverImageUrl = album.coverImageUrl || getPhotoImageUrl(album.images[0]);
     return (
       <article className="photo-album-card" key={album.id}>
         <button className="photo-album-cover" type="button" onClick={() => openPhotoAlbum(album)} title={album.relativePath || album.title}>
-          <img src={album.coverImageUrl} alt="" loading="lazy" draggable={false} />
+          {coverImageUrl ? <img src={coverImageUrl} alt="" loading="lazy" draggable={false} /> : null}
           <span className="photo-album-count">{album.imageCount} 张</span>
         </button>
         <div className="photo-album-copy">
@@ -6456,6 +6503,7 @@ export default function App() {
     );
   };
   const currentPhoto = selectedPhotoAlbum?.images[currentPhotoIndex] ?? null;
+  const currentPhotoUrl = getPhotoImageUrl(currentPhoto);
 
   return (
     <>
@@ -6955,8 +7003,8 @@ export default function App() {
               <button className="photo-nav-button previous" type="button" onClick={() => movePhoto(-1)} disabled={currentPhotoIndex <= 0} aria-label="上一张">
                 <ChevronLeft size={34} />
               </button>
-              {currentPhoto ? (
-                <img src={currentPhoto.url} alt={currentPhoto.name} draggable={false} />
+              {currentPhoto && currentPhotoUrl ? (
+                <img src={currentPhotoUrl} alt={currentPhoto.name} draggable={false} />
               ) : (
                 <div className="photo-empty-state">没有可显示的图片</div>
               )}
@@ -6976,20 +7024,23 @@ export default function App() {
                 <span>{currentPhoto?.name ?? selectedPhotoAlbum.title}</span>
               </div>
               <div className="photo-thumbnails" aria-label="图片缩略图">
-                {visiblePhotoThumbnails.map((image) => (
-                  <button
-                    className={image.index === currentPhotoIndex ? "active" : ""}
-                    key={image.id}
-                    type="button"
-                    onClick={() => {
-                      setCurrentPhotoIndex(image.index);
-                      persistPhotoAlbumProgress(selectedPhotoAlbum, image.index, image.index === selectedPhotoAlbum.images.length - 1);
-                    }}
-                    title={image.name}
-                  >
-                    <img src={image.url} alt="" loading="lazy" draggable={false} />
-                  </button>
-                ))}
+                {visiblePhotoThumbnails.map((image) => {
+                  const thumbnailUrl = getPhotoImageUrl(image);
+                  return (
+                    <button
+                      className={image.index === currentPhotoIndex ? "active" : ""}
+                      key={image.id}
+                      type="button"
+                      onClick={() => {
+                        setCurrentPhotoIndex(image.index);
+                        persistPhotoAlbumProgress(selectedPhotoAlbum, image.index, image.index === selectedPhotoAlbum.images.length - 1);
+                      }}
+                      title={image.name}
+                    >
+                      {thumbnailUrl ? <img src={thumbnailUrl} alt="" loading="lazy" draggable={false} /> : null}
+                    </button>
+                  );
+                })}
               </div>
             </footer>
           </section>

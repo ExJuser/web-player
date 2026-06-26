@@ -203,6 +203,7 @@ export type PhotoAlbumImage = {
   name: string;
   relativePath: string;
   url: string;
+  file?: File;
   size: number;
   lastModified: number;
   mediaRootId: string;
