@@ -74,6 +74,7 @@ import type {
   VideoTagStore
 } from "./playerTypes";
 import {
+  clearCachedPhotoAlbumScan,
   defaultPhotoAlbumPreferences,
   loadCachedPhotoAlbumScan,
   loadPhotoAlbumStore,
@@ -4631,7 +4632,23 @@ export default function App() {
       }
 
       if (!(await hasDirectoryWritePermission(parentDirectory))) {
-        setPhotoDeleteError("当前写真集文件夹没有写入权限。请返回写真集页重新选择文件夹后再删除。");
+        await clearPhotoAlbumFolderHandle().catch(() => undefined);
+        await clearCachedPhotoAlbumScan().catch(() => undefined);
+        Object.values(photoObjectUrlsRef.current).forEach((url) => URL.revokeObjectURL(url));
+        photoAlbumDirectoryRef.current = null;
+        photoAlbumsRef.current = [];
+        photoObjectUrlsRef.current = {};
+        setPhotoAlbums([]);
+        setPhotoRootStatuses([]);
+        setPhotoObjectUrls({});
+        setPhotoAlbumPage(1);
+        setCurrentPhotoIndex(0);
+        setSelectedPhotoAlbumId(null);
+        setPhotoDeleteCandidate(null);
+        setPhotoDeleteError("");
+        setHasLoadedPhotoAlbums(true);
+        setActiveView("photos");
+        setPhotoAlbumMessage("旧写真集目录记录没有写入权限，已自动清除。请重新选择写真集文件夹以授予删除权限。");
         setIsPhotoDeletePending(false);
         return;
       }
