@@ -849,6 +849,12 @@ type TagMergePrompt = {
   suggestion: TagMergeSuggestion;
 };
 
+type ExistingMediaRootPrompt = {
+  directoryName: string;
+  mediaRootLabel: string;
+  resolve: (shouldRescan: boolean) => void;
+};
+
 type BangumiSubject = {
   id: number;
   name: string;
@@ -1573,6 +1579,7 @@ export default function App() {
   const [theme, setTheme] = useState<AppTheme>(readStoredTheme);
   const [deleteCandidate, setDeleteCandidate] = useState<VideoItem | null>(null);
   const [mediaRootLabelPrompt, setMediaRootLabelPrompt] = useState<MediaRootLabelPrompt | null>(null);
+  const [existingMediaRootPrompt, setExistingMediaRootPrompt] = useState<ExistingMediaRootPrompt | null>(null);
   const [mediaRootLocalPathDialog, setMediaRootLocalPathDialog] = useState<MediaRootLocalPathDialog | null>(null);
   const [skipFolderAccessPrompt, setSkipFolderAccessPrompt] = useState(defaultPlayerSettings.skipFolderAccessPrompt);
   const [message, setMessage] = useState("新增一个媒体库开始播放");
@@ -2138,6 +2145,21 @@ export default function App() {
     });
   }, []);
 
+  const requestExistingMediaRootRescan = useCallback((directoryName: string, mediaRootLabel: string) => {
+    return new Promise<boolean>((resolve) => {
+      setExistingMediaRootPrompt({ directoryName, mediaRootLabel, resolve });
+    });
+  }, []);
+
+  const closeExistingMediaRootPrompt = useCallback(
+    (shouldRescan: boolean) => {
+      if (!existingMediaRootPrompt) return;
+      existingMediaRootPrompt.resolve(shouldRescan);
+      setExistingMediaRootPrompt(null);
+    },
+    [existingMediaRootPrompt],
+  );
+
   const closeMediaRootLabelPrompt = useCallback(
     (value: string | null) => {
       if (!mediaRootLabelPrompt) return;
@@ -2210,7 +2232,14 @@ export default function App() {
   const ensureMediaRootForDirectory = useCallback(
     async (directory: FileSystemDirectoryHandle) => {
       const existingRootId = resolveMediaRootId(directory.name);
-      if (existingRootId) return existingRootId;
+      if (existingRootId) {
+        const existingRoot = localConfigRef.current?.mediaRoots.find((root) => root.id === existingRootId);
+        const shouldRescan = await requestExistingMediaRootRescan(
+          directory.name,
+          existingRoot?.label ?? directory.name,
+        );
+        return shouldRescan ? existingRootId : null;
+      }
 
       const label = (await requestMediaRootLabel(directory.name))?.trim();
       if (!label) return null;
@@ -2224,7 +2253,7 @@ export default function App() {
       localConfigRef.current = nextConfig;
       return response.mediaRoot.id;
     },
-    [requestMediaRootLabel, resolveMediaRootId],
+    [requestExistingMediaRootRescan, requestMediaRootLabel, resolveMediaRootId],
   );
 
   const clearControlsHideTimer = useCallback(() => {
@@ -6621,6 +6650,44 @@ export default function App() {
               disabled={!mediaRootLabelPrompt.value.trim()}
             >
               确定
+            </button>
+          </div>
+        </section>
+      </div>
+    ) : null}
+    {existingMediaRootPrompt ? (
+      <div className="modal-backdrop" role="presentation" onMouseDown={() => closeExistingMediaRootPrompt(false)}>
+        <section
+          aria-labelledby="existing-media-root-title"
+          aria-modal="true"
+          className="media-root-label-dialog"
+          role="dialog"
+          onMouseDown={(event) => event.stopPropagation()}
+        >
+          <button
+            aria-label="关闭"
+            className="dialog-close"
+            type="button"
+            onClick={() => closeExistingMediaRootPrompt(false)}
+          >
+            <X size={18} />
+          </button>
+          <div className="dialog-icon">
+            <FolderOpen size={28} />
+          </div>
+          <div className="dialog-copy">
+            <h2 id="existing-media-root-title">该媒体库已添加</h2>
+            <p>
+              “{existingMediaRootPrompt.mediaRootLabel}”已在全局媒体库中。重新扫描会刷新“{existingMediaRootPrompt.directoryName}”下的视频和字幕。
+            </p>
+          </div>
+          <div className="dialog-actions">
+            <button className="secondary-button" type="button" onClick={() => closeExistingMediaRootPrompt(false)}>
+              取消
+            </button>
+            <button className="primary-button" type="button" onClick={() => closeExistingMediaRootPrompt(true)}>
+              <RefreshCw size={18} />
+              重新扫描
             </button>
           </div>
         </section>
