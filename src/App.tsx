@@ -4695,6 +4695,37 @@ export default function App() {
         favorites: Array.from(nextFavorites),
       });
 
+      void loadCachedPhotoAlbumScan()
+        .then((cache) => {
+          if (!cache || cache.rootId !== album.mediaRootId) return;
+          let didUpdateAlbum = false;
+          const cachedAlbums = cache.albums.flatMap((cachedAlbum) => {
+            if (cachedAlbum.id !== album.id) return [cachedAlbum];
+            didUpdateAlbum = true;
+            if (!remainingImages.length) return [];
+            return [
+              {
+                ...cachedAlbum,
+                coverImageUrl: cachedAlbum.coverImageUrl === photo.url ? "" : cachedAlbum.coverImageUrl,
+                imageCount: remainingImages.length,
+                totalSize: remainingImages.reduce((sum, image) => sum + image.size, 0),
+                updatedAt: remainingImages.reduce((latest, image) => Math.max(latest, image.lastModified), 0),
+                images: remainingImages,
+              },
+            ];
+          });
+          if (!didUpdateAlbum) return;
+          return saveCachedPhotoAlbumScan({
+            ...cache,
+            albums: cachedAlbums,
+            scannedFiles: Math.max(cache.scannedFiles - 1, 0),
+            updatedAt: Date.now(),
+          });
+        })
+        .catch(() => {
+          setPhotoAlbumMessage("图片已删除，但写真集扫描缓存更新失败，下次刷新会修正。");
+        });
+
       setPhotoAlbumMessage(
         remainingImages.length
           ? `已删除《${photo.name}》`
