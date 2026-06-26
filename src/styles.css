@@ -258,6 +258,42 @@ button {
   min-width: 0;
 }
 
+.compatible-media-status {
+  display: inline-flex;
+  min-width: min(360px, 100%);
+  max-width: 100%;
+  flex: 1 1 360px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  color: #aab1bd;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.compatible-media-status span,
+.compatible-media-status small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.compatible-media-status .secondary-button {
+  min-width: 118px;
+  height: 28px;
+  padding: 0 9px;
+  font-size: 12px;
+}
+
+.spin-icon {
+  animation: compatible-spin 0.9s linear infinite;
+}
+
+@keyframes compatible-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .primary-button {
   display: inline-flex;
   align-items: center;
@@ -3724,6 +3760,7 @@ button {
 .app-shell.theme-light .shortcut-group h3,
 .app-shell.theme-light .dialog-copy p,
 .app-shell.theme-light .current-video-meta dt,
+.app-shell.theme-light .compatible-media-status,
 .app-shell.theme-light .timeline-row > span,
 .app-shell.theme-light .timeline-preview-placeholder,
 .app-shell.theme-light .empty-list {
@@ -4474,7 +4511,8 @@ button {
 :root[data-theme="light"] .ai-dialog-header span,
 :root[data-theme="light"] .ai-empty-state,
 :root[data-theme="light"] .ai-loading,
-:root[data-theme="light"] .ai-recap-meta {
+:root[data-theme="light"] .ai-recap-meta,
+:root[data-theme="light"] .compatible-media-status {
   color: #667085;
 }
 

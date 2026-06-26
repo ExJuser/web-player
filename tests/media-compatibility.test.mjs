@@ -1,0 +1,93 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import {
+  classifyMediaProbe,
+  createCompatibleMediaCacheId,
+  createNeedsLocalPathPlayability,
+  mediaContentTypeForPath,
+} from "../server/mediaCompatibility.mjs";
+import { scanMediaRoot } from "../server/mediaRoots.mjs";
+import { mkdir, truncate, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+
+function probe({ format = "matroska,webm", video = "h264", audio = "aac", pixFmt = "yuv420p", profile = "High", subtitles = [] } = {}) {
+  return {
+    format: { format_name: format },
+    streams: [
+      { index: 0, codec_type: "video", codec_name: video, pix_fmt: pixFmt, profile, width: 1920, height: 1080 },
+      ...(audio ? [{ index: 1, codec_type: "audio", codec_name: audio }] : []),
+      ...subtitles.map((codec, index) => ({ index: index + 2, codec_type: "subtitle", codec_name: codec })),
+    ],
+  };
+}
+
+test("classifies browser direct MP4 media", () => {
+  const result = classifyMediaProbe(probe({ format: "mov,mp4,m4a,3gp,3g2,mj2" }), "Episode.mp4");
+
+  assert.equal(result.playability.status, "direct");
+  assert.equal(result.canRemux, false);
+  assert.equal(result.playability.videoCodec, "h264");
+  assert.equal(result.playability.audioCodec, "aac");
+});
+
+test("classifies MKV with MP4-compatible streams as remux recommended", () => {
+  const result = classifyMediaProbe(probe(), "Episode.mkv");
+
+  assert.equal(result.playability.status, "remuxRecommended");
+  assert.equal(result.canRemux, true);
+});
+
+test("classifies unsupported codecs that require transcoding", () => {
+  const hevc = classifyMediaProbe(probe({ video: "hevc", pixFmt: "yuv420p10le" }), "Episode.mkv");
+  const dts = classifyMediaProbe(probe({ audio: "dts" }), "Episode.mkv");
+
+  assert.equal(hevc.playability.status, "unsupported");
+  assert.match(hevc.playability.reason, /HEVC|高位深/);
+  assert.equal(dts.playability.status, "unsupported");
+  assert.match(dts.playability.reason, /dts/);
+});
+
+test("browser roots without localPath are marked as needing a local path", () => {
+  assert.deepEqual(createNeedsLocalPathPlayability(), {
+    status: "needsLocalPath",
+    reason: "浏览器添加的媒体库需要先配置本机路径，才能使用 ffprobe/ffmpeg。",
+  });
+});
+
+test("compatible cache id changes when file identity changes", () => {
+  const first = createCompatibleMediaCacheId("anime", "Show/E01.mkv", 100, 123);
+  const second = createCompatibleMediaCacheId("anime", "Show/E01.mkv", 100, 124);
+
+  assert.match(first, /^[a-f0-9]{64}$/);
+  assert.notEqual(first, second);
+});
+
+test("maps media content types by extension", () => {
+  assert.equal(mediaContentTypeForPath("E01.mp4"), "video/mp4");
+  assert.equal(mediaContentTypeForPath("E01.webm"), "video/webm");
+  assert.equal(mediaContentTypeForPath("E01.ogg"), "video/ogg");
+  assert.equal(mediaContentTypeForPath("E01.mov"), "video/quicktime");
+  assert.equal(mediaContentTypeForPath("E01.mkv"), "video/x-matroska");
+});
+
+test("scanMediaRoot attaches playability from the provided inspector", async () => {
+  const directory = path.join(tmpdir(), `web-player-media-compat-${Date.now()}`);
+  await mkdir(directory, { recursive: true });
+  const videoPath = path.join(directory, "E01.mkv");
+  await writeFile(videoPath, "");
+  await truncate(videoPath, 51 * 1024 * 1024);
+
+  const result = await scanMediaRoot(
+    { id: "anime", label: "Anime", path: directory, source: "local" },
+    {
+      createVideoPlayability: async () => ({
+        status: "remuxRecommended",
+        reason: "测试",
+      }),
+    },
+  );
+
+  assert.equal(result.videos.length, 1);
+  assert.equal(result.videos[0].playability.status, "remuxRecommended");
+});

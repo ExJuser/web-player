@@ -10,6 +10,16 @@ import tls from "node:tls";
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import {
+  classifyMediaProbe,
+  createCompatibleMediaUrl,
+  createVideoPlayability,
+  getCachedCompatibleMedia,
+  mediaContentTypeForPath,
+  probeMediaFile,
+  remuxCompatibleMedia,
+  resolveCompatibleMediaPath,
+} from "./server/mediaCompatibility.mjs";
+import {
   ensureFileExists,
   normalizeMediaRoots as normalizeMediaRootsFromConfig,
   resolveMediaPath as resolveMediaPathFromConfig,
@@ -25,6 +35,7 @@ const librariesRoot = path.join(dataRoot, "libraries");
 const thumbnailsRoot = path.join(dataRoot, "thumbnails");
 const photoAlbumsRoot = path.join(dataRoot, "photo-albums");
 const embeddedSubtitlesRoot = path.join(dataRoot, "subtitles");
+const compatibleMediaRoot = path.join(dataRoot, "compatible-media");
 const aiRoot = path.join(dataRoot, "ai");
 const bangumiRoot = path.join(dataRoot, "bangumi");
 const bangumiMatchesRoot = path.join(bangumiRoot, "matches");
@@ -61,25 +72,7 @@ async function sendMediaFile(request, response, filePath) {
   const fileStat = await stat(filePath);
   const fileSize = fileStat.size;
   const range = request.headers.range;
-  const extension = path.extname(filePath).toLowerCase();
-  const contentType =
-    extension === ".vtt"
-      ? "text/vtt; charset=utf-8"
-      : extension === ".srt"
-        ? "application/x-subrip; charset=utf-8"
-        : extension === ".jpg" || extension === ".jpeg"
-          ? "image/jpeg"
-          : extension === ".png"
-            ? "image/png"
-            : extension === ".webp"
-              ? "image/webp"
-              : extension === ".gif"
-                ? "image/gif"
-                : extension === ".avif"
-                  ? "image/avif"
-                  : extension === ".bmp"
-                    ? "image/bmp"
-                    : "video/mp4";
+  const contentType = mediaContentTypeForPath(filePath);
 
   if (range) {
     const match = /^bytes=(\d*)-(\d*)$/.exec(range);
@@ -206,6 +199,7 @@ async function createCacheStatus() {
     { id: "thumbnails", label: "视频缩略图", path: thumbnailsRoot },
     { id: "photo-albums", label: "写真集数据", path: photoAlbumsRoot },
     { id: "subtitles", label: "内封字幕", path: embeddedSubtitlesRoot },
+    { id: "compatible-media", label: "兼容播放缓存", path: compatibleMediaRoot },
     { id: "ai-summaries", label: "AI 字幕总结", path: path.join(aiRoot, "summaries") },
     { id: "ai-qa", label: "AI 字幕问答", path: path.join(aiRoot, "qa") },
     { id: "ai-recaps", label: "AI 进度回顾", path: path.join(aiRoot, "recaps") },
@@ -377,6 +371,103 @@ function resolveVideoPath(config, rootId, relativePath) {
 
 function resolveMediaPath(config, rootId, relativePath) {
   return resolveMediaPathFromConfig(config, rootId, relativePath);
+}
+
+function findMediaRoot(config, rootId) {
+  const id = typeof rootId === "string" ? rootId.trim() : "";
+  return normalizeMediaRoots(config).find((root) => root.id === id) ?? null;
+}
+
+async function createScannedVideoPlayability(root, video, filePath) {
+  return createVideoPlayability({
+    root,
+    video,
+    filePath,
+    compatibleMediaRoot,
+    runProcess,
+  });
+}
+
+async function scanConfiguredMediaRootsWithPlayability(config) {
+  return scanConfiguredMediaRoots(config, {
+    createVideoPlayability: createScannedVideoPlayability,
+  });
+}
+
+async function probeMedia(config, payload) {
+  const root = findMediaRoot(config, payload?.rootId);
+  if (!root) throw new Error("Unknown media root.");
+  if (root.source === "browser" && !root.localPath) {
+    return {
+      playability: {
+        status: "needsLocalPath",
+        reason: "浏览器添加的媒体库需要先配置本机路径，才能使用 ffprobe/ffmpeg。",
+      },
+      probe: null,
+    };
+  }
+
+  const videoPath = resolveVideoPath(config, payload?.rootId, payload?.relativePath);
+  await ensureFileExists(videoPath);
+  const fileStat = await stat(videoPath);
+  const video = {
+    name: path.basename(videoPath),
+    relativePath: payload.relativePath,
+    size: fileStat.size,
+    lastModified: Math.round(fileStat.mtimeMs),
+  };
+  const rawProbe = await probeMediaFile(runProcess, videoPath);
+  const result = classifyMediaProbe(rawProbe, video.name);
+  const cached = await getCachedCompatibleMedia(compatibleMediaRoot, root.id, video);
+  return {
+    probe: result.probe,
+    canRemux: result.canRemux,
+    playability: {
+      ...result.playability,
+      ...(cached.compatibleUrl ? { compatibleUrl: cached.compatibleUrl } : {}),
+    },
+  };
+}
+
+async function remuxMediaToCompatibleMp4(config, payload) {
+  const root = findMediaRoot(config, payload?.rootId);
+  if (!root) throw new Error("Unknown media root.");
+  if (root.source === "browser" && !root.localPath) {
+    throw new Error("浏览器添加的媒体库需要先配置本机路径，才能生成兼容 MP4。");
+  }
+
+  const videoPath = resolveVideoPath(config, payload?.rootId, payload?.relativePath);
+  await ensureFileExists(videoPath);
+  const fileStat = await stat(videoPath);
+  const video = {
+    name: path.basename(videoPath),
+    relativePath: payload.relativePath,
+    size: fileStat.size,
+    lastModified: Math.round(fileStat.mtimeMs),
+  };
+  const rawProbe = await probeMediaFile(runProcess, videoPath);
+  const result = classifyMediaProbe(rawProbe, video.name);
+  if (!result.canRemux || result.playability.status !== "remuxRecommended") {
+    throw new Error(result.playability.reason || "当前视频不能无损生成兼容 MP4。");
+  }
+
+  const cached = await getCachedCompatibleMedia(compatibleMediaRoot, root.id, video);
+  if (!cached.compatibleUrl) {
+    await remuxCompatibleMedia({
+      runProcess,
+      sourcePath: videoPath,
+      outputPath: cached.cachePath,
+    });
+  }
+
+  return {
+    cacheId: cached.cacheId,
+    compatibleUrl: createCompatibleMediaUrl(cached.cacheId),
+    playability: {
+      ...result.playability,
+      compatibleUrl: createCompatibleMediaUrl(cached.cacheId),
+    },
+  };
 }
 
 function normalizeSubtitleTrack(stream) {
@@ -1278,6 +1369,7 @@ function playerDataApiPlugin(env) {
     const libraryMatch = url.pathname.match(/^\/api\/player-data\/libraries\/([^/]+)$/);
     const thumbnailMatch = url.pathname.match(/^\/api\/player-data\/thumbnails\/([^/]+)$/);
     const mediaMatch = url.pathname.match(/^\/api\/media\/([^/]+)\/(.+)$/);
+    const compatibleMediaMatch = url.pathname.match(/^\/api\/media-compatible\/([a-f0-9]{64})\.mp4$/);
 
     try {
       if (url.pathname === "/api/local-config" && request.method === "GET") {
@@ -1286,7 +1378,7 @@ function playerDataApiPlugin(env) {
       }
 
       if (url.pathname === "/api/media-roots/scan" && request.method === "GET") {
-        sendJson(response, 200, await scanConfiguredMediaRoots(await loadAppConfig()));
+        sendJson(response, 200, await scanConfiguredMediaRootsWithPlayability(await loadAppConfig()));
         return;
       }
 
@@ -1331,6 +1423,24 @@ function playerDataApiPlugin(env) {
         const relativePath = mediaMatch[2].split("/").map((segment) => decodeURIComponent(segment)).join("/");
         const filePath = resolveMediaPath(await loadAppConfig(), rootId, relativePath);
         await sendMediaFile(request, response, filePath);
+        return;
+      }
+
+      if (compatibleMediaMatch && request.method === "GET") {
+        const filePath = resolveCompatibleMediaPath(compatibleMediaRoot, compatibleMediaMatch[1]);
+        await sendMediaFile(request, response, filePath);
+        return;
+      }
+
+      if (url.pathname === "/api/media/probe" && request.method === "POST") {
+        const payload = JSON.parse((await readBody(request)).toString("utf8"));
+        sendJson(response, 200, await probeMedia(await loadAppConfig(), payload));
+        return;
+      }
+
+      if (url.pathname === "/api/media/compatible/remux" && request.method === "POST") {
+        const payload = JSON.parse((await readBody(request)).toString("utf8"));
+        sendJson(response, 200, await remuxMediaToCompatibleMp4(await loadAppConfig(), payload));
         return;
       }
 

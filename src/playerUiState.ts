@@ -4,6 +4,15 @@ type MediaRootForUi = {
   localPath?: string;
 };
 
+type VideoForCompatibilityUi = {
+  playbackSource?: "browser" | "server";
+  playability?: {
+    status: "direct" | "remuxRecommended" | "unsupported" | "unknown" | "needsLocalPath";
+    reason?: string;
+    compatibleUrl?: string;
+  };
+};
+
 type SubtitleForUi = {
   id: string;
   name?: string;
@@ -41,6 +50,22 @@ export function getMediaRootLocalPathAction(root: MediaRootForUi) {
     visible: true,
     disabled: isConfigured,
     label: isConfigured ? "本机路径已配置" : "配置本机路径",
+  };
+}
+
+export function getCompatibleMediaAction(video: VideoForCompatibilityUi | null | undefined, options: { canUseServerTools: boolean }) {
+  const canCreate =
+    Boolean(video) &&
+    video?.playbackSource === "server" &&
+    options.canUseServerTools &&
+    video.playability?.status === "remuxRecommended" &&
+    !video.playability.compatibleUrl;
+
+  return {
+    visible: Boolean(video?.playability?.reason || canCreate),
+    disabled: !canCreate,
+    canCreate,
+    label: canCreate ? "生成兼容 MP4" : "",
   };
 }
 

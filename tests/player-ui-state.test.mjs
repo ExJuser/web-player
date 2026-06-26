@@ -19,6 +19,46 @@ test("browser media root with localPath renders a disabled configured action", (
   );
 });
 
+test("compatible media action is enabled only for server remux candidates", () => {
+  assert.deepEqual(
+    uiState.getCompatibleMediaAction(
+      {
+        playbackSource: "server",
+        playability: { status: "remuxRecommended", reason: "建议转封装" },
+      },
+      { canUseServerTools: true },
+    ),
+    {
+      visible: true,
+      disabled: false,
+      canCreate: true,
+      label: "生成兼容 MP4",
+    },
+  );
+
+  assert.equal(
+    uiState.getCompatibleMediaAction(
+      {
+        playbackSource: "server",
+        playability: { status: "remuxRecommended", reason: "建议转封装", compatibleUrl: "/api/media-compatible/a.mp4" },
+      },
+      { canUseServerTools: true },
+    ).canCreate,
+    false,
+  );
+
+  assert.equal(
+    uiState.getCompatibleMediaAction(
+      {
+        playbackSource: "browser",
+        playability: { status: "needsLocalPath", reason: "需本机路径" },
+      },
+      { canUseServerTools: true },
+    ).canCreate,
+    false,
+  );
+});
+
 test("home anime mode includes duplicate Anime media roots by label", () => {
   assert.equal(uiState.isMediaRootInHomeMode({ id: "anime-a", label: "Anime" }, "anime"), true);
   assert.equal(uiState.isMediaRootInHomeMode({ id: "anime-b", label: " anime " }, "anime"), true);

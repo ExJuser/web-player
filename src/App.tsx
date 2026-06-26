@@ -66,6 +66,7 @@ import type {
   SubtitleItem,
   TagMergeDecisionStore,
   VideoItem,
+  VideoPlayability,
   VideoMetadata,
   VideoTagStore
 } from "./playerTypes";
@@ -288,6 +289,7 @@ async function ensureDirectoryReadPermission(directory: FileSystemDirectoryHandl
 import { ControlSelect } from "./ControlSelect";
 import {
   createPersistedEmbeddedSubtitles,
+  getCompatibleMediaAction,
   createSubtitleControlOptions,
   getMediaRootLocalPathAction,
   isMediaRootInHomeMode,
@@ -396,6 +398,8 @@ function videoMetadataRows(video: VideoItem) {
     ["大小", formatFileSize(video.size)],
     ["时长", video.duration ? formatTime(video.duration) : "读取中"],
     ["分辨率", formatResolution(video.width, video.height)],
+    ["播放兼容", formatPlayabilityStatus(video.playability)],
+    ["编码", formatCodecSummary(video.playability)],
     ["修改", formatModifiedTime(video.lastModified)],
   ] as const;
 }
@@ -625,6 +629,15 @@ function mergeVideoRuntimeState(nextVideos: VideoItem[], previousVideos: VideoIt
   return nextVideos.map((video) => {
     const previous = previousById.get(video.id);
     if (!previous) return video;
+    const basePlayability = video.playability ?? previous.playability;
+    const playability: VideoPlayability | undefined = basePlayability
+      ? {
+          ...basePlayability,
+          ...(previous.playability?.compatibleUrl && !video.playability?.compatibleUrl
+            ? { compatibleUrl: previous.playability.compatibleUrl }
+            : {}),
+        }
+      : undefined;
     return {
       ...video,
       duration: previous.duration ?? video.duration,
@@ -632,6 +645,7 @@ function mergeVideoRuntimeState(nextVideos: VideoItem[], previousVideos: VideoIt
       height: previous.height ?? video.height,
       thumbnailUrl: previous.thumbnailUrl ?? video.thumbnailUrl,
       thumbnailStatus: previous.thumbnailStatus ?? video.thumbnailStatus,
+      ...(playability ? { playability } : {}),
     };
   });
 }
@@ -1277,6 +1291,31 @@ type ExtractedEmbeddedSubtitle = {
   text: string;
 };
 
+type CompatibleRemuxResponse = {
+  cacheId: string;
+  compatibleUrl: string;
+  playability: NonNullable<VideoItem["playability"]>;
+};
+
+function playableUrlForVideo(video: VideoItem) {
+  return video.playability?.compatibleUrl || video.url;
+}
+
+function formatPlayabilityStatus(playability?: VideoItem["playability"]) {
+  if (!playability) return "未探测";
+  if (playability.compatibleUrl) return "兼容 MP4";
+  if (playability.status === "direct") return "可直接播放";
+  if (playability.status === "remuxRecommended") return "建议转封装";
+  if (playability.status === "unsupported") return "需转码";
+  if (playability.status === "needsLocalPath") return "需本机路径";
+  return "兼容性未知";
+}
+
+function formatCodecSummary(playability?: VideoItem["playability"]) {
+  if (!playability) return "未探测";
+  return [playability.videoCodec, playability.audioCodec, playability.pixelFormat].filter(Boolean).join(" / ") || "未探测";
+}
+
 function normalizeLocalConfig(config: LocalConfig): LocalConfig {
   return {
     ...config,
@@ -1697,7 +1736,7 @@ async function loadVideoMetadata(video: VideoItem) {
 
   try {
     element.preload = "metadata";
-    element.src = video.url;
+    element.src = playableUrlForVideo(video);
 
     if (element.readyState < HTMLMediaElement.HAVE_METADATA) {
       await waitForMediaEvent(element, "loadedmetadata");
@@ -1757,7 +1796,7 @@ async function createVideoThumbnailBlob(video: VideoItem) {
     element.muted = true;
     element.preload = "auto";
     element.playsInline = true;
-    element.src = video.url;
+    element.src = playableUrlForVideo(video);
 
     if (element.readyState < HTMLMediaElement.HAVE_METADATA) {
       await waitForMediaEvent(element, "loadedmetadata");
@@ -1913,6 +1952,8 @@ export default function App() {
   const [isEmbeddedSubtitleDialogOpen, setIsEmbeddedSubtitleDialogOpen] = useState(false);
   const [embeddedSubtitleMessage, setEmbeddedSubtitleMessage] = useState("");
   const [isEmbeddedSubtitleLoading, setIsEmbeddedSubtitleLoading] = useState(false);
+  const [compatibleMediaVideoId, setCompatibleMediaVideoId] = useState<string | null>(null);
+  const [compatibleMediaMessage, setCompatibleMediaMessage] = useState("");
   const [isAiPanelOpen, setIsAiPanelOpen] = useState(false);
   const [aiTab, setAiTab] = useState<"summary" | "qa" | "recap">("summary");
   const [subtitleSummary, setSubtitleSummary] = useState("");
@@ -2265,6 +2306,7 @@ export default function App() {
     () => videos.find((item) => item.id === currentVideoId) ?? null,
     [currentVideoId, videos],
   );
+  const currentVideoPlaybackUrl = currentVideo ? playableUrlForVideo(currentVideo) : "";
   const currentVideoTags = currentVideo ? videoTags[currentVideo.id] ?? [] : [];
   const seriesOptionsKey = useMemo(
     () => seriesOptions.map((series) => `${series.key}\t${series.title}\t${series.count}`).join("\n"),
@@ -2807,6 +2849,15 @@ export default function App() {
       localConfig?.ffmpeg.ffmpeg &&
       localConfig.ffmpeg.ffprobe,
   );
+  const compatibleMediaAction = getCompatibleMediaAction(currentVideo, {
+    canUseServerTools: Boolean(
+      currentMediaRootId &&
+        supportsServerFileAccess(currentMediaLibraryRoot) &&
+        localConfig?.ffmpeg.ffmpeg &&
+        localConfig.ffmpeg.ffprobe,
+    ),
+  });
+  const canCreateCompatibleMedia = compatibleMediaAction.canCreate;
   const resolveMediaRootId = useCallback((directoryName: string) => {
     const roots = localConfigRef.current?.mediaRoots ?? [];
     const matches = roots.filter((root) => root.basename === directoryName);
@@ -3220,6 +3271,19 @@ export default function App() {
     },
     [],
   );
+
+  const updateVideoPlayability = useCallback((videoId: string, playability: NonNullable<VideoItem["playability"]>) => {
+    setVideos((previous) => {
+      let didChange = false;
+      const nextVideos = previous.map((video) => {
+        if (video.id !== videoId) return video;
+        didChange = true;
+        return { ...video, playability };
+      });
+      if (didChange) videosRef.current = nextVideos;
+      return didChange ? nextVideos : previous;
+    });
+  }, []);
 
   const updateProgress = useCallback(
     (video: VideoItem, currentTime: number, duration: number, completed?: boolean) => {
@@ -4828,14 +4892,15 @@ export default function App() {
         return;
       }
 
-      if (currentVideo.url && element.src !== currentVideo.url) {
-        element.src = currentVideo.url;
+      if (currentVideoPlaybackUrl && element.src !== currentVideoPlaybackUrl) {
+        element.src = currentVideoPlaybackUrl;
       }
     });
-  }, [currentVideo?.id, currentVideo?.url]);
+  }, [currentVideo?.id, currentVideoPlaybackUrl]);
 
   useEffect(() => {
     setVideoRotation(0);
+    setCompatibleMediaMessage("");
   }, [currentVideo?.id]);
 
   useEffect(() => {
@@ -4925,7 +4990,7 @@ export default function App() {
       element.removeEventListener("canplay", handleCanPlay);
       element.removeEventListener("error", handleError);
     };
-  }, [activeView, currentVideo?.id, currentVideo?.url, updateVideoMetadata]);
+  }, [activeView, currentVideo?.id, currentVideoPlaybackUrl, updateVideoMetadata]);
 
   useEffect(() => {
     const element = videoRef.current;
@@ -5408,6 +5473,30 @@ export default function App() {
       setIsEmbeddedSubtitleLoading(false);
     }
   }, [currentMediaRootId, currentVideo, localConfig, probeEmbeddedSubtitleTracksForVideo]);
+
+  const createCompatibleMedia = useCallback(async () => {
+    if (!currentVideo || !currentMediaRootId) return;
+    if (!canCreateCompatibleMedia || compatibleMediaVideoId) return;
+
+    setCompatibleMediaVideoId(currentVideo.id);
+    setCompatibleMediaMessage("正在生成兼容 MP4...");
+    try {
+      const payload = await fetchJson<CompatibleRemuxResponse>("/api/media/compatible/remux", {
+        method: "POST",
+        body: JSON.stringify({
+          rootId: currentMediaRootId,
+          relativePath: currentVideo.relativePath,
+        }),
+      });
+      updateVideoPlayability(currentVideo.id, payload.playability);
+      setCompatibleMediaMessage("已生成兼容 MP4，播放器将优先使用兼容版本。");
+      setMessage("已生成兼容 MP4。");
+    } catch (error) {
+      setCompatibleMediaMessage(error instanceof Error ? error.message : "生成兼容 MP4 失败。");
+    } finally {
+      setCompatibleMediaVideoId(null);
+    }
+  }, [canCreateCompatibleMedia, compatibleMediaVideoId, currentMediaRootId, currentVideo, updateVideoPlayability]);
 
   const extractEmbeddedSubtitle = useCallback(
     async (track: EmbeddedSubtitleTrack) => {
@@ -6569,14 +6658,33 @@ export default function App() {
         <header className="top-bar" ref={topBarRef}>
           <div className="video-summary">
             {currentVideo && !isPrivacyMode && !isNonPlayerViewVisible ? (
-              <dl className="current-video-meta">
-                {videoMetadataRows(currentVideo).map(([label, value]) => (
-                  <div key={label} className={label === "文件名" ? "current-video-file-chip" : undefined}>
-                    <dt>{label}</dt>
-                    <dd>{value}</dd>
+              <>
+                <dl className="current-video-meta">
+                  {videoMetadataRows(currentVideo).map(([label, value]) => (
+                    <div key={label} className={label === "文件名" ? "current-video-file-chip" : undefined}>
+                      <dt>{label}</dt>
+                      <dd>{value}</dd>
+                    </div>
+                  ))}
+                </dl>
+                {compatibleMediaAction.visible ? (
+                  <div className="compatible-media-status">
+                    <span>{currentVideo.playability?.reason ?? "当前视频尚未探测播放兼容性。"}</span>
+                    {canCreateCompatibleMedia ? (
+                      <button
+                        className="secondary-button"
+                        type="button"
+                        onClick={() => void createCompatibleMedia()}
+                        disabled={compatibleMediaVideoId === currentVideo.id}
+                      >
+                        <RefreshCw size={15} className={compatibleMediaVideoId === currentVideo.id ? "spin-icon" : undefined} />
+                        {compatibleMediaVideoId === currentVideo.id ? "生成中" : "生成兼容 MP4"}
+                      </button>
+                    ) : null}
+                    {compatibleMediaMessage ? <small>{compatibleMediaMessage}</small> : null}
                   </div>
-                ))}
-              </dl>
+                ) : null}
+              </>
             ) : (
               <p className="current-video-title">
                 {isPrivacyMode

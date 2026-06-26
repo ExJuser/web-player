@@ -41,9 +41,22 @@ export type VideoItem = {
   parentDirectory?: FileSystemDirectoryHandle;
   mediaRootId?: string;
   playbackSource?: "browser" | "server";
+  playability?: VideoPlayability;
 };
 
 export type VideoMetadata = Pick<VideoItem, "duration" | "width" | "height">;
+
+export type VideoPlayabilityStatus = "direct" | "remuxRecommended" | "unsupported" | "unknown" | "needsLocalPath";
+
+export type VideoPlayability = {
+  status: VideoPlayabilityStatus;
+  reason: string;
+  compatibleUrl?: string;
+  container?: string;
+  videoCodec?: string;
+  audioCodec?: string;
+  pixelFormat?: string;
+};
 
 export type SubtitleItem = {
   id: string;

@@ -209,7 +209,7 @@ export function createLegacyVideoId(relativePath, size, lastModified) {
   return `${relativePath}|${size}|${lastModified}`;
 }
 
-export async function scanMediaRoot(root) {
+export async function scanMediaRoot(root, options = {}) {
   const rootPath = serverPathForRoot(root);
   if (!rootPath || !path.isAbsolute(rootPath)) {
     return {
@@ -252,7 +252,7 @@ export async function scanMediaRoot(root) {
           filteredSmallVideos += 1;
           continue;
         }
-        videos.push({
+        const video = {
           id: createGlobalMediaId(root.id, relativePath, fileStat.size, lastModified),
           legacyId: createLegacyVideoId(relativePath, fileStat.size, lastModified),
           name: entry.name,
@@ -262,7 +262,11 @@ export async function scanMediaRoot(root) {
           lastModified,
           mediaRootId: root.id,
           playbackSource: "server",
-        });
+        };
+        if (typeof options.createVideoPlayability === "function") {
+          video.playability = await options.createVideoPlayability(root, video, entryPath);
+        }
+        videos.push(video);
       } else if (subtitleExtensions.has(extension)) {
         subtitles.push({
           id: createGlobalMediaId(root.id, relativePath, fileStat.size, lastModified),
@@ -306,9 +310,9 @@ export async function scanMediaRoot(root) {
   }
 }
 
-export async function scanConfiguredMediaRoots(config) {
+export async function scanConfiguredMediaRoots(config, options = {}) {
   const roots = normalizeMediaRoots(config);
-  const rootsResult = await Promise.all(roots.map((root) => scanMediaRoot(root)));
+  const rootsResult = await Promise.all(roots.map((root) => scanMediaRoot(root, options)));
   const videos = rootsResult.flatMap((result) => result.videos);
   const subtitles = rootsResult.flatMap((result) => result.subtitles);
   const scannedFiles = rootsResult.reduce((sum, result) => sum + result.status.scannedFiles, 0);
