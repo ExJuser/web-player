@@ -148,7 +148,7 @@ function libraryFolderTitleForVideo(video: VideoItem) {
 }
 
 function libraryFolderKeyForVideo(video: VideoItem) {
-  return seriesKeyFromTitle(libraryFolderTitleForVideo(video));
+  return scopedSeriesKeyForVideo(video, libraryFolderTitleForVideo(video));
 }
 
 function libraryFolderPathForVideo(video: VideoItem) {
@@ -182,6 +182,11 @@ function inferSeriesTitle(video: VideoItem) {
 
 function seriesKeyFromTitle(title: string) {
   return title.trim().toLowerCase();
+}
+
+function scopedSeriesKeyForVideo(video: VideoItem, title: string) {
+  const titleKey = seriesKeyFromTitle(title);
+  return video.mediaRootId ? `${video.mediaRootId}:${titleKey}` : titleKey;
 }
 
 function createLegacyVideoId(relativePath: string, file: Pick<File, "size" | "lastModified">) {
@@ -816,6 +821,7 @@ type LibrarySearchResult = {
   key: string;
   title: string;
   path: string;
+  mediaRootLabel?: string;
   videos: LibraryFolderResultVideo[];
   representativeVideo: VideoItem;
   score: number;
@@ -826,6 +832,7 @@ type LibrarySearchCandidate = {
   id: string;
   name: string;
   relativePath: string;
+  mediaRootLabel: string;
   seriesTitle: string;
   tags: string[];
   progressLabel: string;
@@ -1688,19 +1695,25 @@ export default function App() {
     [isPlaylistSortReversed, isSeriesMode, playlistSortMode, videos],
   );
   const seriesOptions = useMemo(() => {
-    const seriesByKey = new Map<string, { key: string; title: string; count: number }>();
+    const seriesByKey = new Map<string, { key: string; title: string; count: number; mediaRootLabel?: string }>();
     playlistVideos.forEach((video) => {
       const title = inferSeriesTitle(video);
-      const key = seriesKeyFromTitle(title);
+      const key = scopedSeriesKeyForVideo(video, title);
+      const mediaRoot = video.mediaRootId ? localConfig?.mediaRoots.find((root) => root.id === video.mediaRootId) : null;
       const existing = seriesByKey.get(key);
       if (existing) {
         existing.count += 1;
       } else {
-        seriesByKey.set(key, { key, title, count: 1 });
+        seriesByKey.set(key, {
+          key,
+          title,
+          count: 1,
+          mediaRootLabel: mediaRoot?.label ?? (video.mediaRootId ? fallbackMediaRootLabelForVideo(video) : undefined),
+        });
       }
     });
     return Array.from(seriesByKey.values()).sort((a, b) => collator.compare(a.title, b.title));
-  }, [playlistVideos]);
+  }, [localConfig, playlistVideos]);
   const seriesTitleByVideoId = useMemo(() => {
     const titles = new Map<string, string>();
     playlistVideos.forEach((video) => titles.set(video.id, inferSeriesTitle(video)));
@@ -1708,7 +1721,7 @@ export default function App() {
   }, [playlistVideos]);
   const seriesFilteredVideos = useMemo(() => {
     if (!isSeriesMode || selectedSeriesKey === "all") return playlistVideos;
-    return playlistVideos.filter((video) => seriesKeyFromTitle(seriesTitleByVideoId.get(video.id) ?? "") === selectedSeriesKey);
+    return playlistVideos.filter((video) => scopedSeriesKeyForVideo(video, seriesTitleByVideoId.get(video.id) ?? "") === selectedSeriesKey);
   }, [isSeriesMode, playlistVideos, selectedSeriesKey, seriesTitleByVideoId]);
   const currentVideo = useMemo(
     () => videos.find((item) => item.id === currentVideoId) ?? null,
@@ -1720,7 +1733,7 @@ export default function App() {
     [seriesOptions],
   );
   const currentSeriesKey = useMemo(
-    () => (currentVideo ? seriesKeyFromTitle(seriesTitleByVideoId.get(currentVideo.id) ?? inferSeriesTitle(currentVideo)) : ""),
+    () => (currentVideo ? scopedSeriesKeyForVideo(currentVideo, seriesTitleByVideoId.get(currentVideo.id) ?? inferSeriesTitle(currentVideo)) : ""),
     [currentVideo, seriesTitleByVideoId],
   );
   const activeBangumiSeries = useMemo(() => {
@@ -1737,7 +1750,7 @@ export default function App() {
   const activeSeriesProgressVideoIds = useMemo(() => {
     if (!isSeriesMode || !activeBangumiSeries) return [];
     return playlistVideos
-      .filter((video) => seriesKeyFromTitle(seriesTitleByVideoId.get(video.id) ?? inferSeriesTitle(video)) === activeBangumiSeries.key)
+      .filter((video) => scopedSeriesKeyForVideo(video, seriesTitleByVideoId.get(video.id) ?? inferSeriesTitle(video)) === activeBangumiSeries.key)
       .map((video) => video.id);
   }, [activeBangumiSeries, isSeriesMode, playlistVideos, seriesTitleByVideoId]);
   const canClearPlaylistProgress = useMemo(() => {
@@ -1819,17 +1832,21 @@ export default function App() {
   const createLibraryFolderResult = useCallback(
     (folderVideos: VideoItem[], representativeVideo: VideoItem, score: number, reason: string): LibrarySearchResult => {
       const sortedVideos = [...folderVideos].sort((a, b) => compareNaturalRelativePath(a.relativePath, b.relativePath));
+      const mediaRoot = representativeVideo.mediaRootId
+        ? localConfig?.mediaRoots.find((root) => root.id === representativeVideo.mediaRootId)
+        : null;
       return {
         key: libraryFolderKeyForVideo(representativeVideo),
         title: libraryFolderTitleForVideo(representativeVideo),
         path: libraryFolderPathForVideo(representativeVideo),
+        mediaRootLabel: mediaRoot?.label ?? (representativeVideo.mediaRootId ? fallbackMediaRootLabelForVideo(representativeVideo) : undefined),
         videos: sortedVideos.map((video) => ({ video, progress: progressStore[video.id] })),
         representativeVideo,
         score,
         reason,
       };
     },
-    [progressStore],
+    [localConfig, progressStore],
   );
   const resumableHomeCards = useMemo(
     () =>
@@ -1873,11 +1890,9 @@ export default function App() {
   const nextEpisodeCard = useMemo(() => {
     const sourceVideo = primaryResumeCard?.video ?? recentHomeCards[0]?.video ?? currentVideo;
     if (!sourceVideo) return null;
-    const createScopedSeriesKey = (video: VideoItem) =>
-      `${video.mediaRootId ?? "unscoped"}:${seriesKeyFromTitle(seriesTitleByVideoId.get(video.id) ?? inferSeriesTitle(video))}`;
-    const sourceSeriesKey = createScopedSeriesKey(sourceVideo);
+    const sourceSeriesKey = scopedSeriesKeyForVideo(sourceVideo, seriesTitleByVideoId.get(sourceVideo.id) ?? inferSeriesTitle(sourceVideo));
     const seriesVideos = playlistVideos.filter(
-      (video) => createScopedSeriesKey(video) === sourceSeriesKey,
+      (video) => scopedSeriesKeyForVideo(video, seriesTitleByVideoId.get(video.id) ?? inferSeriesTitle(video)) === sourceSeriesKey,
     );
     if (seriesVideos.length < 2) return null;
     const sourceIndex = seriesVideos.findIndex((video) => video.id === sourceVideo.id);
@@ -1961,6 +1976,8 @@ export default function App() {
       videos.forEach((video) => {
         const folderTitle = libraryFolderTitleForVideo(video);
         const folderPath = libraryFolderPathForVideo(video);
+        const mediaRoot = video.mediaRootId ? localConfig?.mediaRoots.find((root) => root.id === video.mediaRootId) : null;
+        const mediaRootLabel = mediaRoot?.label ?? (video.mediaRootId ? fallbackMediaRootLabelForVideo(video) : "");
         const directoryParts = directoryPartsOf(video.relativePath);
         const parentDirectory = directoryParts.at(-1) ?? "";
         const directoryPath = directoryParts.join(" ");
@@ -1972,6 +1989,7 @@ export default function App() {
           video.name,
           video.relativePath,
           baseNameWithoutExtension(video.name),
+          mediaRootLabel,
         ].map(normalizeLibrarySearchText);
         const tags = videoTags[video.id] ?? [];
         let score = 0;
@@ -2001,6 +2019,10 @@ export default function App() {
           score += 6;
           reasons.push("路径匹配");
         }
+        if (searchable[7].includes(normalizedQuery)) {
+          score += 12;
+          reasons.push("媒体库匹配");
+        }
         const tagScore = getTagSearchScore(query, tags);
         if (tagScore > 0) {
           score += tagScore;
@@ -2014,6 +2036,7 @@ export default function App() {
           if (searchable[3].includes(token)) score += 5;
           if (searchable[4].includes(token)) score += 2;
           if (searchable[5].includes(token)) score += 1;
+          if (searchable[7].includes(token)) score += 4;
           score += Math.floor(getTagSearchScore(token, tags) / 4);
         });
 
@@ -2051,7 +2074,7 @@ export default function App() {
         .sort((a, b) => b.score - a.score || collator.compare(a.title, b.title))
         .slice(0, limit);
     },
-    [createLibraryFolderResult, favoriteVideoIds, progressStore, videoTags, videos, videosByLibraryFolderKey],
+    [createLibraryFolderResult, favoriteVideoIds, localConfig, progressStore, videoTags, videos, videosByLibraryFolderKey],
   );
   const createLibrarySearchCandidates = useCallback(
     (localResults: LibrarySearchResult[]): LibrarySearchCandidate[] => {
@@ -2065,6 +2088,7 @@ export default function App() {
           id: video.id,
           name: video.name,
           relativePath: video.relativePath,
+          mediaRootLabel: card.mediaRootLabel ?? "",
           seriesTitle: card.seriesTitle ?? "",
           tags: videoTags[video.id] ?? [],
           progressLabel: formatLibrarySearchProgressLabel(card),
@@ -2849,7 +2873,7 @@ export default function App() {
     if (nextSeriesMode) setPlaylistFilter("all");
     const currentSeriesKey =
       currentVideo && nextSeriesMode
-        ? seriesKeyFromTitle(seriesTitleByVideoId.get(currentVideo.id) ?? inferSeriesTitle(currentVideo))
+        ? scopedSeriesKeyForVideo(currentVideo, seriesTitleByVideoId.get(currentVideo.id) ?? inferSeriesTitle(currentVideo))
         : playerPreferencesRef.current.selectedSeriesKey;
     replacePlayerPreferences({
       ...playerPreferencesRef.current,
@@ -2877,7 +2901,7 @@ export default function App() {
   const createBangumiMatchPayload = useCallback(
     (series: { key: string; title: string }) => {
       const seriesVideos = playlistVideos
-        .filter((video) => seriesKeyFromTitle(seriesTitleByVideoId.get(video.id) ?? inferSeriesTitle(video)) === series.key)
+        .filter((video) => scopedSeriesKeyForVideo(video, seriesTitleByVideoId.get(video.id) ?? inferSeriesTitle(video)) === series.key)
         .slice(0, 8);
       return {
         libraryId,
@@ -5629,7 +5653,9 @@ export default function App() {
         <span className="library-folder-copy">
           <strong>{result.title}</strong>
           <small>{result.videos.length} 集 · {statusLabel} · {result.reason}</small>
-          {result.path ? <small>{result.path}</small> : null}
+          {result.path || result.mediaRootLabel ? (
+            <small>{[result.mediaRootLabel, result.path].filter(Boolean).join(" · ")}</small>
+          ) : null}
         </span>
       </button>
     );
@@ -6337,7 +6363,12 @@ export default function App() {
                   <span>
                     {selectedSeriesKey === "all"
                       ? "全部系列"
-                      : seriesOptions.find((series) => series.key === selectedSeriesKey)?.title ?? "全部系列"}
+                      : (() => {
+                          const selectedSeries = seriesOptions.find((series) => series.key === selectedSeriesKey);
+                          return selectedSeries
+                            ? [selectedSeries.title, selectedSeries.mediaRootLabel].filter(Boolean).join(" · ")
+                            : "全部系列";
+                        })()}
                   </span>
                   <ChevronDown className="series-menu-chevron" size={15} aria-hidden="true" />
                 </button>
@@ -6361,7 +6392,7 @@ export default function App() {
                         aria-selected={selectedSeriesKey === series.key}
                         onClick={() => updateSelectedSeries(series.key)}
                       >
-                        {series.title} ({series.count})
+                        {[series.title, series.mediaRootLabel].filter(Boolean).join(" · ")} ({series.count})
                       </button>
                     ))}
                   </div>
