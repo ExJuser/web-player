@@ -2740,7 +2740,7 @@ button {
 
 .cache-status-overview {
   display: grid;
-  grid-template-columns: minmax(120px, 1fr) minmax(110px, 1fr) minmax(110px, 1fr) minmax(210px, 1.35fr);
+  grid-template-columns: minmax(120px, 1fr) minmax(110px, 1fr) minmax(110px, 1fr) minmax(180px, 1.25fr);
   gap: 1px;
   overflow: hidden;
   border: 1px solid #242a31;
@@ -2750,9 +2750,11 @@ button {
 
 .cache-status-overview div {
   display: grid;
-  gap: 5px;
+  align-content: center;
+  gap: 7px;
   min-width: 0;
-  padding: 13px;
+  min-height: 64px;
+  padding: 12px 16px;
   background: #1d222c;
 }
 
@@ -2766,12 +2768,13 @@ button {
 .cache-status-overview strong {
   color: #f5f7fb;
   font-size: 18px;
-  line-height: 1.1;
+  line-height: 1.2;
 }
 
 .cache-status-overview span {
   color: #8e97a5;
   font-size: 12px;
+  line-height: 1.2;
 }
 
 .cache-status-list {
