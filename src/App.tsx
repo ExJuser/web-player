@@ -872,6 +872,18 @@ async function collectPhotoAlbumsFromDirectory(directory: FileSystemDirectoryHan
   return collectPhotoAlbumsFromBrowserFiles(rootLabel, rootId, photoFiles);
 }
 
+async function resolvePhotoParentDirectory(rootDirectory: FileSystemDirectoryHandle, relativePath: string) {
+  const parts = relativePath.replace(/\\/g, "/").split("/").filter(Boolean);
+  const directoryParts = parts.slice(0, -1);
+  let directory = rootDirectory;
+
+  for (const part of directoryParts) {
+    directory = await directory.getDirectoryHandle(part);
+  }
+
+  return directory;
+}
+
 function createCachedPhotoAlbumScan(scan: Awaited<ReturnType<typeof collectPhotoAlbumsFromDirectory>>): CachedPhotoAlbumScan {
   return {
     version: photoAlbumScanCacheVersion,
@@ -2106,6 +2118,15 @@ export default function App() {
   const [isPrivacyMode, setIsPrivacyMode] = useState(false);
   const [theme, setTheme] = useState<AppTheme>(readStoredTheme);
   const [deleteCandidate, setDeleteCandidate] = useState<VideoItem | null>(null);
+  const [photoDeleteCandidate, setPhotoDeleteCandidate] = useState<{
+    albumId: string;
+    albumTitle: string;
+    imageId: string;
+    imageIndex: number;
+    name: string;
+    relativePath: string;
+    parentDirectory?: FileSystemDirectoryHandle;
+  } | null>(null);
   const [mediaRootLabelPrompt, setMediaRootLabelPrompt] = useState<MediaRootLabelPrompt | null>(null);
   const [existingMediaRootPrompt, setExistingMediaRootPrompt] = useState<ExistingMediaRootPrompt | null>(null);
   const [mediaRootLocalPathDialog, setMediaRootLocalPathDialog] = useState<MediaRootLocalPathDialog | null>(null);
@@ -4556,54 +4577,85 @@ export default function App() {
     setPhotoAlbumMessage(`已清除《${selectedPhotoAlbum.title}》的阅读进度`);
   }, [saveCurrentPhotoAlbumStore, selectedPhotoAlbum]);
 
-  const deleteCurrentPhoto = useCallback(async () => {
+  const requestDeleteCurrentPhoto = useCallback(() => {
     if (!selectedPhotoAlbum) return;
     const photo = selectedPhotoAlbum.images[currentPhotoIndex];
-    const parentDirectory = photo?.parentDirectory;
-    if (!photo || !parentDirectory?.removeEntry) {
-      setPhotoAlbumMessage("当前图片来源不支持直接删除。");
+    if (!photo) {
+      setPhotoAlbumMessage("当前没有可删除的写真图片。");
+      return;
+    }
+
+    setPhotoDeleteCandidate({
+      albumId: selectedPhotoAlbum.id,
+      albumTitle: selectedPhotoAlbum.title,
+      imageId: photo.id,
+      imageIndex: currentPhotoIndex,
+      name: photo.name,
+      relativePath: photo.relativePath,
+      parentDirectory: photo.parentDirectory,
+    });
+  }, [currentPhotoIndex, selectedPhotoAlbum]);
+
+  const confirmDeleteCurrentPhoto = useCallback(async () => {
+    if (!photoDeleteCandidate) return;
+    const album = photoAlbumsRef.current.find((item) => item.id === photoDeleteCandidate.albumId);
+    const photo = album?.images.find((image) => image.id === photoDeleteCandidate.imageId);
+    if (!album || !photo) {
+      setPhotoDeleteCandidate(null);
+      setPhotoAlbumMessage("这张图片已经不在当前写真集中。");
       return;
     }
 
     try {
+      const rootDirectory = photoAlbumDirectoryRef.current ?? (await readPhotoAlbumFolderHandle().catch(() => null));
+      const parentDirectory = photo.parentDirectory ?? photoDeleteCandidate.parentDirectory ?? (rootDirectory ? await resolvePhotoParentDirectory(rootDirectory, photo.relativePath) : null);
+      if (!parentDirectory?.removeEntry) {
+        setPhotoDeleteCandidate(null);
+        setPhotoAlbumMessage("当前图片来源不支持直接删除，请刷新写真集或在文件管理器中删除。");
+        return;
+      }
+
       if (!(await hasDirectoryWritePermission(parentDirectory))) {
+        setPhotoDeleteCandidate(null);
         setPhotoAlbumMessage("为避免浏览器原生确认框，当前未启用应用内删除写真图片。请在文件管理器中删除。");
         return;
       }
 
       await parentDirectory.removeEntry(photo.name);
 
-      const previousProgress = photoAlbumProgressRef.current[selectedPhotoAlbum.id];
-      const remainingImages = selectedPhotoAlbum.images
+      setPhotoDeleteCandidate(null);
+
+      const previousProgress = photoAlbumProgressRef.current[album.id];
+      const remainingImages = album.images
         .filter((image) => image.id !== photo.id)
         .map((image, index) => ({ ...image, index }));
-      const nextPhotoIndex = Math.min(currentPhotoIndex, Math.max(remainingImages.length - 1, 0));
+      const nextPhotoIndex = Math.min(photoDeleteCandidate.imageIndex, Math.max(remainingImages.length - 1, 0));
       const nextProgress = { ...photoAlbumProgressRef.current };
       let nextFavorites = favoritePhotoAlbumIdsRef.current;
-      let nextSelectedAlbumId: string | null = selectedPhotoAlbum.id;
+      let nextSelectedAlbumId: string | null = album.id;
 
       let nextAlbums: PhotoAlbum[];
       if (remainingImages.length) {
         const nextAlbum: PhotoAlbum = {
-          ...selectedPhotoAlbum,
-          coverImageUrl: selectedPhotoAlbum.coverImageUrl === photo.url ? remainingImages[0]?.url || "" : selectedPhotoAlbum.coverImageUrl,
+          ...album,
+          coverImageUrl: album.coverImageUrl === photo.url ? remainingImages[0]?.url || "" : album.coverImageUrl,
           imageCount: remainingImages.length,
           totalSize: remainingImages.reduce((sum, image) => sum + image.size, 0),
           updatedAt: remainingImages.reduce((latest, image) => Math.max(latest, image.lastModified), 0),
           images: remainingImages,
         };
-        nextAlbums = photoAlbumsRef.current.map((album) => (album.id === selectedPhotoAlbum.id ? nextAlbum : album));
-        nextProgress[selectedPhotoAlbum.id] = {
+        nextAlbums = photoAlbumsRef.current.map((item) => (item.id === album.id ? nextAlbum : item));
+        nextProgress[album.id] = {
           imageIndex: nextPhotoIndex,
           updatedAt: Date.now(),
           completed: Boolean(previousProgress?.completed && nextPhotoIndex === remainingImages.length - 1),
         };
       } else {
-        nextAlbums = photoAlbumsRef.current.filter((album) => album.id !== selectedPhotoAlbum.id);
-        delete nextProgress[selectedPhotoAlbum.id];
-        if (favoritePhotoAlbumIdsRef.current.has(selectedPhotoAlbum.id)) {
+        nextAlbums = photoAlbumsRef.current.filter((item) => item.id !== album.id);
+        delete nextProgress[album.id];
+        if (favoritePhotoAlbumIdsRef.current.has(album.id)) {
           nextFavorites = new Set(favoritePhotoAlbumIdsRef.current);
-          nextFavorites.delete(selectedPhotoAlbum.id);
+          nextFavorites.delete(album.id);
         }
         nextSelectedAlbumId = null;
       }
@@ -4621,10 +4673,10 @@ export default function App() {
       setPhotoAlbums(nextAlbums);
       setPhotoRootStatuses((statuses) =>
         statuses.map((status) =>
-          status.id === selectedPhotoAlbum.mediaRootId
+          status.id === album.mediaRootId
             ? {
                 ...status,
-                videoCount: nextAlbums.filter((album) => album.mediaRootId === selectedPhotoAlbum.mediaRootId).length,
+                videoCount: nextAlbums.filter((item) => item.mediaRootId === album.mediaRootId).length,
                 scannedFiles: Math.max(status.scannedFiles - 1, 0),
                 updatedAt: Date.now(),
               }
@@ -4646,12 +4698,13 @@ export default function App() {
       setPhotoAlbumMessage(
         remainingImages.length
           ? `已删除《${photo.name}》`
-          : `已删除《${photo.name}》，《${selectedPhotoAlbum.title}》已无图片`,
+          : `已删除《${photo.name}》，《${album.title}》已无图片`,
       );
     } catch {
+      setPhotoDeleteCandidate(null);
       setPhotoAlbumMessage("删除写真图片失败，请确认浏览器仍有文件夹写入权限。");
     }
-  }, [currentPhotoIndex, saveCurrentPhotoAlbumStore, selectedPhotoAlbum]);
+  }, [photoDeleteCandidate, saveCurrentPhotoAlbumStore]);
 
   const updatePhotoAlbumSortMode = useCallback(
     (nextSortMode: PhotoAlbumSortMode) => {
@@ -6443,6 +6496,7 @@ export default function App() {
     resetHoldSpeedState();
     setIsShortcutDialogOpen(false);
     setDeleteCandidate(null);
+    setPhotoDeleteCandidate(null);
     setIsFolderDialogOpen(false);
     setTimelinePreview({
       time: 0,
@@ -6672,6 +6726,12 @@ export default function App() {
         return;
       }
 
+      if (event.key === "Escape" && photoDeleteCandidate) {
+        event.preventDefault();
+        setPhotoDeleteCandidate(null);
+        return;
+      }
+
       if (event.key === "Escape" && isClearCacheConfirmOpen) {
         event.preventDefault();
         setIsClearCacheConfirmOpen(false);
@@ -6746,7 +6806,7 @@ export default function App() {
         return;
       }
 
-      if (!currentVideo || isShortcutDialogOpen || deleteCandidate || isFormControl(event.target)) return;
+      if (!currentVideo || isShortcutDialogOpen || deleteCandidate || photoDeleteCandidate || isFormControl(event.target)) return;
 
       if (isPrivacyMode) {
         if (eventCode === activeShortcuts.seekBackward) {
@@ -6886,6 +6946,7 @@ export default function App() {
     stopRightMouseHoldSpeed,
     deleteCandidate,
     exitPrivacyMode,
+    photoDeleteCandidate,
     isCinemaMode,
     isClearCacheConfirmOpen,
     isPrivacyMode,
@@ -7693,9 +7754,9 @@ export default function App() {
                 <button
                   className="danger-button photo-delete-button"
                   type="button"
-                  onClick={() => void deleteCurrentPhoto()}
-                  disabled={!currentPhoto?.parentDirectory?.removeEntry}
-                  title={currentPhoto?.parentDirectory?.removeEntry ? "删除当前写真" : "当前图片来源不支持直接删除"}
+                  onClick={requestDeleteCurrentPhoto}
+                  disabled={!currentPhoto}
+                  title={currentPhoto ? "删除当前写真" : "当前没有可删除的写真图片"}
                 >
                   <Trash2 size={16} />
                   删除
@@ -8412,6 +8473,46 @@ export default function App() {
             <button className="danger-button" type="button" onClick={() => void confirmDeleteLocalVideo()}>
               <Trash2 size={18} />
               删除文件
+            </button>
+          </div>
+        </section>
+      </div>
+    ) : null}
+    {photoDeleteCandidate ? (
+      <div className="modal-backdrop" role="presentation" onMouseDown={() => setPhotoDeleteCandidate(null)}>
+        <section
+          aria-labelledby="delete-photo-title"
+          aria-modal="true"
+          className="delete-dialog"
+          role="dialog"
+          onMouseDown={(event) => event.stopPropagation()}
+        >
+          <button
+            aria-label="关闭"
+            className="dialog-close"
+            type="button"
+            onClick={() => setPhotoDeleteCandidate(null)}
+          >
+            <X size={18} />
+          </button>
+          <div className="dialog-icon danger">
+            <Trash2 size={28} />
+          </div>
+          <div className="dialog-copy">
+            <h2 id="delete-photo-title">删除写真图片？</h2>
+            <p>这个操作会直接从本地磁盘删除图片文件，删除后无法在播放器内恢复。</p>
+          </div>
+          <div className="delete-file-preview">
+            <strong>{photoDeleteCandidate.name}</strong>
+            <span>{photoDeleteCandidate.relativePath || photoDeleteCandidate.albumTitle}</span>
+          </div>
+          <div className="dialog-actions">
+            <button className="secondary-button" type="button" onClick={() => setPhotoDeleteCandidate(null)}>
+              取消
+            </button>
+            <button className="danger-button" type="button" onClick={() => void confirmDeleteCurrentPhoto()}>
+              <Trash2 size={18} />
+              删除图片
             </button>
           </div>
         </section>
