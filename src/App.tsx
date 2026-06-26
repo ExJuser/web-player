@@ -774,6 +774,7 @@ function collectVideosFromFiles(files: FileList | File[]): MediaCollection {
 type BrowserPhotoFile = {
   file: File;
   relativePath: string;
+  parentDirectory: FileSystemDirectoryHandle;
 };
 
 function collectPhotoAlbumsFromBrowserFiles(rootLabel: string, rootId: string, photoFiles: BrowserPhotoFile[]) {
@@ -800,6 +801,7 @@ function collectPhotoAlbumsFromBrowserFiles(rootLabel: string, rootId: string, p
       lastModified: file.lastModified,
       mediaRootId: rootId,
       index: 0,
+      parentDirectory: photoFile.parentDirectory,
     });
     albumImages.set(albumPath, images);
   }
@@ -845,6 +847,7 @@ async function collectPhotoAlbumsFromDirectory(directory: FileSystemDirectoryHan
         photoFiles.push({
           file,
           relativePath: [...segments, entry.name].join("/"),
+          parentDirectory: handle,
         });
       }
     }
@@ -4413,6 +4416,103 @@ export default function App() {
     setPhotoAlbumMessage(`已清除《${selectedPhotoAlbum.title}》的阅读进度`);
   }, [saveCurrentPhotoAlbumStore, selectedPhotoAlbum]);
 
+  const deleteCurrentPhoto = useCallback(async () => {
+    if (!selectedPhotoAlbum) return;
+    const photo = selectedPhotoAlbum.images[currentPhotoIndex];
+    const parentDirectory = photo?.parentDirectory;
+    if (!photo || !parentDirectory?.removeEntry) {
+      setPhotoAlbumMessage("当前图片来源不支持直接删除。");
+      return;
+    }
+
+    try {
+      if (!(await ensureDirectoryPermission(parentDirectory))) {
+        setPhotoAlbumMessage("需要允许文件夹写入权限，才能删除写真图片。");
+        return;
+      }
+
+      await parentDirectory.removeEntry(photo.name);
+
+      const previousProgress = photoAlbumProgressRef.current[selectedPhotoAlbum.id];
+      const remainingImages = selectedPhotoAlbum.images
+        .filter((image) => image.id !== photo.id)
+        .map((image, index) => ({ ...image, index }));
+      const nextPhotoIndex = Math.min(currentPhotoIndex, Math.max(remainingImages.length - 1, 0));
+      const nextProgress = { ...photoAlbumProgressRef.current };
+      let nextFavorites = favoritePhotoAlbumIdsRef.current;
+      let nextSelectedAlbumId: string | null = selectedPhotoAlbum.id;
+
+      let nextAlbums: PhotoAlbum[];
+      if (remainingImages.length) {
+        const nextAlbum: PhotoAlbum = {
+          ...selectedPhotoAlbum,
+          coverImageUrl: selectedPhotoAlbum.coverImageUrl === photo.url ? remainingImages[0]?.url || "" : selectedPhotoAlbum.coverImageUrl,
+          imageCount: remainingImages.length,
+          totalSize: remainingImages.reduce((sum, image) => sum + image.size, 0),
+          updatedAt: remainingImages.reduce((latest, image) => Math.max(latest, image.lastModified), 0),
+          images: remainingImages,
+        };
+        nextAlbums = photoAlbumsRef.current.map((album) => (album.id === selectedPhotoAlbum.id ? nextAlbum : album));
+        nextProgress[selectedPhotoAlbum.id] = {
+          imageIndex: nextPhotoIndex,
+          updatedAt: Date.now(),
+          completed: Boolean(previousProgress?.completed && nextPhotoIndex === remainingImages.length - 1),
+        };
+      } else {
+        nextAlbums = photoAlbumsRef.current.filter((album) => album.id !== selectedPhotoAlbum.id);
+        delete nextProgress[selectedPhotoAlbum.id];
+        if (favoritePhotoAlbumIdsRef.current.has(selectedPhotoAlbum.id)) {
+          nextFavorites = new Set(favoritePhotoAlbumIdsRef.current);
+          nextFavorites.delete(selectedPhotoAlbum.id);
+        }
+        nextSelectedAlbumId = null;
+      }
+
+      const objectUrl = photoObjectUrlsRef.current[photo.id];
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      if (isObjectUrl(photo.url)) URL.revokeObjectURL(photo.url);
+      const nextPhotoObjectUrls = { ...photoObjectUrlsRef.current };
+      delete nextPhotoObjectUrls[photo.id];
+      photoObjectUrlsRef.current = nextPhotoObjectUrls;
+
+      photoAlbumsRef.current = nextAlbums;
+      photoAlbumProgressRef.current = nextProgress;
+      favoritePhotoAlbumIdsRef.current = nextFavorites;
+      setPhotoAlbums(nextAlbums);
+      setPhotoRootStatuses((statuses) =>
+        statuses.map((status) =>
+          status.id === selectedPhotoAlbum.mediaRootId
+            ? {
+                ...status,
+                videoCount: nextAlbums.filter((album) => album.mediaRootId === selectedPhotoAlbum.mediaRootId).length,
+                scannedFiles: Math.max(status.scannedFiles - 1, 0),
+                updatedAt: Date.now(),
+              }
+            : status,
+        ),
+      );
+      setPhotoObjectUrls(nextPhotoObjectUrls);
+      setPhotoAlbumProgress(nextProgress);
+      setFavoritePhotoAlbumIds(nextFavorites);
+      setCurrentPhotoIndex(nextPhotoIndex);
+      setSelectedPhotoAlbumId(nextSelectedAlbumId);
+      if (!remainingImages.length) setActiveView("photos");
+
+      await saveCurrentPhotoAlbumStore({
+        progress: nextProgress,
+        favorites: Array.from(nextFavorites),
+      });
+
+      setPhotoAlbumMessage(
+        remainingImages.length
+          ? `已删除《${photo.name}》`
+          : `已删除《${photo.name}》，《${selectedPhotoAlbum.title}》已无图片`,
+      );
+    } catch {
+      setPhotoAlbumMessage("删除写真图片失败，请确认浏览器仍有文件夹写入权限。");
+    }
+  }, [currentPhotoIndex, saveCurrentPhotoAlbumStore, selectedPhotoAlbum]);
+
   const updatePhotoAlbumSortMode = useCallback(
     (nextSortMode: PhotoAlbumSortMode) => {
       const nextPreferences = {
@@ -7445,6 +7545,16 @@ export default function App() {
                 <button className="secondary-button" type="button" onClick={resetSelectedPhotoAlbumProgress}>
                   <RotateCcw size={16} />
                   重读
+                </button>
+                <button
+                  className="danger-button photo-delete-button"
+                  type="button"
+                  onClick={() => void deleteCurrentPhoto()}
+                  disabled={!currentPhoto?.parentDirectory?.removeEntry}
+                  title={currentPhoto?.parentDirectory?.removeEntry ? "删除当前写真" : "当前图片来源不支持直接删除"}
+                >
+                  <Trash2 size={16} />
+                  删除
                 </button>
               </div>
             </header>

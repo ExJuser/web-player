@@ -1205,6 +1205,14 @@ button {
   flex: 0 0 auto;
 }
 
+.photo-viewer-actions .photo-delete-button {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: auto;
+  height: 34px;
+  padding: 0 10px;
+}
+
 .photo-stage {
   position: relative;
   display: flex;
