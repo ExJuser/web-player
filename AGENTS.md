@@ -1,5 +1,6 @@
 # Project Rules
 
+- 若进行了 UI 改动，需要使用本地页面做一次实际浏览器检查。
 - Do not use native browser dialogs such as `alert`, `confirm`, or `prompt`; use app-styled modal UI instead.
 - Do not expose native browser scrollbars; style scrollable areas with the app's custom scrollbar treatment.
 - Media library names (`label`) are display names and may be duplicated; never use `label` as a uniqueness constraint.
