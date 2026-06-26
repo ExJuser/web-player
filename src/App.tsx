@@ -6976,10 +6976,6 @@ export default function App() {
                 <ArrowLeft size={17} />
                 返回
               </button>
-              <div>
-                <strong>{selectedPhotoAlbum.title}</strong>
-                <span>{selectedPhotoAlbum.mediaRootLabel} · {selectedPhotoAlbum.relativePath || "根目录"}</span>
-              </div>
               <div className="photo-viewer-actions">
                 <button
                   className={`secondary-button ${favoritePhotoAlbumIds.has(selectedPhotoAlbum.id) ? "active" : ""}`}

@@ -1058,7 +1058,7 @@ button {
 
 .photo-viewer-header {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: 12px;
   border: 1px solid #242a31;
@@ -1093,8 +1093,10 @@ button {
 
 .photo-viewer-actions {
   display: flex;
+  flex-direction: row;
+  justify-self: end;
   justify-content: flex-end;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 8px;
 }
 
