@@ -1151,7 +1151,7 @@ button {
 
 .photo-viewer-header {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: max-content minmax(0, 1fr);
   align-items: center;
   gap: 12px;
   border: 1px solid #242a31;
@@ -1160,11 +1160,18 @@ button {
   background: #1a1e24;
 }
 
-.photo-viewer-header > div {
+.photo-viewer-header > div:not(.photo-viewer-actions) {
   display: flex;
   min-width: 0;
   flex-direction: column;
   gap: 3px;
+}
+
+.photo-viewer-header .secondary-button {
+  min-width: auto;
+  width: auto;
+  height: 34px;
+  padding: 0 10px;
 }
 
 .photo-viewer-header strong,
@@ -1187,10 +1194,15 @@ button {
 .photo-viewer-actions {
   display: flex;
   flex-direction: row;
+  min-width: 0;
   justify-self: end;
   justify-content: flex-end;
   flex-wrap: nowrap;
   gap: 8px;
+}
+
+.photo-viewer-actions .secondary-button {
+  flex: 0 0 auto;
 }
 
 .photo-stage {
@@ -4639,7 +4651,6 @@ button {
   }
 
   .photo-toolbar,
-  .photo-viewer-header,
   .photo-filmstrip {
     grid-template-columns: 1fr;
   }
@@ -4649,8 +4660,7 @@ button {
     flex-direction: column;
   }
 
-  .photo-toolbar-actions,
-  .photo-viewer-actions {
+  .photo-toolbar-actions {
     justify-content: flex-start;
   }
 
