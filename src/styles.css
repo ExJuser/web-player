@@ -2319,31 +2319,32 @@ button {
   margin-left: 2px;
 }
 
-.series-mode-button {
+.player-mode-indicator {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   height: 32px;
-  padding: 0 10px;
+  min-width: 46px;
+  padding: 0 11px;
   border: 1px solid #303743;
   border-radius: 6px;
   background: #20252d;
   color: #dce2ec;
-  cursor: pointer;
   font-size: 13px;
+  font-weight: 700;
   white-space: nowrap;
 }
 
-.series-mode-button.active {
+.player-mode-indicator.mode-anime {
   border-color: #00a1d6;
   background: #07394a;
   color: #79dfff;
 }
 
-.series-mode-button:disabled {
-  cursor: not-allowed;
-  color: #5f6875;
-  background: #191d23;
+.player-mode-indicator.mode-special {
+  border-color: #a974ff;
+  background: #2b1d43;
+  color: #d6c4ff;
 }
 
 .series-menu {
@@ -3812,7 +3813,6 @@ button {
 .app-shell.theme-light .bangumi-link-button,
 .app-shell.theme-light .playlist-locate-button,
 .app-shell.theme-light .playlist-clear-button,
-.app-shell.theme-light .series-mode-button,
 .app-shell.theme-light .auto-next-actions button,
 .app-shell.theme-light .shortcut-key-button,
 .app-shell.theme-light .permission-notes span,
@@ -3832,8 +3832,7 @@ button {
 .app-shell.theme-light .icon-button.privacy-toggle.active,
 .app-shell.theme-light .icon-button.cinema-toggle.active,
 .app-shell.theme-light .playlist-order-button.active,
-.app-shell.theme-light .bangumi-link-button.active,
-.app-shell.theme-light .series-mode-button.active {
+.app-shell.theme-light .bangumi-link-button.active {
   border-color: #00a1d6;
   background: #e1f5fd;
   color: #0077a8;
@@ -3859,7 +3858,6 @@ button {
 .app-shell.theme-light .bangumi-link-button:disabled,
 .app-shell.theme-light .playlist-locate-button:disabled,
 .app-shell.theme-light .playlist-clear-button:disabled,
-.app-shell.theme-light .series-mode-button:disabled,
 .app-shell.theme-light .episode-action-button:disabled {
   border-color: #d8e0ea;
   background: #eef2f6;
@@ -4284,6 +4282,24 @@ button {
 
 .app-shell.theme-light .playlist-panel {
   border-left-color: #d7e0ea;
+}
+
+.app-shell.theme-light .player-mode-indicator {
+  border-color: #cfd8e3;
+  background: #ffffff;
+  color: #243044;
+}
+
+.app-shell.theme-light .player-mode-indicator.mode-anime {
+  border-color: rgba(0, 161, 214, 0.32);
+  background: #e1f5fd;
+  color: #005f86;
+}
+
+.app-shell.theme-light .player-mode-indicator.mode-special {
+  border-color: rgba(124, 58, 237, 0.28);
+  background: #f0e9ff;
+  color: #5b21b6;
 }
 
 .app-shell.theme-light .playlist-filter {

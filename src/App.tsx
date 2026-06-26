@@ -2274,6 +2274,7 @@ export default function App() {
     [homeMediaMode, homeModeMediaRootIds, mediaRootStatuses],
   );
   const homeMediaModeLabel = homeMediaMode === "anime" ? "追番模式" : homeMediaMode === "special" ? "特殊模式" : "全部";
+  const playerMediaModeLabel = homeMediaMode === "anime" ? "追番" : homeMediaMode === "special" ? "特殊" : "全部";
   const playlistVideos = useMemo(
     () => getSortedVideos(modeFilteredVideos, isSeriesMode ? "name" : playlistSortMode, isSeriesMode ? false : isPlaylistSortReversed),
     [isPlaylistSortReversed, isSeriesMode, modeFilteredVideos, playlistSortMode],
@@ -3630,21 +3631,6 @@ export default function App() {
     setRecordingShortcutAction(null);
     setShortcutMessage("已恢复默认快捷键");
   }, [replacePlayerPreferences]);
-
-  const toggleSeriesMode = useCallback(() => {
-    const nextSeriesMode = !playerPreferencesRef.current.isSeriesMode;
-    setIsSeriesMenuOpen(false);
-    if (nextSeriesMode) setPlaylistFilter("all");
-    const currentSeriesKey =
-      currentVideo && nextSeriesMode
-        ? scopedSeriesKeyForVideo(currentVideo, seriesTitleByVideoId.get(currentVideo.id) ?? inferSeriesTitle(currentVideo))
-        : playerPreferencesRef.current.selectedSeriesKey;
-    replacePlayerPreferences({
-      ...playerPreferencesRef.current,
-      isSeriesMode: nextSeriesMode,
-      selectedSeriesKey: nextSeriesMode ? currentSeriesKey : "all",
-    });
-  }, [currentVideo, replacePlayerPreferences, seriesTitleByVideoId]);
 
   const updateSelectedSeries = useCallback(
     (nextSeriesKey: string) => {
@@ -6772,12 +6758,6 @@ export default function App() {
             >
               {theme === "dark" ? <Sun size={17} /> : <Moon size={17} />}
             </button>
-            {!isPrivacyMode && !isPhotoAlbumViewVisible ? (
-              <button className="primary-button" type="button" onClick={requestAddMediaLibrary} disabled={isScanning}>
-                <FolderOpen size={18} />
-                {isScanning ? "扫描中" : "新增媒体库"}
-              </button>
-            ) : null}
           </div>
         </header>
 
@@ -7657,16 +7637,9 @@ export default function App() {
             </span>
           </div>
           <div className={`playlist-tools ${isSeriesMode ? "series-mode" : ""}`}>
-            <button
-              className={`series-mode-button ${isSeriesMode ? "active" : ""}`}
-              type="button"
-              onClick={toggleSeriesMode}
-              disabled={!modeFilteredVideos.length}
-              title={isSeriesMode ? "关闭追番模式" : "打开追番模式"}
-              aria-pressed={isSeriesMode}
-            >
-              追番
-            </button>
+            <span className={`player-mode-indicator mode-${homeMediaMode}`} title={`当前播放模式：${playerMediaModeLabel}`}>
+              {playerMediaModeLabel}
+            </span>
             {isSeriesMode ? (
               <div className="series-menu">
                 <button
