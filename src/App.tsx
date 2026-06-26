@@ -2627,7 +2627,7 @@ export default function App() {
     [subtitles],
   );
   const homeRecapCard = primaryResumeCard;
-  const shouldShowHomeRecap = shouldShowHomeRecapCard(homeMediaMode, Boolean(homeRecapCard));
+  const shouldShowHomeRecap = shouldShowHomeRecapCard(homeMediaMode);
   const homeRecapVideoId = homeRecapCard?.video.id ?? "";
   const homeRecapSubtitle = useMemo(
     () => (shouldShowHomeRecap && homeRecapCard ? findMatchedSubtitleForVideo(homeRecapCard.video) : null),
@@ -6968,32 +6968,36 @@ export default function App() {
                 ) : null}
               </section>
 
-              {shouldShowHomeRecap && homeRecapCard ? (
+              {shouldShowHomeRecap ? (
                 <section className="home-section home-recap-card">
                   <div className="home-section-header">
                     <h2>无剧透回顾</h2>
-                    <span>{formatHomeProgressLabel(homeRecapCard)}</span>
+                    <span>{homeRecapCard ? formatHomeProgressLabel(homeRecapCard) : "等待观看进度"}</span>
                   </div>
-                  <div className="home-recap-target">
-                    <Subtitles size={22} />
-                    <div>
-                      <strong>{homeRecapCard.video.name}</strong>
-                      <span>{homeRecapCard.seriesTitle}</span>
+                  {homeRecapCard ? (
+                    <div className="home-recap-target">
+                      <Subtitles size={22} />
+                      <div>
+                        <strong>{homeRecapCard.video.name}</strong>
+                        <span>{homeRecapCard.seriesTitle}</span>
+                      </div>
                     </div>
-                  </div>
+                  ) : null}
                   <div className="home-recap-output">
-                    {homeProgressRecapVideoId === homeRecapVideoId && homeProgressRecap
-                      ? homeProgressRecap
-                      : homeProgressRecapMessage ||
-                        (homeRecapSubtitle
-                          ? "根据当前进度前的字幕生成回顾，不包含后续剧情。"
-                          : canUseHomeEmbeddedSubtitles
-                            ? "可自动提取内封文本字幕，并根据当前进度生成回顾。"
-                            : homeRecapMediaRoot?.source === "browser"
-                              ? "浏览器添加的媒体库只能播放和匹配外置字幕；自动提取内封字幕需要在服务端配置该媒体库的本机绝对路径。"
-                              : "没有匹配字幕，暂时无法生成回顾。")}
+                    {homeRecapCard
+                      ? homeProgressRecapVideoId === homeRecapVideoId && homeProgressRecap
+                        ? homeProgressRecap
+                        : homeProgressRecapMessage ||
+                          (homeRecapSubtitle
+                            ? "根据当前进度前的字幕生成回顾，不包含后续剧情。"
+                            : canUseHomeEmbeddedSubtitles
+                              ? "可自动提取内封文本字幕，并根据当前进度生成回顾。"
+                              : homeRecapMediaRoot?.source === "browser"
+                                ? "浏览器添加的媒体库只能播放和匹配外置字幕；自动提取内封字幕需要在服务端配置该媒体库的本机绝对路径。"
+                                : "没有匹配字幕，暂时无法生成回顾。")
+                      : "当前没有可回顾的观看进度。播放一集并保留进度后，就能在这里生成无剧透回顾。"}
                   </div>
-                  {homeRecapMediaRoot?.source === "browser" && !homeRecapMediaRoot.localPath ? (
+                  {homeRecapCard && homeRecapMediaRoot?.source === "browser" && !homeRecapMediaRoot.localPath ? (
                     <button
                       className="secondary-button home-recap-button"
                       type="button"
@@ -7007,8 +7011,8 @@ export default function App() {
                     className="secondary-button home-recap-button"
                     type="button"
                     onClick={() => void loadHomeProgressRecap()}
-                    disabled={isHomeProgressRecapLoading || !localConfig?.ai.configured || !canUseHomeRecapSubtitle}
-                    title={!localConfig?.ai.configured ? "未配置 DEEPSEEK_API_KEY" : undefined}
+                    disabled={isHomeProgressRecapLoading || !homeRecapCard || !localConfig?.ai.configured || !canUseHomeRecapSubtitle}
+                    title={!homeRecapCard ? "当前没有可回顾的观看进度" : !localConfig?.ai.configured ? "未配置 DEEPSEEK_API_KEY" : undefined}
                   >
                     {homeProgressRecap ? "重新生成" : isHomeProgressRecapLoading ? "生成中..." : "生成回顾"}
                   </button>

@@ -79,11 +79,10 @@ test("home all mode includes unlabeled and temporary media roots", () => {
   assert.equal(uiState.isMediaRootInHomeMode({}, "all"), true);
 });
 
-test("home recap card is shown only in anime mode", () => {
-  assert.equal(uiState.shouldShowHomeRecapCard("anime", true), true);
-  assert.equal(uiState.shouldShowHomeRecapCard("all", true), false);
-  assert.equal(uiState.shouldShowHomeRecapCard("special", true), false);
-  assert.equal(uiState.shouldShowHomeRecapCard("anime", false), false);
+test("home recap card entry is shown only in anime mode", () => {
+  assert.equal(uiState.shouldShowHomeRecapCard("anime"), true);
+  assert.equal(uiState.shouldShowHomeRecapCard("all"), false);
+  assert.equal(uiState.shouldShowHomeRecapCard("special"), false);
 });
 
 test("subtitle options include loaded subtitles before manual selection", () => {
