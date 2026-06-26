@@ -7568,7 +7568,7 @@ export default function App() {
                 {isMediaLibraryPanelOpen ? (
                   <div id="home-media-library-panel" className="media-library-panel">
                     {homeModeMediaRoots.length ? (
-                      <div className="media-library-list">
+                      <div className={`media-library-list${homeModeMediaRoots.length > 2 ? " media-library-list-scrollable" : ""}`}>
                         {homeModeMediaRoots.map((root) => {
                           const action = getMediaRootLocalPathAction(root);
                           const status = modeFilteredMediaRootStatuses.find((item) => item.id === root.id);

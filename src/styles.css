@@ -1645,10 +1645,12 @@ button {
   max-height: min(320px, 36vh);
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding-right: 2px;
   scrollbar-color: rgba(142, 151, 165, 0.58) rgba(20, 22, 26, 0.35);
-  scrollbar-gutter: stable;
   scrollbar-width: thin;
+}
+
+.media-library-list-scrollable {
+  width: calc(100% + 10px);
 }
 
 .media-library-list::-webkit-scrollbar {
