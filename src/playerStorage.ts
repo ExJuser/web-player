@@ -11,6 +11,7 @@ import type {
   PersistedEmbeddedSubtitle,
   ShortcutAction,
   ShortcutMap,
+  VideoStatsStore,
   VideoTagStore
 } from "./playerTypes";
 import {
@@ -65,6 +66,49 @@ export function parseVideoTags(source: unknown): VideoTagStore {
       .map((tag) => tag.trim())
       .filter(Boolean);
     if (tags.length) store[videoId] = tags;
+  }
+  return store;
+}
+
+export function parseVideoStats(source: unknown): VideoStatsStore {
+  if (!source || typeof source !== "object" || Array.isArray(source)) return {};
+
+  const store: VideoStatsStore = {};
+  for (const [key, value] of Object.entries(source)) {
+    if (!key || !value || typeof value !== "object" || Array.isArray(value)) continue;
+    const stats = value as Partial<VideoStatsStore[string]>;
+    if (
+      Number.isFinite(stats.totalPlayedSeconds) &&
+      Number.isFinite(stats.playCount) &&
+      Number.isFinite(stats.durationSeconds) &&
+      Number.isFinite(stats.emissionCount) &&
+      Number.isFinite(stats.updatedAt)
+    ) {
+      const totalPlayedSeconds = stats.totalPlayedSeconds;
+      const playCount = stats.playCount;
+      const durationSeconds = stats.durationSeconds;
+      const emissionCount = stats.emissionCount;
+      const updatedAt = stats.updatedAt;
+      if (
+        typeof totalPlayedSeconds !== "number" ||
+        typeof playCount !== "number" ||
+        typeof durationSeconds !== "number" ||
+        typeof emissionCount !== "number" ||
+        typeof updatedAt !== "number"
+      ) {
+        continue;
+      }
+      store[key] = {
+        totalPlayedSeconds: Math.max(0, totalPlayedSeconds),
+        playCount: Math.max(0, Math.floor(playCount)),
+        durationSeconds: Math.max(0, durationSeconds),
+        emissionCount: Math.max(0, Math.floor(emissionCount)),
+        ...(Number.isFinite(stats.lastEmissionAt) && stats.lastEmissionAt && stats.lastEmissionAt > 0
+          ? { lastEmissionAt: stats.lastEmissionAt }
+          : {}),
+        updatedAt,
+      };
+    }
   }
   return store;
 }
@@ -207,6 +251,7 @@ export function parsePlayerDataStore(raw: string): PlayerDataStore {
     preferences?: unknown;
     settings?: unknown;
     videoTags?: unknown;
+    videoStats?: unknown;
     tagMergeDecisions?: unknown;
     embeddedSubtitles?: unknown;
     metadata?: unknown;
@@ -222,6 +267,7 @@ export function parsePlayerDataStore(raw: string): PlayerDataStore {
     progress: parseProgressItems(progressSource),
     favorites,
     videoTags: parseVideoTags(parsed?.videoTags),
+    videoStats: parseVideoStats(parsed?.videoStats),
     tagMergeDecisions: parseTagMergeDecisions(parsed?.tagMergeDecisions),
     embeddedSubtitles: parsePersistedEmbeddedSubtitles(parsed?.embeddedSubtitles),
     preferences: parsePlayerPreferences(parsed?.preferences),
@@ -239,6 +285,7 @@ export function createDefaultPlayerDataStore(metadata?: PlayerDataStore["metadat
     progress: {},
     favorites: [],
     videoTags: {},
+    videoStats: {},
     tagMergeDecisions: {},
     embeddedSubtitles: [],
     preferences: defaultPlayerPreferences,
@@ -315,6 +362,7 @@ export async function saveGlobalPlayerDataStore(store: PlayerDataStore) {
       items: store.progress,
       favorites: store.favorites,
       videoTags: parseVideoTags(store.videoTags),
+      videoStats: parseVideoStats(store.videoStats),
       tagMergeDecisions: parseTagMergeDecisions(store.tagMergeDecisions),
       embeddedSubtitles: parsePersistedEmbeddedSubtitles(store.embeddedSubtitles),
       preferences: getPersistedPlayerPreferences(store.preferences),
@@ -337,6 +385,7 @@ export async function savePlayerDataStore(libraryId: string, store: PlayerDataSt
       items: store.progress,
       favorites: store.favorites,
       videoTags: parseVideoTags(store.videoTags),
+      videoStats: parseVideoStats(store.videoStats),
       tagMergeDecisions: parseTagMergeDecisions(store.tagMergeDecisions),
       embeddedSubtitles: parsePersistedEmbeddedSubtitles(store.embeddedSubtitles),
       preferences: getPersistedPlayerPreferences(store.preferences),

@@ -100,6 +100,15 @@ export type PlaybackProgress = {
 
 export type ProgressStore = Record<string, PlaybackProgress>;
 export type VideoTagStore = Record<string, string[]>;
+export type VideoStats = {
+  totalPlayedSeconds: number;
+  playCount: number;
+  durationSeconds: number;
+  emissionCount: number;
+  lastEmissionAt?: number;
+  updatedAt: number;
+};
+export type VideoStatsStore = Record<string, VideoStats>;
 export type TagMergeDecision = {
   from: string;
   to: string;
@@ -146,6 +155,7 @@ export type PlayerDataStore = {
   progress: ProgressStore;
   favorites: string[];
   videoTags: VideoTagStore;
+  videoStats: VideoStatsStore;
   tagMergeDecisions: TagMergeDecisionStore;
   embeddedSubtitles: PersistedEmbeddedSubtitle[];
   preferences: PlayerPreferences;

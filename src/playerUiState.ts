@@ -17,6 +17,12 @@ type VideoForCompatibilityUi = {
   };
 };
 
+type VideoForStatsUi = {
+  name?: string;
+  size?: number;
+  lastModified?: number;
+};
+
 type SubtitleForUi = {
   id: string;
   name?: string;
@@ -79,6 +85,13 @@ export function isMediaRootInHomeMode(root: MediaRootForUi, mode: HomeMediaMode)
   const normalizedLabel = (root.label ?? "").trim();
   if (mode === "anime") return normalizedLabel.toLowerCase() === "anime";
   return normalizedLabel.toUpperCase().endsWith("AV");
+}
+
+export function createVideoStatsKey(video: VideoForStatsUi) {
+  const normalizedName = (video.name ?? "").trim().normalize("NFKC").toLowerCase();
+  const size = Number.isFinite(video.size) ? Math.max(0, Math.floor(video.size ?? 0)) : 0;
+  const lastModified = Number.isFinite(video.lastModified) ? Math.max(0, Math.round(video.lastModified ?? 0)) : 0;
+  return `${normalizedName}|${size}|${lastModified}`;
 }
 
 export function shouldShowHomeRecapCard(mode: HomeMediaMode) {

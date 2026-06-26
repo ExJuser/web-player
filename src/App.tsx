@@ -20,6 +20,7 @@ import {
   Play,
   RotateCcw,
   RotateCw,
+  Rocket,
   Search,
   ShieldCheck,
   SkipForward,
@@ -68,6 +69,7 @@ import type {
   VideoItem,
   VideoPlayability,
   VideoMetadata,
+  VideoStatsStore,
   VideoTagStore
 } from "./playerTypes";
 import {
@@ -272,6 +274,7 @@ function hasStoredData(store: PlayerDataStore) {
     Object.keys(store.progress).length ||
       store.favorites.length ||
       Object.keys(store.videoTags).length ||
+      Object.keys(store.videoStats).length ||
       Object.keys(store.tagMergeDecisions).length ||
       store.embeddedSubtitles.length ||
       JSON.stringify(store.preferences) !== JSON.stringify(defaultPlayerPreferences)
@@ -291,6 +294,7 @@ import {
   createPersistedEmbeddedSubtitles,
   getCompatibleMediaAction,
   createSubtitleControlOptions,
+  createVideoStatsKey,
   getMediaRootLocalPathAction,
   isMediaRootInHomeMode,
   resolvePlayerEntrySeriesMode,
@@ -1920,6 +1924,7 @@ export default function App() {
   const playerSettingsRef = useRef(defaultPlayerSettings);
   const favoriteVideoIdsRef = useRef(new Set<string>());
   const videoTagsRef = useRef<VideoTagStore>({});
+  const videoStatsRef = useRef<VideoStatsStore>({});
   const tagMergeDecisionsRef = useRef<TagMergeDecisionStore>({});
   const videosRef = useRef<VideoItem[]>([]);
   const subtitlesRef = useRef<SubtitleItem[]>([]);
@@ -1951,6 +1956,7 @@ export default function App() {
   const autoSubtitleSelectionVideoIdRef = useRef<string | null>(null);
   const lastSubtitleSelectionVideoIdRef = useRef<string | null>(null);
   const selectedSubtitleIdRef = useRef("off");
+  const playbackStatsSessionRef = useRef<{ key: string; lastTime: number | null; hasCountedPlay: boolean } | null>(null);
   const photoAlbumsRef = useRef<PhotoAlbum[]>([]);
   const photoObjectUrlsRef = useRef<Record<string, string>>({});
   const [videos, setVideos] = useState<VideoItem[]>([]);
@@ -2118,6 +2124,7 @@ export default function App() {
       progress: progressStoreRef.current,
       favorites: Array.from(favoriteVideoIdsRef.current),
       videoTags: videoTagsRef.current,
+      videoStats: videoStatsRef.current,
       tagMergeDecisions: tagMergeDecisionsRef.current,
       embeddedSubtitles: createPersistedEmbeddedSubtitles(subtitlesRef.current),
       preferences: playerPreferencesRef.current,
@@ -2170,6 +2177,7 @@ export default function App() {
     playerSettingsRef.current = nextDataStore.settings;
     favoriteVideoIdsRef.current = new Set(nextDataStore.favorites);
     videoTagsRef.current = nextDataStore.videoTags;
+    videoStatsRef.current = nextDataStore.videoStats;
     tagMergeDecisionsRef.current = nextDataStore.tagMergeDecisions;
     libraryMetadataRef.current = nextDataStore.metadata;
     setProgressStore(nextDataStore.progress);
@@ -2902,6 +2910,122 @@ export default function App() {
     canUseServerTools: canUseServerMediaTools,
   });
   const canCreateCompatibleMedia = compatibleMediaAction.canCreate;
+  const isCurrentVideoSpecialMedia = Boolean(
+    currentVideo && currentMediaLibraryRoot && isMediaRootInHomeMode(currentMediaLibraryRoot, "special"),
+  );
+  const canRecordEmission = Boolean(currentVideo && homeMediaMode === "special" && isCurrentVideoSpecialMedia);
+
+  const updateSpecialVideoStats = useCallback(
+    (
+      video: VideoItem,
+      updater: (current: VideoStatsStore[string]) => VideoStatsStore[string],
+      options?: { saveMessage?: string },
+    ) => {
+      const root = video.mediaRootId
+        ? localConfigRef.current?.mediaRoots.find((item) => item.id === video.mediaRootId) ?? null
+        : null;
+      if (!root || !isMediaRootInHomeMode(root, "special")) return;
+
+      const statsKey = createVideoStatsKey(video);
+      const currentStats = videoStatsRef.current[statsKey] ?? {
+        totalPlayedSeconds: 0,
+        playCount: 0,
+        durationSeconds: 0,
+        emissionCount: 0,
+        updatedAt: Date.now(),
+      };
+      const nextStats = updater(currentStats);
+      const nextStore = {
+        ...videoStatsRef.current,
+        [statsKey]: nextStats,
+      };
+      videoStatsRef.current = nextStore;
+
+      saveCurrentPlayerDataStore({
+        videoStats: nextStore,
+      })
+        .then(() => {
+          if (options?.saveMessage) setMessage(options.saveMessage);
+        })
+        .catch(() => {
+          setMessage("无法写入项目数据目录，请确认通过 npm run dev 或 npm run preview 启动。");
+        });
+    },
+    [saveCurrentPlayerDataStore],
+  );
+
+  const recordPlaybackStartForStats = useCallback(
+    (video: VideoItem) => {
+      const statsKey = createVideoStatsKey(video);
+      const session = playbackStatsSessionRef.current;
+      if (session?.key === statsKey && session.hasCountedPlay) return;
+
+      playbackStatsSessionRef.current = {
+        key: statsKey,
+        lastTime: videoRef.current?.currentTime ?? null,
+        hasCountedPlay: true,
+      };
+      updateSpecialVideoStats(video, (stats) => ({
+        ...stats,
+        playCount: stats.playCount + 1,
+        durationSeconds: videoRef.current?.duration && Number.isFinite(videoRef.current.duration)
+          ? videoRef.current.duration
+          : stats.durationSeconds,
+        updatedAt: Date.now(),
+      }));
+    },
+    [updateSpecialVideoStats],
+  );
+
+  const recordPlaybackProgressForStats = useCallback(
+    (video: VideoItem, nextTime: number, nextDuration: number) => {
+      const statsKey = createVideoStatsKey(video);
+      const session = playbackStatsSessionRef.current;
+      const nextSession =
+        session?.key === statsKey
+          ? session
+          : { key: statsKey, lastTime: null, hasCountedPlay: false };
+      const previousTime = nextSession.lastTime;
+      nextSession.lastTime = nextTime;
+      playbackStatsSessionRef.current = nextSession;
+      if (previousTime === null || !Number.isFinite(previousTime) || !Number.isFinite(nextTime)) return;
+
+      const delta = nextTime - previousTime;
+      if (delta <= 0 || delta > 10) return;
+
+      updateSpecialVideoStats(video, (stats) => ({
+        ...stats,
+        totalPlayedSeconds: stats.totalPlayedSeconds + delta,
+        durationSeconds: Number.isFinite(nextDuration) && nextDuration > 0 ? nextDuration : stats.durationSeconds,
+        updatedAt: Date.now(),
+      }));
+    },
+    [updateSpecialVideoStats],
+  );
+
+  const recordPlaybackEndedForStats = useCallback(() => {
+    playbackStatsSessionRef.current = null;
+  }, []);
+
+  const recordEmissionForCurrentVideo = useCallback(() => {
+    if (!currentVideo || !canRecordEmission) return;
+    updateSpecialVideoStats(
+      currentVideo,
+      (stats) => ({
+        ...stats,
+        emissionCount: stats.emissionCount + 1,
+        lastEmissionAt: Date.now(),
+        durationSeconds: Number.isFinite(duration) && duration > 0 ? duration : stats.durationSeconds,
+        updatedAt: Date.now(),
+      }),
+      { saveMessage: "已记录一次发射。" },
+    );
+  }, [canRecordEmission, currentVideo, duration, updateSpecialVideoStats]);
+
+  useEffect(() => {
+    playbackStatsSessionRef.current = null;
+  }, [currentVideoId]);
+
   const resolveMediaRootId = useCallback((directoryName: string) => {
     const roots = localConfigRef.current?.mediaRoots ?? [];
     const matches = roots.filter((root) => root.basename === directoryName);
@@ -3166,6 +3290,14 @@ export default function App() {
         }
       });
 
+      const nextVideoStats = { ...baseStore.videoStats };
+      Object.entries(legacyStore.videoStats).forEach(([statsKey, stats]) => {
+        if (!nextVideoStats[statsKey]) {
+          nextVideoStats[statsKey] = stats;
+          didImport = true;
+        }
+      });
+
       const nextEmbeddedSubtitles = [...baseStore.embeddedSubtitles];
       const existingSubtitleKeys = new Set(nextEmbeddedSubtitles.map((subtitle) => `${subtitle.videoId}:${subtitle.embeddedTrack.streamIndex}`));
       legacyStore.embeddedSubtitles.forEach((subtitle) => {
@@ -3187,6 +3319,7 @@ export default function App() {
             progress: nextProgress,
             favorites: Array.from(favoriteIds),
             videoTags: nextVideoTags,
+            videoStats: nextVideoStats,
             tagMergeDecisions: nextTagMergeDecisions,
             embeddedSubtitles: nextEmbeddedSubtitles,
           }
@@ -3582,8 +3715,10 @@ export default function App() {
     progressStoreRef.current = {};
     favoriteVideoIdsRef.current = new Set();
     videoTagsRef.current = {};
+    videoStatsRef.current = {};
     tagMergeDecisionsRef.current = {};
     clearedProgressVideoIdsRef.current = new Set(videosRef.current.map((video) => video.id));
+    playbackStatsSessionRef.current = null;
     setProgressStore({});
     setFavoriteVideoIds(new Set());
     setVideoTags({});
@@ -6573,6 +6708,17 @@ export default function App() {
     setVideoRotation((rotation) => (rotation + 90) % 360);
   };
 
+  const handleDurationChange = (event: React.SyntheticEvent<HTMLVideoElement>) => {
+    const nextDuration = event.currentTarget.duration || 0;
+    setDuration(nextDuration);
+    if (!currentVideo || !Number.isFinite(nextDuration) || nextDuration <= 0) return;
+    updateSpecialVideoStats(currentVideo, (stats) => ({
+      ...stats,
+      durationSeconds: nextDuration,
+      updatedAt: Date.now(),
+    }));
+  };
+
   const handleTimeUpdate = () => {
     const element = videoRef.current;
     if (!element || !currentVideo) return;
@@ -6583,11 +6729,13 @@ export default function App() {
     saveTimerRef.current = window.setTimeout(() => {
       saveTimerRef.current = null;
       updateProgress(currentVideo, element.currentTime, element.duration || 0);
+      recordPlaybackProgressForStats(currentVideo, element.currentTime, element.duration || 0);
     }, 1500);
   };
 
   const handleEnded = () => {
     persistCurrentProgress(true);
+    recordPlaybackEndedForStats();
     setIsPlaying(false);
 
     if (playbackMode === "single-loop") {
@@ -7377,13 +7525,16 @@ export default function App() {
                     : undefined
                 }
                 onClick={togglePlay}
-                onPlay={() => setIsPlaying(true)}
+                onPlay={() => {
+                  setIsPlaying(true);
+                  if (currentVideo) recordPlaybackStartForStats(currentVideo);
+                }}
                 onPause={() => {
                   setIsPlaying(false);
                   persistCurrentProgress();
                 }}
                 onTimeUpdate={handleTimeUpdate}
-                onDurationChange={(event) => setDuration(event.currentTarget.duration || 0)}
+                onDurationChange={handleDurationChange}
                 onEnded={handleEnded}
                 playsInline
               >
@@ -7646,6 +7797,18 @@ export default function App() {
               >
                 <Tags size={18} />
               </button>
+              {canRecordEmission ? (
+                <button
+                  className="icon-button"
+                  type="button"
+                  onClick={recordEmissionForCurrentVideo}
+                  disabled={!currentVideo}
+                  title="发射"
+                  aria-label="发射"
+                >
+                  <Rocket size={18} />
+                </button>
+              ) : null}
 
               <span className="control-spacer" />
 

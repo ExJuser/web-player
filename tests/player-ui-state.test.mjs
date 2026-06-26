@@ -75,6 +75,37 @@ test("home special mode excludes media roots without AV suffix", () => {
   assert.equal(uiState.isMediaRootInHomeMode({ label: "AV资料备份" }, "special"), false);
 });
 
+test("video stats key is stable across media roots", () => {
+  const first = uiState.createVideoStatsKey({
+    id: "root-a|folder-a/movie.mp4|1024|1700000000000",
+    mediaRootId: "root-a",
+    name: "Movie.mp4",
+    size: 1024,
+    lastModified: 1700000000000,
+  });
+  const second = uiState.createVideoStatsKey({
+    id: "root-b|folder-b/movie.mp4|1024|1700000000000",
+    mediaRootId: "root-b",
+    name: "Movie.mp4",
+    size: 1024,
+    lastModified: 1700000000000,
+  });
+
+  assert.equal(first, second);
+});
+
+test("video stats key changes when file fingerprint changes", () => {
+  const base = uiState.createVideoStatsKey({
+    name: "Movie.mp4",
+    size: 1024,
+    lastModified: 1700000000000,
+  });
+
+  assert.notEqual(base, uiState.createVideoStatsKey({ name: "Other.mp4", size: 1024, lastModified: 1700000000000 }));
+  assert.notEqual(base, uiState.createVideoStatsKey({ name: "Movie.mp4", size: 2048, lastModified: 1700000000000 }));
+  assert.notEqual(base, uiState.createVideoStatsKey({ name: "Movie.mp4", size: 1024, lastModified: 1700000001000 }));
+});
+
 test("home all mode includes unlabeled and temporary media roots", () => {
   assert.equal(uiState.isMediaRootInHomeMode({}, "all"), true);
 });
