@@ -2742,6 +2742,7 @@ button {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 1px;
+  min-height: 96px;
   overflow: hidden;
   border: 1px solid #242a31;
   border-radius: 8px;
@@ -2754,8 +2755,8 @@ button {
   justify-content: center;
   gap: 5px;
   min-width: 0;
-  height: 72px;
-  padding: 10px 16px;
+  min-height: 96px;
+  padding: 16px;
   overflow: visible;
   background: #1d222c;
 }
