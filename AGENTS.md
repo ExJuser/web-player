@@ -56,3 +56,7 @@
 - React state updater 必须保持纯函数；不要在 updater 内修改 ref 或其他外部状态。
 - 设置 `isScanning` 的扫描函数必须在函数内部用 `finally` 复位，覆盖权限拒绝、用户取消和提前返回。
 - 使用 runId 或取消标记丢弃旧异步结果的 effect，不能把 `loading` 当成可跳过的终态；新一轮 effect 必须重新发起请求或接管旧请求。
+
+## 浏览器检查
+
+- in-app browser 的 `evaluate` 运行时不一定暴露 `CSSStyleRule` 构造器；检查样式规则时用 `selectorText`/`style` 字段判断，不要依赖 `instanceof CSSStyleRule`。

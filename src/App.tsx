@@ -2008,6 +2008,7 @@ export default function App() {
   const autoNextTimerRef = useRef<number | null>(null);
   const doubleClickFeedbackTimerRef = useRef<number | null>(null);
   const playerOverlayFeedbackTimerRef = useRef<number | null>(null);
+  const launchEffectTimerRef = useRef<number | null>(null);
   const timelineFrameTimerRef = useRef<number | null>(null);
   const timelineFrameRequestRef = useRef(0);
   const rightKeyHoldTimerRef = useRef<number | null>(null);
@@ -2132,6 +2133,7 @@ export default function App() {
     defaultPlayerPreferences.playlistSortMode,
   );
   const [videoStatsRevision, setVideoStatsRevision] = useState(0);
+  const [launchEffectKey, setLaunchEffectKey] = useState(0);
   const [isPlaylistSortReversed, setIsPlaylistSortReversed] = useState(
     defaultPlayerPreferences.isPlaylistSortReversed,
   );
@@ -3120,6 +3122,10 @@ export default function App() {
     currentVideo && currentMediaLibraryRoot && isMediaRootInHomeMode(currentMediaLibraryRoot, "special"),
   );
   const canRecordEmission = Boolean(currentVideo && homeMediaMode === "special" && isCurrentVideoSpecialMedia);
+  const currentVideoEmissionCount = useMemo(() => {
+    if (!currentVideo) return 0;
+    return videoStatsRef.current[createVideoStatsKey(currentVideo)]?.emissionCount ?? 0;
+  }, [currentVideo, videoStatsRevision]);
 
   const updateSpecialVideoStats = useCallback(
     (
@@ -3146,9 +3152,7 @@ export default function App() {
         [statsKey]: nextStats,
       };
       videoStatsRef.current = nextStore;
-      if (isStatsPlaylistSortMode(playerPreferencesRef.current.playlistSortMode)) {
-        setVideoStatsRevision((revision) => revision + 1);
-      }
+      setVideoStatsRevision((revision) => revision + 1);
 
       saveCurrentPlayerDataStore({
         videoStats: nextStore,
@@ -3218,6 +3222,14 @@ export default function App() {
 
   const recordEmissionForCurrentVideo = useCallback(() => {
     if (!currentVideo || !canRecordEmission) return;
+    setLaunchEffectKey((key) => key + 1);
+    if (launchEffectTimerRef.current !== null) {
+      window.clearTimeout(launchEffectTimerRef.current);
+    }
+    launchEffectTimerRef.current = window.setTimeout(() => {
+      setLaunchEffectKey(0);
+      launchEffectTimerRef.current = null;
+    }, 1800);
     updateSpecialVideoStats(
       currentVideo,
       (stats) => ({
@@ -3234,6 +3246,14 @@ export default function App() {
   useEffect(() => {
     playbackStatsSessionRef.current = null;
   }, [currentVideoId]);
+
+  useEffect(() => {
+    return () => {
+      if (launchEffectTimerRef.current !== null) {
+        window.clearTimeout(launchEffectTimerRef.current);
+      }
+    };
+  }, []);
 
   const resolveMediaRootId = useCallback((directoryName: string) => {
     const roots = localConfigRef.current?.mediaRoots ?? [];
@@ -7980,6 +8000,23 @@ export default function App() {
               </div>
             ) : null}
 
+            {launchEffectKey ? (
+              <div key={launchEffectKey} className="rocket-launch-effect" aria-hidden="true">
+                <div className="rocket-launch-effect__sky">
+                  <span className="rocket-launch-effect__star star-one" />
+                  <span className="rocket-launch-effect__star star-two" />
+                  <span className="rocket-launch-effect__star star-three" />
+                </div>
+                <div className="rocket-launch-effect__rocket">
+                  <Rocket size={58} strokeWidth={2.2} />
+                </div>
+                <div className="rocket-launch-effect__flame" />
+                <div className="rocket-launch-effect__smoke smoke-one" />
+                <div className="rocket-launch-effect__smoke smoke-two" />
+                <div className="rocket-launch-effect__smoke smoke-three" />
+              </div>
+            ) : null}
+
             {currentVideo ? (
               <>
               <video
@@ -8223,16 +8260,22 @@ export default function App() {
                 <Tags size={18} />
               </button>
               {canRecordEmission ? (
-                <button
-                  className="icon-button"
-                  type="button"
-                  onClick={recordEmissionForCurrentVideo}
-                  disabled={!currentVideo}
-                  title="发射"
-                  aria-label="发射"
-                >
-                  <Rocket size={18} />
-                </button>
+                <div className="emission-control" aria-label={`发射次数 ${currentVideoEmissionCount}`}>
+                  <button
+                    className="icon-button emission-launch-button"
+                    type="button"
+                    onClick={recordEmissionForCurrentVideo}
+                    disabled={!currentVideo}
+                    title="发射"
+                    aria-label="发射"
+                  >
+                    <Rocket size={18} />
+                  </button>
+                  <span className="emission-count-label">
+                    <Rocket size={15} />
+                    发射次数 {currentVideoEmissionCount}
+                  </span>
+                </div>
               ) : null}
 
               <span className="control-spacer" />

@@ -525,6 +525,109 @@ button {
   background: rgba(255, 255, 255, 0.06);
 }
 
+.rocket-launch-effect {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 50% 72%, rgba(255, 207, 103, 0.3), transparent 18%),
+    linear-gradient(180deg, rgba(7, 12, 22, 0.2), rgba(7, 12, 22, 0.72));
+  pointer-events: none;
+  animation: launch-effect-fade 1800ms ease forwards;
+}
+
+.rocket-launch-effect__sky {
+  position: absolute;
+  inset: 0;
+}
+
+.rocket-launch-effect__star {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #f6fbff;
+  box-shadow: 0 0 14px rgba(246, 251, 255, 0.9);
+  animation: launch-star 1300ms ease-out forwards;
+}
+
+.rocket-launch-effect__star.star-one {
+  left: 26%;
+  top: 32%;
+}
+
+.rocket-launch-effect__star.star-two {
+  left: 63%;
+  top: 22%;
+  animation-delay: 90ms;
+}
+
+.rocket-launch-effect__star.star-three {
+  left: 72%;
+  top: 45%;
+  animation-delay: 160ms;
+}
+
+.rocket-launch-effect__rocket {
+  position: absolute;
+  left: 50%;
+  bottom: 20%;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  color: #ffffff;
+  filter: drop-shadow(0 0 18px rgba(255, 211, 109, 0.85));
+  transform: translateX(-50%) rotate(-45deg);
+  animation: launch-rocket 1500ms cubic-bezier(0.22, 0.8, 0.2, 1) forwards;
+}
+
+.rocket-launch-effect__flame {
+  position: absolute;
+  left: 50%;
+  bottom: 12%;
+  width: 38px;
+  height: 150px;
+  border-radius: 999px 999px 42px 42px;
+  background: linear-gradient(180deg, #fff8bf 0%, #ffb02e 38%, rgba(245, 70, 45, 0) 100%);
+  filter: blur(1px) drop-shadow(0 0 22px rgba(255, 159, 43, 0.8));
+  transform: translateX(-50%);
+  transform-origin: 50% 0;
+  animation: launch-flame 1200ms ease-out forwards;
+}
+
+.rocket-launch-effect__smoke {
+  position: absolute;
+  bottom: 5%;
+  width: 110px;
+  height: 54px;
+  border-radius: 50%;
+  background: rgba(214, 221, 230, 0.34);
+  filter: blur(8px);
+  animation: launch-smoke 1500ms ease-out forwards;
+}
+
+.rocket-launch-effect__smoke.smoke-one {
+  left: 37%;
+}
+
+.rocket-launch-effect__smoke.smoke-two {
+  left: 46%;
+  animation-delay: 80ms;
+}
+
+.rocket-launch-effect__smoke.smoke-three {
+  left: 55%;
+  animation-delay: 140ms;
+}
+
 .control-bar {
   display: flex;
   flex: 0 0 auto;
@@ -1950,6 +2053,87 @@ button {
   }
 }
 
+@keyframes launch-effect-fade {
+  0% {
+    opacity: 0;
+  }
+
+  10%,
+  78% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes launch-rocket {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 28%) rotate(-45deg) scale(0.72);
+  }
+
+  18% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -420%) rotate(-45deg) scale(1.06);
+  }
+}
+
+@keyframes launch-flame {
+  0% {
+    opacity: 0;
+    scale: 0.56 0.2;
+  }
+
+  18%,
+  58% {
+    opacity: 1;
+    scale: 1 1;
+  }
+
+  100% {
+    opacity: 0;
+    scale: 0.82 1.35;
+  }
+}
+
+@keyframes launch-smoke {
+  0% {
+    opacity: 0;
+    transform: translateY(24px) scale(0.42);
+  }
+
+  24% {
+    opacity: 0.78;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateY(-34px) scale(1.7);
+  }
+}
+
+@keyframes launch-star {
+  0% {
+    opacity: 0;
+    transform: translateY(16px) scale(0.7);
+  }
+
+  32% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateY(-26px) scale(1.2);
+  }
+}
+
 .timeline-row,
 .control-row {
   display: flex;
@@ -2315,6 +2499,40 @@ button {
 
 .control-spacer {
   flex: 1;
+}
+
+.emission-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.emission-launch-button {
+  border-color: #7f54d7;
+  background: #2b1d43;
+  color: #d6c4ff;
+}
+
+.emission-count-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  max-width: 148px;
+  padding: 0 9px;
+  border: 1px solid #45365f;
+  border-radius: 6px;
+  background: #17131f;
+  color: #d6c4ff;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.emission-count-label svg {
+  flex: none;
 }
 
 .playlist-panel {
@@ -4736,6 +4954,10 @@ button {
 
   .control-spacer {
     display: none;
+  }
+
+  .emission-count-label {
+    max-width: none;
   }
 
   .playlist-tools {
