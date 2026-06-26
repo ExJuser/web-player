@@ -40,6 +40,7 @@ export type VideoItem = {
   thumbnailStatus?: "idle" | "loading" | "ready" | "failed";
   parentDirectory?: FileSystemDirectoryHandle;
   mediaRootId?: string;
+  playbackSource?: "browser" | "server";
 };
 
 export type VideoMetadata = Pick<VideoItem, "duration" | "width" | "height">;
@@ -55,6 +56,7 @@ export type SubtitleItem = {
   rawText?: string;
   format?: "srt" | "vtt";
   videoId?: string;
+  mediaRootId?: string;
   embeddedTrack?: EmbeddedSubtitleTrack;
 };
 
@@ -106,6 +108,26 @@ export type PlayerLibraryMetadata = {
   updatedAt: number;
 };
 
+export type PlayerMediaRootStatus = {
+  id: string;
+  label: string;
+  source?: "browser" | "local";
+  status: "ready" | "needsAccess" | "error";
+  videoCount: number;
+  scannedFiles: number;
+  updatedAt: number;
+  error?: string;
+};
+
+export type PlayerGlobalMetadata = {
+  id: "global";
+  name: string;
+  videoCount: number;
+  scannedFiles: number;
+  updatedAt: number;
+  mediaRoots: PlayerMediaRootStatus[];
+};
+
 export type PlayerDataStore = {
   version?: number;
   progress: ProgressStore;
@@ -115,7 +137,7 @@ export type PlayerDataStore = {
   embeddedSubtitles: PersistedEmbeddedSubtitle[];
   preferences: PlayerPreferences;
   settings: PlayerPersistentSettings;
-  metadata?: PlayerLibraryMetadata;
+  metadata?: PlayerLibraryMetadata | PlayerGlobalMetadata;
 };
 
 export type PlaylistFilter = "all" | "favorites";

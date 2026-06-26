@@ -5,8 +5,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  createGlobalVideoId,
   normalizeMediaRoots,
+  resolveMediaPath,
   resolveVideoPath,
+  scanConfiguredMediaRoots,
   updateMediaRootLocalPath,
 } from "../server/mediaRoots.mjs";
 
@@ -82,5 +85,45 @@ test("browser media root resolves videos through localPath without escaping root
     );
 
     assert.throws(() => resolveVideoPath(config, "anime", "../E01.mkv"), /Invalid relative path/);
+  });
+});
+
+test("global video id includes media root id", () => {
+  const first = createGlobalVideoId("anime", "Show/E01.mkv", 100, 123);
+  const second = createGlobalVideoId("movies", "Show/E01.mkv", 100, 123);
+
+  assert.notEqual(first, second);
+  assert.match(first, /^anime\|Show\/E01\.mkv\|100\|123$/);
+});
+
+test("browser media root without localPath is reported as needsAccess", async () => {
+  const result = await scanConfiguredMediaRoots({
+    media: {
+      roots: [
+        { id: "anime", label: "Anime", path: "Anime", source: "browser" },
+      ],
+    },
+  });
+
+  assert.equal(result.videos.length, 0);
+  assert.equal(result.metadata.mediaRoots[0].status, "needsAccess");
+});
+
+test("media path resolver supports subtitles but rejects escaping root", async () => {
+  await withTempConfig(async ({ directory }) => {
+    const config = {
+      media: {
+        roots: [
+          { id: "anime", label: "Anime", path: directory },
+        ],
+      },
+    };
+
+    assert.equal(
+      resolveMediaPath(config, "anime", "Show/E01.srt"),
+      path.resolve(directory, "Show/E01.srt"),
+    );
+
+    assert.throws(() => resolveMediaPath(config, "anime", "../E01.srt"), /Invalid relative path/);
   });
 });

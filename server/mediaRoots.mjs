@@ -1,8 +1,10 @@
 import { createHash } from "node:crypto";
-import { access, mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 const videoExtensions = new Set([".mp4", ".webm", ".ogg", ".mov", ".m4v", ".mkv"]);
+const subtitleExtensions = new Set([".srt", ".vtt"]);
+const smallVideoFileThresholdBytes = 50 * 1024 * 1024;
 
 async function readJsonFile(filePath, fallback) {
   try {
@@ -158,20 +160,175 @@ function serverPathForRoot(root) {
   return root.path;
 }
 
-export function resolveVideoPath(config, rootId, relativePath) {
+function createGlobalMediaId(rootId, relativePath, size, lastModified) {
+  return `${rootId}|${relativePath}|${size}|${lastModified}`;
+}
+
+function encodeMediaUrl(rootId, relativePath) {
+  return `/api/media/${encodeURIComponent(rootId)}/${relativePath
+    .replace(/\\/g, "/")
+    .split("/")
+    .filter(Boolean)
+    .map((segment) => encodeURIComponent(segment))
+    .join("/")}`;
+}
+
+function createRootStatus(root, status, overrides = {}) {
+  return {
+    id: root.id,
+    label: root.label,
+    source: root.source,
+    status,
+    videoCount: 0,
+    scannedFiles: 0,
+    updatedAt: Date.now(),
+    ...overrides,
+  };
+}
+
+export function createGlobalVideoId(rootId, relativePath, size, lastModified) {
+  return createGlobalMediaId(rootId, relativePath, size, lastModified);
+}
+
+export function createLegacyVideoId(relativePath, size, lastModified) {
+  return `${relativePath}|${size}|${lastModified}`;
+}
+
+export async function scanMediaRoot(root) {
+  const rootPath = serverPathForRoot(root);
+  if (!rootPath || !path.isAbsolute(rootPath)) {
+    return {
+      root,
+      status: createRootStatus(root, "needsAccess", {
+        error: "需要配置本机绝对路径或重新授权浏览器目录。",
+      }),
+      videos: [],
+      subtitles: [],
+      filteredSmallVideos: 0,
+    };
+  }
+
+  const resolvedRoot = path.resolve(rootPath);
+  const videos = [];
+  const subtitles = [];
+  let scannedFiles = 0;
+  let filteredSmallVideos = 0;
+
+  async function walk(directory, segments) {
+    const entries = await readdir(directory, { withFileTypes: true });
+    for (const entry of entries) {
+      const nextSegments = [...segments, entry.name];
+      const entryPath = path.join(directory, entry.name);
+      if (entry.isDirectory()) {
+        await walk(entryPath, nextSegments);
+        continue;
+      }
+      if (!entry.isFile()) continue;
+
+      const extension = path.extname(entry.name).toLowerCase();
+      if (!videoExtensions.has(extension) && !subtitleExtensions.has(extension)) continue;
+      scannedFiles += 1;
+
+      const fileStat = await stat(entryPath);
+      const lastModified = Math.round(fileStat.mtimeMs);
+      const relativePath = nextSegments.join("/");
+      if (videoExtensions.has(extension)) {
+        if (fileStat.size < smallVideoFileThresholdBytes) {
+          filteredSmallVideos += 1;
+          continue;
+        }
+        videos.push({
+          id: createGlobalMediaId(root.id, relativePath, fileStat.size, lastModified),
+          legacyId: createLegacyVideoId(relativePath, fileStat.size, lastModified),
+          name: entry.name,
+          relativePath,
+          url: encodeMediaUrl(root.id, relativePath),
+          size: fileStat.size,
+          lastModified,
+          mediaRootId: root.id,
+          playbackSource: "server",
+        });
+      } else if (subtitleExtensions.has(extension)) {
+        subtitles.push({
+          id: createGlobalMediaId(root.id, relativePath, fileStat.size, lastModified),
+          legacyId: createLegacyVideoId(relativePath, fileStat.size, lastModified),
+          name: entry.name,
+          relativePath,
+          url: encodeMediaUrl(root.id, relativePath),
+          size: fileStat.size,
+          lastModified,
+          mediaRootId: root.id,
+        });
+      }
+    }
+  }
+
+  try {
+    await walk(resolvedRoot, []);
+    videos.sort((a, b) => a.relativePath.localeCompare(b.relativePath, undefined, { numeric: true, sensitivity: "base" }));
+    subtitles.sort((a, b) => a.relativePath.localeCompare(b.relativePath, undefined, { numeric: true, sensitivity: "base" }));
+    return {
+      root,
+      status: createRootStatus(root, "ready", {
+        videoCount: videos.length,
+        scannedFiles,
+      }),
+      videos,
+      subtitles,
+      filteredSmallVideos,
+    };
+  } catch (error) {
+    return {
+      root,
+      status: createRootStatus(root, "error", {
+        scannedFiles,
+        error: error instanceof Error ? error.message : "扫描媒体根失败。",
+      }),
+      videos,
+      subtitles,
+      filteredSmallVideos,
+    };
+  }
+}
+
+export async function scanConfiguredMediaRoots(config) {
+  const roots = normalizeMediaRoots(config);
+  const rootsResult = await Promise.all(roots.map((root) => scanMediaRoot(root)));
+  const videos = rootsResult.flatMap((result) => result.videos);
+  const subtitles = rootsResult.flatMap((result) => result.subtitles);
+  const scannedFiles = rootsResult.reduce((sum, result) => sum + result.status.scannedFiles, 0);
+  const filteredSmallVideos = rootsResult.reduce((sum, result) => sum + result.filteredSmallVideos, 0);
+  return {
+    roots: rootsResult,
+    videos,
+    subtitles,
+    scannedFiles,
+    filteredSmallVideos,
+    metadata: {
+      id: "global",
+      name: "全局媒体库",
+      videoCount: videos.length,
+      scannedFiles,
+      updatedAt: Date.now(),
+      mediaRoots: rootsResult.map((result) => result.status),
+    },
+  };
+}
+
+export function resolveMediaPath(config, rootId, relativePath, allowedExtensions = new Set([...videoExtensions, ...subtitleExtensions])) {
   const root = normalizeMediaRoots(config).find((item) => item.id === rootId);
   if (!root) throw new Error("Unknown media root.");
   const rootPath = serverPathForRoot(root);
   if (!rootPath || !path.isAbsolute(rootPath)) {
-    throw new Error("Browser media libraries need a configured local absolute path before server subtitle extraction.");
+    throw new Error("Browser media libraries need a configured local absolute path before server file access.");
   }
   if (typeof relativePath !== "string" || !relativePath.trim()) throw new Error("Invalid relative path.");
   const normalizedRelativePath = relativePath.replace(/\\/g, "/");
   if (path.isAbsolute(normalizedRelativePath) || normalizedRelativePath.split("/").includes("..")) {
     throw new Error("Invalid relative path.");
   }
-  if (!videoExtensions.has(path.extname(normalizedRelativePath).toLowerCase())) {
-    throw new Error("Unsupported video file.");
+  if (!allowedExtensions.has(path.extname(normalizedRelativePath).toLowerCase())) {
+    throw new Error("Unsupported media file.");
   }
   const resolvedRoot = path.resolve(rootPath);
   const resolved = path.resolve(resolvedRoot, normalizedRelativePath);
@@ -180,6 +337,17 @@ export function resolveVideoPath(config, rootId, relativePath) {
     throw new Error("Resolved video path is outside the configured media root.");
   }
   return resolved;
+}
+
+export function resolveVideoPath(config, rootId, relativePath) {
+  try {
+    return resolveMediaPath(config, rootId, relativePath, videoExtensions);
+  } catch (error) {
+    if (error instanceof Error && error.message === "Unsupported media file.") {
+      throw new Error("Unsupported video file.");
+    }
+    throw error;
+  }
 }
 
 export async function ensureFileExists(filePath) {

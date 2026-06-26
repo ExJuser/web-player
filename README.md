@@ -2,7 +2,7 @@
 
 Local Web Player is a browser-based local video player built with React, TypeScript, and Vite. It scans videos from a folder selected by the user, plays them directly in the browser, and stores playback progress and preferences in the project data folder.
 
-The app is designed for personal local media libraries. It does not upload video files to a server.
+The app is designed for personal local media libraries. It does not upload video files to a remote server.
 
 ## Features
 
@@ -171,7 +171,9 @@ To enable embedded subtitle extraction, install `ffmpeg` and `ffprobe` on your s
 }
 ```
 
-When the selected browser folder name matches one configured media root basename, the player can detect and extract embedded text subtitles from videos in that root. Image subtitle formats such as PGS and VobSub are detected but not OCR'd.
+The home view uses a global media library: every configured media root is scanned into one playlist, search index, progress store, favorites list, and tag store. Local roots and browser roots with `localPath` are scanned automatically by the local dev server. Browser roots without `localPath` stay visible in the media library card as needing access/configuration and are not auto-scanned.
+
+When a video's media root has a server-readable path, the player can detect and extract embedded text subtitles from videos in that root. Image subtitle formats such as PGS and VobSub are detected but not OCR'd.
 
 Browser-added media libraries keep their browser folder name in `path`. To let the local Vite server use `ffmpeg`/`ffprobe` for that same library, configure its server-readable absolute path in `localPath` or use the in-app “配置本机路径” dialog:
 

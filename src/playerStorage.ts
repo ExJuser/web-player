@@ -3,6 +3,7 @@ import type {
   PlaybackProgress,
   TagMergeDecisionStore,
   PlayerDataStore,
+  PlayerGlobalMetadata,
   PlayerLibraryMetadata,
   PlayerPersistentSettings,
   PlayerPreferences,
@@ -227,7 +228,7 @@ export function parsePlayerDataStore(raw: string): PlayerDataStore {
   };
 }
 
-export function createDefaultPlayerDataStore(metadata?: PlayerLibraryMetadata): PlayerDataStore {
+export function createDefaultPlayerDataStore(metadata?: PlayerDataStore["metadata"]): PlayerDataStore {
   return {
     version: 5,
     progress: {},
@@ -252,6 +253,20 @@ async function readApiError(response: Response) {
   } catch {
     return response.statusText;
   }
+}
+
+export async function loadGlobalPlayerDataStore(metadata?: PlayerGlobalMetadata): Promise<PlayerDataStore> {
+  const response = await fetch(createApiUrl("global"), {
+    headers: { Accept: "application/json" },
+  });
+  if (response.status === 404) return createDefaultPlayerDataStore(metadata);
+  if (!response.ok) throw new Error(await readApiError(response));
+  const raw = JSON.stringify(await response.json());
+  const parsed = parsePlayerDataStore(raw);
+  return {
+    ...parsed,
+    metadata: parsed.metadata ?? metadata,
+  };
 }
 
 export async function loadPlayerDataStore(libraryId: string, metadata?: PlayerLibraryMetadata): Promise<PlayerDataStore> {
@@ -281,6 +296,28 @@ export async function loadLegacyPlayerDataStore(directory: FileSystemDirectoryHa
 export async function deleteLegacyPlayerDataStore(directory: FileSystemDirectoryHandle) {
   if (!directory.removeEntry) throw new Error("The selected folder does not allow removing legacy progress data.");
   await directory.removeEntry(PROGRESS_FILE_NAME);
+}
+
+export async function saveGlobalPlayerDataStore(store: PlayerDataStore) {
+  const response = await fetch(createApiUrl("global"), {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify({
+      version: 5,
+      items: store.progress,
+      favorites: store.favorites,
+      videoTags: parseVideoTags(store.videoTags),
+      tagMergeDecisions: parseTagMergeDecisions(store.tagMergeDecisions),
+      embeddedSubtitles: parsePersistedEmbeddedSubtitles(store.embeddedSubtitles),
+      preferences: getPersistedPlayerPreferences(store.preferences),
+      settings: parsePlayerSettings(store.settings),
+      metadata: store.metadata,
+    }),
+  });
+  if (!response.ok) throw new Error(await readApiError(response));
 }
 
 export async function savePlayerDataStore(libraryId: string, store: PlayerDataStore) {

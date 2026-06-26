@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
+import { createReadStream } from "node:fs";
 import { access, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import http from "node:http";
 import https from "node:https";
@@ -11,7 +12,9 @@ import react from "@vitejs/plugin-react";
 import {
   ensureFileExists,
   normalizeMediaRoots as normalizeMediaRootsFromConfig,
+  resolveMediaPath as resolveMediaPathFromConfig,
   resolveVideoPath as resolveVideoPathFromConfig,
+  scanConfiguredMediaRoots,
   updateMediaRootLocalPath as updateMediaRootLocalPathInConfig,
   upsertMediaRoot as upsertMediaRootInConfig,
 } from "./server/mediaRoots.mjs";
@@ -24,6 +27,7 @@ const aiRoot = path.join(dataRoot, "ai");
 const bangumiRoot = path.join(dataRoot, "bangumi");
 const bangumiMatchesRoot = path.join(bangumiRoot, "matches");
 const indexPath = path.join(dataRoot, "index.json");
+const globalDataPath = path.join(dataRoot, "global.json");
 const appConfigPath = path.resolve(__dirname, "config", "app.json");
 const videoExtensions = new Set([".mp4", ".webm", ".ogg", ".mov", ".m4v", ".mkv"]);
 const imageSubtitleCodecs = new Set(["hdmv_pgs_subtitle", "pgs", "dvd_subtitle", "dvb_subtitle", "xsub"]);
@@ -49,6 +53,50 @@ function sendBlob(response, status, buffer) {
   response.statusCode = status;
   response.setHeader("Content-Type", "image/jpeg");
   response.end(buffer);
+}
+
+async function sendMediaFile(request, response, filePath) {
+  const fileStat = await stat(filePath);
+  const fileSize = fileStat.size;
+  const range = request.headers.range;
+  const extension = path.extname(filePath).toLowerCase();
+  const contentType =
+    extension === ".vtt"
+      ? "text/vtt; charset=utf-8"
+      : extension === ".srt"
+        ? "application/x-subrip; charset=utf-8"
+        : "video/mp4";
+
+  if (range) {
+    const match = /^bytes=(\d*)-(\d*)$/.exec(range);
+    if (!match) {
+      response.statusCode = 416;
+      response.setHeader("Content-Range", `bytes */${fileSize}`);
+      response.end();
+      return;
+    }
+    const start = match[1] ? Number(match[1]) : 0;
+    const end = match[2] ? Number(match[2]) : fileSize - 1;
+    if (!Number.isFinite(start) || !Number.isFinite(end) || start > end || start < 0 || end >= fileSize) {
+      response.statusCode = 416;
+      response.setHeader("Content-Range", `bytes */${fileSize}`);
+      response.end();
+      return;
+    }
+    response.statusCode = 206;
+    response.setHeader("Content-Type", contentType);
+    response.setHeader("Accept-Ranges", "bytes");
+    response.setHeader("Content-Range", `bytes ${start}-${end}/${fileSize}`);
+    response.setHeader("Content-Length", String(end - start + 1));
+    createReadStream(filePath, { start, end }).pipe(response);
+    return;
+  }
+
+  response.statusCode = 200;
+  response.setHeader("Content-Type", contentType);
+  response.setHeader("Accept-Ranges", "bytes");
+  response.setHeader("Content-Length", String(fileSize));
+  createReadStream(filePath).pipe(response);
 }
 
 function sanitizeStorageId(value) {
@@ -139,6 +187,7 @@ async function getPathStats(targetPath) {
 async function createCacheStatus() {
   const definitions = [
     { id: "bangumi-matches", label: "Bangumi 匹配", path: bangumiMatchesRoot },
+    { id: "global", label: "全局播放数据", path: globalDataPath },
     { id: "libraries", label: "播放数据", path: librariesRoot },
     { id: "thumbnails", label: "视频缩略图", path: thumbnailsRoot },
     { id: "subtitles", label: "内封字幕", path: embeddedSubtitlesRoot },
@@ -309,6 +358,10 @@ async function detectTools() {
 
 function resolveVideoPath(config, rootId, relativePath) {
   return resolveVideoPathFromConfig(config, rootId, relativePath);
+}
+
+function resolveMediaPath(config, rootId, relativePath) {
+  return resolveMediaPathFromConfig(config, rootId, relativePath);
 }
 
 function normalizeSubtitleTrack(stream) {
@@ -1209,10 +1262,16 @@ function playerDataApiPlugin(env) {
     const url = new URL(request.url, "http://127.0.0.1");
     const libraryMatch = url.pathname.match(/^\/api\/player-data\/libraries\/([^/]+)$/);
     const thumbnailMatch = url.pathname.match(/^\/api\/player-data\/thumbnails\/([^/]+)$/);
+    const mediaMatch = url.pathname.match(/^\/api\/media\/([^/]+)\/(.+)$/);
 
     try {
       if (url.pathname === "/api/local-config" && request.method === "GET") {
         sendJson(response, 200, publicLocalConfig(await loadAppConfig(), await getTools(), env));
+        return;
+      }
+
+      if (url.pathname === "/api/media-roots/scan" && request.method === "GET") {
+        sendJson(response, 200, await scanConfiguredMediaRoots(await loadAppConfig()));
         return;
       }
 
@@ -1244,6 +1303,14 @@ function playerDataApiPlugin(env) {
       if (url.pathname === "/api/cache-status/clear" && request.method === "POST") {
         const payload = JSON.parse((await readBody(request)).toString("utf8"));
         sendJson(response, 200, await clearCacheItems(payload));
+        return;
+      }
+
+      if (mediaMatch && request.method === "GET") {
+        const rootId = decodeURIComponent(mediaMatch[1]);
+        const relativePath = mediaMatch[2].split("/").map((segment) => decodeURIComponent(segment)).join("/");
+        const filePath = resolveMediaPath(await loadAppConfig(), rootId, relativePath);
+        await sendMediaFile(request, response, filePath);
         return;
       }
 
@@ -1287,6 +1354,23 @@ function playerDataApiPlugin(env) {
         const payload = JSON.parse((await readBody(request)).toString("utf8"));
         sendJson(response, 200, await searchLibraryWithAi(env, payload));
         return;
+      }
+
+      if (url.pathname === "/api/player-data/global") {
+        if (request.method === "GET") {
+          const payload = await readJsonFile(globalDataPath, null);
+          sendJson(response, payload ? 200 : 404, payload ?? { error: "Global data not found." });
+          return;
+        }
+
+        if (request.method === "PUT") {
+          const rawBody = await readBody(request);
+          const payload = JSON.parse(rawBody.toString("utf8"));
+          await mkdir(dataRoot, { recursive: true });
+          await writeFile(globalDataPath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+          sendJson(response, 200, { ok: true });
+          return;
+        }
       }
 
       if (url.pathname === "/api/ai/tags/merge-suggestion" && request.method === "POST") {
