@@ -1,0 +1,16 @@
+{
+  "server": {
+    "port": 3001
+  },
+  "media": {
+    "roots": [
+      {
+        "id": "example-media-root",
+        "label": "Example Library",
+        "path": "Example",
+        "source": "browser",
+        "localPath": "D:\\Example\\Media"
+      }
+    ]
+  }
+}

@@ -4,6 +4,7 @@ coverage/
 .npm-cache/
 .cache/
 .local-web-player-data/
+config/app.json
 
 .agents/
 .codex/
