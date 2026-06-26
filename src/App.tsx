@@ -55,7 +55,6 @@ import type {
   PlayerPreferences,
   PhotoAlbum,
   PhotoAlbumProgress,
-  PhotoAlbumScanResponse,
   PhotoAlbumSortMode,
   PhotoAlbumStore,
   PlaylistFilter,
@@ -129,6 +128,12 @@ function isObjectUrl(value: string) {
 
 function isSubtitleFile(name: string) {
   return hasExtension(name, SUBTITLE_EXTENSIONS);
+}
+
+const PHOTO_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif", ".bmp"]);
+
+function isPhotoFile(name: string) {
+  return hasExtension(name, PHOTO_EXTENSIONS);
 }
 
 function hasExtension(name: string, extensions: Set<string>) {
@@ -209,6 +214,10 @@ function createLegacyVideoId(relativePath: string, file: Pick<File, "size" | "la
 
 function createGlobalVideoId(rootId: string, relativePath: string, file: Pick<File, "size" | "lastModified">) {
   return `${rootId}|${relativePath}|${file.size}|${file.lastModified}`;
+}
+
+function createPhotoAlbumFolderId(rootId: string, relativePath: string) {
+  return `${rootId}|${relativePath}`;
 }
 
 function hashString(value: string) {
@@ -687,6 +696,69 @@ async function* collectVideos(directory: FileSystemDirectoryHandle, rootId?: str
   if (pendingVideos.length || pendingSubtitles.length || scannedFiles || filteredSmallVideos) {
     yield createBatch();
   }
+}
+
+async function collectPhotoAlbumsFromDirectory(directory: FileSystemDirectoryHandle) {
+  const rootId = `browser-photo:${sanitizeLibraryName(directory.name)}-${hashString(directory.name)}`;
+  const rootLabel = directory.name;
+  const albums: PhotoAlbum[] = [];
+  let scannedFiles = 0;
+
+  async function walk(handle: FileSystemDirectoryHandle, segments: string[]) {
+    const images: PhotoAlbum["images"] = [];
+
+    for await (const entry of handle.values()) {
+      const nextSegments = [...segments, entry.name];
+      if (entry.kind === "directory") {
+        await walk(entry, nextSegments);
+        continue;
+      }
+      if (!isPhotoFile(entry.name)) continue;
+
+      scannedFiles += 1;
+      const file = await entry.getFile();
+      const relativePath = nextSegments.join("/");
+      images.push({
+        id: createGlobalVideoId(rootId, relativePath, file),
+        name: entry.name,
+        relativePath,
+        url: URL.createObjectURL(file),
+        size: file.size,
+        lastModified: file.lastModified,
+        mediaRootId: rootId,
+        index: 0,
+      });
+    }
+
+    if (!images.length) return;
+    images.sort((a, b) => a.relativePath.localeCompare(b.relativePath, undefined, { numeric: true, sensitivity: "base" }));
+    const relativePath = segments.join("/");
+    const indexedImages = images.map((image, index) => ({ ...image, index }));
+    const totalSize = indexedImages.reduce((sum, image) => sum + image.size, 0);
+    const updatedAt = indexedImages.reduce((latest, image) => Math.max(latest, image.lastModified), 0);
+    albums.push({
+      id: createPhotoAlbumFolderId(rootId, relativePath),
+      title: segments.at(-1) || rootLabel,
+      relativePath,
+      mediaRootId: rootId,
+      mediaRootLabel: rootLabel,
+      coverImageUrl: indexedImages[0]?.url ?? "",
+      imageCount: indexedImages.length,
+      totalSize,
+      updatedAt,
+      images: indexedImages,
+    });
+  }
+
+  await walk(directory, []);
+  albums.sort((a, b) => b.updatedAt - a.updatedAt || a.relativePath.localeCompare(b.relativePath, undefined, { numeric: true, sensitivity: "base" }));
+
+  return {
+    rootId,
+    rootLabel,
+    albums,
+    scannedFiles,
+  };
 }
 
 function collectVideosFromFiles(files: FileList | File[]): MediaCollection {
@@ -1541,6 +1613,7 @@ export default function App() {
   const autoSubtitleSelectionVideoIdRef = useRef<string | null>(null);
   const lastSubtitleSelectionVideoIdRef = useRef<string | null>(null);
   const selectedSubtitleIdRef = useRef("off");
+  const photoAlbumsRef = useRef<PhotoAlbum[]>([]);
   const [videos, setVideos] = useState<VideoItem[]>([]);
   const [subtitles, setSubtitles] = useState<SubtitleItem[]>([]);
   const [localConfig, setLocalConfig] = useState<LocalConfig | null>(null);
@@ -1590,7 +1663,7 @@ export default function App() {
   const [photoAlbumFilter, setPhotoAlbumFilter] = useState<PhotoAlbumViewFilter>(
     defaultPhotoAlbumPreferences.favoritesOnly ? "favorites" : "all",
   );
-  const [photoAlbumMessage, setPhotoAlbumMessage] = useState("打开写真集后会扫描已配置媒体库中的图片文件夹。");
+  const [photoAlbumMessage, setPhotoAlbumMessage] = useState("选择一个写真集文件夹后开始扫描图片。");
   const [isPhotoAlbumsLoading, setIsPhotoAlbumsLoading] = useState(false);
   const [hasLoadedPhotoAlbums, setHasLoadedPhotoAlbums] = useState(false);
   const [selectedSubtitleId, setSelectedSubtitleId] = useState<string>("off");
@@ -1675,6 +1748,7 @@ export default function App() {
   isMainVideoLoadingRef.current = isMainVideoLoading;
   videosRef.current = videos;
   subtitlesRef.current = subtitles;
+  photoAlbumsRef.current = photoAlbums;
   selectedSubtitleIdRef.current = selectedSubtitleId;
   localConfigRef.current = localConfig;
   bangumiMatchesBySeriesKeyRef.current = bangumiMatchesBySeriesKey;
@@ -1764,13 +1838,24 @@ export default function App() {
     setTagMergeDecisions(nextDataStore.tagMergeDecisions);
   }, []);
 
-  const loadPhotoAlbums = useCallback(async () => {
+  const choosePhotoAlbumDirectory = useCallback(async () => {
     if (isPhotoAlbumsLoading) return;
+    if (!window.showDirectoryPicker) {
+      setPhotoAlbumMessage("当前浏览器不支持选择文件夹，请使用 Chrome 或 Edge。");
+      return;
+    }
     setIsPhotoAlbumsLoading(true);
-    setPhotoAlbumMessage("正在扫描写真集...");
+    setPhotoAlbumMessage("请选择写真集文件夹。");
     try {
+      const directory = await window.showDirectoryPicker({ mode: "read" });
+      const canReadDirectory = await ensureDirectoryReadPermission(directory);
+      if (!canReadDirectory) {
+        setPhotoAlbumMessage("没有获得文件夹读取权限。");
+        return;
+      }
+      setPhotoAlbumMessage(`正在扫描“${directory.name}”...`);
       const [scan, store] = await Promise.all([
-        fetchJson<PhotoAlbumScanResponse>("/api/photo-albums/scan"),
+        collectPhotoAlbumsFromDirectory(directory),
         loadPhotoAlbumStore().catch(() => ({
           version: 1,
           favorites: [],
@@ -1779,20 +1864,39 @@ export default function App() {
         })),
       ]);
       applyPhotoAlbumStore(store);
+      photoAlbumsRef.current.forEach((album) => {
+        album.images.forEach((image) => {
+          if (isObjectUrl(image.url)) URL.revokeObjectURL(image.url);
+        });
+      });
       setPhotoAlbums(scan.albums);
-      setPhotoRootStatuses(scan.metadata.mediaRoots);
+      setPhotoRootStatuses([
+        {
+          id: scan.rootId,
+          label: scan.rootLabel,
+          source: "browser",
+          status: "ready",
+          videoCount: scan.albums.length,
+          scannedFiles: scan.scannedFiles,
+          updatedAt: Date.now(),
+        },
+      ]);
       setHasLoadedPhotoAlbums(true);
       setPhotoAlbumMessage(
         scan.albums.length
-          ? `已加载 ${scan.albums.length} 本写真集，扫描 ${scan.scannedFiles} 张图片`
-          : "没有找到包含图片的文件夹",
+          ? `已从“${scan.rootLabel}”加载 ${scan.albums.length} 本写真集，扫描 ${scan.scannedFiles} 张图片`
+          : `“${scan.rootLabel}”里没有找到包含图片的文件夹`,
       );
     } catch (error) {
-      setPhotoAlbumMessage(error instanceof Error ? error.message : "扫描写真集失败。");
+      if (error instanceof DOMException && error.name === "AbortError") {
+        setPhotoAlbumMessage(hasLoadedPhotoAlbums ? "已取消选择写真集文件夹。" : "选择一个写真集文件夹后开始扫描图片。");
+      } else {
+        setPhotoAlbumMessage(error instanceof Error ? error.message : "扫描写真集失败。");
+      }
     } finally {
       setIsPhotoAlbumsLoading(false);
     }
-  }, [applyPhotoAlbumStore, isPhotoAlbumsLoading]);
+  }, [applyPhotoAlbumStore, hasLoadedPhotoAlbums, isPhotoAlbumsLoading]);
 
   const playlistVideos = useMemo(
     () => getSortedVideos(videos, isSeriesMode ? "name" : playlistSortMode, isSeriesMode ? false : isPlaylistSortReversed),
@@ -3490,8 +3594,7 @@ export default function App() {
     resetHoldSpeedState();
     setAreControlsVisible(true);
     setActiveView("photos");
-    if (!hasLoadedPhotoAlbums) void loadPhotoAlbums();
-  }, [cancelAutoNextPrompt, hasLoadedPhotoAlbums, loadPhotoAlbums, persistCurrentProgress, resetHoldSpeedState]);
+  }, [cancelAutoNextPrompt, persistCurrentProgress, resetHoldSpeedState]);
 
   const persistPhotoAlbumProgress = useCallback(
     (album: PhotoAlbum, imageIndex: number, completed = false) => {
@@ -6382,9 +6485,9 @@ export default function App() {
                   <option value="name">名称</option>
                   <option value="count">图片数</option>
                 </select>
-                <button className="secondary-button" type="button" onClick={() => void loadPhotoAlbums()} disabled={isPhotoAlbumsLoading}>
-                  <RefreshCw size={16} />
-                  {isPhotoAlbumsLoading ? "扫描中" : "重新扫描"}
+                <button className="secondary-button" type="button" onClick={() => void choosePhotoAlbumDirectory()} disabled={isPhotoAlbumsLoading}>
+                  <FolderOpen size={16} />
+                  {isPhotoAlbumsLoading ? "扫描中" : hasLoadedPhotoAlbums ? "重新选择" : "选择文件夹"}
                 </button>
               </div>
             </section>
@@ -6432,10 +6535,10 @@ export default function App() {
               <section className="home-section photo-empty-state">
                 <Images size={42} />
                 <h2>{isPhotoAlbumsLoading ? "正在扫描写真集" : "还没有可显示的写真集"}</h2>
-                <p>{photoAlbumFilter === "favorites" ? "收藏写真集后会出现在这里。" : "会把包含图片的文件夹识别为一本写真集。"}</p>
-                <button className="primary-button" type="button" onClick={() => void loadPhotoAlbums()} disabled={isPhotoAlbumsLoading}>
-                  <RefreshCw size={18} />
-                  {isPhotoAlbumsLoading ? "扫描中" : "扫描写真集"}
+                <p>{photoAlbumFilter === "favorites" ? "收藏写真集后会出现在这里。" : "手动选择文件夹后，会把其中包含图片的文件夹识别为写真集。"}</p>
+                <button className="primary-button" type="button" onClick={() => void choosePhotoAlbumDirectory()} disabled={isPhotoAlbumsLoading}>
+                  <FolderOpen size={18} />
+                  {isPhotoAlbumsLoading ? "扫描中" : "选择写真集文件夹"}
                 </button>
               </section>
             )}
