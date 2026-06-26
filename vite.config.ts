@@ -1337,9 +1337,27 @@ async function updateIndex(libraryId, metadata) {
 
 function playerDataApiPlugin(env) {
   let toolsPromise = null;
+  let mediaRootsScanPromise = null;
+  let photoAlbumsScanPromise = null;
   const getTools = () => {
     toolsPromise ??= detectTools();
     return toolsPromise;
+  };
+  const scanMediaRootsOnce = async () => {
+    if (!mediaRootsScanPromise) {
+      mediaRootsScanPromise = (async () => scanConfiguredMediaRoots(await loadAppConfig()))().finally(() => {
+        mediaRootsScanPromise = null;
+      });
+    }
+    return mediaRootsScanPromise;
+  };
+  const scanPhotoAlbumsOnce = async () => {
+    if (!photoAlbumsScanPromise) {
+      photoAlbumsScanPromise = (async () => scanConfiguredPhotoAlbums(await loadAppConfig()))().finally(() => {
+        photoAlbumsScanPromise = null;
+      });
+    }
+    return photoAlbumsScanPromise;
   };
 
   const middleware = async (request, response, next) => {
@@ -1361,12 +1379,12 @@ function playerDataApiPlugin(env) {
       }
 
       if (url.pathname === "/api/media-roots/scan" && request.method === "GET") {
-        sendJson(response, 200, await scanConfiguredMediaRoots(await loadAppConfig()));
+        sendJson(response, 200, await scanMediaRootsOnce());
         return;
       }
 
       if (url.pathname === "/api/photo-albums/scan" && request.method === "GET") {
-        sendJson(response, 200, await scanConfiguredPhotoAlbums(await loadAppConfig()));
+        sendJson(response, 200, await scanPhotoAlbumsOnce());
         return;
       }
 
@@ -1588,6 +1606,16 @@ function playerDataApiPlugin(env) {
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
   return {
+    server: {
+      watch: {
+        ignored: [
+          "**/.git/**",
+          "**/.local-web-player-data/**",
+          "**/.npm-cache/**",
+          "**/dist/**",
+        ],
+      },
+    },
     plugins: [react(), playerDataApiPlugin(env)],
   };
 });
