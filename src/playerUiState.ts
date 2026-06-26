@@ -70,9 +70,14 @@ export function getCompatibleMediaAction(video: VideoForCompatibilityUi | null |
     options.canUseServerTools &&
     video.playability?.status === "remuxRecommended" &&
     !video.playability.compatibleUrl;
+  const shouldExplainPlayability = Boolean(
+    video?.playability &&
+      !video.playability.compatibleUrl &&
+      video.playability.status !== "direct",
+  );
 
   return {
-    visible: Boolean(video?.playability || canCreate),
+    visible: shouldExplainPlayability || canCreate,
     disabled: !canCreate,
     canCreate,
     label: canCreate ? "生成兼容 MP4" : "",

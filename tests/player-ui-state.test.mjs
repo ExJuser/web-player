@@ -55,7 +55,18 @@ test("compatible media action is enabled only for server remux candidates", () =
       },
       { canUseServerTools: true },
     ).visible,
-    true,
+    false,
+  );
+
+  assert.equal(
+    uiState.getCompatibleMediaAction(
+      {
+        playbackSource: "server",
+        playability: { status: "remuxRecommended", reason: "建议转封装", compatibleUrl: "/api/media-compatible/a.mp4" },
+      },
+      { canUseServerTools: true },
+    ).visible,
+    false,
   );
 
   assert.equal(
