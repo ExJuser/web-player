@@ -180,6 +180,7 @@ export type HomeVideoCard = {
   progress?: PlaybackProgress;
   progressPercent: number;
   seriesTitle?: string;
+  mediaRootLabel?: string;
   tags?: string[];
 };
 

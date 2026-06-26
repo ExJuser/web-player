@@ -155,6 +155,10 @@ function libraryFolderPathForVideo(video: VideoItem) {
   return directoryPartsOf(video.relativePath)[0] ?? "";
 }
 
+function fallbackMediaRootLabelForVideo(video: VideoItem) {
+  return video.mediaRootId ?? directoryPartsOf(video.relativePath)[0] ?? "临时媒体";
+}
+
 function supportsServerFileAccess(root: LocalMediaRoot | null | undefined) {
   return Boolean(root && (root.source !== "browser" || root.localPath));
 }
@@ -1571,7 +1575,7 @@ export default function App() {
   const [mediaRootLabelPrompt, setMediaRootLabelPrompt] = useState<MediaRootLabelPrompt | null>(null);
   const [mediaRootLocalPathDialog, setMediaRootLocalPathDialog] = useState<MediaRootLocalPathDialog | null>(null);
   const [skipFolderAccessPrompt, setSkipFolderAccessPrompt] = useState(defaultPlayerSettings.skipFolderAccessPrompt);
-  const [message, setMessage] = useState("选择一个本地文件夹开始播放");
+  const [message, setMessage] = useState("新增一个媒体库开始播放");
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -1779,15 +1783,17 @@ export default function App() {
       const progressPercent = progressDuration
         ? clamp(((progress?.currentTime ?? 0) / progressDuration) * 100, 0, 100)
         : 0;
+      const mediaRoot = video.mediaRootId ? localConfig?.mediaRoots.find((root) => root.id === video.mediaRootId) : null;
       return {
         video,
         progress,
         progressPercent,
         seriesTitle: seriesTitleByVideoId.get(video.id) ?? inferSeriesTitle(video),
+        mediaRootLabel: mediaRoot?.label ?? fallbackMediaRootLabelForVideo(video),
         tags: videoTags[video.id] ?? [],
       };
     },
-    [progressStore, seriesTitleByVideoId, videoTags],
+    [localConfig, progressStore, seriesTitleByVideoId, videoTags],
   );
   const videosByLibraryFolderKey = useMemo(() => {
     const grouped = new Map<string, VideoItem[]>();
@@ -1859,9 +1865,11 @@ export default function App() {
   const nextEpisodeCard = useMemo(() => {
     const sourceVideo = primaryResumeCard?.video ?? recentHomeCards[0]?.video ?? currentVideo;
     if (!sourceVideo) return null;
-    const sourceSeriesKey = seriesKeyFromTitle(seriesTitleByVideoId.get(sourceVideo.id) ?? inferSeriesTitle(sourceVideo));
+    const createScopedSeriesKey = (video: VideoItem) =>
+      `${video.mediaRootId ?? "unscoped"}:${seriesKeyFromTitle(seriesTitleByVideoId.get(video.id) ?? inferSeriesTitle(video))}`;
+    const sourceSeriesKey = createScopedSeriesKey(sourceVideo);
     const seriesVideos = playlistVideos.filter(
-      (video) => seriesKeyFromTitle(seriesTitleByVideoId.get(video.id) ?? inferSeriesTitle(video)) === sourceSeriesKey,
+      (video) => createScopedSeriesKey(video) === sourceSeriesKey,
     );
     if (seriesVideos.length < 2) return null;
     const sourceIndex = seriesVideos.findIndex((video) => video.id === sourceVideo.id);
@@ -3072,7 +3080,7 @@ export default function App() {
 
   const requestDeleteLocalVideo = useCallback((video: VideoItem) => {
     if (!video.parentDirectory?.removeEntry) {
-      setMessage("当前加载方式不支持删除本地文件，请通过“选择文件夹”重新加载后再试。");
+      setMessage("当前加载方式不支持删除本地文件，请通过“新增媒体库”重新加载后再试。");
       return;
     }
 
@@ -3083,7 +3091,7 @@ export default function App() {
     async (video: VideoItem) => {
       const parentDirectory = video.parentDirectory;
       if (!parentDirectory?.removeEntry) {
-        setMessage("当前加载方式不支持删除本地文件，请通过“选择文件夹”重新加载后再试。");
+        setMessage("当前加载方式不支持删除本地文件，请通过“新增媒体库”重新加载后再试。");
         return;
       }
 
@@ -3703,7 +3711,7 @@ export default function App() {
     ],
   );
 
-  const chooseFolderWithFileInput = () => {
+  const chooseTemporaryFolderFilesWithFileInput = () => {
     const input = document.createElement("input");
     input.type = "file";
     input.multiple = true;
@@ -3719,7 +3727,7 @@ export default function App() {
       }
 
       try {
-        await loadFileMedia(files);
+        await loadFileMedia(files, "当前浏览器不支持新增全局媒体库，文件播放进度仅在本次会话保留");
       } catch {
         setMessage("无法读取选择的媒体文件");
       } finally {
@@ -3732,9 +3740,9 @@ export default function App() {
     input.click();
   };
 
-  const chooseFolder = async () => {
+  const chooseMediaLibraryDirectory = async () => {
     if (!window.showDirectoryPicker) {
-      chooseFolderWithFileInput();
+      chooseTemporaryFolderFilesWithFileInput();
       return;
     }
 
@@ -3743,23 +3751,23 @@ export default function App() {
       await loadDirectoryMedia(directory, { remember: true, promptForLabel: true });
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
-        setMessage("已取消选择文件夹");
+        setMessage("已取消新增媒体库");
       } else {
-        setMessage("扫描文件夹失败，请确认浏览器权限后重试。");
+        setMessage("新增媒体库失败，请确认浏览器权限后重试。");
       }
     } finally {
       setIsScanning(false);
     }
   };
 
-  const requestFolderAccess = () => {
+  const requestAddMediaLibrary = () => {
     if (!window.showDirectoryPicker) {
-      chooseFolderWithFileInput();
+      chooseTemporaryFolderFilesWithFileInput();
       return;
     }
 
     if (skipFolderAccessPrompt) {
-      void chooseFolder();
+      void chooseMediaLibraryDirectory();
       return;
     }
 
@@ -3801,7 +3809,7 @@ export default function App() {
         );
         const droppedFiles = handleFiles.length ? handleFiles : Array.from(event.dataTransfer.files);
         if (!droppedFiles.length) {
-          setMessage("当前浏览器不支持拖入文件夹，请使用“选择文件夹”。");
+          setMessage("当前浏览器不支持拖入文件夹，请使用“新增媒体库”。");
           return;
         }
 
@@ -5525,9 +5533,10 @@ export default function App() {
     return `${formatTime(card.progress.currentTime)} / ${formatTime(total)}`;
   };
   const formatHomeMeta = (card: HomeVideoCard) => {
-    if (card.progress?.updatedAt) return `${formatHomeProgressLabel(card)} · ${formatRelativeTime(card.progress.updatedAt)}`;
-    if (card.video.duration) return `未开始 · ${formatTime(card.video.duration)}`;
-    return "未开始";
+    const prefix = card.mediaRootLabel ? `${card.mediaRootLabel} · ` : "";
+    if (card.progress?.updatedAt) return `${prefix}${formatHomeProgressLabel(card)} · ${formatRelativeTime(card.progress.updatedAt)}`;
+    if (card.video.duration) return `${prefix}未开始 · ${formatTime(card.video.duration)}`;
+    return `${prefix}未开始`;
   };
   const homeCardThumbnail = (card: HomeVideoCard, fallbackIndex?: number) => (
     <span className={`home-card-thumbnail ${card.video.thumbnailUrl ? "has-image" : ""}`} aria-hidden="true">
@@ -5646,9 +5655,9 @@ export default function App() {
               {theme === "dark" ? <Sun size={17} /> : <Moon size={17} />}
             </button>
             {!isPrivacyMode ? (
-              <button className="primary-button" type="button" onClick={requestFolderAccess} disabled={isScanning}>
+              <button className="primary-button" type="button" onClick={requestAddMediaLibrary} disabled={isScanning}>
                 <FolderOpen size={18} />
-                {isScanning ? "扫描中" : "选择文件夹"}
+                {isScanning ? "扫描中" : "新增媒体库"}
               </button>
             ) : null}
           </div>
@@ -5665,6 +5674,7 @@ export default function App() {
                       <span className="home-section-eyebrow">{primaryHomeTitle}</span>
                       <h2>{primaryHomeCard.video.name}</h2>
                       <p>{primaryHomeCard.seriesTitle}</p>
+                      <span>{primaryHomeCard.mediaRootLabel}</span>
                       <span>{primaryHomeCard.video.relativePath}</span>
                       <div className="home-progress" aria-label={formatHomeProgressLabel(primaryHomeCard)}>
                         <span style={{ width: `${primaryHomeCard.progressPercent}%` }} />
@@ -5689,11 +5699,11 @@ export default function App() {
                 ) : (
                   <div className="home-empty-state">
                     <FolderOpen size={42} />
-                    <h2>选择一个本地文件夹开始播放</h2>
-                    <p>播放器会在本地扫描视频、匹配字幕，并在允许写入时保存观看进度。</p>
-                    <button className="primary-button" type="button" onClick={requestFolderAccess} disabled={isScanning}>
+                    <h2>新增一个媒体库开始播放</h2>
+                    <p>播放器会把你选择的目录加入全局媒体库，扫描视频、匹配字幕并保存观看进度。</p>
+                    <button className="primary-button" type="button" onClick={requestAddMediaLibrary} disabled={isScanning}>
                       <FolderOpen size={18} />
-                      {isScanning ? "扫描中" : "选择文件夹"}
+                      {isScanning ? "扫描中" : "新增媒体库"}
                     </button>
                   </div>
                 )}
@@ -5709,7 +5719,7 @@ export default function App() {
                     {homeCardThumbnail(nextEpisodeCard)}
                     <div>
                       <strong>{nextEpisodeCard.video.name}</strong>
-                      <small>{nextEpisodeCard.video.relativePath}</small>
+                      <small>{nextEpisodeCard.mediaRootLabel} · {nextEpisodeCard.video.relativePath}</small>
                     </div>
                     <button className="secondary-button" type="button" onClick={() => openVideoFromHome(nextEpisodeCard.video)}>
                       播放
@@ -5754,6 +5764,15 @@ export default function App() {
                   <h2>全局媒体库</h2>
                   <span>{`${mediaRootStatuses.filter((status) => status.status === "ready").length} / ${localConfig?.mediaRoots.length ?? 0} 可用`}</span>
                 </div>
+                <button
+                  className="secondary-button media-library-add-button"
+                  type="button"
+                  onClick={requestAddMediaLibrary}
+                  disabled={isScanning}
+                >
+                  <FolderOpen size={16} />
+                  {isScanning ? "扫描中" : "新增媒体库"}
+                </button>
                 {localConfig?.mediaRoots.length ? (
                   <div className="media-library-list">
                     {localConfig.mediaRoots.map((root) => {
@@ -6257,7 +6276,7 @@ export default function App() {
                   : isSeriesMode
                     ? `${visibleVideos.length} / ${videos.length} 个视频`
                     : `${videos.length} 个视频`
-                : "等待选择文件夹"}
+                : "等待新增媒体库"}
             </span>
           </div>
           <div className={`playlist-tools ${isSeriesMode ? "series-mode" : ""}`}>
@@ -6697,8 +6716,8 @@ export default function App() {
             <ShieldCheck size={28} />
           </div>
           <div className="dialog-copy">
-            <h2 id="folder-access-title">允许访问本地视频文件夹</h2>
-            <p>播放器只会读取你选择的文件夹，用来扫描可播放的视频和保存本地播放进度。</p>
+            <h2 id="folder-access-title">添加媒体库</h2>
+            <p>播放器只会读取你选择的目录，用来加入全局媒体库、扫描可播放的视频并保存本地播放进度。</p>
           </div>
           <div className="permission-notes">
             <span>不会上传文件</span>
@@ -6711,15 +6730,15 @@ export default function App() {
               checked={skipFolderAccessPrompt}
               onChange={(event) => updateSkipFolderAccessPrompt(event.target.checked)}
             />
-            不再提示，直接选择文件夹
+            不再提示，直接新增媒体库
           </label>
           <div className="dialog-actions">
             <button className="secondary-button" type="button" onClick={() => setIsFolderDialogOpen(false)}>
               取消
             </button>
-            <button className="primary-button" type="button" onClick={chooseFolder}>
+            <button className="primary-button" type="button" onClick={chooseMediaLibraryDirectory}>
               <FolderOpen size={18} />
-              继续选择
+              继续添加
             </button>
           </div>
         </section>

@@ -928,6 +928,11 @@ button {
   gap: 12px;
 }
 
+.media-library-add-button {
+  width: 100%;
+  min-height: 34px;
+}
+
 .media-library-current {
   display: grid;
   grid-template-columns: 38px minmax(0, 1fr) auto;
