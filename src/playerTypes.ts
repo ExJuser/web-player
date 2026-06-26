@@ -67,6 +67,15 @@ export type EmbeddedSubtitleTrack = {
   reason?: string;
 };
 
+export type PersistedEmbeddedSubtitle = {
+  id: string;
+  name: string;
+  relativePath: string;
+  format: "srt" | "vtt";
+  videoId: string;
+  embeddedTrack: EmbeddedSubtitleTrack;
+};
+
 export type PlaybackProgress = {
   currentTime: number;
   duration: number;
@@ -75,6 +84,14 @@ export type PlaybackProgress = {
 };
 
 export type ProgressStore = Record<string, PlaybackProgress>;
+export type VideoTagStore = Record<string, string[]>;
+export type TagMergeDecision = {
+  from: string;
+  to: string;
+  decision: "merge" | "keep";
+  updatedAt: number;
+};
+export type TagMergeDecisionStore = Record<string, TagMergeDecision>;
 
 export type PlayerPersistentSettings = {
   volume: number;
@@ -93,6 +110,9 @@ export type PlayerDataStore = {
   version?: number;
   progress: ProgressStore;
   favorites: string[];
+  videoTags: VideoTagStore;
+  tagMergeDecisions: TagMergeDecisionStore;
+  embeddedSubtitles: PersistedEmbeddedSubtitle[];
   preferences: PlayerPreferences;
   settings: PlayerPersistentSettings;
   metadata?: PlayerLibraryMetadata;
@@ -138,6 +158,7 @@ export type HomeVideoCard = {
   progress?: PlaybackProgress;
   progressPercent: number;
   seriesTitle?: string;
+  tags?: string[];
 };
 
 export type MediaCollection = {

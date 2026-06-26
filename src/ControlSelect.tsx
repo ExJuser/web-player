@@ -1,4 +1,5 @@
 import { ChevronDown } from "lucide-react";
+import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 
 type ControlSelectValue = string | number;
@@ -9,12 +10,13 @@ type ControlSelectOption<T extends ControlSelectValue> = {
 };
 
 type ControlSelectProps<T extends ControlSelectValue> = {
-  label: string;
+  label: ReactNode;
   ariaLabel: string;
   value: T;
   options: ControlSelectOption<T>[];
   onChange: (value: T) => void;
   className?: string;
+  disabled?: boolean;
 };
 
 export function ControlSelect<T extends ControlSelectValue>({
@@ -24,6 +26,7 @@ export function ControlSelect<T extends ControlSelectValue>({
   options,
   onChange,
   className = "",
+  disabled = false,
 }: ControlSelectProps<T>) {
   const [isOpen, setIsOpen] = useState(false);
   const selectRef = useRef<HTMLDivElement | null>(null);
@@ -55,6 +58,7 @@ export function ControlSelect<T extends ControlSelectValue>({
   }, [isOpen]);
 
   const selectOption = (nextValue: T) => {
+    if (disabled) return;
     onChange(nextValue);
     setIsOpen(false);
     window.requestAnimationFrame(() => triggerRef.current?.focus());
@@ -72,6 +76,7 @@ export function ControlSelect<T extends ControlSelectValue>({
           aria-expanded={isOpen}
           aria-label={ariaLabel}
           title={ariaLabel}
+          disabled={disabled}
           onClick={() => setIsOpen((open) => !open)}
         >
           <span>{selectedOption?.label ?? ""}</span>

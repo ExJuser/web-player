@@ -173,6 +173,18 @@ To enable embedded subtitle extraction, install `ffmpeg` and `ffprobe` on your s
 
 When the selected browser folder name matches one configured media root basename, the player can detect and extract embedded text subtitles from videos in that root. Image subtitle formats such as PGS and VobSub are detected but not OCR'd.
 
+Browser-added media libraries keep their browser folder name in `path`. To let the local Vite server use `ffmpeg`/`ffprobe` for that same library, configure its server-readable absolute path in `localPath` or use the in-app “配置本机路径” dialog:
+
+```json
+{
+  "id": "anime",
+  "label": "Anime",
+  "path": "Anime",
+  "source": "browser",
+  "localPath": "D:\\Media\\Anime"
+}
+```
+
 Subtitle summaries and Q&A use DeepSeek through the local Vite API proxy. Configure the API key in your shell or `.env.local` before starting the dev server:
 
 ```text

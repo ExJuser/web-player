@@ -5,39 +5,42 @@
   "media": {
     "roots": [
       {
-        "id": "jav-e-pending",
-        "label": "JAV",
-        "path": "E:\\学习资料\\待整理"
+        "id": "media-6c25a75803",
+        "label": "Anime",
+        "path": "番剧",
+        "source": "browser",
+        "localPath": "G:\\番剧"
       },
       {
-        "id": "jav-f-study",
-        "label": "JAV",
-        "path": "F:\\学习资料"
-      },
-      {
-        "id": "western-av-f",
-        "label": "WesternAV",
-        "path": "F:\\欧美"
-      },
-      {
-        "id": "chinese-av-f",
-        "label": "ChineseAV",
-        "path": "F:\\国产"
-      },
-      {
-        "id": "mmd-3d-f",
+        "id": "3d-fcffba9828",
         "label": "3DAV",
-        "path": "F:\\3D"
+        "path": "3D",
+        "source": "browser"
       },
       {
-        "id": "anime-g",
-        "label": "Anime",
-        "path": "G:\\番剧"
+        "id": "media-86ecb15df1",
+        "label": "国产AV",
+        "path": "国产",
+        "source": "browser"
       },
       {
-        "id": "anime-h",
+        "id": "media-728393d8bc",
+        "label": "欧美AV",
+        "path": "欧美",
+        "source": "browser"
+      },
+      {
+        "id": "media-52e198a5fb",
+        "label": "JAV",
+        "path": "学习资料",
+        "source": "browser"
+      },
+      {
+        "id": "anime-3eac161518",
         "label": "Anime",
-        "path": "H:\\Anime"
+        "path": "Anime",
+        "source": "browser",
+        "localPath": "H:\\Anime"
       }
     ]
   }

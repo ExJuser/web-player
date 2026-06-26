@@ -8,6 +8,13 @@ import path from "node:path";
 import tls from "node:tls";
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
+import {
+  ensureFileExists,
+  normalizeMediaRoots as normalizeMediaRootsFromConfig,
+  resolveVideoPath as resolveVideoPathFromConfig,
+  updateMediaRootLocalPath as updateMediaRootLocalPathInConfig,
+  upsertMediaRoot as upsertMediaRootInConfig,
+} from "./server/mediaRoots.mjs";
 
 const dataRoot = path.resolve(__dirname, ".local-web-player-data");
 const librariesRoot = path.join(dataRoot, "libraries");
@@ -147,16 +154,17 @@ async function createCacheStatus() {
       ...(await getPathStats(definition.path)),
     })),
   );
-  const totalBytes = items.reduce((sum, item) => sum + item.bytes, 0);
-  const totalFiles = items.reduce((sum, item) => sum + item.files, 0);
-  const updatedAt = items.reduce((latest, item) => Math.max(latest, item.updatedAt ?? 0), 0) || null;
+  const visibleItems = items.filter((item) => item.bytes > 0 || item.files > 0 || item.updatedAt || item.error);
+  const totalBytes = visibleItems.reduce((sum, item) => sum + item.bytes, 0);
+  const totalFiles = visibleItems.reduce((sum, item) => sum + item.files, 0);
+  const updatedAt = visibleItems.reduce((latest, item) => Math.max(latest, item.updatedAt ?? 0), 0) || null;
 
   return {
     rootPath: dataRoot,
     totalBytes,
     totalFiles,
     updatedAt,
-    items,
+    items: visibleItems,
   };
 }
 
@@ -192,20 +200,35 @@ async function clearCacheItems(payload) {
 }
 
 function normalizeMediaRoots(config) {
-  const roots = Array.isArray(config?.media?.roots) ? config.media.roots : [];
-  return roots
-    .map((root) => {
-      const id = typeof root?.id === "string" ? root.id.trim() : "";
-      const rootPath = typeof root?.path === "string" ? path.resolve(root.path) : "";
-      if (!id || !rootPath || !/^[A-Za-z0-9._~-]{1,80}$/.test(id)) return null;
-      return {
-        id,
-        label: typeof root?.label === "string" && root.label.trim() ? root.label.trim() : path.basename(rootPath),
-        path: rootPath,
-        basename: path.basename(rootPath),
-      };
-    })
-    .filter(Boolean);
+  return normalizeMediaRootsFromConfig(config);
+}
+
+function createMediaRootId(rootPath, existingRoots) {
+  const slug =
+    String((path.isAbsolute(rootPath) ? path.basename(rootPath) : rootPath) || "media")
+      .trim()
+      .normalize("NFKD")
+      .replace(/[^\w.-]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 42)
+      .toLowerCase() || "media";
+  const suffix = hashValue(rootPath).slice(0, 10);
+  let id = `${slug}-${suffix}`;
+  let index = 2;
+  const existingIds = new Set(existingRoots.map((root) => root.id));
+  while (existingIds.has(id)) {
+    id = `${slug}-${suffix}-${index}`;
+    index += 1;
+  }
+  return id;
+}
+
+async function upsertMediaRoot(payload) {
+  return upsertMediaRootInConfig(appConfigPath, payload);
+}
+
+async function updateMediaRootLocalPath(payload) {
+  return updateMediaRootLocalPathInConfig(appConfigPath, payload);
 }
 
 async function loadAppConfig() {
@@ -218,6 +241,8 @@ function publicLocalConfig(config, tools, env) {
     label: root.label,
     basename: root.basename,
     path: root.path,
+    source: root.source,
+    localPath: root.localPath,
   }));
   return {
     mediaRoots: roots,
@@ -283,26 +308,7 @@ async function detectTools() {
 }
 
 function resolveVideoPath(config, rootId, relativePath) {
-  const root = normalizeMediaRoots(config).find((item) => item.id === rootId);
-  if (!root) throw new Error("Unknown media root.");
-  if (typeof relativePath !== "string" || !relativePath.trim()) throw new Error("Invalid relative path.");
-  const normalizedRelativePath = relativePath.replace(/\\/g, "/");
-  if (path.isAbsolute(normalizedRelativePath) || normalizedRelativePath.split("/").includes("..")) {
-    throw new Error("Invalid relative path.");
-  }
-  if (!videoExtensions.has(path.extname(normalizedRelativePath).toLowerCase())) {
-    throw new Error("Unsupported video file.");
-  }
-  const resolved = path.resolve(root.path, normalizedRelativePath);
-  const rootWithSeparator = root.path.endsWith(path.sep) ? root.path : `${root.path}${path.sep}`;
-  if (resolved !== root.path && !resolved.startsWith(rootWithSeparator)) {
-    throw new Error("Resolved video path is outside the configured media root.");
-  }
-  return resolved;
-}
-
-async function ensureFileExists(filePath) {
-  await access(filePath);
+  return resolveVideoPathFromConfig(config, rootId, relativePath);
 }
 
 function normalizeSubtitleTrack(stream) {
@@ -355,6 +361,16 @@ async function extractEmbeddedSubtitle(config, payload) {
   await mkdir(embeddedSubtitlesRoot, { recursive: true });
   await writeFile(cachePath, text, "utf8");
   return { id: cacheId, format: "vtt", text };
+}
+
+async function readCachedEmbeddedSubtitle(config, payload) {
+  resolveVideoPath(config, payload?.rootId, payload?.relativePath);
+  const streamIndex = Number(payload?.streamIndex);
+  if (!Number.isInteger(streamIndex) || streamIndex < 0) throw new Error("Invalid subtitle stream.");
+  const cacheId = hashValue(`${payload.rootId}|${payload.relativePath}|${streamIndex}|vtt`);
+  const cachePath = path.join(embeddedSubtitlesRoot, `${cacheId}.vtt`);
+  const text = await readTextFile(cachePath);
+  return text ? { id: cacheId, format: "vtt", text } : { id: cacheId, format: "vtt", text: "" };
 }
 
 function chunkText(text, size = 12000) {
@@ -679,6 +695,9 @@ function normalizeLibrarySearchCandidates(source) {
       name: typeof candidate?.name === "string" ? candidate.name.slice(0, 240) : "",
       relativePath: typeof candidate?.relativePath === "string" ? candidate.relativePath.slice(0, 360) : "",
       seriesTitle: typeof candidate?.seriesTitle === "string" ? candidate.seriesTitle.slice(0, 160) : "",
+      tags: Array.isArray(candidate?.tags)
+        ? candidate.tags.filter((tag) => typeof tag === "string" && tag.trim()).map((tag) => tag.trim().slice(0, 40)).slice(0, 12)
+        : [],
       progressLabel: typeof candidate?.progressLabel === "string" ? candidate.progressLabel.slice(0, 80) : "",
       isFavorite: Boolean(candidate?.isFavorite),
       isCompleted: Boolean(candidate?.isCompleted),
@@ -696,7 +715,7 @@ async function searchLibraryWithAi(env, payload) {
   const catalog = candidates
     .map(
       (candidate, index) =>
-        `${index + 1}. id=${JSON.stringify(candidate.id)} | series=${candidate.seriesTitle || "未分组"} | name=${candidate.name} | path=${candidate.relativePath} | progress=${candidate.progressLabel || "未知"} | favorite=${candidate.isFavorite ? "yes" : "no"} | completed=${candidate.isCompleted ? "yes" : "no"}`,
+        `${index + 1}. id=${JSON.stringify(candidate.id)} | series=${candidate.seriesTitle || "未分组"} | name=${candidate.name} | path=${candidate.relativePath} | tags=${candidate.tags.join(", ") || "无"} | progress=${candidate.progressLabel || "未知"} | favorite=${candidate.isFavorite ? "yes" : "no"} | completed=${candidate.isCompleted ? "yes" : "no"}`,
     )
     .join("\n");
 
@@ -722,6 +741,42 @@ async function searchLibraryWithAi(env, payload) {
     : [];
   const answer = normalizeAiLibrarySearchAnswer(parsed, matchIds);
   return { answer, matchIds };
+}
+
+async function suggestTagMergeWithAi(env, payload) {
+  const newTags = Array.isArray(payload?.newTags)
+    ? payload.newTags.filter((tag) => typeof tag === "string" && tag.trim()).map((tag) => tag.trim().slice(0, 40)).slice(0, 12)
+    : [];
+  const existingTags = Array.isArray(payload?.existingTags)
+    ? payload.existingTags.filter((tag) => typeof tag === "string" && tag.trim()).map((tag) => tag.trim().slice(0, 40)).slice(0, 80)
+    : [];
+  if (!newTags.length || !existingTags.length) return {};
+
+  const raw = await callDeepSeek(
+    env,
+    [
+      {
+        role: "system",
+        content:
+          "你是视频标签整理助手。只能判断用户给出的新标签是否和已有标签语义相同或非常接近。返回严格 JSON：{\"newTag\":\"新标签\",\"existingTag\":\"已有标签\",\"reason\":\"简短中文原因\"}。如果没有明确合并建议，返回 {}。",
+      },
+      {
+        role: "user",
+        content: `新标签：${newTags.join("、")}\n已有标签：${existingTags.join("、")}`,
+      },
+    ],
+    { responseFormat: { type: "json_object" } },
+  );
+  const parsed = parseAiJsonObject(raw) ?? {};
+  const newTag = typeof parsed?.newTag === "string" && newTags.includes(parsed.newTag) ? parsed.newTag : "";
+  const existingTag =
+    typeof parsed?.existingTag === "string" && existingTags.includes(parsed.existingTag) ? parsed.existingTag : "";
+  if (!newTag || !existingTag) return {};
+  return {
+    newTag,
+    existingTag,
+    reason: typeof parsed?.reason === "string" ? parsed.reason.slice(0, 120) : "",
+  };
 }
 
 function createBodyBuffer(body) {
@@ -1161,6 +1216,26 @@ function playerDataApiPlugin(env) {
         return;
       }
 
+      if (url.pathname === "/api/local-config/media-root" && request.method === "POST") {
+        const payload = JSON.parse((await readBody(request)).toString("utf8"));
+        const mediaRoot = await upsertMediaRoot(payload);
+        sendJson(response, 200, {
+          ...publicLocalConfig(await loadAppConfig(), await getTools(), env),
+          mediaRoot,
+        });
+        return;
+      }
+
+      if (url.pathname === "/api/local-config/media-root/local-path" && request.method === "PUT") {
+        const payload = JSON.parse((await readBody(request)).toString("utf8"));
+        const result = await updateMediaRootLocalPath(payload);
+        sendJson(response, 200, {
+          ...publicLocalConfig(result.config, await getTools(), env),
+          mediaRoot: result.mediaRoot,
+        });
+        return;
+      }
+
       if (url.pathname === "/api/cache-status" && request.method === "GET") {
         sendJson(response, 200, await createCacheStatus());
         return;
@@ -1181,6 +1256,12 @@ function playerDataApiPlugin(env) {
       if (url.pathname === "/api/subtitles/embedded/extract" && request.method === "POST") {
         const payload = JSON.parse((await readBody(request)).toString("utf8"));
         sendJson(response, 200, await extractEmbeddedSubtitle(await loadAppConfig(), payload));
+        return;
+      }
+
+      if (url.pathname === "/api/subtitles/embedded/cached" && request.method === "POST") {
+        const payload = JSON.parse((await readBody(request)).toString("utf8"));
+        sendJson(response, 200, await readCachedEmbeddedSubtitle(await loadAppConfig(), payload));
         return;
       }
 
@@ -1205,6 +1286,12 @@ function playerDataApiPlugin(env) {
       if (url.pathname === "/api/ai/library/search" && request.method === "POST") {
         const payload = JSON.parse((await readBody(request)).toString("utf8"));
         sendJson(response, 200, await searchLibraryWithAi(env, payload));
+        return;
+      }
+
+      if (url.pathname === "/api/ai/tags/merge-suggestion" && request.method === "POST") {
+        const payload = JSON.parse((await readBody(request)).toString("utf8"));
+        sendJson(response, 200, await suggestTagMergeWithAi(env, payload));
         return;
       }
 

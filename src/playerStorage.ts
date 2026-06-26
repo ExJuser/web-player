@@ -1,13 +1,16 @@
 import type {
   FileSystemDirectoryHandle,
   PlaybackProgress,
+  TagMergeDecisionStore,
   PlayerDataStore,
   PlayerLibraryMetadata,
   PlayerPersistentSettings,
   PlayerPreferences,
   ProgressStore,
+  PersistedEmbeddedSubtitle,
   ShortcutAction,
-  ShortcutMap
+  ShortcutMap,
+  VideoTagStore
 } from "./playerTypes";
 import {
   PROGRESS_FILE_NAME,
@@ -47,6 +50,89 @@ export function parseProgressItems(source: unknown): ProgressStore {
     }
   }
   return store;
+}
+
+export function parseVideoTags(source: unknown): VideoTagStore {
+  if (!source || typeof source !== "object" || Array.isArray(source)) return {};
+
+  const store: VideoTagStore = {};
+  for (const [videoId, value] of Object.entries(source)) {
+    if (!Array.isArray(value)) continue;
+    const tags = value
+      .filter((tag): tag is string => typeof tag === "string")
+      .map((tag) => tag.trim())
+      .filter(Boolean);
+    if (tags.length) store[videoId] = tags;
+  }
+  return store;
+}
+
+export function parseTagMergeDecisions(source: unknown): TagMergeDecisionStore {
+  if (!source || typeof source !== "object" || Array.isArray(source)) return {};
+
+  const decisions: TagMergeDecisionStore = {};
+  for (const [key, value] of Object.entries(source)) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+    const decision = value as Partial<TagMergeDecisionStore[string]>;
+    if (
+      typeof decision.from === "string" &&
+      typeof decision.to === "string" &&
+      (decision.decision === "merge" || decision.decision === "keep") &&
+      typeof decision.updatedAt === "number" &&
+      Number.isFinite(decision.updatedAt)
+    ) {
+      decisions[key] = {
+        from: decision.from,
+        to: decision.to,
+        decision: decision.decision,
+        updatedAt: decision.updatedAt,
+      };
+    }
+  }
+  return decisions;
+}
+
+export function parsePersistedEmbeddedSubtitles(source: unknown): PersistedEmbeddedSubtitle[] {
+  if (!Array.isArray(source)) return [];
+
+  return source.flatMap((value) => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+    const subtitle = value as Partial<PersistedEmbeddedSubtitle>;
+    const track = subtitle.embeddedTrack;
+    if (
+      typeof subtitle.id !== "string" ||
+      typeof subtitle.name !== "string" ||
+      typeof subtitle.relativePath !== "string" ||
+      (subtitle.format !== "srt" && subtitle.format !== "vtt") ||
+      typeof subtitle.videoId !== "string" ||
+      !track ||
+      typeof track !== "object" ||
+      Array.isArray(track) ||
+      !Number.isInteger(track.streamIndex) ||
+      typeof track.codec !== "string" ||
+      typeof track.extractable !== "boolean"
+    ) {
+      return [];
+    }
+
+    return [
+      {
+        id: subtitle.id,
+        name: subtitle.name,
+        relativePath: subtitle.relativePath,
+        format: subtitle.format,
+        videoId: subtitle.videoId,
+        embeddedTrack: {
+          streamIndex: track.streamIndex,
+          codec: track.codec,
+          language: typeof track.language === "string" ? track.language : undefined,
+          title: typeof track.title === "string" ? track.title : undefined,
+          extractable: track.extractable,
+          reason: typeof track.reason === "string" ? track.reason : undefined,
+        },
+      },
+    ];
+  });
 }
 
 export function parseShortcuts(source: unknown): ShortcutMap {
@@ -114,6 +200,9 @@ export function parsePlayerDataStore(raw: string): PlayerDataStore {
     favorites?: unknown;
     preferences?: unknown;
     settings?: unknown;
+    videoTags?: unknown;
+    tagMergeDecisions?: unknown;
+    embeddedSubtitles?: unknown;
     metadata?: unknown;
   };
   const progressSource = parsed && typeof parsed === "object" && parsed.items ? parsed.items : parsed;
@@ -126,6 +215,9 @@ export function parsePlayerDataStore(raw: string): PlayerDataStore {
     version: typeof parsed?.version === "number" ? parsed.version : undefined,
     progress: parseProgressItems(progressSource),
     favorites,
+    videoTags: parseVideoTags(parsed?.videoTags),
+    tagMergeDecisions: parseTagMergeDecisions(parsed?.tagMergeDecisions),
+    embeddedSubtitles: parsePersistedEmbeddedSubtitles(parsed?.embeddedSubtitles),
     preferences: parsePlayerPreferences(parsed?.preferences),
     settings: parsePlayerSettings(parsed?.settings),
     metadata:
@@ -137,9 +229,12 @@ export function parsePlayerDataStore(raw: string): PlayerDataStore {
 
 export function createDefaultPlayerDataStore(metadata?: PlayerLibraryMetadata): PlayerDataStore {
   return {
-    version: 4,
+    version: 5,
     progress: {},
     favorites: [],
+    videoTags: {},
+    tagMergeDecisions: {},
+    embeddedSubtitles: [],
     preferences: defaultPlayerPreferences,
     settings: defaultPlayerSettings,
     metadata,
@@ -196,9 +291,12 @@ export async function savePlayerDataStore(libraryId: string, store: PlayerDataSt
       Accept: "application/json",
     },
     body: JSON.stringify({
-      version: 4,
+      version: 5,
       items: store.progress,
       favorites: store.favorites,
+      videoTags: parseVideoTags(store.videoTags),
+      tagMergeDecisions: parseTagMergeDecisions(store.tagMergeDecisions),
+      embeddedSubtitles: parsePersistedEmbeddedSubtitles(store.embeddedSubtitles),
       preferences: getPersistedPlayerPreferences(store.preferences),
       settings: parsePlayerSettings(store.settings),
       metadata: store.metadata,

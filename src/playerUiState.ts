@@ -1,0 +1,89 @@
+type MediaRootForUi = {
+  source?: "browser" | "local";
+  localPath?: string;
+};
+
+type SubtitleForUi = {
+  id: string;
+  name?: string;
+  isManual?: boolean;
+  relativePath?: string;
+  source?: "external" | "manual" | "embedded";
+  format?: "srt" | "vtt";
+  videoId?: string;
+  embeddedTrack?: {
+    streamIndex: number;
+    codec: string;
+    language?: string;
+    title?: string;
+    extractable: boolean;
+    reason?: string;
+  };
+};
+
+type PersistedEmbeddedSubtitleForUi = {
+  id: string;
+  name: string;
+  relativePath: string;
+  format: "srt" | "vtt";
+  videoId: string;
+  embeddedTrack: NonNullable<SubtitleForUi["embeddedTrack"]>;
+};
+
+export function getMediaRootLocalPathAction(root: MediaRootForUi) {
+  if (root.source !== "browser") {
+    return { visible: false, disabled: true, label: "" };
+  }
+
+  const isConfigured = Boolean(root.localPath);
+  return {
+    visible: true,
+    disabled: isConfigured,
+    label: isConfigured ? "本机路径已配置" : "配置本机路径",
+  };
+}
+
+export function createSubtitleControlOptions(subtitles: SubtitleForUi[]) {
+  return [
+    { value: "off", label: "字幕关闭" },
+    ...subtitles.map((subtitle) => ({
+      value: subtitle.id,
+      label: subtitle.isManual ? `手动: ${subtitle.name ?? ""}` : subtitle.name ?? "",
+    })),
+    { value: "manual", label: "选择字幕..." },
+  ];
+}
+
+export function resolveSubtitleSelection(
+  currentSelection: string,
+  subtitles: SubtitleForUi[],
+  options?: { autoSelectFromOff?: boolean },
+) {
+  if (subtitles.some((subtitle) => subtitle.id === currentSelection)) return currentSelection;
+  if (currentSelection === "off" && !options?.autoSelectFromOff) return "off";
+  return subtitles.find((subtitle) => !subtitle.isManual)?.id ?? "off";
+}
+
+export function createPersistedEmbeddedSubtitles(subtitles: SubtitleForUi[]): PersistedEmbeddedSubtitleForUi[] {
+  return subtitles
+    .flatMap((subtitle) => {
+      if (
+        subtitle.source === "embedded" &&
+        subtitle.videoId &&
+        subtitle.relativePath &&
+        subtitle.embeddedTrack
+      ) {
+        return [
+          {
+            id: subtitle.id,
+            name: subtitle.name ?? "内封字幕",
+            relativePath: subtitle.relativePath,
+            format: subtitle.format === "srt" ? "srt" : "vtt",
+            videoId: subtitle.videoId,
+            embeddedTrack: subtitle.embeddedTrack,
+          },
+        ];
+      }
+      return [];
+    });
+}

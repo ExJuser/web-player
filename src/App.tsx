@@ -21,6 +21,7 @@ import {
   SkipForward,
   Star,
   Subtitles,
+  Tags,
   Trash2,
   RefreshCw,
   Moon,
@@ -52,8 +53,10 @@ import type {
   ShortcutAction,
   ShortcutMap,
   SubtitleItem,
+  TagMergeDecisionStore,
   VideoItem,
-  VideoMetadata
+  VideoMetadata,
+  VideoTagStore
 } from "./playerTypes";
 import {
   VIDEO_EXTENSIONS,
@@ -150,6 +153,10 @@ function libraryFolderPathForVideo(video: VideoItem) {
   return directoryPartsOf(video.relativePath)[0] ?? "";
 }
 
+function supportsServerFileAccess(root: LocalMediaRoot | null | undefined) {
+  return Boolean(root && (root.source !== "browser" || root.localPath));
+}
+
 function inferSeriesTitle(video: VideoItem) {
   const normalizedPath = video.relativePath.replace(/\\/g, "/");
   const pathParts = normalizedPath.split("/").filter(Boolean);
@@ -216,7 +223,10 @@ function hasStoredData(store: PlayerDataStore) {
   return Boolean(
     Object.keys(store.progress).length ||
       store.favorites.length ||
-      JSON.stringify(store.preferences) !== JSON.stringify(defaultPlayerPreferences),
+      Object.keys(store.videoTags).length ||
+      Object.keys(store.tagMergeDecisions).length ||
+      store.embeddedSubtitles.length ||
+      JSON.stringify(store.preferences) !== JSON.stringify(defaultPlayerPreferences)
   );
 }
 
@@ -229,6 +239,21 @@ async function ensureDirectoryReadPermission(directory: FileSystemDirectoryHandl
 }
 
 import { ControlSelect } from "./ControlSelect";
+import {
+  createPersistedEmbeddedSubtitles,
+  createSubtitleControlOptions,
+  getMediaRootLocalPathAction,
+  resolveSubtitleSelection,
+} from "./playerUiState";
+import {
+  createTagPairKey,
+  findTagMergeSuggestion,
+  getTagSearchScore,
+  mergeTags,
+  normalizeTagKey,
+  parseTagInput,
+  type TagMergeSuggestion
+} from "./tagUtils";
 import {
   clearRecentFolderHandle,
   createDefaultPlayerDataStore,
@@ -685,11 +710,28 @@ function srtToVtt(raw: string) {
   return `WEBVTT\n\n${cues.join("\n\n")}`;
 }
 
+type LocalMediaRoot = {
+  id: string;
+  label: string;
+  basename: string;
+  path: string;
+  source?: "browser" | "local";
+  localPath?: string;
+};
+
 type LocalConfig = {
-  mediaRoots: Array<{ id: string; label: string; basename: string; path: string }>;
+  mediaRoots: LocalMediaRoot[];
   ffmpeg: { ffmpeg: boolean; ffprobe: boolean };
   ai: { configured: boolean; model: string };
   bangumi: { configured: boolean; proxyConfigured: boolean };
+};
+
+type UpsertMediaRootResponse = LocalConfig & {
+  mediaRoot: LocalMediaRoot;
+};
+
+type UpdateMediaRootLocalPathResponse = LocalConfig & {
+  mediaRoot: LocalMediaRoot;
 };
 
 type CacheStatusItem = {
@@ -737,6 +779,7 @@ type LibrarySearchCandidate = {
   name: string;
   relativePath: string;
   seriesTitle: string;
+  tags: string[];
   progressLabel: string;
   isFavorite: boolean;
   isCompleted: boolean;
@@ -745,6 +788,17 @@ type LibrarySearchCandidate = {
 type LibraryAiSearchResponse = {
   answer: string;
   matchIds: string[];
+};
+
+type AiTagMergeSuggestionResponse = {
+  existingTag?: string;
+  newTag?: string;
+  reason?: string;
+};
+
+type TagMergePrompt = {
+  pendingTags: string[];
+  suggestion: TagMergeSuggestion;
 };
 
 type BangumiSubject = {
@@ -768,6 +822,19 @@ type BangumiSeriesMatch = {
   candidates: BangumiSubject[];
   error?: string;
   updatedAt?: number;
+};
+
+type MediaRootLabelPrompt = {
+  directoryName: string;
+  value: string;
+  resolve: (value: string | null) => void;
+};
+
+type MediaRootLocalPathDialog = {
+  root: LocalMediaRoot;
+  value: string;
+  error: string;
+  isSaving: boolean;
 };
 
 type SubtitleCue = {
@@ -794,6 +861,13 @@ type ExtractedEmbeddedSubtitle = {
   format: "vtt";
   text: string;
 };
+
+function normalizeLocalConfig(config: LocalConfig): LocalConfig {
+  return {
+    ...config,
+    bangumi: config.bangumi ?? { configured: false, proxyConfigured: false },
+  };
+}
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, {
@@ -888,6 +962,50 @@ async function readSubtitleText(subtitle: SubtitleItem) {
   if (subtitle.rawText) return normalizeSubtitleText(subtitle.rawText);
   if (!subtitle.file) return "";
   return normalizeSubtitleText(await subtitle.file.text());
+}
+
+async function restoreCachedEmbeddedSubtitles(
+  persistedSubtitles: PlayerDataStore["embeddedSubtitles"],
+  videos: VideoItem[],
+  fallbackRootId: string | null,
+) {
+  const videosById = new Map(videos.map((video) => [video.id, video]));
+  const restored = await Promise.all(
+    persistedSubtitles.map(async (persisted) => {
+      const video = videosById.get(persisted.videoId);
+      const relativePath = video?.relativePath ?? persisted.relativePath.split("#subtitle-")[0];
+      const rootId = video?.mediaRootId ?? fallbackRootId;
+      if (!rootId || !relativePath || !persisted.embeddedTrack) return null;
+
+      try {
+        const payload = await fetchJson<ExtractedEmbeddedSubtitle>("/api/subtitles/embedded/cached", {
+          method: "POST",
+          body: JSON.stringify({
+            rootId,
+            relativePath,
+            streamIndex: persisted.embeddedTrack.streamIndex,
+          }),
+        });
+        if (!payload.text.trim()) return null;
+        const subtitle: SubtitleItem = {
+          ...persisted,
+          source: "embedded",
+          rawText: payload.text,
+          format: payload.format,
+          url: "",
+          videoId: video?.id ?? persisted.videoId,
+        };
+        return {
+          ...subtitle,
+          url: await createSubtitleUrl(subtitle),
+        };
+      } catch {
+        return null;
+      }
+    }),
+  );
+
+  return restored.filter((subtitle): subtitle is SubtitleItem => Boolean(subtitle));
 }
 
 function parseSubtitleTimestamp(value: string) {
@@ -1295,9 +1413,12 @@ export default function App() {
   const playerPreferencesRef = useRef<PlayerPreferences>(defaultPlayerPreferences);
   const playerSettingsRef = useRef(defaultPlayerSettings);
   const favoriteVideoIdsRef = useRef(new Set<string>());
+  const videoTagsRef = useRef<VideoTagStore>({});
+  const tagMergeDecisionsRef = useRef<TagMergeDecisionStore>({});
   const videosRef = useRef<VideoItem[]>([]);
   const subtitlesRef = useRef<SubtitleItem[]>([]);
   const localConfigRef = useRef<LocalConfig | null>(null);
+  const cachedEmbeddedSubtitleLookupKeysRef = useRef(new Set<string>());
   const bangumiMatchesBySeriesKeyRef = useRef<Record<string, BangumiSeriesMatch>>({});
   const bangumiMatchRunIdRef = useRef(0);
   const thumbnailLoadRunIdRef = useRef(0);
@@ -1317,6 +1438,8 @@ export default function App() {
   const didHoldSpeedStartPlaybackRef = useRef(false);
   const wasHoldSpeedPlaybackPausedRef = useRef(false);
   const startFromBeginningVideoIdRef = useRef<string | null>(null);
+  const autoSubtitleSelectionVideoIdRef = useRef<string | null>(null);
+  const lastSubtitleSelectionVideoIdRef = useRef<string | null>(null);
   const [videos, setVideos] = useState<VideoItem[]>([]);
   const [subtitles, setSubtitles] = useState<SubtitleItem[]>([]);
   const [localConfig, setLocalConfig] = useState<LocalConfig | null>(null);
@@ -1358,6 +1481,12 @@ export default function App() {
   const [selectedSubtitleId, setSelectedSubtitleId] = useState<string>("off");
   const [progressStore, setProgressStore] = useState<ProgressStore>({});
   const [favoriteVideoIds, setFavoriteVideoIds] = useState<Set<string>>(() => new Set());
+  const [videoTags, setVideoTags] = useState<VideoTagStore>({});
+  const [tagMergeDecisions, setTagMergeDecisions] = useState<TagMergeDecisionStore>({});
+  const [isTagDialogOpen, setIsTagDialogOpen] = useState(false);
+  const [tagInput, setTagInput] = useState("");
+  const [tagMessage, setTagMessage] = useState("");
+  const [tagMergePrompt, setTagMergePrompt] = useState<TagMergePrompt | null>(null);
   const [playlistFilter, setPlaylistFilter] = useState<PlaylistFilter>("all");
   const [playlistSortMode, setPlaylistSortMode] = useState<PlaylistSortMode>(
     defaultPlayerPreferences.playlistSortMode,
@@ -1380,6 +1509,8 @@ export default function App() {
   const [isPrivacyMode, setIsPrivacyMode] = useState(false);
   const [theme, setTheme] = useState<AppTheme>(readStoredTheme);
   const [deleteCandidate, setDeleteCandidate] = useState<VideoItem | null>(null);
+  const [mediaRootLabelPrompt, setMediaRootLabelPrompt] = useState<MediaRootLabelPrompt | null>(null);
+  const [mediaRootLocalPathDialog, setMediaRootLocalPathDialog] = useState<MediaRootLocalPathDialog | null>(null);
   const [skipFolderAccessPrompt, setSkipFolderAccessPrompt] = useState(defaultPlayerSettings.skipFolderAccessPrompt);
   const [message, setMessage] = useState("选择一个本地文件夹开始播放");
   const [isPlaying, setIsPlaying] = useState(false);
@@ -1432,9 +1563,12 @@ export default function App() {
 
   const buildPlayerDataStore = useCallback(
     (overrides?: Partial<PlayerDataStore>): PlayerDataStore => ({
-      version: 4,
+      version: 5,
       progress: progressStoreRef.current,
       favorites: Array.from(favoriteVideoIdsRef.current),
+      videoTags: videoTagsRef.current,
+      tagMergeDecisions: tagMergeDecisionsRef.current,
+      embeddedSubtitles: createPersistedEmbeddedSubtitles(subtitlesRef.current),
       preferences: playerPreferencesRef.current,
       settings: playerSettingsRef.current,
       metadata: libraryMetadataRef.current,
@@ -1483,6 +1617,7 @@ export default function App() {
     () => videos.find((item) => item.id === currentVideoId) ?? null,
     [currentVideoId, videos],
   );
+  const currentVideoTags = currentVideo ? videoTags[currentVideo.id] ?? [] : [];
   const seriesOptionsKey = useMemo(
     () => seriesOptions.map((series) => `${series.key}\t${series.title}\t${series.count}`).join("\n"),
     [seriesOptions],
@@ -1564,9 +1699,10 @@ export default function App() {
         progress,
         progressPercent,
         seriesTitle: seriesTitleByVideoId.get(video.id) ?? inferSeriesTitle(video),
+        tags: videoTags[video.id] ?? [],
       };
     },
-    [progressStore, seriesTitleByVideoId],
+    [progressStore, seriesTitleByVideoId, videoTags],
   );
   const videosByLibraryFolderKey = useMemo(() => {
     const grouped = new Map<string, VideoItem[]>();
@@ -1700,8 +1836,16 @@ export default function App() {
     [findMatchedSubtitleForVideo, homeRecapCard],
   );
   const homeRecapMediaRootId = homeRecapCard?.video.mediaRootId ?? mediaRootId;
+  const homeRecapMediaRoot = useMemo(() => {
+    const roots = localConfig?.mediaRoots ?? [];
+    return homeRecapMediaRootId ? roots.find((root) => root.id === homeRecapMediaRootId) ?? null : null;
+  }, [homeRecapMediaRootId, localConfig]);
   const canUseHomeEmbeddedSubtitles = Boolean(
-    homeRecapCard && homeRecapMediaRootId && localConfig?.ffmpeg.ffmpeg && localConfig.ffmpeg.ffprobe,
+    homeRecapCard &&
+      homeRecapMediaRootId &&
+      supportsServerFileAccess(homeRecapMediaRoot) &&
+      localConfig?.ffmpeg.ffmpeg &&
+      localConfig.ffmpeg.ffprobe,
   );
   const canUseHomeRecapSubtitle = Boolean(homeRecapSubtitle || canUseHomeEmbeddedSubtitles);
   const searchLibraryLocally = useCallback(
@@ -1726,6 +1870,7 @@ export default function App() {
           video.relativePath,
           baseNameWithoutExtension(video.name),
         ].map(normalizeLibrarySearchText);
+        const tags = videoTags[video.id] ?? [];
         let score = 0;
         const reasons: string[] = [];
 
@@ -1753,6 +1898,11 @@ export default function App() {
           score += 6;
           reasons.push("路径匹配");
         }
+        const tagScore = getTagSearchScore(query, tags);
+        if (tagScore > 0) {
+          score += tagScore;
+          reasons.push("标签匹配");
+        }
 
         tokens.forEach((token) => {
           if (searchable[0].includes(token)) score += 10;
@@ -1761,6 +1911,7 @@ export default function App() {
           if (searchable[3].includes(token)) score += 5;
           if (searchable[4].includes(token)) score += 2;
           if (searchable[5].includes(token)) score += 1;
+          score += Math.floor(getTagSearchScore(token, tags) / 4);
         });
 
         const progress = progressStore[video.id];
@@ -1797,7 +1948,7 @@ export default function App() {
         .sort((a, b) => b.score - a.score || collator.compare(a.title, b.title))
         .slice(0, limit);
     },
-    [createLibraryFolderResult, favoriteVideoIds, progressStore, videos, videosByLibraryFolderKey],
+    [createLibraryFolderResult, favoriteVideoIds, progressStore, videoTags, videos, videosByLibraryFolderKey],
   );
   const createLibrarySearchCandidates = useCallback(
     (localResults: LibrarySearchResult[]): LibrarySearchCandidate[] => {
@@ -1812,6 +1963,7 @@ export default function App() {
           name: video.name,
           relativePath: video.relativePath,
           seriesTitle: card.seriesTitle ?? "",
+          tags: videoTags[video.id] ?? [],
           progressLabel: formatLibrarySearchProgressLabel(card),
           isFavorite: favoriteVideoIds.has(video.id),
           isCompleted: Boolean(card.progress?.completed),
@@ -1828,7 +1980,7 @@ export default function App() {
       playlistVideos.forEach(addVideo);
       return candidates;
     },
-    [createHomeVideoCard, favoriteHomeCards, favoriteVideoIds, playlistVideos, recentHomeCards, resumableHomeCards],
+    [createHomeVideoCard, favoriteHomeCards, favoriteVideoIds, playlistVideos, recentHomeCards, resumableHomeCards, videoTags],
   );
   const currentVideoSubtitles = useMemo(() => {
     if (!currentVideo) return [];
@@ -1840,6 +1992,10 @@ export default function App() {
         basePathOf(subtitle.relativePath) === currentBasePath,
     );
   }, [currentVideo, subtitles]);
+  const subtitleControlOptions = useMemo(
+    () => createSubtitleControlOptions(currentVideoSubtitles),
+    [currentVideoSubtitles],
+  );
   const selectedSubtitle = currentVideoSubtitles.find((subtitle) => subtitle.id === selectedSubtitleId) ?? null;
   const effectivePlaybackRate = isHoldSpeedActive ? holdPlaybackRate : playbackRate;
   const playbackRateOptions = useMemo(() => {
@@ -1868,14 +2024,116 @@ export default function App() {
     return matches.length === 1 ? matches[0] : null;
   }, [currentMediaRootId, localConfig]);
   const canUseEmbeddedSubtitles = Boolean(
-    currentVideo && currentMediaRootId && localConfig?.ffmpeg.ffmpeg && localConfig.ffmpeg.ffprobe,
+    currentVideo &&
+      currentMediaRootId &&
+      supportsServerFileAccess(currentMediaLibraryRoot) &&
+      localConfig?.ffmpeg.ffmpeg &&
+      localConfig.ffmpeg.ffprobe,
   );
+  const currentMediaRootLocalPathAction = currentMediaLibraryRoot
+    ? getMediaRootLocalPathAction(currentMediaLibraryRoot)
+    : null;
 
   const resolveMediaRootId = useCallback((directoryName: string) => {
     const roots = localConfigRef.current?.mediaRoots ?? [];
     const matches = roots.filter((root) => root.basename === directoryName);
     return matches.length === 1 ? matches[0].id : null;
   }, []);
+
+  const requestMediaRootLabel = useCallback((directoryName: string) => {
+    return new Promise<string | null>((resolve) => {
+      setMediaRootLabelPrompt({ directoryName, value: directoryName, resolve });
+    });
+  }, []);
+
+  const closeMediaRootLabelPrompt = useCallback(
+    (value: string | null) => {
+      if (!mediaRootLabelPrompt) return;
+      mediaRootLabelPrompt.resolve(value);
+      setMediaRootLabelPrompt(null);
+    },
+    [mediaRootLabelPrompt],
+  );
+
+  const submitMediaRootLabelPrompt = useCallback(() => {
+    const label = mediaRootLabelPrompt?.value.trim();
+    if (!label) return;
+    closeMediaRootLabelPrompt(label);
+  }, [closeMediaRootLabelPrompt, mediaRootLabelPrompt]);
+
+  const openMediaRootLocalPathDialog = useCallback((root: LocalMediaRoot) => {
+    setMediaRootLocalPathDialog({
+      root,
+      value: root.localPath ?? "",
+      error: "",
+      isSaving: false,
+    });
+  }, []);
+
+  const closeMediaRootLocalPathDialog = useCallback(() => {
+    setMediaRootLocalPathDialog((previous) => (previous?.isSaving ? previous : null));
+  }, []);
+
+  const updateMediaRootLocalPathValue = useCallback((value: string) => {
+    setMediaRootLocalPathDialog((previous) => (previous ? { ...previous, value, error: "" } : previous));
+  }, []);
+
+  const submitMediaRootLocalPath = useCallback(async () => {
+    if (!mediaRootLocalPathDialog || mediaRootLocalPathDialog.isSaving) return;
+    const localPath = mediaRootLocalPathDialog.value.trim();
+    if (!localPath) {
+      setMediaRootLocalPathDialog((previous) =>
+        previous ? { ...previous, error: "请输入本机绝对路径。" } : previous,
+      );
+      return;
+    }
+
+    setMediaRootLocalPathDialog((previous) => (previous ? { ...previous, isSaving: true, error: "" } : previous));
+    try {
+      const response = await fetchJson<UpdateMediaRootLocalPathResponse>("/api/local-config/media-root/local-path", {
+        method: "PUT",
+        body: JSON.stringify({
+          id: mediaRootLocalPathDialog.root.id,
+          localPath,
+        }),
+      });
+      const nextConfig = normalizeLocalConfig(response);
+      setLocalConfig(nextConfig);
+      localConfigRef.current = nextConfig;
+      setMediaRootLocalPathDialog(null);
+      setMessage("已保存媒体库本机路径。");
+    } catch (error) {
+      setMediaRootLocalPathDialog((previous) =>
+        previous
+          ? {
+              ...previous,
+              isSaving: false,
+              error: error instanceof Error ? error.message : "保存本机路径失败。",
+            }
+          : previous,
+      );
+    }
+  }, [mediaRootLocalPathDialog]);
+
+  const ensureMediaRootForDirectory = useCallback(
+    async (directory: FileSystemDirectoryHandle) => {
+      const existingRootId = resolveMediaRootId(directory.name);
+      if (existingRootId) return existingRootId;
+
+      const label = (await requestMediaRootLabel(directory.name))?.trim();
+      if (!label) return null;
+
+      const response = await fetchJson<UpsertMediaRootResponse>("/api/local-config/media-root", {
+        method: "POST",
+        body: JSON.stringify({ label, path: directory.name, source: "browser" }),
+      });
+      const nextConfig = normalizeLocalConfig(response);
+      setLocalConfig(nextConfig);
+      localConfigRef.current = nextConfig;
+      return response.mediaRoot.id;
+    },
+    [requestMediaRootLabel, resolveMediaRootId],
+  );
 
   const clearControlsHideTimer = useCallback(() => {
     if (!controlsHideTimerRef.current) return;
@@ -1912,10 +2170,7 @@ export default function App() {
     fetchJson<LocalConfig>("/api/local-config")
       .then((config) => {
         if (isCancelled) return;
-        const normalizedConfig = {
-          ...config,
-          bangumi: config.bangumi ?? { configured: false, proxyConfigured: false },
-        };
+        const normalizedConfig = normalizeLocalConfig(config);
         setLocalConfig(normalizedConfig);
         localConfigRef.current = normalizedConfig;
       })
@@ -2080,12 +2335,168 @@ export default function App() {
       });
   }, [saveCurrentPlayerDataStore]);
 
+  const replaceVideoTags = useCallback((nextVideoTags: VideoTagStore, successMessage?: string) => {
+    videoTagsRef.current = nextVideoTags;
+    setVideoTags(nextVideoTags);
+
+    saveCurrentPlayerDataStore({
+      videoTags: nextVideoTags,
+      tagMergeDecisions: tagMergeDecisionsRef.current,
+    })
+      .then(() => {
+        if (successMessage) setTagMessage(successMessage);
+      })
+      .catch(() => {
+        setTagMessage("无法写入项目数据目录，请确认通过 npm run dev 或 npm run preview 启动。");
+      });
+  }, [saveCurrentPlayerDataStore]);
+
+  const replaceTagMergeDecisions = useCallback((nextDecisions: TagMergeDecisionStore) => {
+    tagMergeDecisionsRef.current = nextDecisions;
+    setTagMergeDecisions(nextDecisions);
+    saveCurrentPlayerDataStore({
+      videoTags: videoTagsRef.current,
+      tagMergeDecisions: nextDecisions,
+    }).catch(() => {
+      setTagMessage("无法保存标签合并选择。");
+    });
+  }, [saveCurrentPlayerDataStore]);
+
+  const getAllLibraryTags = useCallback(() => {
+    const seen = new Set<string>();
+    const tags: string[] = [];
+    Object.values(videoTagsRef.current).flat().forEach((tag) => {
+      const key = normalizeTagKey(tag);
+      if (!key || seen.has(key)) return;
+      seen.add(key);
+      tags.push(tag);
+    });
+    return tags;
+  }, []);
+
+  const addTagsToCurrentVideo = useCallback(async (tags: string[], options?: { skipPrompt?: boolean }) => {
+    if (!currentVideo) return;
+    const existingVideoTags = videoTagsRef.current[currentVideo.id] ?? [];
+    const allTags = getAllLibraryTags();
+    const incomingTags = parseTagInput(tags.join(" "));
+    if (!incomingTags.length) {
+      setTagMessage("请输入至少一个标签。");
+      return;
+    }
+
+    if (!options?.skipPrompt) {
+      const suggestion = incomingTags
+        .map((tag) => findTagMergeSuggestion(tag, allTags, tagMergeDecisionsRef.current))
+        .find((item): item is TagMergeSuggestion => Boolean(item));
+      if (suggestion) {
+        setTagMergePrompt({ pendingTags: incomingTags, suggestion });
+        setTagMessage("");
+        return;
+      }
+
+      if (localConfig?.ai.configured && allTags.length) {
+        try {
+          const aiSuggestion = await fetchJson<AiTagMergeSuggestionResponse>("/api/ai/tags/merge-suggestion", {
+            method: "POST",
+            body: JSON.stringify({ newTags: incomingTags, existingTags: allTags }),
+          });
+          if (aiSuggestion.newTag && aiSuggestion.existingTag) {
+            setTagMergePrompt({
+              pendingTags: incomingTags,
+              suggestion: {
+                newTag: aiSuggestion.newTag,
+                existingTag: aiSuggestion.existingTag,
+                reason: "相似标签",
+                score: 0.86,
+              },
+            });
+            setTagMessage(aiSuggestion.reason || "");
+            return;
+          }
+        } catch {
+          setTagMessage("AI 标签合并建议不可用，已使用离线规则。");
+        }
+      }
+    }
+
+    const nextTags = mergeTags(existingVideoTags, incomingTags);
+    const nextVideoTags = {
+      ...videoTagsRef.current,
+      [currentVideo.id]: nextTags,
+    };
+    replaceVideoTags(nextVideoTags, `已保存 ${nextTags.length} 个标签。`);
+    setTagInput("");
+    setTagMergePrompt(null);
+  }, [currentVideo, getAllLibraryTags, localConfig, replaceVideoTags]);
+
+  const submitTagInput = useCallback(() => {
+    void addTagsToCurrentVideo(parseTagInput(tagInput));
+  }, [addTagsToCurrentVideo, tagInput]);
+
+  const removeTagFromCurrentVideo = useCallback((tag: string) => {
+    if (!currentVideo) return;
+    const tagKey = normalizeTagKey(tag);
+    const nextTags = (videoTagsRef.current[currentVideo.id] ?? []).filter((item) => normalizeTagKey(item) !== tagKey);
+    const nextVideoTags = { ...videoTagsRef.current };
+    if (nextTags.length) {
+      nextVideoTags[currentVideo.id] = nextTags;
+    } else {
+      delete nextVideoTags[currentVideo.id];
+    }
+    replaceVideoTags(nextVideoTags, "标签已移除。");
+  }, [currentVideo, replaceVideoTags]);
+
+  const applyTagMergeSuggestion = useCallback(() => {
+    if (!tagMergePrompt || !currentVideo) return;
+    const { suggestion, pendingTags } = tagMergePrompt;
+    const pairKey = createTagPairKey(suggestion.newTag, suggestion.existingTag);
+    const nextDecisions = {
+      ...tagMergeDecisionsRef.current,
+      [pairKey]: {
+        from: suggestion.newTag,
+        to: suggestion.existingTag,
+        decision: "merge" as const,
+        updatedAt: Date.now(),
+      },
+    };
+    tagMergeDecisionsRef.current = nextDecisions;
+    setTagMergeDecisions(nextDecisions);
+    const mergedTags = pendingTags.map((tag) =>
+      normalizeTagKey(tag) === normalizeTagKey(suggestion.newTag) ? suggestion.existingTag : tag,
+    );
+    void addTagsToCurrentVideo(mergedTags, { skipPrompt: true });
+    saveCurrentPlayerDataStore({
+      videoTags: videoTagsRef.current,
+      tagMergeDecisions: nextDecisions,
+    }).catch(() => setTagMessage("无法保存标签合并选择。"));
+  }, [addTagsToCurrentVideo, currentVideo, saveCurrentPlayerDataStore, tagMergePrompt]);
+
+  const keepTagMergeSuggestion = useCallback(() => {
+    if (!tagMergePrompt) return;
+    const { suggestion, pendingTags } = tagMergePrompt;
+    const pairKey = createTagPairKey(suggestion.newTag, suggestion.existingTag);
+    replaceTagMergeDecisions({
+      ...tagMergeDecisionsRef.current,
+      [pairKey]: {
+        from: suggestion.newTag,
+        to: suggestion.existingTag,
+        decision: "keep",
+        updatedAt: Date.now(),
+      },
+    });
+    void addTagsToCurrentVideo(pendingTags, { skipPrompt: true });
+  }, [addTagsToCurrentVideo, replaceTagMergeDecisions, tagMergePrompt]);
+
   const clearCurrentLibraryRuntimeData = useCallback(() => {
     progressStoreRef.current = {};
     favoriteVideoIdsRef.current = new Set();
+    videoTagsRef.current = {};
+    tagMergeDecisionsRef.current = {};
     clearedProgressVideoIdsRef.current = new Set(videosRef.current.map((video) => video.id));
     setProgressStore({});
     setFavoriteVideoIds(new Set());
+    setVideoTags({});
+    setTagMergeDecisions({});
     setHomeProgressRecap("");
     setHomeProgressRecapMessage("");
     setHomeProgressRecapVideoId("");
@@ -2463,7 +2874,9 @@ export default function App() {
         const nextVideos = videosRef.current.filter((item) => item.id !== video.id);
         const nextProgressStore = { ...progressStoreRef.current };
         const nextFavoriteVideoIds = new Set(favoriteVideoIdsRef.current);
+        const nextVideoTags = { ...videoTagsRef.current };
         delete nextProgressStore[video.id];
+        delete nextVideoTags[video.id];
         nextFavoriteVideoIds.delete(video.id);
         clearedProgressVideoIdsRef.current.delete(video.id);
         if (video.thumbnailUrl) URL.revokeObjectURL(video.thumbnailUrl);
@@ -2472,9 +2885,11 @@ export default function App() {
         videosRef.current = nextVideos;
         progressStoreRef.current = nextProgressStore;
         favoriteVideoIdsRef.current = nextFavoriteVideoIds;
+        videoTagsRef.current = nextVideoTags;
         setVideos(nextVideos);
         setProgressStore(nextProgressStore);
         setFavoriteVideoIds(nextFavoriteVideoIds);
+        setVideoTags(nextVideoTags);
 
         if (video.id === currentVideoId) {
           videoRef.current?.pause();
@@ -2493,9 +2908,12 @@ export default function App() {
 
         if (libraryIdRef.current) {
           await savePlayerDataStore(libraryIdRef.current, {
-            version: 4,
+            version: 5,
             progress: nextProgressStore,
             favorites: Array.from(nextFavoriteVideoIds),
+            videoTags: nextVideoTags,
+            tagMergeDecisions: tagMergeDecisionsRef.current,
+            embeddedSubtitles: createPersistedEmbeddedSubtitles(subtitlesRef.current),
             preferences: playerPreferencesRef.current,
             settings: playerSettingsRef.current,
             metadata: libraryMetadataRef.current,
@@ -2590,6 +3008,7 @@ export default function App() {
       resetHoldSpeedState();
       setActiveView("player");
       pendingAutoPlayVideoIdRef.current = videoId;
+      autoSubtitleSelectionVideoIdRef.current = videoId;
       isMainVideoLoadingRef.current = true;
       setIsMainVideoLoading(true);
       setCurrentVideoId(videoId);
@@ -2804,7 +3223,10 @@ export default function App() {
   );
 
   const loadDirectoryMedia = useCallback(
-    async (directory: FileSystemDirectoryHandle, options?: { remember?: boolean; restored?: boolean }) => {
+    async (
+      directory: FileSystemDirectoryHandle,
+      options?: { remember?: boolean; restored?: boolean; promptForLabel?: boolean },
+    ) => {
       setIsFolderDialogOpen(false);
       setIsScanning(true);
       setMessage(options?.restored ? "正在恢复上次文件夹..." : "正在扫描视频文件...");
@@ -2818,7 +3240,17 @@ export default function App() {
         return;
       }
 
-      const nextMediaRootId = resolveMediaRootId(directory.name);
+      const nextMediaRootId = options?.promptForLabel
+        ? await ensureMediaRootForDirectory(directory)
+        : resolveMediaRootId(directory.name);
+      if (options?.promptForLabel && !nextMediaRootId) {
+        if (options?.remember) {
+          await clearRecentFolderHandle().catch(() => undefined);
+        }
+        setMessage("已取消添加媒体库");
+        return;
+      }
+
       let media = createEmptyMediaCollection();
       directoryRef.current = directory;
       libraryIdRef.current = null;
@@ -2838,10 +3270,14 @@ export default function App() {
       subtitlesRef.current = [];
       progressStoreRef.current = {};
       favoriteVideoIdsRef.current = new Set();
+      videoTagsRef.current = {};
+      tagMergeDecisionsRef.current = {};
       setVideos([]);
       setSubtitles([]);
       setProgressStore({});
       setFavoriteVideoIds(new Set());
+      setVideoTags({});
+      setTagMergeDecisions({});
       setSelectedSubtitleId("off");
       setPlaylistFilter("all");
       setCurrentVideoId(null);
@@ -2897,8 +3333,10 @@ export default function App() {
       if (isProjectStorageAvailable && legacyDataStore && !hasStoredData(nextDataStore)) {
         nextDataStore = {
           ...legacyDataStore,
-          version: 4,
+          version: 5,
           settings: nextDataStore.settings,
+          videoTags: nextDataStore.videoTags,
+          tagMergeDecisions: nextDataStore.tagMergeDecisions,
           metadata,
         };
         try {
@@ -2915,10 +3353,27 @@ export default function App() {
         savePlayerDataStore(metadata.id, nextDataStore).catch(() => undefined);
       }
 
+      const restoredEmbeddedSubtitles = await restoreCachedEmbeddedSubtitles(
+        nextDataStore.embeddedSubtitles,
+        media.videos,
+        nextMediaRootId,
+      );
+      if (restoredEmbeddedSubtitles.length) {
+        const restoredIds = new Set(restoredEmbeddedSubtitles.map((subtitle) => subtitle.id));
+        media = {
+          ...media,
+          subtitles: [...media.subtitles.filter((subtitle) => !restoredIds.has(subtitle.id)), ...restoredEmbeddedSubtitles],
+        };
+        subtitlesRef.current = media.subtitles;
+        setSubtitles(media.subtitles);
+      }
+
       progressStoreRef.current = nextDataStore.progress;
       playerPreferencesRef.current = nextDataStore.preferences;
       playerSettingsRef.current = nextDataStore.settings;
       favoriteVideoIdsRef.current = new Set(nextDataStore.favorites);
+      videoTagsRef.current = nextDataStore.videoTags;
+      tagMergeDecisionsRef.current = nextDataStore.tagMergeDecisions;
       setProgressStore(nextDataStore.progress);
       setPlaylistSortMode(nextDataStore.preferences.playlistSortMode);
       setIsPlaylistSortReversed(nextDataStore.preferences.isPlaylistSortReversed);
@@ -2929,6 +3384,8 @@ export default function App() {
       setVolume(nextDataStore.settings.volume);
       setSkipFolderAccessPrompt(nextDataStore.settings.skipFolderAccessPrompt);
       setFavoriteVideoIds(new Set(nextDataStore.favorites));
+      setVideoTags(nextDataStore.videoTags);
+      setTagMergeDecisions(nextDataStore.tagMergeDecisions);
 
       if (media.videos.length) {
         const resumeTarget = getLatestResumableVideo(media.videos, nextDataStore.progress);
@@ -2953,7 +3410,7 @@ export default function App() {
         await writeRecentFolderHandle(directory).catch(() => undefined);
       }
     },
-    [resolveMediaRootId, revokeVideoUrls],
+    [ensureMediaRootForDirectory, resolveMediaRootId, revokeVideoUrls],
   );
 
   const loadFileMedia = useCallback(
@@ -2979,6 +3436,8 @@ export default function App() {
       setSubtitleAnswer("");
       setAiMessage("");
       progressStoreRef.current = {};
+      videoTagsRef.current = {};
+      tagMergeDecisionsRef.current = {};
       playerPreferencesRef.current = {
         playlistSortMode,
         isPlaylistSortReversed,
@@ -2990,6 +3449,8 @@ export default function App() {
       favoriteVideoIdsRef.current = new Set();
       setProgressStore({});
       setFavoriteVideoIds(new Set());
+      setVideoTags({});
+      setTagMergeDecisions({});
       setIsSeriesMode(playerPreferencesRef.current.isSeriesMode);
       setSelectedSeriesKey(playerPreferencesRef.current.selectedSeriesKey);
       revokeVideoUrls(videosRef.current);
@@ -3058,7 +3519,7 @@ export default function App() {
 
     try {
       const directory = await window.showDirectoryPicker({ mode: "read" });
-      await loadDirectoryMedia(directory, { remember: true });
+      await loadDirectoryMedia(directory, { remember: true, promptForLabel: true });
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
         setMessage("已取消选择文件夹");
@@ -3108,7 +3569,7 @@ export default function App() {
         ).filter((handle): handle is FileSystemDirectoryHandle | FileSystemFileHandle => Boolean(handle));
         const directory = handles.find((handle): handle is FileSystemDirectoryHandle => handle.kind === "directory");
         if (directory) {
-          await loadDirectoryMedia(directory, { remember: true });
+          await loadDirectoryMedia(directory, { remember: true, promptForLabel: true });
           return;
         }
 
@@ -3274,6 +3735,11 @@ export default function App() {
 
   useEffect(() => {
     if (!window.showDirectoryPicker) return;
+    if (!localConfig) return;
+    if (!localConfig.mediaRoots.length) {
+      clearRecentFolderHandle().catch(() => undefined);
+      return;
+    }
 
     let isCancelled = false;
     const restoreRecentFolder = async () => {
@@ -3297,7 +3763,7 @@ export default function App() {
     return () => {
       isCancelled = true;
     };
-  }, [loadDirectoryMedia]);
+  }, [loadDirectoryMedia, localConfig]);
 
   useEffect(() => {
     return () => {
@@ -3462,12 +3928,27 @@ export default function App() {
 
   useEffect(() => {
     if (!currentVideo) {
+      autoSubtitleSelectionVideoIdRef.current = null;
+      lastSubtitleSelectionVideoIdRef.current = null;
       setSelectedSubtitleId("off");
       return;
     }
 
-    const matchedSubtitle = currentVideoSubtitles.find((subtitle) => !subtitle.isManual);
-    setSelectedSubtitleId(matchedSubtitle?.id ?? "off");
+    if (lastSubtitleSelectionVideoIdRef.current !== currentVideo.id) {
+      lastSubtitleSelectionVideoIdRef.current = currentVideo.id;
+      autoSubtitleSelectionVideoIdRef.current = currentVideo.id;
+    }
+
+    setSelectedSubtitleId((currentSelection) => {
+      const shouldAutoSelectFromOff = autoSubtitleSelectionVideoIdRef.current === currentVideo.id;
+      const nextSelection = resolveSubtitleSelection(currentSelection, currentVideoSubtitles, {
+        autoSelectFromOff: shouldAutoSelectFromOff,
+      });
+      if (nextSelection !== "off" || (currentSelection !== "off" && nextSelection === currentSelection)) {
+        autoSubtitleSelectionVideoIdRef.current = null;
+      }
+      return nextSelection;
+    });
   }, [currentVideo, currentVideoSubtitles]);
 
   const seekTo = useCallback(
@@ -3721,6 +4202,67 @@ export default function App() {
     return payload.tracks;
   }, []);
 
+  const loadCachedEmbeddedSubtitlesForVideo = useCallback(
+    async (video: VideoItem, rootId: string) => {
+      const tracks = await probeEmbeddedSubtitleTracksForVideo(video, rootId);
+      const restoredSubtitles = (
+        await Promise.all(
+          tracks
+            .filter((track) => track.extractable)
+            .map(async (track) => {
+              try {
+                const payload = await fetchJson<ExtractedEmbeddedSubtitle>("/api/subtitles/embedded/cached", {
+                  method: "POST",
+                  body: JSON.stringify({
+                    rootId,
+                    relativePath: video.relativePath,
+                    streamIndex: track.streamIndex,
+                  }),
+                });
+                if (!payload.text.trim()) return null;
+
+                const language = track.language ? ` ${track.language}` : "";
+                const title = track.title ? ` ${track.title}` : "";
+                const subtitle: SubtitleItem = {
+                  id: `embedded:${video.id}:${payload.id}`,
+                  name: `内封字幕${language}${title}`.trim(),
+                  relativePath: `${video.relativePath}#subtitle-${track.streamIndex}`,
+                  url: "",
+                  source: "embedded",
+                  rawText: payload.text,
+                  format: payload.format,
+                  videoId: video.id,
+                  embeddedTrack: track,
+                };
+                return {
+                  ...subtitle,
+                  url: await createSubtitleUrl(subtitle),
+                };
+              } catch {
+                return null;
+              }
+            }),
+        )
+      ).filter((subtitle): subtitle is SubtitleItem => Boolean(subtitle));
+
+      if (!restoredSubtitles.length) return;
+      const restoredIds = new Set(restoredSubtitles.map((subtitle) => subtitle.id));
+      subtitlesRef.current
+        .filter((subtitle) => restoredIds.has(subtitle.id) && subtitle.url && isObjectUrl(subtitle.url))
+        .forEach((subtitle) => URL.revokeObjectURL(subtitle.url));
+      const nextSubtitles = [
+        ...subtitlesRef.current.filter((subtitle) => !restoredIds.has(subtitle.id)),
+        ...restoredSubtitles,
+      ];
+      subtitlesRef.current = nextSubtitles;
+      setSubtitles(nextSubtitles);
+      void saveCurrentPlayerDataStore({
+        embeddedSubtitles: createPersistedEmbeddedSubtitles(nextSubtitles),
+      });
+    },
+    [probeEmbeddedSubtitleTracksForVideo, saveCurrentPlayerDataStore],
+  );
+
   const loadEmbeddedSubtitleForVideo = useCallback(
     async (video: VideoItem, rootId: string, track: EmbeddedSubtitleTrack, options?: { select?: boolean }) => {
       if (!track.extractable) return null;
@@ -3760,6 +4302,10 @@ export default function App() {
         ...subtitle,
         url: await createSubtitleUrl(subtitle),
       };
+      const nextPersistedEmbeddedSubtitles = createPersistedEmbeddedSubtitles([
+        ...subtitlesRef.current.filter((item) => item.id !== subtitleWithUrl.id),
+        subtitleWithUrl,
+      ]);
       setSubtitles((previous) => {
         previous
           .filter((item) => item.id === subtitleWithUrl.id)
@@ -3770,11 +4316,30 @@ export default function App() {
         subtitlesRef.current = nextSubtitles;
         return nextSubtitles;
       });
+      void saveCurrentPlayerDataStore({
+        embeddedSubtitles: nextPersistedEmbeddedSubtitles,
+      });
       if (options?.select) setSelectedSubtitleId(subtitleWithUrl.id);
       return subtitleWithUrl;
     },
-    [],
+    [saveCurrentPlayerDataStore],
   );
+
+  useEffect(() => {
+    if (!currentVideo || !currentMediaRootId || !canUseEmbeddedSubtitles) return;
+    if (currentVideoSubtitles.some((subtitle) => subtitle.source === "embedded")) return;
+
+    const lookupKey = `${currentMediaRootId}:${currentVideo.id}`;
+    if (cachedEmbeddedSubtitleLookupKeysRef.current.has(lookupKey)) return;
+    cachedEmbeddedSubtitleLookupKeysRef.current.add(lookupKey);
+    void loadCachedEmbeddedSubtitlesForVideo(currentVideo, currentMediaRootId);
+  }, [
+    canUseEmbeddedSubtitles,
+    currentMediaRootId,
+    currentVideo,
+    currentVideoSubtitles,
+    loadCachedEmbeddedSubtitlesForVideo,
+  ]);
 
   const probeEmbeddedSubtitles = useCallback(async () => {
     if (!currentVideo || !currentMediaRootId) {
@@ -4180,6 +4745,7 @@ export default function App() {
 
   const confirmClearSelectedCache = useCallback(async () => {
     if (!selectedCacheItems.length) return;
+    const shouldClearRecentFolder = isAllCacheSelected;
     setIsClearingCache(true);
     setCacheStatusMessage("");
     try {
@@ -4193,13 +4759,23 @@ export default function App() {
       if (response.cleared.some((id) => id === "libraries" || id === "index")) {
         clearCurrentLibraryRuntimeData();
       }
+      if (shouldClearRecentFolder) {
+        await clearRecentFolderHandle().catch(() => undefined);
+        clearLoadedMedia();
+        directoryRef.current = null;
+        libraryIdRef.current = null;
+        libraryMetadataRef.current = undefined;
+        setLibraryId(null);
+        setMediaRootId(null);
+        setActiveView("home");
+      }
       setCacheStatusMessage(`已清除 ${response.cleared.length} 项缓存。`);
     } catch (error) {
       setCacheStatusMessage(error instanceof Error ? error.message : "清除缓存失败。");
     } finally {
       setIsClearingCache(false);
     }
-  }, [clearCurrentLibraryRuntimeData, selectedCacheItems]);
+  }, [clearCurrentLibraryRuntimeData, clearLoadedMedia, isAllCacheSelected, selectedCacheItems]);
 
   const openCacheStatusDialog = useCallback(() => {
     setIsCacheStatusDialogOpen(true);
@@ -4757,6 +5333,20 @@ export default function App() {
       )}
     </span>
   );
+  const renderTagChips = (tags: string[], options?: { limit?: number; compact?: boolean }) => {
+    const visibleTags = tags.slice(0, options?.limit ?? 3);
+    if (!visibleTags.length) return null;
+    return (
+      <span className={`tag-chip-row ${options?.compact ? "compact" : ""}`}>
+        {visibleTags.map((tag) => (
+          <span className="tag-chip" key={tag}>
+            {tag}
+          </span>
+        ))}
+        {tags.length > visibleTags.length ? <span className="tag-chip more">+{tags.length - visibleTags.length}</span> : null}
+      </span>
+    );
+  };
   const renderHomeListCard = (card: HomeVideoCard, index: number) => (
     <button
       key={card.video.id}
@@ -4769,6 +5359,7 @@ export default function App() {
       <span className="home-list-copy">
         <strong>{card.video.name}</strong>
         <small>{formatHomeMeta(card)}</small>
+        {renderTagChips(card.tags ?? [], { limit: 3, compact: true })}
       </span>
     </button>
   );
@@ -4965,17 +5556,56 @@ export default function App() {
                     </span>
                     <div>
                       <strong>{currentMediaLibraryRoot.label}</strong>
-                      <code>{currentMediaLibraryRoot.path}</code>
+                      <code>
+                        {currentMediaLibraryRoot.source === "browser"
+                          ? `浏览器：${currentMediaLibraryRoot.path}`
+                          : currentMediaLibraryRoot.path}
+                      </code>
+                      {currentMediaLibraryRoot.source === "browser" ? (
+                        <code>
+                          {currentMediaLibraryRoot.localPath
+                            ? `本机：${currentMediaLibraryRoot.localPath}`
+                            : "本机：未配置"}
+                        </code>
+                      ) : null}
                     </div>
+                    {currentMediaRootLocalPathAction?.visible ? (
+                      <button
+                        className="secondary-button media-library-path-button"
+                        type="button"
+                        disabled={currentMediaRootLocalPathAction.disabled}
+                        onClick={() => openMediaRootLocalPathDialog(currentMediaLibraryRoot)}
+                      >
+                        <HardDrive size={16} />
+                        {currentMediaRootLocalPathAction.label}
+                      </button>
+                    ) : null}
                   </div>
                 ) : localConfig?.mediaRoots.length ? (
                   <div className="media-library-list">
-                    {localConfig.mediaRoots.map((root) => (
-                      <div className="media-library-row" key={root.id}>
-                        <strong>{root.label}</strong>
-                        <code>{root.path}</code>
-                      </div>
-                    ))}
+                    {localConfig.mediaRoots.map((root) => {
+                      const action = getMediaRootLocalPathAction(root);
+                      return (
+                        <div className="media-library-row" key={root.id}>
+                          <strong>{root.label}</strong>
+                          <code>{root.source === "browser" ? `浏览器：${root.path}` : root.path}</code>
+                          {root.source === "browser" ? (
+                            <code>{root.localPath ? `本机：${root.localPath}` : "本机：未配置"}</code>
+                          ) : null}
+                          {action.visible ? (
+                            <button
+                              className="secondary-button media-library-path-button"
+                              type="button"
+                              disabled={action.disabled}
+                              onClick={() => openMediaRootLocalPathDialog(root)}
+                            >
+                              <HardDrive size={16} />
+                              {action.label}
+                            </button>
+                          ) : null}
+                        </div>
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className="empty-list compact">尚未配置本地媒体库地址。</div>
@@ -5003,8 +5633,20 @@ export default function App() {
                           ? "根据当前进度前的字幕生成回顾，不包含后续剧情。"
                           : canUseHomeEmbeddedSubtitles
                             ? "可自动提取内封文本字幕，并根据当前进度生成回顾。"
-                          : "没有匹配字幕，暂时无法生成回顾。")}
+                            : homeRecapMediaRoot?.source === "browser"
+                              ? "浏览器添加的媒体库只能播放和匹配外置字幕；自动提取内封字幕需要在服务端配置该媒体库的本机绝对路径。"
+                              : "没有匹配字幕，暂时无法生成回顾。")}
                   </div>
+                  {homeRecapMediaRoot?.source === "browser" && !homeRecapMediaRoot.localPath ? (
+                    <button
+                      className="secondary-button home-recap-button"
+                      type="button"
+                      onClick={() => openMediaRootLocalPathDialog(homeRecapMediaRoot)}
+                    >
+                      <HardDrive size={16} />
+                      配置本机路径
+                    </button>
+                  ) : null}
                   <button
                     className="secondary-button home-recap-button"
                     type="button"
@@ -5329,30 +5971,22 @@ export default function App() {
                 onChange={setHoldPlaybackRate}
               />
 
-              <label className="subtitle-control">
-                <Subtitles size={18} />
-                <select
-                  aria-label="字幕"
-                  className="subtitle-select"
-                  value={selectedSubtitleId}
-                  onChange={(event) => {
-                    if (event.target.value === "manual") {
-                      void chooseSubtitleFile();
-                      return;
-                    }
-                    setSelectedSubtitleId(event.target.value);
-                  }}
-                  disabled={!currentVideo}
-                >
-                  <option value="off">字幕关闭</option>
-                  {currentVideoSubtitles.map((subtitle) => (
-                    <option key={subtitle.id} value={subtitle.id}>
-                      {subtitle.isManual ? `手动: ${subtitle.name}` : subtitle.name}
-                    </option>
-                  ))}
-                  <option value="manual">选择字幕...</option>
-                </select>
-              </label>
+              <ControlSelect
+                label={<Subtitles size={18} aria-hidden="true" />}
+                ariaLabel="字幕"
+                value={selectedSubtitleId}
+                options={subtitleControlOptions}
+                onChange={(value) => {
+                  autoSubtitleSelectionVideoIdRef.current = null;
+                  if (value === "manual") {
+                    void chooseSubtitleFile();
+                    return;
+                  }
+                  setSelectedSubtitleId(value);
+                }}
+                className="subtitle-control"
+                disabled={!currentVideo}
+              />
 
               <button
                 className="icon-button"
@@ -5375,6 +6009,20 @@ export default function App() {
                 title={selectedSubtitle ? "字幕总结和问答" : "请先选择字幕"}
               >
                 AI
+              </button>
+              <button
+                className={`icon-button ${currentVideoTags.length ? "active" : ""}`}
+                type="button"
+                onClick={() => {
+                  setIsTagDialogOpen(true);
+                  setTagMessage("");
+                  setTagMergePrompt(null);
+                }}
+                disabled={!currentVideo}
+                title="管理视频标签"
+                aria-label="管理视频标签"
+              >
+                <Tags size={18} />
               </button>
 
               <span className="control-spacer" />
@@ -5597,6 +6245,7 @@ export default function App() {
             const playlistIndex = playlistIndexById.get(video.id) ?? 0;
             const isFavorite = favoriteVideoIds.has(video.id);
             const seriesTitle = isSeriesMode ? seriesTitleByVideoId.get(video.id) : "";
+            const tags = videoTags[video.id] ?? [];
             return (
               <div
                 key={video.id}
@@ -5619,6 +6268,7 @@ export default function App() {
                     <strong>{video.name}</strong>
                     <small>{video.relativePath}</small>
                     {seriesTitle ? <small className="episode-series">{seriesTitle}</small> : null}
+                    {renderTagChips(tags, { limit: 3, compact: true })}
                     {isCompleted ? (
                       <span className="episode-progress compact">
                         <CheckCircle2 size={15} />
@@ -5720,6 +6370,132 @@ export default function App() {
             <button className="danger-button" type="button" onClick={() => void confirmDeleteLocalVideo()}>
               <Trash2 size={18} />
               删除文件
+            </button>
+          </div>
+        </section>
+      </div>
+    ) : null}
+    {mediaRootLabelPrompt ? (
+      <div className="modal-backdrop" role="presentation" onMouseDown={() => closeMediaRootLabelPrompt(null)}>
+        <section
+          aria-labelledby="media-root-label-title"
+          aria-modal="true"
+          className="media-root-label-dialog"
+          role="dialog"
+          onMouseDown={(event) => event.stopPropagation()}
+        >
+          <button
+            aria-label="关闭"
+            className="dialog-close"
+            type="button"
+            onClick={() => closeMediaRootLabelPrompt(null)}
+          >
+            <X size={18} />
+          </button>
+          <div className="dialog-icon">
+            <FolderOpen size={28} />
+          </div>
+          <div className="dialog-copy">
+            <h2 id="media-root-label-title">命名媒体库</h2>
+            <p>为“{mediaRootLabelPrompt.directoryName}”设置一个媒体库名称。</p>
+          </div>
+          <label className="media-root-label-field">
+            <span>媒体库名称</span>
+            <input
+              autoFocus
+              type="text"
+              value={mediaRootLabelPrompt.value}
+              onChange={(event) =>
+                setMediaRootLabelPrompt((previous) =>
+                  previous ? { ...previous, value: event.target.value } : previous,
+                )
+              }
+              onKeyDown={(event) => {
+                if (event.key === "Enter") submitMediaRootLabelPrompt();
+                if (event.key === "Escape") closeMediaRootLabelPrompt(null);
+              }}
+            />
+          </label>
+          <div className="dialog-actions">
+            <button className="secondary-button" type="button" onClick={() => closeMediaRootLabelPrompt(null)}>
+              取消
+            </button>
+            <button
+              className="primary-button"
+              type="button"
+              onClick={submitMediaRootLabelPrompt}
+              disabled={!mediaRootLabelPrompt.value.trim()}
+            >
+              确定
+            </button>
+          </div>
+        </section>
+      </div>
+    ) : null}
+    {mediaRootLocalPathDialog ? (
+      <div className="modal-backdrop" role="presentation" onMouseDown={closeMediaRootLocalPathDialog}>
+        <section
+          aria-labelledby="media-root-local-path-title"
+          aria-modal="true"
+          className="media-root-local-path-dialog"
+          role="dialog"
+          onMouseDown={(event) => event.stopPropagation()}
+        >
+          <button
+            aria-label="关闭"
+            className="dialog-close"
+            type="button"
+            onClick={closeMediaRootLocalPathDialog}
+            disabled={mediaRootLocalPathDialog.isSaving}
+          >
+            <X size={18} />
+          </button>
+          <div className="dialog-icon">
+            <HardDrive size={28} />
+          </div>
+          <div className="dialog-copy">
+            <h2 id="media-root-local-path-title">配置本机路径</h2>
+            <p>为“{mediaRootLocalPathDialog.root.label}”填写服务端可访问的本机绝对路径。</p>
+          </div>
+          <div className="media-root-path-preview">
+            <span>浏览器目录</span>
+            <code>{mediaRootLocalPathDialog.root.path}</code>
+          </div>
+          <label className="media-root-label-field">
+            <span>本机绝对路径</span>
+            <input
+              autoFocus
+              type="text"
+              value={mediaRootLocalPathDialog.value}
+              placeholder="D:\\Media\\Anime"
+              onChange={(event) => updateMediaRootLocalPathValue(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") void submitMediaRootLocalPath();
+                if (event.key === "Escape") closeMediaRootLocalPathDialog();
+              }}
+              disabled={mediaRootLocalPathDialog.isSaving}
+            />
+          </label>
+          {mediaRootLocalPathDialog.error ? (
+            <div className="dialog-inline-error">{mediaRootLocalPathDialog.error}</div>
+          ) : null}
+          <div className="dialog-actions">
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={closeMediaRootLocalPathDialog}
+              disabled={mediaRootLocalPathDialog.isSaving}
+            >
+              取消
+            </button>
+            <button
+              className="primary-button"
+              type="button"
+              onClick={() => void submitMediaRootLocalPath()}
+              disabled={mediaRootLocalPathDialog.isSaving || !mediaRootLocalPathDialog.value.trim()}
+            >
+              <HardDrive size={18} />
+              {mediaRootLocalPathDialog.isSaving ? "保存中..." : "保存路径"}
             </button>
           </div>
         </section>
@@ -5975,6 +6751,92 @@ export default function App() {
               {isClearingCache ? "正在清除..." : "确认清除"}
             </button>
           </div>
+        </section>
+      </div>
+    ) : null}
+    {isTagDialogOpen ? (
+      <div className="modal-backdrop" role="presentation" onMouseDown={() => setIsTagDialogOpen(false)}>
+        <section
+          aria-labelledby="tag-dialog-title"
+          aria-modal="true"
+          className="tag-dialog"
+          role="dialog"
+          onMouseDown={(event) => event.stopPropagation()}
+        >
+          <button
+            aria-label="关闭"
+            className="dialog-close"
+            type="button"
+            onClick={() => setIsTagDialogOpen(false)}
+          >
+            <X size={18} />
+          </button>
+          <div className="tag-dialog-header">
+            <div className="dialog-icon">
+              <Tags size={28} />
+            </div>
+            <div className="dialog-copy">
+              <h2 id="tag-dialog-title">视频标签</h2>
+              <p>{currentVideo?.name ?? "未选择视频"}</p>
+            </div>
+          </div>
+
+          <div className="tag-editor-current">
+            {currentVideoTags.length ? (
+              currentVideoTags.map((tag) => (
+                <button className="tag-editor-chip" key={tag} type="button" onClick={() => removeTagFromCurrentVideo(tag)}>
+                  <span>{tag}</span>
+                  <X size={14} />
+                </button>
+              ))
+            ) : (
+              <div className="ai-empty-state">当前视频还没有标签。</div>
+            )}
+          </div>
+
+          <form
+            className="tag-editor-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              submitTagInput();
+            }}
+          >
+            <input
+              autoFocus
+              value={tagInput}
+              placeholder="输入标签，可用空格、逗号、顿号分隔"
+              onChange={(event) => setTagInput(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") setIsTagDialogOpen(false);
+              }}
+              disabled={!currentVideo}
+            />
+            <button className="primary-button" type="submit" disabled={!currentVideo || !tagInput.trim()}>
+              添加
+            </button>
+          </form>
+
+          {tagMergePrompt ? (
+            <div className="tag-merge-prompt">
+              <strong>发现相近标签</strong>
+              <p>
+                “{tagMergePrompt.suggestion.newTag}” 和已有标签 “{tagMergePrompt.suggestion.existingTag}” 可能是{tagMergePrompt.suggestion.reason}。
+              </p>
+              <div className="dialog-actions compact">
+                <button className="primary-button" type="button" onClick={applyTagMergeSuggestion}>
+                  采用已有标签
+                </button>
+                <button className="secondary-button" type="button" onClick={keepTagMergeSuggestion}>
+                  保留新标签
+                </button>
+                <button className="secondary-button" type="button" onClick={() => setTagMergePrompt(null)}>
+                  取消
+                </button>
+              </div>
+            </div>
+          ) : null}
+
+          {tagMessage ? <div className="ai-empty-state">{tagMessage}</div> : null}
         </section>
       </div>
     ) : null}
