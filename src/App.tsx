@@ -295,6 +295,7 @@ import {
   isMediaRootInHomeMode,
   resolveRestoredEmbeddedSubtitleSelection,
   resolveSubtitleSelection,
+  shouldShowHomeRecapCard,
   type HomeMediaMode,
 } from "./playerUiState";
 import {
@@ -2626,7 +2627,7 @@ export default function App() {
     [subtitles],
   );
   const homeRecapCard = primaryResumeCard;
-  const shouldShowHomeRecap = homeMediaMode !== "special" && Boolean(homeRecapCard);
+  const shouldShowHomeRecap = shouldShowHomeRecapCard(homeMediaMode, Boolean(homeRecapCard));
   const homeRecapVideoId = homeRecapCard?.video.id ?? "";
   const homeRecapSubtitle = useMemo(
     () => (shouldShowHomeRecap && homeRecapCard ? findMatchedSubtitleForVideo(homeRecapCard.video) : null),

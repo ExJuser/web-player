@@ -79,6 +79,10 @@ export function isMediaRootInHomeMode(root: MediaRootForUi, mode: HomeMediaMode)
   return normalizedLabel.toUpperCase().endsWith("AV");
 }
 
+export function shouldShowHomeRecapCard(mode: HomeMediaMode, hasRecapTarget: boolean) {
+  return mode === "anime" && hasRecapTarget;
+}
+
 export function createSubtitleControlOptions(subtitles: SubtitleForUi[]) {
   return [
     { value: "off", label: "字幕关闭" },
