@@ -165,7 +165,15 @@ export type PlayerDataStore = {
 };
 
 export type PlaylistFilter = "all" | "favorites";
-export type PlaylistSortMode = "name" | "path" | "modified" | "size";
+export type PlaylistSortMode =
+  | "name"
+  | "path"
+  | "modified"
+  | "size"
+  | "playedDuration"
+  | "playIntensity"
+  | "playCount"
+  | "emissionCount";
 export type PlaybackMode = "sequential" | "single-loop" | "list-loop" | "shuffle" | "favorites-only";
 export type HomeMediaMode = "all" | "anime" | "special";
 export type ActiveView = "home" | "player" | "photos" | "photoViewer";

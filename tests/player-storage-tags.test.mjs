@@ -89,6 +89,21 @@ test("player preferences remember the home media mode", () => {
   assert.equal(oldStore.preferences.homeMediaMode, "all");
 });
 
+test("player preferences remember stat playlist sort modes", () => {
+  for (const playlistSortMode of ["playedDuration", "playIntensity", "playCount", "emissionCount"]) {
+    const parsed = storage.parsePlayerDataStore(JSON.stringify({
+      version: 5,
+      items: {},
+      favorites: [],
+      preferences: {
+        playlistSortMode,
+      },
+    }));
+
+    assert.equal(parsed.preferences.playlistSortMode, playlistSortMode);
+  }
+});
+
 test("default player data store contains tag containers", () => {
   const store = storage.createDefaultPlayerDataStore();
 

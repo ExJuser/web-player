@@ -2334,7 +2334,7 @@ button {
   gap: 10px;
 }
 
-.playlist-sort-select + .playlist-order-button,
+.playlist-sort-control + .playlist-order-button,
 .playlist-filter + .playlist-clear-button {
   margin-left: 2px;
 }
@@ -2481,21 +2481,31 @@ button {
   color: white;
 }
 
-.playlist-sort-select {
-  width: 92px;
-  height: 32px;
-  padding: 0 7px;
-  border: 1px solid #303743;
-  border-radius: 6px;
-  background: #20252d;
-  color: #f5f7fb;
-  font-size: 13px;
+.playlist-sort-control {
+  gap: 0;
+  margin-left: 0;
 }
 
-.playlist-sort-select:disabled {
-  cursor: not-allowed;
-  color: #5f6875;
-  background: #191d23;
+.playlist-sort-control .control-group-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.playlist-sort-control .control-select {
+  width: 112px;
+}
+
+.playlist-sort-control .control-select-trigger {
+  height: 32px;
+}
+
+.playlist-sort-control .control-select-list {
+  top: calc(100% + 6px);
+  bottom: auto;
 }
 
 .playlist-order-button,
@@ -2548,7 +2558,7 @@ button {
   }
 }
 
-.playlist-tools.series-mode .playlist-sort-select,
+.playlist-tools.series-mode .playlist-sort-control,
 .playlist-tools.series-mode .playlist-order-button {
   display: none;
 }
@@ -3827,7 +3837,6 @@ button {
 .app-shell.theme-light .current-video-meta div,
 .app-shell.theme-light .secondary-button,
 .app-shell.theme-light .icon-button,
-.app-shell.theme-light .playlist-sort-select,
 .app-shell.theme-light .playlist-order-button,
 .app-shell.theme-light .playlist-top-button,
 .app-shell.theme-light .bangumi-link-button,
@@ -3872,7 +3881,6 @@ button {
 
 .app-shell.theme-light .secondary-button:disabled,
 .app-shell.theme-light .icon-button:disabled,
-.app-shell.theme-light .playlist-sort-select:disabled,
 .app-shell.theme-light .playlist-order-button:disabled,
 .app-shell.theme-light .playlist-top-button:disabled,
 .app-shell.theme-light .bangumi-link-button:disabled,
@@ -4856,9 +4864,13 @@ button {
     flex: 1;
   }
 
-  .playlist-sort-select {
+  .playlist-sort-control {
     flex: 1;
     min-width: 0;
+  }
+
+  .playlist-sort-control .control-select {
+    width: 100%;
   }
 
   .playlist-item {

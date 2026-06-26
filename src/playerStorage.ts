@@ -199,7 +199,11 @@ export function parsePlayerPreferences(source: unknown): PlayerPreferences {
     playlistSortMode:
       preferences.playlistSortMode === "path" ||
       preferences.playlistSortMode === "modified" ||
-      preferences.playlistSortMode === "size"
+      preferences.playlistSortMode === "size" ||
+      preferences.playlistSortMode === "playedDuration" ||
+      preferences.playlistSortMode === "playIntensity" ||
+      preferences.playlistSortMode === "playCount" ||
+      preferences.playlistSortMode === "emissionCount"
         ? preferences.playlistSortMode
         : defaultPlayerPreferences.playlistSortMode,
     isPlaylistSortReversed:

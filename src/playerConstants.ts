@@ -25,6 +25,10 @@ export const playlistSortOptions: Array<{ value: PlaylistSortMode; label: string
   { value: "name", label: "文件名" },
   { value: "path", label: "路径" },
   { value: "modified", label: "修改时间" },
+  { value: "playedDuration", label: "播放时长" },
+  { value: "playIntensity", label: "播放强度" },
+  { value: "playCount", label: "播放次数" },
+  { value: "emissionCount", label: "发射次数" },
 ];
 export const volumeStep = 0.05;
 export const controlsAutoHideDelay = 2500;

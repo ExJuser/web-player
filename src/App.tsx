@@ -582,7 +582,26 @@ function compareNaturalRelativePath(aPath: string, bPath: string) {
   return 0;
 }
 
-function compareVideos(a: VideoItem, b: VideoItem, mode: PlaylistSortMode) {
+function getStatsSortValue(video: VideoItem, statsStore: VideoStatsStore, mode: PlaylistSortMode) {
+  const stats = statsStore[createVideoStatsKey(video)];
+  if (!stats) return 0;
+
+  if (mode === "playedDuration") return stats.totalPlayedSeconds;
+  if (mode === "playCount") return stats.playCount;
+  if (mode === "emissionCount") return stats.emissionCount;
+  if (mode === "playIntensity") {
+    const duration = stats.durationSeconds || video.duration || 0;
+    return duration > 0 ? stats.totalPlayedSeconds / duration : 0;
+  }
+
+  return 0;
+}
+
+function isStatsPlaylistSortMode(mode: PlaylistSortMode) {
+  return mode === "playedDuration" || mode === "playIntensity" || mode === "playCount" || mode === "emissionCount";
+}
+
+function compareVideos(a: VideoItem, b: VideoItem, mode: PlaylistSortMode, statsStore: VideoStatsStore) {
   if (mode === "modified") {
     return b.lastModified - a.lastModified || compareNaturalRelativePath(a.relativePath, b.relativePath);
   }
@@ -595,6 +614,10 @@ function compareVideos(a: VideoItem, b: VideoItem, mode: PlaylistSortMode) {
     return b.size - a.size || compareNaturalRelativePath(a.relativePath, b.relativePath);
   }
 
+  if (isStatsPlaylistSortMode(mode)) {
+    return getStatsSortValue(b, statsStore, mode) - getStatsSortValue(a, statsStore, mode) || compareNaturalRelativePath(a.relativePath, b.relativePath);
+  }
+
   if (hasSeasonDirectory(a) || hasSeasonDirectory(b)) {
     return compareNaturalRelativePath(a.relativePath, b.relativePath) || collator.compare(a.name, b.name);
   }
@@ -602,8 +625,8 @@ function compareVideos(a: VideoItem, b: VideoItem, mode: PlaylistSortMode) {
   return collator.compare(a.name, b.name) || compareNaturalRelativePath(a.relativePath, b.relativePath);
 }
 
-function getSortedVideos(videos: VideoItem[], mode: PlaylistSortMode, isReversed: boolean) {
-  const sorted = [...videos].sort((a, b) => compareVideos(a, b, mode));
+function getSortedVideos(videos: VideoItem[], mode: PlaylistSortMode, isReversed: boolean, statsStore: VideoStatsStore = {}) {
+  const sorted = [...videos].sort((a, b) => compareVideos(a, b, mode, statsStore));
   return isReversed ? sorted.reverse() : sorted;
 }
 
@@ -2108,6 +2131,7 @@ export default function App() {
   const [playlistSortMode, setPlaylistSortMode] = useState<PlaylistSortMode>(
     defaultPlayerPreferences.playlistSortMode,
   );
+  const [videoStatsRevision, setVideoStatsRevision] = useState(0);
   const [isPlaylistSortReversed, setIsPlaylistSortReversed] = useState(
     defaultPlayerPreferences.isPlaylistSortReversed,
   );
@@ -2461,8 +2485,14 @@ export default function App() {
   const homeMediaModeLabel = homeMediaMode === "anime" ? "追番模式" : homeMediaMode === "special" ? "特殊模式" : "全部";
   const playerMediaModeLabel = homeMediaMode === "anime" ? "追番" : homeMediaMode === "special" ? "特殊" : "全部";
   const playlistVideos = useMemo(
-    () => getSortedVideos(modeFilteredVideos, isSeriesMode ? "name" : playlistSortMode, isSeriesMode ? false : isPlaylistSortReversed),
-    [isPlaylistSortReversed, isSeriesMode, modeFilteredVideos, playlistSortMode],
+    () =>
+      getSortedVideos(
+        modeFilteredVideos,
+        isSeriesMode ? "name" : playlistSortMode,
+        isSeriesMode ? false : isPlaylistSortReversed,
+        videoStatsRef.current,
+      ),
+    [isPlaylistSortReversed, isSeriesMode, modeFilteredVideos, playlistSortMode, videoStatsRevision],
   );
   const seriesOptions = useMemo(() => {
     const seriesByKey = new Map<string, { key: string; title: string; count: number; mediaRootLabel?: string }>();
@@ -3116,6 +3146,9 @@ export default function App() {
         [statsKey]: nextStats,
       };
       videoStatsRef.current = nextStore;
+      if (isStatsPlaylistSortMode(playerPreferencesRef.current.playlistSortMode)) {
+        setVideoStatsRevision((revision) => revision + 1);
+      }
 
       saveCurrentPlayerDataStore({
         videoStats: nextStore,
@@ -8333,20 +8366,15 @@ export default function App() {
                 {activeBangumiMatch?.status === "loading" ? <RefreshCw size={16} /> : <ExternalLink size={16} />}
               </button>
             ) : null}
-            <select
-              className="playlist-sort-select"
-              aria-label="播放列表排序方式"
-              title="排序方式"
+            <ControlSelect
+              label="排序"
+              ariaLabel="播放列表排序方式"
               value={playlistSortMode}
-              onChange={(event) => updatePlaylistSortMode(event.target.value as PlaylistSortMode)}
+              options={playlistSortOptions}
+              onChange={updatePlaylistSortMode}
+              className="playlist-sort-control"
               disabled={!modeFilteredVideos.length}
-            >
-              {playlistSortOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+            />
             <button
               className={`playlist-order-button ${isPlaylistSortReversed ? "active" : ""}`}
               type="button"
