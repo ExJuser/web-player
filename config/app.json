@@ -15,25 +15,29 @@
         "id": "3d-fcffba9828",
         "label": "3DAV",
         "path": "3D",
-        "source": "browser"
+        "source": "browser",
+        "localPath": "F:\\3D"
       },
       {
         "id": "media-86ecb15df1",
         "label": "国产AV",
         "path": "国产",
-        "source": "browser"
+        "source": "browser",
+        "localPath": "F:\\国产"
       },
       {
         "id": "media-728393d8bc",
         "label": "欧美AV",
         "path": "欧美",
-        "source": "browser"
+        "source": "browser",
+        "localPath": "F:\\欧美"
       },
       {
         "id": "media-52e198a5fb",
         "label": "JAV",
         "path": "学习资料",
-        "source": "browser"
+        "source": "browser",
+        "localPath": "F:\\学习资料"
       },
       {
         "id": "anime-3eac161518",
@@ -41,6 +45,13 @@
         "path": "Anime",
         "source": "browser",
         "localPath": "H:\\Anime"
+      },
+      {
+        "id": "media-302da57d07",
+        "label": "JAV",
+        "path": "待整理",
+        "source": "browser",
+        "localPath": "E:\\学习资料\\待整理"
       }
     ]
   }
