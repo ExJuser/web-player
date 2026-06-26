@@ -2026,7 +2026,7 @@ export default function App() {
     defaultPlayerPreferences.isPlaylistSortReversed,
   );
   const [shortcuts, setShortcuts] = useState<ShortcutMap>(defaultPlayerPreferences.shortcuts);
-  const [homeMediaMode, setHomeMediaMode] = useState<HomeMediaMode>("all");
+  const [homeMediaMode, setHomeMediaMode] = useState<HomeMediaMode>(defaultPlayerPreferences.homeMediaMode);
   const [isSeriesMode, setIsSeriesMode] = useState(defaultPlayerPreferences.isSeriesMode);
   const [selectedSeriesKey, setSelectedSeriesKey] = useState(defaultPlayerPreferences.selectedSeriesKey);
   const [isCinemaMode, setIsCinemaMode] = useState(defaultPlayerPreferences.isCinemaMode);
@@ -2172,6 +2172,7 @@ export default function App() {
     setPlaylistSortMode(nextDataStore.preferences.playlistSortMode);
     setIsPlaylistSortReversed(nextDataStore.preferences.isPlaylistSortReversed);
     setShortcuts(nextDataStore.preferences.shortcuts);
+    setHomeMediaMode(nextDataStore.preferences.homeMediaMode);
     setIsSeriesMode(nextDataStore.preferences.isSeriesMode);
     setSelectedSeriesKey(nextDataStore.preferences.selectedSeriesKey);
     setIsCinemaMode(nextDataStore.preferences.isCinemaMode);
@@ -3573,6 +3574,7 @@ export default function App() {
     setPlaylistSortMode(nextPreferences.playlistSortMode);
     setIsPlaylistSortReversed(nextPreferences.isPlaylistSortReversed);
     setShortcuts(nextPreferences.shortcuts);
+    setHomeMediaMode(nextPreferences.homeMediaMode);
     setIsSeriesMode(nextPreferences.isSeriesMode);
     setSelectedSeriesKey(nextPreferences.selectedSeriesKey);
     setIsCinemaMode(nextPreferences.isCinemaMode);
@@ -3600,6 +3602,16 @@ export default function App() {
       isPlaylistSortReversed: !playerPreferencesRef.current.isPlaylistSortReversed,
     });
   }, [replacePlayerPreferences]);
+
+  const updateHomeMediaMode = useCallback(
+    (nextMode: HomeMediaMode) => {
+      replacePlayerPreferences({
+        ...playerPreferencesRef.current,
+        homeMediaMode: nextMode,
+      });
+    },
+    [replacePlayerPreferences],
+  );
 
   const updateShortcut = useCallback(
     (action: ShortcutAction, nextCode: string) => {
@@ -4653,6 +4665,7 @@ export default function App() {
         playlistSortMode,
         isPlaylistSortReversed,
         shortcuts,
+        homeMediaMode,
         isSeriesMode,
         selectedSeriesKey,
         isCinemaMode,
@@ -4686,6 +4699,7 @@ export default function App() {
       isCinemaMode,
       isPlaylistSortReversed,
       isSeriesMode,
+      homeMediaMode,
       playlistSortMode,
       revokeVideoUrls,
       selectedSeriesKey,
@@ -6883,7 +6897,7 @@ export default function App() {
                   <button
                     className={homeMediaMode === "all" ? "active" : ""}
                     type="button"
-                    onClick={() => setHomeMediaMode("all")}
+                    onClick={() => updateHomeMediaMode("all")}
                     aria-pressed={homeMediaMode === "all"}
                   >
                     <Play size={15} />
@@ -6892,7 +6906,7 @@ export default function App() {
                   <button
                     className={homeMediaMode === "anime" ? "active" : ""}
                     type="button"
-                    onClick={() => setHomeMediaMode("anime")}
+                    onClick={() => updateHomeMediaMode("anime")}
                     aria-pressed={homeMediaMode === "anime"}
                   >
                     <Subtitles size={15} />
@@ -6901,7 +6915,7 @@ export default function App() {
                   <button
                     className={homeMediaMode === "special" ? "active" : ""}
                     type="button"
-                    onClick={() => setHomeMediaMode("special")}
+                    onClick={() => updateHomeMediaMode("special")}
                     aria-pressed={homeMediaMode === "special"}
                   >
                     <ShieldCheck size={15} />

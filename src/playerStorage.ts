@@ -162,6 +162,10 @@ export function parsePlayerPreferences(source: unknown): PlayerPreferences {
         ? preferences.isPlaylistSortReversed
         : defaultPlayerPreferences.isPlaylistSortReversed,
     shortcuts: parseShortcuts(preferences.shortcuts),
+    homeMediaMode:
+      preferences.homeMediaMode === "anime" || preferences.homeMediaMode === "special"
+        ? preferences.homeMediaMode
+        : defaultPlayerPreferences.homeMediaMode,
     isSeriesMode: defaultPlayerPreferences.isSeriesMode,
     selectedSeriesKey: defaultPlayerPreferences.selectedSeriesKey,
     isCinemaMode:

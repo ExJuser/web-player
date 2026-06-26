@@ -156,6 +156,7 @@ export type PlayerDataStore = {
 export type PlaylistFilter = "all" | "favorites";
 export type PlaylistSortMode = "name" | "path" | "modified" | "size";
 export type PlaybackMode = "sequential" | "single-loop" | "list-loop" | "shuffle" | "favorites-only";
+export type HomeMediaMode = "all" | "anime" | "special";
 export type ActiveView = "home" | "player" | "photos" | "photoViewer";
 export type AutoNextPrompt = {
   nextVideoId: string;
@@ -183,6 +184,7 @@ export type PlayerPreferences = {
   playlistSortMode: PlaylistSortMode;
   isPlaylistSortReversed: boolean;
   shortcuts: ShortcutMap;
+  homeMediaMode: HomeMediaMode;
   isSeriesMode: boolean;
   selectedSeriesKey: string;
   isCinemaMode: boolean;

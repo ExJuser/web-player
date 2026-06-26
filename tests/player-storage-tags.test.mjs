@@ -41,10 +41,31 @@ test("player data stores parse valid tags and merge decisions", () => {
   });
 });
 
+test("player preferences remember the home media mode", () => {
+  const parsed = storage.parsePlayerDataStore(JSON.stringify({
+    version: 5,
+    items: {},
+    favorites: [],
+    preferences: {
+      homeMediaMode: "anime",
+    },
+  }));
+
+  assert.equal(parsed.preferences.homeMediaMode, "anime");
+
+  const oldStore = storage.parsePlayerDataStore(JSON.stringify({
+    version: 4,
+    items: {},
+    favorites: [],
+  }));
+  assert.equal(oldStore.preferences.homeMediaMode, "all");
+});
+
 test("default player data store contains tag containers", () => {
   const store = storage.createDefaultPlayerDataStore();
 
   assert.equal(store.version, 5);
   assert.deepEqual(store.videoTags, {});
   assert.deepEqual(store.tagMergeDecisions, {});
+  assert.equal(store.preferences.homeMediaMode, "all");
 });

@@ -1,3 +1,7 @@
+import type { HomeMediaMode } from "./playerTypes";
+
+export type { HomeMediaMode };
+
 type MediaRootForUi = {
   label?: string;
   source?: "browser" | "local";
@@ -68,8 +72,6 @@ export function getCompatibleMediaAction(video: VideoForCompatibilityUi | null |
     label: canCreate ? "生成兼容 MP4" : "",
   };
 }
-
-export type HomeMediaMode = "all" | "anime" | "special";
 
 export function isMediaRootInHomeMode(root: MediaRootForUi, mode: HomeMediaMode) {
   if (mode === "all") return true;

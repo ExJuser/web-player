@@ -61,6 +61,7 @@ export const defaultPlayerPreferences: PlayerPreferences = {
   playlistSortMode: "name",
   isPlaylistSortReversed: false,
   shortcuts: defaultShortcuts,
+  homeMediaMode: "all",
   isSeriesMode: false,
   selectedSeriesKey: "all",
   isCinemaMode: false,
