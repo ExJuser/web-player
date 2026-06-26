@@ -329,7 +329,7 @@ import {
   createDefaultPlayerDataStore,
   createProgress,
   deleteLegacyPlayerDataStore,
-  ensureDirectoryPermission,
+  hasDirectoryWritePermission,
   loadLegacyPlayerDataStore,
   loadGlobalPlayerDataStore,
   loadPlayerDataStore,
@@ -4222,8 +4222,8 @@ export default function App() {
 
       try {
         const rootDirectory = directoryRef.current;
-        if (!rootDirectory || !(await ensureDirectoryPermission(rootDirectory))) {
-          setMessage("需要允许文件夹写入权限，才能删除本地文件。");
+        if (!rootDirectory || !(await hasDirectoryWritePermission(rootDirectory))) {
+          setMessage("为避免浏览器原生确认框，当前未启用应用内删除本地文件。请在文件管理器中删除。");
           return;
         }
 
@@ -4566,8 +4566,8 @@ export default function App() {
     }
 
     try {
-      if (!(await ensureDirectoryPermission(parentDirectory))) {
-        setPhotoAlbumMessage("需要允许文件夹写入权限，才能删除写真图片。");
+      if (!(await hasDirectoryWritePermission(parentDirectory))) {
+        setPhotoAlbumMessage("为避免浏览器原生确认框，当前未启用应用内删除写真图片。请在文件管理器中删除。");
         return;
       }
 

@@ -509,10 +509,8 @@ export async function clearPhotoAlbumFolderHandle() {
   );
 }
 
-export async function ensureDirectoryPermission(directory: FileSystemDirectoryHandle) {
+export async function hasDirectoryWritePermission(directory: FileSystemDirectoryHandle) {
   const descriptor = { mode: "readwrite" as const };
   const currentPermission = await directory.queryPermission?.(descriptor);
-  if (currentPermission === "granted") return true;
-  const nextPermission = await directory.requestPermission?.(descriptor);
-  return nextPermission !== "denied";
+  return currentPermission === undefined || currentPermission === "granted";
 }
