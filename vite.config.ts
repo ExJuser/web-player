@@ -14,6 +14,7 @@ import {
   normalizeMediaRoots as normalizeMediaRootsFromConfig,
   resolveMediaPath as resolveMediaPathFromConfig,
   resolveVideoPath as resolveVideoPathFromConfig,
+  scanConfiguredPhotoAlbums,
   scanConfiguredMediaRoots,
   updateMediaRootLocalPath as updateMediaRootLocalPathInConfig,
   upsertMediaRoot as upsertMediaRootInConfig,
@@ -22,6 +23,7 @@ import {
 const dataRoot = path.resolve(__dirname, ".local-web-player-data");
 const librariesRoot = path.join(dataRoot, "libraries");
 const thumbnailsRoot = path.join(dataRoot, "thumbnails");
+const photoAlbumsRoot = path.join(dataRoot, "photo-albums");
 const embeddedSubtitlesRoot = path.join(dataRoot, "subtitles");
 const aiRoot = path.join(dataRoot, "ai");
 const bangumiRoot = path.join(dataRoot, "bangumi");
@@ -65,7 +67,19 @@ async function sendMediaFile(request, response, filePath) {
       ? "text/vtt; charset=utf-8"
       : extension === ".srt"
         ? "application/x-subrip; charset=utf-8"
-        : "video/mp4";
+        : extension === ".jpg" || extension === ".jpeg"
+          ? "image/jpeg"
+          : extension === ".png"
+            ? "image/png"
+            : extension === ".webp"
+              ? "image/webp"
+              : extension === ".gif"
+                ? "image/gif"
+                : extension === ".avif"
+                  ? "image/avif"
+                  : extension === ".bmp"
+                    ? "image/bmp"
+                    : "video/mp4";
 
   if (range) {
     const match = /^bytes=(\d*)-(\d*)$/.exec(range);
@@ -190,6 +204,7 @@ async function createCacheStatus() {
     { id: "global", label: "全局播放数据", path: globalDataPath },
     { id: "libraries", label: "播放数据", path: librariesRoot },
     { id: "thumbnails", label: "视频缩略图", path: thumbnailsRoot },
+    { id: "photo-albums", label: "写真集数据", path: photoAlbumsRoot },
     { id: "subtitles", label: "内封字幕", path: embeddedSubtitlesRoot },
     { id: "ai-summaries", label: "AI 字幕总结", path: path.join(aiRoot, "summaries") },
     { id: "ai-qa", label: "AI 字幕问答", path: path.join(aiRoot, "qa") },
@@ -1275,6 +1290,11 @@ function playerDataApiPlugin(env) {
         return;
       }
 
+      if (url.pathname === "/api/photo-albums/scan" && request.method === "GET") {
+        sendJson(response, 200, await scanConfiguredPhotoAlbums(await loadAppConfig()));
+        return;
+      }
+
       if (url.pathname === "/api/local-config/media-root" && request.method === "POST") {
         const payload = JSON.parse((await readBody(request)).toString("utf8"));
         const mediaRoot = await upsertMediaRoot(payload);
@@ -1368,6 +1388,24 @@ function playerDataApiPlugin(env) {
           const payload = JSON.parse(rawBody.toString("utf8"));
           await mkdir(dataRoot, { recursive: true });
           await writeFile(globalDataPath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+          sendJson(response, 200, { ok: true });
+          return;
+        }
+      }
+
+      if (url.pathname === "/api/photo-albums/global") {
+        const filePath = path.join(photoAlbumsRoot, "global.json");
+        if (request.method === "GET") {
+          const payload = await readJsonFile(filePath, null);
+          sendJson(response, payload ? 200 : 404, payload ?? { error: "Photo album data not found." });
+          return;
+        }
+
+        if (request.method === "PUT") {
+          const rawBody = await readBody(request);
+          const payload = JSON.parse(rawBody.toString("utf8"));
+          await mkdir(photoAlbumsRoot, { recursive: true });
+          await writeFile(filePath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
           sendJson(response, 200, { ok: true });
           return;
         }

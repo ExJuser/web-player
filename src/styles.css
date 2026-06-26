@@ -833,6 +833,348 @@ button {
   padding: 14px;
 }
 
+.photo-dashboard {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 14px;
+  overflow: auto;
+  padding-right: 4px;
+  scrollbar-color: rgba(142, 151, 165, 0.58) rgba(20, 22, 26, 0.35);
+  scrollbar-width: thin;
+}
+
+.photo-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.photo-toolbar h2,
+.photo-empty-state h2 {
+  margin: 0;
+  color: #f5f7fb;
+  letter-spacing: 0;
+}
+
+.photo-toolbar p,
+.photo-empty-state p {
+  margin: 6px 0 0;
+  color: #8e97a5;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.photo-toolbar-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.photo-sort-select {
+  min-width: 118px;
+}
+
+.photo-stats {
+  min-height: 84px;
+}
+
+.photo-root-status .media-library-list {
+  max-height: 220px;
+}
+
+.photo-album-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.photo-album-card {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #242a31;
+  border-radius: 8px;
+  background: #1a1e24;
+}
+
+.photo-album-cover {
+  position: relative;
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  border: 0;
+  aspect-ratio: 3 / 4;
+  background: #101319;
+  cursor: pointer;
+}
+
+.photo-album-cover img,
+.photo-thumbnails img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.photo-album-cover img {
+  transition: transform 0.18s ease;
+}
+
+.photo-album-cover:hover img {
+  transform: scale(1.025);
+}
+
+.photo-album-count {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  border-radius: 999px;
+  padding: 4px 8px;
+  background: rgba(8, 10, 14, 0.76);
+  color: #f5f7fb;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.photo-album-copy {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+}
+
+.photo-album-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.photo-album-title-row > button:first-child {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  border: 0;
+  background: transparent;
+  color: #f5f7fb;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.photo-favorite-button {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+}
+
+.photo-favorite-button.active,
+.photo-viewer-actions .secondary-button.active {
+  border-color: rgba(255, 211, 91, 0.45);
+  color: #ffd35b;
+}
+
+.photo-album-copy > span {
+  overflow: hidden;
+  color: #8e97a5;
+  font-size: 12px;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.photo-album-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: auto;
+}
+
+.photo-empty-state {
+  display: grid;
+  min-height: 260px;
+  place-items: center;
+  gap: 12px;
+  color: #8e97a5;
+  text-align: center;
+}
+
+.photo-viewer {
+  display: grid;
+  min-height: 0;
+  flex: 1;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  overflow: hidden;
+}
+
+.photo-viewer-header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid #242a31;
+  border-radius: 8px;
+  padding: 10px;
+  background: #1a1e24;
+}
+
+.photo-viewer-header > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.photo-viewer-header strong,
+.photo-page-indicator strong {
+  overflow: hidden;
+  color: #f5f7fb;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.photo-viewer-header span,
+.photo-page-indicator span {
+  overflow: hidden;
+  color: #8e97a5;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.photo-viewer-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.photo-stage {
+  position: relative;
+  display: flex;
+  min-height: 0;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px solid #242a31;
+  border-radius: 8px;
+  background: #090b10;
+}
+
+.photo-stage > img {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.photo-nav-button {
+  position: absolute;
+  top: 50%;
+  z-index: 2;
+  display: flex;
+  width: 48px;
+  height: 70px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: rgba(12, 15, 20, 0.72);
+  color: #f5f7fb;
+  cursor: pointer;
+  transform: translateY(-50%);
+}
+
+.photo-nav-button:hover:not(:disabled) {
+  background: rgba(0, 161, 214, 0.34);
+}
+
+.photo-nav-button:disabled {
+  cursor: default;
+  opacity: 0.32;
+}
+
+.photo-nav-button.previous {
+  left: 12px;
+}
+
+.photo-nav-button.next {
+  right: 12px;
+}
+
+.photo-filmstrip {
+  display: grid;
+  grid-template-columns: minmax(160px, 240px) minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  border: 1px solid #242a31;
+  border-radius: 8px;
+  padding: 10px;
+  background: #1a1e24;
+}
+
+.photo-page-indicator {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.photo-thumbnails {
+  display: flex;
+  min-width: 0;
+  gap: 8px;
+  overflow: auto hidden;
+  padding-bottom: 2px;
+  scrollbar-color: rgba(142, 151, 165, 0.58) rgba(20, 22, 26, 0.35);
+  scrollbar-width: thin;
+}
+
+.photo-thumbnails::-webkit-scrollbar,
+.photo-dashboard::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+
+.photo-thumbnails::-webkit-scrollbar-track,
+.photo-dashboard::-webkit-scrollbar-track {
+  border-radius: 999px;
+  background: rgba(20, 22, 26, 0.35);
+}
+
+.photo-thumbnails::-webkit-scrollbar-thumb,
+.photo-dashboard::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(142, 151, 165, 0.58);
+}
+
+.photo-thumbnails button {
+  width: 64px;
+  height: 64px;
+  flex: 0 0 auto;
+  overflow: hidden;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  padding: 0;
+  background: #101319;
+  cursor: pointer;
+}
+
+.photo-thumbnails button.active {
+  border-color: #00a1d6;
+}
+
 .home-section-header {
   display: flex;
   align-items: baseline;
@@ -3206,6 +3548,11 @@ button {
 .app-shell.theme-light .home-empty-state,
 .app-shell.theme-light .home-resume-copy > span:not(.home-section-eyebrow),
 .app-shell.theme-light .home-resume-copy small,
+.app-shell.theme-light .photo-toolbar p,
+.app-shell.theme-light .photo-empty-state p,
+.app-shell.theme-light .photo-album-copy > span,
+.app-shell.theme-light .photo-viewer-header span,
+.app-shell.theme-light .photo-page-indicator span,
 .app-shell.theme-light .home-next-card small,
 .app-shell.theme-light .home-list-copy small,
 .app-shell.theme-light .home-section-header span,
@@ -3235,6 +3582,11 @@ button {
 .app-shell.theme-light .home-empty-state h2,
 .app-shell.theme-light .home-resume-copy h2,
 .app-shell.theme-light .home-section-header h2,
+.app-shell.theme-light .photo-toolbar h2,
+.app-shell.theme-light .photo-empty-state h2,
+.app-shell.theme-light .photo-album-title-row > button:first-child,
+.app-shell.theme-light .photo-viewer-header strong,
+.app-shell.theme-light .photo-page-indicator strong,
 .app-shell.theme-light .home-next-card strong,
 .app-shell.theme-light .home-list-copy strong,
 .app-shell.theme-light .home-stats strong,
@@ -3445,6 +3797,9 @@ button {
 .app-shell.theme-light .home-resume-card,
 .app-shell.theme-light .home-section,
 .app-shell.theme-light .home-stats,
+.app-shell.theme-light .photo-album-card,
+.app-shell.theme-light .photo-viewer-header,
+.app-shell.theme-light .photo-filmstrip,
 .app-shell.theme-light .playlist-item,
 .app-shell.theme-light .folder-dialog,
 .app-shell.theme-light .delete-dialog,
@@ -3461,7 +3816,9 @@ button {
 }
 
 .app-shell.theme-light .home-card-thumbnail,
-.app-shell.theme-light .episode-thumbnail {
+.app-shell.theme-light .episode-thumbnail,
+.app-shell.theme-light .photo-album-cover,
+.app-shell.theme-light .photo-thumbnails button {
   border-color: #d7e0ea;
   background: #e8eef6;
   color: #667085;
@@ -3492,6 +3849,17 @@ button {
 .app-shell.theme-light .playlist-item.active .episode-thumbnail:not(.has-image) {
   background: #00a1d6;
   color: #ffffff;
+}
+
+.app-shell.theme-light .photo-stage {
+  border-color: #d7e0ea;
+  background: #f8fafc;
+}
+
+.app-shell.theme-light .photo-nav-button {
+  border-color: rgba(15, 23, 42, 0.14);
+  background: rgba(255, 255, 255, 0.82);
+  color: #172033;
 }
 
 .app-shell.theme-light .home-list-card,
@@ -4001,6 +4369,26 @@ button {
     overflow: visible;
   }
 
+  .photo-toolbar,
+  .photo-viewer-header,
+  .photo-filmstrip {
+    grid-template-columns: 1fr;
+  }
+
+  .photo-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .photo-toolbar-actions,
+  .photo-viewer-actions {
+    justify-content: flex-start;
+  }
+
+  .photo-stage {
+    min-height: 58vh;
+  }
+
   .home-primary-column,
   .home-side-column {
     overflow: visible;
@@ -4062,6 +4450,53 @@ button {
 
   .home-dashboard {
     gap: 12px;
+  }
+
+  .photo-dashboard {
+    gap: 10px;
+    padding-right: 0;
+  }
+
+  .photo-album-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .photo-album-card {
+    display: grid;
+    grid-template-columns: minmax(112px, 34%) minmax(0, 1fr);
+  }
+
+  .photo-album-cover {
+    height: 100%;
+    min-height: 172px;
+    aspect-ratio: auto;
+  }
+
+  .photo-viewer {
+    gap: 8px;
+  }
+
+  .photo-viewer-header {
+    gap: 8px;
+  }
+
+  .photo-stage {
+    min-height: 52vh;
+  }
+
+  .photo-nav-button {
+    width: 42px;
+    height: 58px;
+  }
+
+  .photo-filmstrip {
+    gap: 8px;
+  }
+
+  .photo-thumbnails button {
+    width: 56px;
+    height: 56px;
   }
 
   .home-resume-card,

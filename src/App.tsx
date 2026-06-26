@@ -1,13 +1,17 @@
 import {
   ArrowDownUp,
+  ArrowLeft,
   ArrowUp,
   CheckCircle2,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   ExternalLink,
   Folder,
   FolderOpen,
   EyeOff,
   HardDrive,
+  Images,
   Keyboard,
   LocateFixed,
   Maximize,
@@ -49,6 +53,11 @@ import type {
   PlayerLibraryMetadata,
   PlayerMediaRootStatus,
   PlayerPreferences,
+  PhotoAlbum,
+  PhotoAlbumProgress,
+  PhotoAlbumScanResponse,
+  PhotoAlbumSortMode,
+  PhotoAlbumStore,
   PlaylistFilter,
   PlaylistSortMode,
   ProgressStore,
@@ -60,6 +69,11 @@ import type {
   VideoMetadata,
   VideoTagStore
 } from "./playerTypes";
+import {
+  defaultPhotoAlbumPreferences,
+  loadPhotoAlbumStore,
+  savePhotoAlbumStore
+} from "./photoAlbumStorage";
 import {
   VIDEO_EXTENSIONS,
   SUBTITLE_EXTENSIONS,
@@ -345,6 +359,13 @@ function formatResolution(width?: number, height?: number) {
 function formatMediaRootStatus(status?: PlayerMediaRootStatus) {
   if (!status) return "等待扫描";
   if (status.status === "ready") return `${status.videoCount} 个视频`;
+  if (status.status === "needsAccess") return "需配置本机路径";
+  return status.error ? `扫描失败：${status.error}` : "扫描失败";
+}
+
+function formatPhotoRootStatus(status?: PlayerMediaRootStatus) {
+  if (!status) return "等待扫描";
+  if (status.status === "ready") return `${status.videoCount} 本写真集`;
   if (status.status === "needsAccess") return "需配置本机路径";
   return status.error ? `扫描失败：${status.error}` : "扫描失败";
 }
@@ -786,6 +807,8 @@ type UpsertMediaRootResponse = LocalConfig & {
 type UpdateMediaRootLocalPathResponse = LocalConfig & {
   mediaRoot: LocalMediaRoot;
 };
+
+type PhotoAlbumViewFilter = "all" | "favorites";
 
 type CacheStatusItem = {
   id: string;
@@ -1494,6 +1517,9 @@ export default function App() {
   const localConfigRef = useRef<LocalConfig | null>(null);
   const cachedEmbeddedSubtitleLookupKeysRef = useRef(new Set<string>());
   const bangumiMatchesBySeriesKeyRef = useRef<Record<string, BangumiSeriesMatch>>({});
+  const photoAlbumProgressRef = useRef<Record<string, PhotoAlbumProgress>>({});
+  const favoritePhotoAlbumIdsRef = useRef(new Set<string>());
+  const photoAlbumPreferencesRef = useRef(defaultPhotoAlbumPreferences);
   const bangumiMatchRunIdRef = useRef(0);
   const thumbnailLoadRunIdRef = useRef(0);
   const isScanningRef = useRef(false);
@@ -1554,6 +1580,19 @@ export default function App() {
   const [libraryId, setLibraryId] = useState<string | null>(null);
   const [currentVideoId, setCurrentVideoId] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<ActiveView>("home");
+  const [photoAlbums, setPhotoAlbums] = useState<PhotoAlbum[]>([]);
+  const [photoRootStatuses, setPhotoRootStatuses] = useState<PlayerMediaRootStatus[]>([]);
+  const [selectedPhotoAlbumId, setSelectedPhotoAlbumId] = useState<string | null>(null);
+  const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
+  const [photoAlbumProgress, setPhotoAlbumProgress] = useState<Record<string, PhotoAlbumProgress>>({});
+  const [favoritePhotoAlbumIds, setFavoritePhotoAlbumIds] = useState<Set<string>>(() => new Set());
+  const [photoAlbumSortMode, setPhotoAlbumSortMode] = useState<PhotoAlbumSortMode>(defaultPhotoAlbumPreferences.sortMode);
+  const [photoAlbumFilter, setPhotoAlbumFilter] = useState<PhotoAlbumViewFilter>(
+    defaultPhotoAlbumPreferences.favoritesOnly ? "favorites" : "all",
+  );
+  const [photoAlbumMessage, setPhotoAlbumMessage] = useState("打开写真集后会扫描已配置媒体库中的图片文件夹。");
+  const [isPhotoAlbumsLoading, setIsPhotoAlbumsLoading] = useState(false);
+  const [hasLoadedPhotoAlbums, setHasLoadedPhotoAlbums] = useState(false);
   const [selectedSubtitleId, setSelectedSubtitleId] = useState<string>("off");
   const [progressStore, setProgressStore] = useState<ProgressStore>({});
   const [favoriteVideoIds, setFavoriteVideoIds] = useState<Set<string>>(() => new Set());
@@ -1639,6 +1678,12 @@ export default function App() {
   selectedSubtitleIdRef.current = selectedSubtitleId;
   localConfigRef.current = localConfig;
   bangumiMatchesBySeriesKeyRef.current = bangumiMatchesBySeriesKey;
+  photoAlbumProgressRef.current = photoAlbumProgress;
+  favoritePhotoAlbumIdsRef.current = favoritePhotoAlbumIds;
+  photoAlbumPreferencesRef.current = {
+    sortMode: photoAlbumSortMode,
+    favoritesOnly: photoAlbumFilter === "favorites",
+  };
 
   const updateSelectedSubtitleId = useCallback((nextSubtitleId: string) => {
     selectedSubtitleIdRef.current = nextSubtitleId;
@@ -1668,6 +1713,35 @@ export default function App() {
     [buildPlayerDataStore],
   );
 
+  const buildPhotoAlbumStore = useCallback(
+    (overrides?: Partial<PhotoAlbumStore>): PhotoAlbumStore => ({
+      version: 1,
+      favorites: Array.from(favoritePhotoAlbumIdsRef.current),
+      progress: photoAlbumProgressRef.current,
+      preferences: photoAlbumPreferencesRef.current,
+      ...overrides,
+    }),
+    [],
+  );
+
+  const saveCurrentPhotoAlbumStore = useCallback(
+    async (overrides?: Partial<PhotoAlbumStore>) => {
+      await savePhotoAlbumStore(buildPhotoAlbumStore(overrides));
+    },
+    [buildPhotoAlbumStore],
+  );
+
+  const applyPhotoAlbumStore = useCallback((store: PhotoAlbumStore) => {
+    const favoriteIds = new Set(store.favorites);
+    favoritePhotoAlbumIdsRef.current = favoriteIds;
+    photoAlbumProgressRef.current = store.progress;
+    photoAlbumPreferencesRef.current = store.preferences;
+    setFavoritePhotoAlbumIds(favoriteIds);
+    setPhotoAlbumProgress(store.progress);
+    setPhotoAlbumSortMode(store.preferences.sortMode);
+    setPhotoAlbumFilter(store.preferences.favoritesOnly ? "favorites" : "all");
+  }, []);
+
   const applyPlayerDataStore = useCallback((nextDataStore: PlayerDataStore) => {
     progressStoreRef.current = nextDataStore.progress;
     playerPreferencesRef.current = nextDataStore.preferences;
@@ -1689,6 +1763,36 @@ export default function App() {
     setVideoTags(nextDataStore.videoTags);
     setTagMergeDecisions(nextDataStore.tagMergeDecisions);
   }, []);
+
+  const loadPhotoAlbums = useCallback(async () => {
+    if (isPhotoAlbumsLoading) return;
+    setIsPhotoAlbumsLoading(true);
+    setPhotoAlbumMessage("正在扫描写真集...");
+    try {
+      const [scan, store] = await Promise.all([
+        fetchJson<PhotoAlbumScanResponse>("/api/photo-albums/scan"),
+        loadPhotoAlbumStore().catch(() => ({
+          version: 1,
+          favorites: [],
+          progress: {},
+          preferences: defaultPhotoAlbumPreferences,
+        })),
+      ]);
+      applyPhotoAlbumStore(store);
+      setPhotoAlbums(scan.albums);
+      setPhotoRootStatuses(scan.metadata.mediaRoots);
+      setHasLoadedPhotoAlbums(true);
+      setPhotoAlbumMessage(
+        scan.albums.length
+          ? `已加载 ${scan.albums.length} 本写真集，扫描 ${scan.scannedFiles} 张图片`
+          : "没有找到包含图片的文件夹",
+      );
+    } catch (error) {
+      setPhotoAlbumMessage(error instanceof Error ? error.message : "扫描写真集失败。");
+    } finally {
+      setIsPhotoAlbumsLoading(false);
+    }
+  }, [applyPhotoAlbumStore, isPhotoAlbumsLoading]);
 
   const playlistVideos = useMemo(
     () => getSortedVideos(videos, isSeriesMode ? "name" : playlistSortMode, isSeriesMode ? false : isPlaylistSortReversed),
@@ -1900,6 +2004,9 @@ export default function App() {
     return createHomeVideoCard(seriesVideos[sourceIndex + 1]);
   }, [createHomeVideoCard, currentVideo, playlistVideos, primaryResumeCard, recentHomeCards, seriesTitleByVideoId]);
   const isHomeViewVisible = activeView === "home" && !isPrivacyMode && !isCinemaMode && !isFullscreen;
+  const isPhotoAlbumViewVisible =
+    (activeView === "photos" || activeView === "photoViewer") && !isPrivacyMode && !isCinemaMode && !isFullscreen;
+  const isNonPlayerViewVisible = isHomeViewVisible || isPhotoAlbumViewVisible;
   const firstPlayableHomeCard = playlistVideos[0] ? createHomeVideoCard(playlistVideos[0]) : null;
   const primaryHomeCard = primaryResumeCard ?? firstPlayableHomeCard;
   const thumbnailQueueVideoIds = useMemo(() => {
@@ -1932,6 +2039,34 @@ export default function App() {
       favorites: favoriteVideoIds.size,
     };
   }, [favoriteVideoIds.size, progressStore, videos]);
+  const selectedPhotoAlbum = useMemo(
+    () => photoAlbums.find((album) => album.id === selectedPhotoAlbumId) ?? null,
+    [photoAlbums, selectedPhotoAlbumId],
+  );
+  const visiblePhotoAlbums = useMemo(() => {
+    const source =
+      photoAlbumFilter === "favorites"
+        ? photoAlbums.filter((album) => favoritePhotoAlbumIds.has(album.id))
+        : photoAlbums;
+    return [...source].sort((a, b) => {
+      if (photoAlbumSortMode === "name") {
+        return collator.compare(a.title || a.relativePath, b.title || b.relativePath);
+      }
+      if (photoAlbumSortMode === "count") {
+        return b.imageCount - a.imageCount || collator.compare(a.title, b.title);
+      }
+      return b.updatedAt - a.updatedAt || collator.compare(a.title, b.title);
+    });
+  }, [favoritePhotoAlbumIds, photoAlbumFilter, photoAlbumSortMode, photoAlbums]);
+  const photoAlbumStats = useMemo(() => {
+    const completed = photoAlbums.filter((album) => photoAlbumProgress[album.id]?.completed).length;
+    return {
+      total: photoAlbums.length,
+      images: photoAlbums.reduce((sum, album) => sum + album.imageCount, 0),
+      favorites: favoritePhotoAlbumIds.size,
+      completed,
+    };
+  }, [favoritePhotoAlbumIds.size, photoAlbumProgress, photoAlbums]);
   const findMatchedSubtitleForVideo = useCallback(
     (video: VideoItem) => {
       const videoBasePath = basePathOf(video.relativePath);
@@ -3348,8 +3483,144 @@ export default function App() {
     setActiveView("home");
   }, [cancelAutoNextPrompt, persistCurrentProgress, resetHoldSpeedState]);
 
+  const showPhotoAlbumsView = useCallback(() => {
+    persistCurrentProgress();
+    videoRef.current?.pause();
+    cancelAutoNextPrompt();
+    resetHoldSpeedState();
+    setAreControlsVisible(true);
+    setActiveView("photos");
+    if (!hasLoadedPhotoAlbums) void loadPhotoAlbums();
+  }, [cancelAutoNextPrompt, hasLoadedPhotoAlbums, loadPhotoAlbums, persistCurrentProgress, resetHoldSpeedState]);
+
+  const persistPhotoAlbumProgress = useCallback(
+    (album: PhotoAlbum, imageIndex: number, completed = false) => {
+      const safeIndex = Math.min(Math.max(imageIndex, 0), Math.max(album.images.length - 1, 0));
+      const nextProgress = {
+        ...photoAlbumProgressRef.current,
+        [album.id]: {
+          imageIndex: safeIndex,
+          updatedAt: Date.now(),
+          completed,
+        },
+      };
+      photoAlbumProgressRef.current = nextProgress;
+      setPhotoAlbumProgress(nextProgress);
+      void saveCurrentPhotoAlbumStore({ progress: nextProgress }).catch(() => {
+        setPhotoAlbumMessage("写真集进度保存失败。");
+      });
+    },
+    [saveCurrentPhotoAlbumStore],
+  );
+
+  const openPhotoAlbum = useCallback(
+    (album: PhotoAlbum, options?: { fromBeginning?: boolean }) => {
+      const storedIndex = photoAlbumProgressRef.current[album.id]?.imageIndex ?? 0;
+      const nextIndex = options?.fromBeginning ? 0 : Math.min(storedIndex, Math.max(album.images.length - 1, 0));
+      setSelectedPhotoAlbumId(album.id);
+      setCurrentPhotoIndex(nextIndex);
+      setActiveView("photoViewer");
+      persistPhotoAlbumProgress(album, nextIndex, false);
+    },
+    [persistPhotoAlbumProgress],
+  );
+
+  const showPhotoAlbumList = useCallback(() => {
+    setActiveView("photos");
+  }, []);
+
+  const movePhoto = useCallback(
+    (delta: number) => {
+      if (!selectedPhotoAlbum) return;
+      const maxIndex = Math.max(selectedPhotoAlbum.images.length - 1, 0);
+      const nextIndex = Math.min(Math.max(currentPhotoIndex + delta, 0), maxIndex);
+      if (nextIndex === currentPhotoIndex) return;
+      setCurrentPhotoIndex(nextIndex);
+      persistPhotoAlbumProgress(selectedPhotoAlbum, nextIndex, nextIndex === maxIndex);
+    },
+    [currentPhotoIndex, persistPhotoAlbumProgress, selectedPhotoAlbum],
+  );
+
+  const togglePhotoAlbumFavorite = useCallback(
+    (album: PhotoAlbum) => {
+      const nextFavorites = new Set(favoritePhotoAlbumIdsRef.current);
+      if (nextFavorites.has(album.id)) {
+        nextFavorites.delete(album.id);
+        setPhotoAlbumMessage(`已取消收藏《${album.title}》`);
+      } else {
+        nextFavorites.add(album.id);
+        setPhotoAlbumMessage(`已收藏《${album.title}》`);
+      }
+      favoritePhotoAlbumIdsRef.current = nextFavorites;
+      setFavoritePhotoAlbumIds(nextFavorites);
+      void saveCurrentPhotoAlbumStore({ favorites: Array.from(nextFavorites) }).catch(() => {
+        setPhotoAlbumMessage("写真集收藏保存失败。");
+      });
+    },
+    [saveCurrentPhotoAlbumStore],
+  );
+
+  const markSelectedPhotoAlbumCompleted = useCallback(() => {
+    if (!selectedPhotoAlbum) return;
+    const lastIndex = Math.max(selectedPhotoAlbum.images.length - 1, 0);
+    setCurrentPhotoIndex(lastIndex);
+    persistPhotoAlbumProgress(selectedPhotoAlbum, lastIndex, true);
+    setPhotoAlbumMessage(`已标记《${selectedPhotoAlbum.title}》为已读完`);
+  }, [persistPhotoAlbumProgress, selectedPhotoAlbum]);
+
+  const resetSelectedPhotoAlbumProgress = useCallback(() => {
+    if (!selectedPhotoAlbum) return;
+    const nextProgress = { ...photoAlbumProgressRef.current };
+    delete nextProgress[selectedPhotoAlbum.id];
+    photoAlbumProgressRef.current = nextProgress;
+    setPhotoAlbumProgress(nextProgress);
+    setCurrentPhotoIndex(0);
+    void saveCurrentPhotoAlbumStore({ progress: nextProgress }).catch(() => {
+      setPhotoAlbumMessage("写真集进度保存失败。");
+    });
+    setPhotoAlbumMessage(`已清除《${selectedPhotoAlbum.title}》的阅读进度`);
+  }, [saveCurrentPhotoAlbumStore, selectedPhotoAlbum]);
+
+  const updatePhotoAlbumSortMode = useCallback(
+    (nextSortMode: PhotoAlbumSortMode) => {
+      const nextPreferences = {
+        ...photoAlbumPreferencesRef.current,
+        sortMode: nextSortMode,
+      };
+      photoAlbumPreferencesRef.current = nextPreferences;
+      setPhotoAlbumSortMode(nextSortMode);
+      void saveCurrentPhotoAlbumStore({ preferences: nextPreferences }).catch(() => {
+        setPhotoAlbumMessage("写真集偏好保存失败。");
+      });
+    },
+    [saveCurrentPhotoAlbumStore],
+  );
+
+  const updatePhotoAlbumFilter = useCallback(
+    (nextFilter: PhotoAlbumViewFilter) => {
+      const nextPreferences = {
+        ...photoAlbumPreferencesRef.current,
+        favoritesOnly: nextFilter === "favorites",
+      };
+      photoAlbumPreferencesRef.current = nextPreferences;
+      setPhotoAlbumFilter(nextFilter);
+      void saveCurrentPhotoAlbumStore({ preferences: nextPreferences }).catch(() => {
+        setPhotoAlbumMessage("写真集偏好保存失败。");
+      });
+    },
+    [saveCurrentPhotoAlbumStore],
+  );
+
+  const togglePhotoFullscreen = useCallback(async () => {
+    if (document.fullscreenElement) {
+      await document.exitFullscreen();
+      return;
+    }
+    await appShellRef.current?.requestFullscreen();
+  }, []);
+
   useEffect(() => {
-    if (isFullscreen || activeView === "home") {
+    if (isFullscreen || activeView !== "player") {
       setAdaptiveColumns(null);
       return;
     }
@@ -5323,6 +5594,34 @@ export default function App() {
         return;
       }
 
+      if (activeView === "photoViewer" && selectedPhotoAlbum && !isFormControl(event.target)) {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          showPhotoAlbumList();
+          return;
+        }
+        if (event.key === "ArrowLeft") {
+          event.preventDefault();
+          movePhoto(-1);
+          return;
+        }
+        if (event.key === "ArrowRight") {
+          event.preventDefault();
+          movePhoto(1);
+          return;
+        }
+        if (event.key.toLowerCase() === "f") {
+          event.preventDefault();
+          if (!event.repeat) void togglePhotoFullscreen();
+          return;
+        }
+        if (event.key.toLowerCase() === "s") {
+          event.preventDefault();
+          if (!event.repeat) togglePhotoAlbumFavorite(selectedPhotoAlbum);
+          return;
+        }
+      }
+
       if (eventCode === activeShortcuts.toggleShortcuts && !isFormControl(event.target)) {
         event.preventDefault();
         toggleShortcutDialog();
@@ -5468,6 +5767,7 @@ export default function App() {
     };
   }, [
     adjustVolume,
+    activeView,
     autoNextPrompt,
     cancelAutoNextPrompt,
     clearRightKeyHoldTimer,
@@ -5489,8 +5789,13 @@ export default function App() {
     isPrivacyMode,
     isShortcutDialogOpen,
     markCurrentVideoCompleted,
+    movePhoto,
     playNext,
+    selectedPhotoAlbum,
+    showPhotoAlbumList,
     toggleCinemaMode,
+    togglePhotoAlbumFavorite,
+    togglePhotoFullscreen,
     togglePrivacyMode,
   ]);
 
@@ -5660,11 +5965,62 @@ export default function App() {
       </button>
     );
   };
+  const formatPhotoAlbumProgress = (album: PhotoAlbum) => {
+    const progress = photoAlbumProgress[album.id];
+    if (progress?.completed) return "已读完";
+    if (!progress) return "未开始";
+    return `看到 ${Math.min(progress.imageIndex + 1, album.imageCount)} / ${album.imageCount}`;
+  };
+  const renderPhotoAlbumCard = (album: PhotoAlbum) => {
+    const progress = photoAlbumProgress[album.id];
+    const progressPercent = progress ? Math.min(100, ((progress.imageIndex + 1) / Math.max(album.imageCount, 1)) * 100) : 0;
+    const isFavorite = favoritePhotoAlbumIds.has(album.id);
+    return (
+      <article className="photo-album-card" key={album.id}>
+        <button className="photo-album-cover" type="button" onClick={() => openPhotoAlbum(album)} title={album.relativePath || album.title}>
+          <img src={album.coverImageUrl} alt="" loading="lazy" draggable={false} />
+          <span className="photo-album-count">{album.imageCount} 张</span>
+        </button>
+        <div className="photo-album-copy">
+          <div className="photo-album-title-row">
+            <button type="button" onClick={() => openPhotoAlbum(album)} title={album.title}>
+              {album.title}
+            </button>
+            <button
+              className={`icon-button photo-favorite-button ${isFavorite ? "active" : ""}`}
+              type="button"
+              onClick={() => togglePhotoAlbumFavorite(album)}
+              title={isFavorite ? "取消收藏" : "收藏写真集"}
+              aria-label={isFavorite ? "取消收藏" : "收藏写真集"}
+            >
+              <Star size={16} fill={isFavorite ? "currentColor" : "none"} />
+            </button>
+          </div>
+          <span>{album.mediaRootLabel} · {album.relativePath || "根目录"}</span>
+          <span>{formatPhotoAlbumProgress(album)} · {formatFileSize(album.totalSize)} · {formatRelativeTime(album.updatedAt)}</span>
+          <div className="home-progress" aria-label={formatPhotoAlbumProgress(album)}>
+            <span style={{ width: `${progressPercent}%` }} />
+          </div>
+          <div className="photo-album-actions">
+            <button className="secondary-button" type="button" onClick={() => openPhotoAlbum(album)}>
+              打开
+            </button>
+            {progress ? (
+              <button className="secondary-button" type="button" onClick={() => openPhotoAlbum(album, { fromBeginning: true })}>
+                从头
+              </button>
+            ) : null}
+          </div>
+        </div>
+      </article>
+    );
+  };
+  const currentPhoto = selectedPhotoAlbum?.images[currentPhotoIndex] ?? null;
 
   return (
     <>
     <main
-      className={`app-shell theme-${theme} ${isDragActive ? "drag-active" : ""} ${isPrivacyMode ? "privacy-mode" : ""} ${isCinemaMode ? "cinema-mode" : ""} ${isHomeViewVisible ? "home-view" : ""}`}
+      className={`app-shell theme-${theme} ${isDragActive ? "drag-active" : ""} ${isPrivacyMode ? "privacy-mode" : ""} ${isCinemaMode ? "cinema-mode" : ""} ${isNonPlayerViewVisible ? "home-view" : ""}`}
       ref={appShellRef}
       style={shellStyle}
       onDragOver={handleDragOver}
@@ -5680,7 +6036,7 @@ export default function App() {
       <section className="player-column" ref={playerColumnRef}>
         <header className="top-bar" ref={topBarRef}>
           <div className="video-summary">
-            {currentVideo && !isPrivacyMode && !isHomeViewVisible ? (
+            {currentVideo && !isPrivacyMode && !isNonPlayerViewVisible ? (
               <dl className="current-video-meta">
                 {videoMetadataRows(currentVideo).map(([label, value]) => (
                   <div key={label} className={label === "文件名" ? "current-video-file-chip" : undefined}>
@@ -5691,7 +6047,15 @@ export default function App() {
               </dl>
             ) : (
               <p className="current-video-title">
-                {isPrivacyMode ? "正在播放：推荐视频" : currentVideo ? currentVideo.relativePath : message}
+                {isPrivacyMode
+                  ? "正在播放：推荐视频"
+                  : isPhotoAlbumViewVisible
+                    ? activeView === "photoViewer" && selectedPhotoAlbum
+                      ? selectedPhotoAlbum.title
+                      : "写真集"
+                    : currentVideo
+                      ? currentVideo.relativePath
+                      : message}
               </p>
             )}
           </div>
@@ -5699,6 +6063,12 @@ export default function App() {
             {!isPrivacyMode && videos.length && !isHomeViewVisible ? (
               <button className="secondary-button top-home-button" type="button" onClick={showHomeView}>
                 首页
+              </button>
+            ) : null}
+            {!isPrivacyMode && activeView !== "photos" && activeView !== "photoViewer" ? (
+              <button className="secondary-button top-home-button" type="button" onClick={showPhotoAlbumsView}>
+                <Images size={17} />
+                写真集
               </button>
             ) : null}
             <button
@@ -5977,8 +6347,177 @@ export default function App() {
           </section>
         ) : null}
 
+        {isPhotoAlbumViewVisible && activeView === "photos" ? (
+          <section className="photo-dashboard" aria-label="写真集">
+            <section className="photo-toolbar home-section">
+              <div>
+                <span className="home-section-eyebrow">写真集</span>
+                <h2>本地写真集</h2>
+                <p>{photoAlbumMessage}</p>
+              </div>
+              <div className="photo-toolbar-actions">
+                <div className="playlist-filter" role="group" aria-label="写真集筛选">
+                  <button
+                    type="button"
+                    className={photoAlbumFilter === "all" ? "active" : ""}
+                    onClick={() => updatePhotoAlbumFilter("all")}
+                  >
+                    全部
+                  </button>
+                  <button
+                    type="button"
+                    className={photoAlbumFilter === "favorites" ? "active" : ""}
+                    onClick={() => updatePhotoAlbumFilter("favorites")}
+                  >
+                    收藏
+                  </button>
+                </div>
+                <select
+                  className="compact-select photo-sort-select"
+                  value={photoAlbumSortMode}
+                  onChange={(event) => updatePhotoAlbumSortMode(event.target.value as PhotoAlbumSortMode)}
+                  aria-label="写真集排序"
+                >
+                  <option value="updated">最近更新</option>
+                  <option value="name">名称</option>
+                  <option value="count">图片数</option>
+                </select>
+                <button className="secondary-button" type="button" onClick={() => void loadPhotoAlbums()} disabled={isPhotoAlbumsLoading}>
+                  <RefreshCw size={16} />
+                  {isPhotoAlbumsLoading ? "扫描中" : "重新扫描"}
+                </button>
+              </div>
+            </section>
+
+            <section className="home-stats photo-stats">
+              <div>
+                <strong>{photoAlbumStats.total}</strong>
+                <span>相册</span>
+              </div>
+              <div>
+                <strong>{photoAlbumStats.images}</strong>
+                <span>图片</span>
+              </div>
+              <div>
+                <strong>{photoAlbumStats.completed}</strong>
+                <span>已读完</span>
+              </div>
+              <div>
+                <strong>{photoAlbumStats.favorites}</strong>
+                <span>收藏</span>
+              </div>
+            </section>
+
+            {photoRootStatuses.some((status) => status.status !== "ready") ? (
+              <section className="home-section photo-root-status">
+                <div className="home-section-header">
+                  <h2>媒体库状态</h2>
+                  <span>{photoRootStatuses.filter((status) => status.status === "ready").length} / {photoRootStatuses.length} 可用</span>
+                </div>
+                <div className="media-library-list">
+                  {photoRootStatuses.map((status) => (
+                    <div className="media-library-row" key={status.id}>
+                      <strong>{status.label}</strong>
+                      <code>{formatPhotoRootStatus(status)}</code>
+                      {status.error ? <code>{status.error}</code> : null}
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ) : null}
+
+            {visiblePhotoAlbums.length ? (
+              <section className="photo-album-grid">{visiblePhotoAlbums.map(renderPhotoAlbumCard)}</section>
+            ) : (
+              <section className="home-section photo-empty-state">
+                <Images size={42} />
+                <h2>{isPhotoAlbumsLoading ? "正在扫描写真集" : "还没有可显示的写真集"}</h2>
+                <p>{photoAlbumFilter === "favorites" ? "收藏写真集后会出现在这里。" : "会把包含图片的文件夹识别为一本写真集。"}</p>
+                <button className="primary-button" type="button" onClick={() => void loadPhotoAlbums()} disabled={isPhotoAlbumsLoading}>
+                  <RefreshCw size={18} />
+                  {isPhotoAlbumsLoading ? "扫描中" : "扫描写真集"}
+                </button>
+              </section>
+            )}
+          </section>
+        ) : null}
+
+        {isPhotoAlbumViewVisible && activeView === "photoViewer" && selectedPhotoAlbum ? (
+          <section className="photo-viewer" aria-label={`阅读 ${selectedPhotoAlbum.title}`}>
+            <header className="photo-viewer-header">
+              <button className="secondary-button" type="button" onClick={showPhotoAlbumList}>
+                <ArrowLeft size={17} />
+                返回
+              </button>
+              <div>
+                <strong>{selectedPhotoAlbum.title}</strong>
+                <span>{selectedPhotoAlbum.mediaRootLabel} · {selectedPhotoAlbum.relativePath || "根目录"}</span>
+              </div>
+              <div className="photo-viewer-actions">
+                <button
+                  className={`secondary-button ${favoritePhotoAlbumIds.has(selectedPhotoAlbum.id) ? "active" : ""}`}
+                  type="button"
+                  onClick={() => togglePhotoAlbumFavorite(selectedPhotoAlbum)}
+                >
+                  <Star size={16} fill={favoritePhotoAlbumIds.has(selectedPhotoAlbum.id) ? "currentColor" : "none"} />
+                  {favoritePhotoAlbumIds.has(selectedPhotoAlbum.id) ? "已收藏" : "收藏"}
+                </button>
+                <button className="secondary-button" type="button" onClick={markSelectedPhotoAlbumCompleted}>
+                  <CheckCircle2 size={16} />
+                  标记已读
+                </button>
+                <button className="secondary-button" type="button" onClick={resetSelectedPhotoAlbumProgress}>
+                  <RotateCcw size={16} />
+                  重读
+                </button>
+              </div>
+            </header>
+            <div className="photo-stage">
+              <button className="photo-nav-button previous" type="button" onClick={() => movePhoto(-1)} disabled={currentPhotoIndex <= 0} aria-label="上一张">
+                <ChevronLeft size={34} />
+              </button>
+              {currentPhoto ? (
+                <img src={currentPhoto.url} alt={currentPhoto.name} draggable={false} />
+              ) : (
+                <div className="photo-empty-state">没有可显示的图片</div>
+              )}
+              <button
+                className="photo-nav-button next"
+                type="button"
+                onClick={() => movePhoto(1)}
+                disabled={currentPhotoIndex >= selectedPhotoAlbum.images.length - 1}
+                aria-label="下一张"
+              >
+                <ChevronRight size={34} />
+              </button>
+            </div>
+            <footer className="photo-filmstrip">
+              <div className="photo-page-indicator">
+                <strong>{Math.min(currentPhotoIndex + 1, selectedPhotoAlbum.imageCount)} / {selectedPhotoAlbum.imageCount}</strong>
+                <span>{currentPhoto?.name ?? selectedPhotoAlbum.title}</span>
+              </div>
+              <div className="photo-thumbnails" aria-label="图片缩略图">
+                {selectedPhotoAlbum.images.map((image) => (
+                  <button
+                    className={image.index === currentPhotoIndex ? "active" : ""}
+                    key={image.id}
+                    type="button"
+                    onClick={() => {
+                      setCurrentPhotoIndex(image.index);
+                      persistPhotoAlbumProgress(selectedPhotoAlbum, image.index, image.index === selectedPhotoAlbum.images.length - 1);
+                    }}
+                    title={image.name}
+                  >
+                    <img src={image.url} alt="" loading="lazy" draggable={false} />
+                  </button>
+                ))}
+              </div>
+            </footer>
+          </section>
+        ) : null}
+
         <div
-          className={`player-frame ${isHomeViewVisible ? "home-hidden" : ""} ${isFullscreen ? "fullscreen" : ""} ${areControlsVisible ? "" : "controls-hidden"}`}
+          className={`player-frame ${isNonPlayerViewVisible ? "home-hidden" : ""} ${isFullscreen ? "fullscreen" : ""} ${areControlsVisible ? "" : "controls-hidden"}`}
           ref={playerRef}
           onMouseMove={revealControls}
           onContextMenu={handlePlayerContextMenu}
@@ -6323,7 +6862,7 @@ export default function App() {
         </div>
       </section>
 
-      {!isHomeViewVisible && !isPrivacyMode && !isCinemaMode ? (
+      {!isNonPlayerViewVisible && !isPrivacyMode && !isCinemaMode ? (
       <aside className="playlist-panel" aria-label={isSeriesMode ? "追番列表" : "播放列表"}>
         <div className="playlist-header">
           <div className="playlist-title-row">

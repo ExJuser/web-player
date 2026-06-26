@@ -143,7 +143,7 @@ export type PlayerDataStore = {
 export type PlaylistFilter = "all" | "favorites";
 export type PlaylistSortMode = "name" | "path" | "modified" | "size";
 export type PlaybackMode = "sequential" | "single-loop" | "list-loop" | "shuffle" | "favorites-only";
-export type ActiveView = "home" | "player";
+export type ActiveView = "home" | "player" | "photos" | "photoViewer";
 export type AutoNextPrompt = {
   nextVideoId: string;
   nextVideoName: string;
@@ -196,6 +196,77 @@ export type MediaScanBatch = {
   subtitles: SubtitleItem[];
   scannedFiles: number;
   filteredSmallVideos: number;
+};
+
+export type PhotoAlbumImage = {
+  id: string;
+  name: string;
+  relativePath: string;
+  url: string;
+  size: number;
+  lastModified: number;
+  mediaRootId: string;
+  index: number;
+};
+
+export type PhotoAlbum = {
+  id: string;
+  title: string;
+  relativePath: string;
+  mediaRootId: string;
+  mediaRootLabel: string;
+  coverImageUrl: string;
+  imageCount: number;
+  totalSize: number;
+  updatedAt: number;
+  images: PhotoAlbumImage[];
+};
+
+export type PhotoAlbumProgress = {
+  imageIndex: number;
+  updatedAt: number;
+  completed: boolean;
+};
+
+export type PhotoAlbumSortMode = "updated" | "name" | "count";
+
+export type PhotoAlbumPreferences = {
+  sortMode: PhotoAlbumSortMode;
+  favoritesOnly: boolean;
+};
+
+export type PhotoAlbumStore = {
+  version?: number;
+  favorites: string[];
+  progress: Record<string, PhotoAlbumProgress>;
+  preferences: PhotoAlbumPreferences;
+};
+
+export type PhotoAlbumRootStatus = PlayerMediaRootStatus;
+
+export type PhotoAlbumScanResponse = {
+  roots: Array<{
+    root: {
+      id: string;
+      label: string;
+      basename: string;
+      path: string;
+      source?: "browser" | "local";
+      localPath?: string;
+    };
+    status: PhotoAlbumRootStatus;
+    albums: PhotoAlbum[];
+  }>;
+  albums: PhotoAlbum[];
+  scannedFiles: number;
+  metadata: {
+    id: "photo-albums";
+    name: string;
+    albumCount: number;
+    scannedFiles: number;
+    updatedAt: number;
+    mediaRoots: PhotoAlbumRootStatus[];
+  };
 };
 
 declare global {

@@ -4,6 +4,7 @@ import path from "node:path";
 
 const videoExtensions = new Set([".mp4", ".webm", ".ogg", ".mov", ".m4v", ".mkv"]);
 const subtitleExtensions = new Set([".srt", ".vtt"]);
+export const photoExtensions = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif", ".bmp"]);
 const smallVideoFileThresholdBytes = 50 * 1024 * 1024;
 
 async function readJsonFile(filePath, fallback) {
@@ -164,6 +165,10 @@ function createGlobalMediaId(rootId, relativePath, size, lastModified) {
   return `${rootId}|${relativePath}|${size}|${lastModified}`;
 }
 
+function createStableFolderId(rootId, relativePath) {
+  return `${rootId}|${relativePath || "."}`;
+}
+
 function encodeMediaUrl(rootId, relativePath) {
   return `/api/media/${encodeURIComponent(rootId)}/${relativePath
     .replace(/\\/g, "/")
@@ -315,7 +320,117 @@ export async function scanConfiguredMediaRoots(config) {
   };
 }
 
-export function resolveMediaPath(config, rootId, relativePath, allowedExtensions = new Set([...videoExtensions, ...subtitleExtensions])) {
+export async function scanPhotoAlbumsRoot(root) {
+  const rootPath = serverPathForRoot(root);
+  if (!rootPath || !path.isAbsolute(rootPath)) {
+    return {
+      root,
+      status: createRootStatus(root, "needsAccess", {
+        error: "需要配置本机绝对路径或重新授权浏览器目录。",
+      }),
+      albums: [],
+    };
+  }
+
+  const resolvedRoot = path.resolve(rootPath);
+  const albums = [];
+  let scannedFiles = 0;
+
+  async function walk(directory, segments) {
+    const entries = await readdir(directory, { withFileTypes: true });
+    const images = [];
+
+    for (const entry of entries) {
+      const nextSegments = [...segments, entry.name];
+      const entryPath = path.join(directory, entry.name);
+      if (entry.isDirectory()) {
+        await walk(entryPath, nextSegments);
+        continue;
+      }
+      if (!entry.isFile()) continue;
+
+      const extension = path.extname(entry.name).toLowerCase();
+      if (!photoExtensions.has(extension)) continue;
+      scannedFiles += 1;
+
+      const fileStat = await stat(entryPath);
+      const lastModified = Math.round(fileStat.mtimeMs);
+      const relativePath = nextSegments.join("/");
+      images.push({
+        id: createGlobalMediaId(root.id, relativePath, fileStat.size, lastModified),
+        name: entry.name,
+        relativePath,
+        url: encodeMediaUrl(root.id, relativePath),
+        size: fileStat.size,
+        lastModified,
+        mediaRootId: root.id,
+      });
+    }
+
+    if (!images.length) return;
+    images.sort((a, b) => a.relativePath.localeCompare(b.relativePath, undefined, { numeric: true, sensitivity: "base" }));
+    const folderPath = segments.join("/");
+    const title = segments.at(-1) || root.label;
+    const totalSize = images.reduce((sum, image) => sum + image.size, 0);
+    const updatedAt = images.reduce((latest, image) => Math.max(latest, image.lastModified), 0);
+    albums.push({
+      id: createStableFolderId(root.id, folderPath),
+      title,
+      relativePath: folderPath,
+      mediaRootId: root.id,
+      mediaRootLabel: root.label,
+      coverImageUrl: images[0].url,
+      imageCount: images.length,
+      totalSize,
+      updatedAt,
+      images: images.map((image, index) => ({ ...image, index })),
+    });
+  }
+
+  try {
+    await walk(resolvedRoot, []);
+    albums.sort((a, b) => b.updatedAt - a.updatedAt || a.relativePath.localeCompare(b.relativePath, undefined, { numeric: true, sensitivity: "base" }));
+    return {
+      root,
+      status: createRootStatus(root, "ready", {
+        videoCount: albums.length,
+        scannedFiles,
+      }),
+      albums,
+    };
+  } catch (error) {
+    return {
+      root,
+      status: createRootStatus(root, "error", {
+        scannedFiles,
+        error: error instanceof Error ? error.message : "扫描写真集失败。",
+      }),
+      albums,
+    };
+  }
+}
+
+export async function scanConfiguredPhotoAlbums(config) {
+  const roots = normalizeMediaRoots(config);
+  const rootsResult = await Promise.all(roots.map((root) => scanPhotoAlbumsRoot(root)));
+  const albums = rootsResult.flatMap((result) => result.albums);
+  const scannedFiles = rootsResult.reduce((sum, result) => sum + result.status.scannedFiles, 0);
+  return {
+    roots: rootsResult,
+    albums,
+    scannedFiles,
+    metadata: {
+      id: "photo-albums",
+      name: "写真集",
+      albumCount: albums.length,
+      scannedFiles,
+      updatedAt: Date.now(),
+      mediaRoots: rootsResult.map((result) => result.status),
+    },
+  };
+}
+
+export function resolveMediaPath(config, rootId, relativePath, allowedExtensions = new Set([...videoExtensions, ...subtitleExtensions, ...photoExtensions])) {
   const root = normalizeMediaRoots(config).find((item) => item.id === rootId);
   if (!root) throw new Error("Unknown media root.");
   const rootPath = serverPathForRoot(root);
@@ -345,6 +460,17 @@ export function resolveVideoPath(config, rootId, relativePath) {
   } catch (error) {
     if (error instanceof Error && error.message === "Unsupported media file.") {
       throw new Error("Unsupported video file.");
+    }
+    throw error;
+  }
+}
+
+export function resolvePhotoPath(config, rootId, relativePath) {
+  try {
+    return resolveMediaPath(config, rootId, relativePath, photoExtensions);
+  } catch (error) {
+    if (error instanceof Error && error.message === "Unsupported media file.") {
+      throw new Error("Unsupported photo file.");
     }
     throw error;
   }
