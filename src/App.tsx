@@ -4064,7 +4064,7 @@ export default function App() {
 
     const loadSeriesMatch = async (series: { key: string; title: string }) => {
       const existing = bangumiMatchesBySeriesKeyRef.current[series.key];
-      if (existing?.title === series.title && ["loading", "matched", "none", "error"].includes(existing.status)) return;
+      if (existing?.title === series.title && ["matched", "none", "error"].includes(existing.status)) return;
 
       setBangumiMatchesBySeriesKey((previous) => ({
         ...previous,
