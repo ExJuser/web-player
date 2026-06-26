@@ -72,7 +72,7 @@ export function getCompatibleMediaAction(video: VideoForCompatibilityUi | null |
     !video.playability.compatibleUrl;
 
   return {
-    visible: Boolean(video?.playability?.reason || canCreate),
+    visible: Boolean(video?.playability || canCreate),
     disabled: !canCreate,
     canCreate,
     label: canCreate ? "生成兼容 MP4" : "",

@@ -2069,6 +2069,7 @@ export default function App() {
   const [embeddedSubtitleMessage, setEmbeddedSubtitleMessage] = useState("");
   const [isEmbeddedSubtitleLoading, setIsEmbeddedSubtitleLoading] = useState(false);
   const [mediaProbeVideoId, setMediaProbeVideoId] = useState<string | null>(null);
+  const mediaProbeVideoIdRef = useRef<string | null>(null);
   const [compatibleMediaVideoId, setCompatibleMediaVideoId] = useState<string | null>(null);
   const [compatibleMediaMessage, setCompatibleMediaMessage] = useState("");
   const [isAiPanelOpen, setIsAiPanelOpen] = useState(false);
@@ -3693,10 +3694,11 @@ export default function App() {
 
   useEffect(() => {
     if (!currentVideo || !currentMediaRootId || !canUseServerMediaTools) return;
-    if (currentVideo.playability || mediaProbeVideoId === currentVideo.id) return;
+    if (currentVideo.playability || mediaProbeVideoIdRef.current === currentVideo.id) return;
 
     let isCancelled = false;
     const videoId = currentVideo.id;
+    mediaProbeVideoIdRef.current = videoId;
     setMediaProbeVideoId(videoId);
     fetchJson<MediaProbeResponse>("/api/media/probe", {
       method: "POST",
@@ -3717,7 +3719,8 @@ export default function App() {
         });
       })
       .finally(() => {
-        if (!isCancelled) {
+        if (mediaProbeVideoIdRef.current === videoId) {
+          mediaProbeVideoIdRef.current = null;
           setMediaProbeVideoId((currentId) => (currentId === videoId ? null : currentId));
         }
       });
@@ -3725,7 +3728,7 @@ export default function App() {
     return () => {
       isCancelled = true;
     };
-  }, [canUseServerMediaTools, currentMediaRootId, currentVideo, mediaProbeVideoId, updateVideoPlayability]);
+  }, [canUseServerMediaTools, currentMediaRootId, currentVideo, updateVideoPlayability]);
 
   const updateProgress = useCallback(
     (video: VideoItem, currentTime: number, duration: number, completed?: boolean) => {

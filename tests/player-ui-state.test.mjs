@@ -50,6 +50,17 @@ test("compatible media action is enabled only for server remux candidates", () =
   assert.equal(
     uiState.getCompatibleMediaAction(
       {
+        playbackSource: "server",
+        playability: { status: "direct" },
+      },
+      { canUseServerTools: true },
+    ).visible,
+    true,
+  );
+
+  assert.equal(
+    uiState.getCompatibleMediaAction(
+      {
         playbackSource: "browser",
         playability: { status: "needsLocalPath", reason: "需本机路径" },
       },
