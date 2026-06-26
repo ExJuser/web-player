@@ -234,6 +234,7 @@ export type PhotoAlbumImage = {
   lastModified: number;
   mediaRootId: string;
   index: number;
+  parentDirectory?: FileSystemDirectoryHandle;
 };
 
 export type PhotoAlbum = {
