@@ -868,7 +868,7 @@ async function searchLibraryWithAi(env, payload) {
       {
         role: "system",
         content:
-          "你是本地片库搜索助手。搜索范围是用户提供的全部候选视频，不是当前继续观看条目。只能从候选视频中选择，不能编造片名或使用候选外内容。answer 只能解释 matchIds 中已选中的条目；如果没有明确匹配，answer 写“AI 未找到明确匹配”。请返回严格 JSON：{\"answer\":\"简短中文理由\",\"matchIds\":[\"候选 id\"]}。matchIds 最多 5 个。",
+          "你是本地片库搜索助手。搜索范围是用户提供的当前媒体模式候选视频，不是当前继续观看条目。只能从候选视频中选择，不能编造片名或使用候选外内容。answer 只能解释 matchIds 中已选中的条目；如果没有明确匹配，answer 写“AI 未找到明确匹配”。请返回严格 JSON：{\"answer\":\"简短中文理由\",\"matchIds\":[\"候选 id\"]}。matchIds 最多 5 个。",
       },
       {
         role: "user",
