@@ -698,69 +698,6 @@ async function* collectVideos(directory: FileSystemDirectoryHandle, rootId?: str
   }
 }
 
-async function collectPhotoAlbumsFromDirectory(directory: FileSystemDirectoryHandle) {
-  const rootId = `browser-photo:${sanitizeLibraryName(directory.name)}-${hashString(directory.name)}`;
-  const rootLabel = directory.name;
-  const albums: PhotoAlbum[] = [];
-  let scannedFiles = 0;
-
-  async function walk(handle: FileSystemDirectoryHandle, segments: string[]) {
-    const images: PhotoAlbum["images"] = [];
-
-    for await (const entry of handle.values()) {
-      const nextSegments = [...segments, entry.name];
-      if (entry.kind === "directory") {
-        await walk(entry, nextSegments);
-        continue;
-      }
-      if (!isPhotoFile(entry.name)) continue;
-
-      scannedFiles += 1;
-      const file = await entry.getFile();
-      const relativePath = nextSegments.join("/");
-      images.push({
-        id: createGlobalVideoId(rootId, relativePath, file),
-        name: entry.name,
-        relativePath,
-        url: URL.createObjectURL(file),
-        size: file.size,
-        lastModified: file.lastModified,
-        mediaRootId: rootId,
-        index: 0,
-      });
-    }
-
-    if (!images.length) return;
-    images.sort((a, b) => a.relativePath.localeCompare(b.relativePath, undefined, { numeric: true, sensitivity: "base" }));
-    const relativePath = segments.join("/");
-    const indexedImages = images.map((image, index) => ({ ...image, index }));
-    const totalSize = indexedImages.reduce((sum, image) => sum + image.size, 0);
-    const updatedAt = indexedImages.reduce((latest, image) => Math.max(latest, image.lastModified), 0);
-    albums.push({
-      id: createPhotoAlbumFolderId(rootId, relativePath),
-      title: segments.at(-1) || rootLabel,
-      relativePath,
-      mediaRootId: rootId,
-      mediaRootLabel: rootLabel,
-      coverImageUrl: indexedImages[0]?.url ?? "",
-      imageCount: indexedImages.length,
-      totalSize,
-      updatedAt,
-      images: indexedImages,
-    });
-  }
-
-  await walk(directory, []);
-  albums.sort((a, b) => b.updatedAt - a.updatedAt || a.relativePath.localeCompare(b.relativePath, undefined, { numeric: true, sensitivity: "base" }));
-
-  return {
-    rootId,
-    rootLabel,
-    albums,
-    scannedFiles,
-  };
-}
-
 function collectVideosFromFiles(files: FileList | File[]): MediaCollection {
   const collection = createEmptyMediaCollection();
 
@@ -798,6 +735,66 @@ function collectVideosFromFiles(files: FileList | File[]): MediaCollection {
   }
 
   return sortMediaCollection(collection);
+}
+
+function collectPhotoAlbumsFromFiles(files: FileList | File[]) {
+  const albumImages = new Map<string, PhotoAlbum["images"]>();
+  const photoFiles = Array.from(files).filter((file) => isPhotoFile(file.name));
+  const firstRelativePath = (photoFiles[0] as (File & { webkitRelativePath?: string }) | undefined)?.webkitRelativePath ?? "";
+  const rootLabel = firstRelativePath.split("/").filter(Boolean)[0] || "写真集";
+  const rootId = `browser-photo:${sanitizeLibraryName(rootLabel)}-${hashString(rootLabel)}`;
+
+  for (const file of photoFiles) {
+    const browserRelativePath = (file as File & { webkitRelativePath?: string }).webkitRelativePath;
+    const relativePath = (browserRelativePath || file.name).replace(/\\/g, "/");
+    const pathParts = relativePath.split("/").filter(Boolean);
+    const scopedParts = pathParts[0] === rootLabel ? pathParts.slice(1) : pathParts;
+    const name = scopedParts.at(-1) || file.name;
+    if (!isPhotoFile(name)) continue;
+
+    const albumPath = scopedParts.slice(0, -1).join("/");
+    const imageRelativePath = scopedParts.join("/");
+    const images = albumImages.get(albumPath) ?? [];
+    images.push({
+      id: createGlobalVideoId(rootId, imageRelativePath, file),
+      name,
+      relativePath: imageRelativePath,
+      url: URL.createObjectURL(file),
+      size: file.size,
+      lastModified: file.lastModified,
+      mediaRootId: rootId,
+      index: 0,
+    });
+    albumImages.set(albumPath, images);
+  }
+
+  const albums = Array.from(albumImages.entries()).map(([relativePath, images]) => {
+    images.sort((a, b) => a.relativePath.localeCompare(b.relativePath, undefined, { numeric: true, sensitivity: "base" }));
+    const indexedImages = images.map((image, index) => ({ ...image, index }));
+    const totalSize = indexedImages.reduce((sum, image) => sum + image.size, 0);
+    const updatedAt = indexedImages.reduce((latest, image) => Math.max(latest, image.lastModified), 0);
+    return {
+      id: createPhotoAlbumFolderId(rootId, relativePath),
+      title: relativePath.split("/").filter(Boolean).at(-1) || rootLabel,
+      relativePath,
+      mediaRootId: rootId,
+      mediaRootLabel: rootLabel,
+      coverImageUrl: indexedImages[0]?.url ?? "",
+      imageCount: indexedImages.length,
+      totalSize,
+      updatedAt,
+      images: indexedImages,
+    };
+  });
+
+  albums.sort((a, b) => b.updatedAt - a.updatedAt || a.relativePath.localeCompare(b.relativePath, undefined, { numeric: true, sensitivity: "base" }));
+
+  return {
+    rootId,
+    rootLabel,
+    albums,
+    scannedFiles: photoFiles.length,
+  };
 }
 
 function escapeVttText(text: string) {
@@ -1838,65 +1835,80 @@ export default function App() {
     setTagMergeDecisions(nextDataStore.tagMergeDecisions);
   }, []);
 
-  const choosePhotoAlbumDirectory = useCallback(async () => {
+  const loadPhotoAlbumFiles = useCallback(
+    async (files: FileList | File[]) => {
+      setIsPhotoAlbumsLoading(true);
+      setPhotoAlbumMessage("正在扫描写真集...");
+      try {
+        const [scan, store] = await Promise.all([
+          Promise.resolve(collectPhotoAlbumsFromFiles(files)),
+          loadPhotoAlbumStore().catch(() => ({
+            version: 1,
+            favorites: [],
+            progress: {},
+            preferences: defaultPhotoAlbumPreferences,
+          })),
+        ]);
+        applyPhotoAlbumStore(store);
+        photoAlbumsRef.current.forEach((album) => {
+          album.images.forEach((image) => {
+            if (isObjectUrl(image.url)) URL.revokeObjectURL(image.url);
+          });
+        });
+        setPhotoAlbums(scan.albums);
+        setPhotoRootStatuses([
+          {
+            id: scan.rootId,
+            label: scan.rootLabel,
+            source: "browser",
+            status: "ready",
+            videoCount: scan.albums.length,
+            scannedFiles: scan.scannedFiles,
+            updatedAt: Date.now(),
+          },
+        ]);
+        setHasLoadedPhotoAlbums(true);
+        setPhotoAlbumMessage(
+          scan.albums.length
+            ? `已从“${scan.rootLabel}”加载 ${scan.albums.length} 本写真集，扫描 ${scan.scannedFiles} 张图片`
+            : `“${scan.rootLabel}”里没有找到包含图片的文件夹`,
+        );
+      } catch (error) {
+        setPhotoAlbumMessage(error instanceof Error ? error.message : "扫描写真集失败。");
+      } finally {
+        setIsPhotoAlbumsLoading(false);
+      }
+    },
+    [applyPhotoAlbumStore],
+  );
+
+  const choosePhotoAlbumDirectory = useCallback(() => {
     if (isPhotoAlbumsLoading) return;
-    if (!window.showDirectoryPicker) {
-      setPhotoAlbumMessage("当前浏览器不支持选择文件夹，请使用 Chrome 或 Edge。");
-      return;
-    }
-    setIsPhotoAlbumsLoading(true);
-    setPhotoAlbumMessage("请选择写真集文件夹。");
-    try {
-      const directory = await window.showDirectoryPicker({ mode: "read" });
-      const canReadDirectory = await ensureDirectoryReadPermission(directory);
-      if (!canReadDirectory) {
-        setPhotoAlbumMessage("没有获得文件夹读取权限。");
+    const input = document.createElement("input");
+    input.type = "file";
+    input.multiple = true;
+    input.accept = Array.from(PHOTO_EXTENSIONS).join(",");
+    input.style.display = "none";
+    input.setAttribute("webkitdirectory", "");
+
+    input.onchange = async () => {
+      const files = input.files;
+      if (!files?.length) {
+        input.remove();
         return;
       }
-      setPhotoAlbumMessage(`正在扫描“${directory.name}”...`);
-      const [scan, store] = await Promise.all([
-        collectPhotoAlbumsFromDirectory(directory),
-        loadPhotoAlbumStore().catch(() => ({
-          version: 1,
-          favorites: [],
-          progress: {},
-          preferences: defaultPhotoAlbumPreferences,
-        })),
-      ]);
-      applyPhotoAlbumStore(store);
-      photoAlbumsRef.current.forEach((album) => {
-        album.images.forEach((image) => {
-          if (isObjectUrl(image.url)) URL.revokeObjectURL(image.url);
-        });
-      });
-      setPhotoAlbums(scan.albums);
-      setPhotoRootStatuses([
-        {
-          id: scan.rootId,
-          label: scan.rootLabel,
-          source: "browser",
-          status: "ready",
-          videoCount: scan.albums.length,
-          scannedFiles: scan.scannedFiles,
-          updatedAt: Date.now(),
-        },
-      ]);
-      setHasLoadedPhotoAlbums(true);
-      setPhotoAlbumMessage(
-        scan.albums.length
-          ? `已从“${scan.rootLabel}”加载 ${scan.albums.length} 本写真集，扫描 ${scan.scannedFiles} 张图片`
-          : `“${scan.rootLabel}”里没有找到包含图片的文件夹`,
-      );
-    } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") {
-        setPhotoAlbumMessage(hasLoadedPhotoAlbums ? "已取消选择写真集文件夹。" : "选择一个写真集文件夹后开始扫描图片。");
-      } else {
-        setPhotoAlbumMessage(error instanceof Error ? error.message : "扫描写真集失败。");
+
+      try {
+        await loadPhotoAlbumFiles(files);
+      } finally {
+        input.remove();
       }
-    } finally {
-      setIsPhotoAlbumsLoading(false);
-    }
-  }, [applyPhotoAlbumStore, hasLoadedPhotoAlbums, isPhotoAlbumsLoading]);
+    };
+
+    input.addEventListener("cancel", () => input.remove(), { once: true });
+    document.body.append(input);
+    input.click();
+  }, [isPhotoAlbumsLoading, loadPhotoAlbumFiles]);
 
   const playlistVideos = useMemo(
     () => getSortedVideos(videos, isSeriesMode ? "name" : playlistSortMode, isSeriesMode ? false : isPlaylistSortReversed),
