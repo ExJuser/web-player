@@ -6,6 +6,16 @@ const videoExtensions = new Set([".mp4", ".webm", ".ogg", ".mov", ".m4v", ".mkv"
 const subtitleExtensions = new Set([".srt", ".vtt"]);
 export const photoExtensions = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif", ".bmp"]);
 const smallVideoFileThresholdBytes = 50 * 1024 * 1024;
+const ignoredVideoBasenames = new Set(["theme_video", "trailer"]);
+
+function isIgnoredVideoFile(fileName) {
+  const baseName = path.basename(fileName, path.extname(fileName)).toLowerCase();
+  return ignoredVideoBasenames.has(baseName);
+}
+
+function shouldFilterVideoFile(fileName, size) {
+  return size < smallVideoFileThresholdBytes || isIgnoredVideoFile(fileName);
+}
 
 async function readJsonFile(filePath, fallback) {
   try {
@@ -238,7 +248,7 @@ export async function scanMediaRoot(root) {
       const lastModified = Math.round(fileStat.mtimeMs);
       const relativePath = nextSegments.join("/");
       if (videoExtensions.has(extension)) {
-        if (fileStat.size < smallVideoFileThresholdBytes) {
+        if (shouldFilterVideoFile(entry.name, fileStat.size)) {
           filteredSmallVideos += 1;
           continue;
         }

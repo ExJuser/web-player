@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, truncate, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -109,6 +109,40 @@ test("browser media root without localPath is reported as needsAccess", async ()
 
   assert.equal(result.videos.length, 0);
   assert.equal(result.metadata.mediaRoots[0].status, "needsAccess");
+});
+
+test("global media scan filters small videos and ignored video basenames", async () => {
+  await withTempConfig(async ({ directory }) => {
+    const showPath = path.join(directory, "Show");
+    await mkdir(showPath, { recursive: true });
+
+    const keepPath = path.join(showPath, "E01.mkv");
+    const smallPath = path.join(showPath, "Tiny.mkv");
+    const themePath = path.join(showPath, "theme_video.mp4");
+    const trailerPath = path.join(showPath, "Trailer.mkv");
+    await writeFile(keepPath, "");
+    await writeFile(smallPath, "small");
+    await writeFile(themePath, "");
+    await writeFile(trailerPath, "");
+    await writeFile(path.join(showPath, "E01.srt"), "subtitle");
+    await truncate(keepPath, 51 * 1024 * 1024);
+    await truncate(themePath, 51 * 1024 * 1024);
+    await truncate(trailerPath, 51 * 1024 * 1024);
+
+    const result = await scanConfiguredMediaRoots({
+      media: {
+        roots: [
+          { id: "anime", label: "Anime", path: directory },
+        ],
+      },
+    });
+
+    assert.deepEqual(result.videos.map((video) => video.relativePath), ["Show/E01.mkv"]);
+    assert.deepEqual(result.subtitles.map((subtitle) => subtitle.relativePath), ["Show/E01.srt"]);
+    assert.equal(result.filteredSmallVideos, 3);
+    assert.equal(result.scannedFiles, 5);
+    assert.equal(result.metadata.videoCount, 1);
+  });
 });
 
 test("media path resolver supports subtitles but rejects escaping root", async () => {
