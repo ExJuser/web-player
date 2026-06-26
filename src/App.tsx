@@ -2579,10 +2579,11 @@ export default function App() {
     [subtitles],
   );
   const homeRecapCard = primaryResumeCard;
+  const shouldShowHomeRecap = homeMediaMode !== "special" && Boolean(homeRecapCard);
   const homeRecapVideoId = homeRecapCard?.video.id ?? "";
   const homeRecapSubtitle = useMemo(
-    () => (homeRecapCard ? findMatchedSubtitleForVideo(homeRecapCard.video) : null),
-    [findMatchedSubtitleForVideo, homeRecapCard],
+    () => (shouldShowHomeRecap && homeRecapCard ? findMatchedSubtitleForVideo(homeRecapCard.video) : null),
+    [findMatchedSubtitleForVideo, homeRecapCard, shouldShowHomeRecap],
   );
   const homeRecapMediaRootId = homeRecapCard?.video.mediaRootId ?? mediaRootId;
   const homeRecapMediaRoot = useMemo(() => {
@@ -2590,7 +2591,8 @@ export default function App() {
     return homeRecapMediaRootId ? roots.find((root) => root.id === homeRecapMediaRootId) ?? null : null;
   }, [homeRecapMediaRootId, localConfig]);
   const canUseHomeEmbeddedSubtitles = Boolean(
-    homeRecapCard &&
+    shouldShowHomeRecap &&
+      homeRecapCard &&
       homeRecapMediaRootId &&
       supportsServerFileAccess(homeRecapMediaRoot) &&
       localConfig?.ffmpeg.ffmpeg &&
@@ -5585,7 +5587,7 @@ export default function App() {
   }, [homeRecapVideoId]);
 
   const loadHomeProgressRecap = useCallback(async () => {
-    if (!homeRecapCard) return;
+    if (!shouldShowHomeRecap || !homeRecapCard) return;
     if (!localConfig?.ai.configured) {
       setHomeProgressRecapMessage("未配置 DEEPSEEK_API_KEY。");
       return;
@@ -5658,6 +5660,7 @@ export default function App() {
     loadEmbeddedSubtitleForVideo,
     localConfig,
     probeEmbeddedSubtitleTracksForVideo,
+    shouldShowHomeRecap,
   ]);
 
   const runLibrarySearch = useCallback(async () => {
@@ -6808,7 +6811,7 @@ export default function App() {
                 ) : null}
               </section>
 
-              {homeRecapCard ? (
+              {shouldShowHomeRecap && homeRecapCard ? (
                 <section className="home-section home-recap-card">
                   <div className="home-section-header">
                     <h2>无剧透回顾</h2>
