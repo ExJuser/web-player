@@ -243,6 +243,7 @@ import {
   createPersistedEmbeddedSubtitles,
   createSubtitleControlOptions,
   getMediaRootLocalPathAction,
+  resolveRestoredEmbeddedSubtitleSelection,
   resolveSubtitleSelection,
 } from "./playerUiState";
 import {
@@ -1440,6 +1441,7 @@ export default function App() {
   const startFromBeginningVideoIdRef = useRef<string | null>(null);
   const autoSubtitleSelectionVideoIdRef = useRef<string | null>(null);
   const lastSubtitleSelectionVideoIdRef = useRef<string | null>(null);
+  const selectedSubtitleIdRef = useRef("off");
   const [videos, setVideos] = useState<VideoItem[]>([]);
   const [subtitles, setSubtitles] = useState<SubtitleItem[]>([]);
   const [localConfig, setLocalConfig] = useState<LocalConfig | null>(null);
@@ -1558,8 +1560,14 @@ export default function App() {
   isMainVideoLoadingRef.current = isMainVideoLoading;
   videosRef.current = videos;
   subtitlesRef.current = subtitles;
+  selectedSubtitleIdRef.current = selectedSubtitleId;
   localConfigRef.current = localConfig;
   bangumiMatchesBySeriesKeyRef.current = bangumiMatchesBySeriesKey;
+
+  const updateSelectedSubtitleId = useCallback((nextSubtitleId: string) => {
+    selectedSubtitleIdRef.current = nextSubtitleId;
+    setSelectedSubtitleId(nextSubtitleId);
+  }, []);
 
   const buildPlayerDataStore = useCallback(
     (overrides?: Partial<PlayerDataStore>): PlayerDataStore => ({
@@ -2228,11 +2236,11 @@ export default function App() {
     setVideos([]);
     setSubtitles([]);
     setCurrentVideoId(null);
-    setSelectedSubtitleId("off");
+    updateSelectedSubtitleId("off");
     setCurrentTime(0);
     setDuration(0);
     setIsPlaying(false);
-  }, [cancelAutoNextPrompt, revokeVideoUrls]);
+  }, [cancelAutoNextPrompt, revokeVideoUrls, updateSelectedSubtitleId]);
 
   const setVideoThumbnailState = useCallback((videoId: string, status: VideoItem["thumbnailStatus"], url?: string) => {
     setVideos((previous) => {
@@ -2902,7 +2910,7 @@ export default function App() {
           setCurrentVideoId(sortedAfterDelete[fallbackIndex]?.id ?? null);
           setCurrentTime(0);
           setDuration(0);
-          setSelectedSubtitleId("off");
+          updateSelectedSubtitleId("off");
           setIsPlaying(false);
         }
 
@@ -2925,7 +2933,7 @@ export default function App() {
         setMessage("删除本地文件失败，请确认浏览器仍有文件夹写入权限。");
       }
     },
-    [currentVideoId],
+    [currentVideoId, updateSelectedSubtitleId],
   );
 
   const confirmDeleteLocalVideo = useCallback(async () => {
@@ -3023,7 +3031,7 @@ export default function App() {
         imageUrl: "",
         isLoadingFrame: false,
       });
-      setSelectedSubtitleId("off");
+      updateSelectedSubtitleId("off");
       setVideoAspectRatio(16 / 9);
       focusPlayer();
     },
@@ -3278,7 +3286,7 @@ export default function App() {
       setFavoriteVideoIds(new Set());
       setVideoTags({});
       setTagMergeDecisions({});
-      setSelectedSubtitleId("off");
+      updateSelectedSubtitleId("off");
       setPlaylistFilter("all");
       setCurrentVideoId(null);
       setActiveView("home");
@@ -3461,7 +3469,7 @@ export default function App() {
       subtitlesRef.current = nextSubtitles;
       setVideos(media.videos);
       setSubtitles(nextSubtitles);
-      setSelectedSubtitleId("off");
+      updateSelectedSubtitleId("off");
       setPlaylistFilter("all");
       setActiveView("home");
       setCurrentVideoId(getSortedVideos(media.videos, playlistSortMode, isPlaylistSortReversed)[0]?.id ?? null);
@@ -3930,7 +3938,7 @@ export default function App() {
     if (!currentVideo) {
       autoSubtitleSelectionVideoIdRef.current = null;
       lastSubtitleSelectionVideoIdRef.current = null;
-      setSelectedSubtitleId("off");
+      updateSelectedSubtitleId("off");
       return;
     }
 
@@ -3939,17 +3947,17 @@ export default function App() {
       autoSubtitleSelectionVideoIdRef.current = currentVideo.id;
     }
 
-    setSelectedSubtitleId((currentSelection) => {
-      const shouldAutoSelectFromOff = autoSubtitleSelectionVideoIdRef.current === currentVideo.id;
-      const nextSelection = resolveSubtitleSelection(currentSelection, currentVideoSubtitles, {
-        autoSelectFromOff: shouldAutoSelectFromOff,
-      });
-      if (nextSelection !== "off" || (currentSelection !== "off" && nextSelection === currentSelection)) {
-        autoSubtitleSelectionVideoIdRef.current = null;
-      }
-      return nextSelection;
+    const shouldAutoSelectFromOff = autoSubtitleSelectionVideoIdRef.current === currentVideo.id;
+    const nextSelection = resolveSubtitleSelection(selectedSubtitleId, currentVideoSubtitles, {
+      autoSelectFromOff: shouldAutoSelectFromOff,
     });
-  }, [currentVideo, currentVideoSubtitles]);
+    if (nextSelection !== selectedSubtitleId) {
+      updateSelectedSubtitleId(nextSelection);
+    }
+    if (nextSelection !== "off" || (selectedSubtitleId !== "off" && nextSelection === selectedSubtitleId)) {
+      autoSubtitleSelectionVideoIdRef.current = null;
+    }
+  }, [currentVideo, currentVideoSubtitles, selectedSubtitleId, updateSelectedSubtitleId]);
 
   const seekTo = useCallback(
     (value: number) => {
@@ -4183,7 +4191,7 @@ export default function App() {
             subtitleWithUrl,
           ];
         });
-        setSelectedSubtitleId(subtitleWithUrl.id);
+        updateSelectedSubtitleId(subtitleWithUrl.id);
       } catch {
         setMessage("无法读取字幕文件，请确认字幕格式后重试。");
       }
@@ -4256,6 +4264,16 @@ export default function App() {
       ];
       subtitlesRef.current = nextSubtitles;
       setSubtitles(nextSubtitles);
+      const nextSelection = resolveRestoredEmbeddedSubtitleSelection(
+        selectedSubtitleIdRef.current,
+        restoredSubtitles,
+        video.id,
+        autoSubtitleSelectionVideoIdRef.current,
+      );
+      if (nextSelection !== selectedSubtitleIdRef.current) {
+        autoSubtitleSelectionVideoIdRef.current = null;
+        updateSelectedSubtitleId(nextSelection);
+      }
       void saveCurrentPlayerDataStore({
         embeddedSubtitles: createPersistedEmbeddedSubtitles(nextSubtitles),
       });
@@ -4273,7 +4291,7 @@ export default function App() {
           subtitle.embeddedTrack?.streamIndex === track.streamIndex,
       );
       if (existing) {
-        if (options?.select) setSelectedSubtitleId(existing.id);
+        if (options?.select) updateSelectedSubtitleId(existing.id);
         return existing;
       }
 
@@ -4319,7 +4337,7 @@ export default function App() {
       void saveCurrentPlayerDataStore({
         embeddedSubtitles: nextPersistedEmbeddedSubtitles,
       });
-      if (options?.select) setSelectedSubtitleId(subtitleWithUrl.id);
+      if (options?.select) updateSelectedSubtitleId(subtitleWithUrl.id);
       return subtitleWithUrl;
     },
     [saveCurrentPlayerDataStore],
@@ -5982,7 +6000,7 @@ export default function App() {
                     void chooseSubtitleFile();
                     return;
                   }
-                  setSelectedSubtitleId(value);
+                  updateSelectedSubtitleId(value);
                 }}
                 className="subtitle-control"
                 disabled={!currentVideo}

@@ -64,6 +64,16 @@ export function resolveSubtitleSelection(
   return subtitles.find((subtitle) => !subtitle.isManual)?.id ?? "off";
 }
 
+export function resolveRestoredEmbeddedSubtitleSelection(
+  currentSelection: string,
+  restoredSubtitles: SubtitleForUi[],
+  videoId: string,
+  autoSelectVideoId: string | null,
+) {
+  if (currentSelection !== "off" || autoSelectVideoId !== videoId) return currentSelection;
+  return restoredSubtitles.find((subtitle) => subtitle.source === "embedded" && subtitle.videoId === videoId)?.id ?? currentSelection;
+}
+
 export function createPersistedEmbeddedSubtitles(subtitles: SubtitleForUi[]): PersistedEmbeddedSubtitleForUi[] {
   return subtitles
     .flatMap((subtitle) => {

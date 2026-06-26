@@ -67,6 +67,33 @@ test("off subtitle selection is preserved outside auto-select window", () => {
   );
 });
 
+test("restored embedded subtitles are auto-selected while entering the video", () => {
+  assert.equal(
+    uiState.resolveRestoredEmbeddedSubtitleSelection(
+      "off",
+      [
+        { id: "embedded:video-1:cache-1", source: "embedded", videoId: "video-1" },
+        { id: "embedded:video-2:cache-1", source: "embedded", videoId: "video-2" },
+      ],
+      "video-1",
+      "video-1",
+    ),
+    "embedded:video-1:cache-1",
+  );
+});
+
+test("restored embedded subtitles do not override a preserved off selection", () => {
+  assert.equal(
+    uiState.resolveRestoredEmbeddedSubtitleSelection(
+      "off",
+      [{ id: "embedded:video-1:cache-1", source: "embedded", videoId: "video-1" }],
+      "video-1",
+      null,
+    ),
+    "off",
+  );
+});
+
 test("existing available subtitle selection is preserved", () => {
   assert.equal(
     uiState.resolveSubtitleSelection("manual:1", [
