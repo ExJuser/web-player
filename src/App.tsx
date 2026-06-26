@@ -1575,6 +1575,7 @@ export default function App() {
   const [isFolderDialogOpen, setIsFolderDialogOpen] = useState(false);
   const [isShortcutDialogOpen, setIsShortcutDialogOpen] = useState(false);
   const [isSeriesMenuOpen, setIsSeriesMenuOpen] = useState(false);
+  const [isMediaLibraryPanelOpen, setIsMediaLibraryPanelOpen] = useState(false);
   const [isPrivacyMode, setIsPrivacyMode] = useState(false);
   const [theme, setTheme] = useState<AppTheme>(readStoredTheme);
   const [deleteCandidate, setDeleteCandidate] = useState<VideoItem | null>(null);
@@ -5789,50 +5790,52 @@ export default function App() {
               </section>
 
               <section className="home-section media-library-card">
-                <div className="home-section-header">
-                  <h2>全局媒体库</h2>
-                  <span>{`${mediaRootStatuses.filter((status) => status.status === "ready").length} / ${localConfig?.mediaRoots.length ?? 0} 可用`}</span>
-                </div>
                 <button
-                  className="secondary-button media-library-add-button"
+                  className="media-library-toggle"
                   type="button"
-                  onClick={requestAddMediaLibrary}
-                  disabled={isScanning}
+                  aria-expanded={isMediaLibraryPanelOpen}
+                  aria-controls="home-media-library-panel"
+                  onClick={() => setIsMediaLibraryPanelOpen((isOpen) => !isOpen)}
                 >
-                  <FolderOpen size={16} />
-                  {isScanning ? "扫描中" : "新增媒体库"}
+                  <span>全局媒体库</span>
+                  <span>{`${mediaRootStatuses.filter((status) => status.status === "ready").length} / ${localConfig?.mediaRoots.length ?? 0} 可用`}</span>
+                  <ChevronDown className="media-library-toggle-chevron" size={16} aria-hidden="true" />
                 </button>
-                {localConfig?.mediaRoots.length ? (
-                  <div className="media-library-list">
-                    {localConfig.mediaRoots.map((root) => {
-                      const action = getMediaRootLocalPathAction(root);
-                      const status = mediaRootStatuses.find((item) => item.id === root.id);
-                      return (
-                        <div className="media-library-row" key={root.id}>
-                          <strong>{root.label}</strong>
-                          <code>{formatMediaRootStatus(status)}</code>
-                          <code>{root.source === "browser" ? `浏览器：${root.path}` : root.path}</code>
-                          {root.source === "browser" ? (
-                            <code>{root.localPath ? `本机：${root.localPath}` : "本机：未配置"}</code>
-                          ) : null}
-                          {action.visible ? (
-                            <button
-                              className="secondary-button media-library-path-button"
-                              type="button"
-                              disabled={action.disabled}
-                              onClick={() => openMediaRootLocalPathDialog(root)}
-                            >
-                              <HardDrive size={16} />
-                              {action.label}
-                            </button>
-                          ) : null}
-                        </div>
-                      );
-                    })}
+                {isMediaLibraryPanelOpen ? (
+                  <div id="home-media-library-panel" className="media-library-panel">
+                    {localConfig?.mediaRoots.length ? (
+                      <div className="media-library-list">
+                        {localConfig.mediaRoots.map((root) => {
+                          const action = getMediaRootLocalPathAction(root);
+                          const status = mediaRootStatuses.find((item) => item.id === root.id);
+                          return (
+                            <div className="media-library-row" key={root.id}>
+                              <strong>{root.label}</strong>
+                              <code>{formatMediaRootStatus(status)}</code>
+                              <code>{root.source === "browser" ? `浏览器：${root.path}` : root.path}</code>
+                              {root.source === "browser" ? (
+                                <code>{root.localPath ? `本机：${root.localPath}` : "本机：未配置"}</code>
+                              ) : null}
+                              {action.visible ? (
+                                <button
+                                  className="secondary-button media-library-path-button"
+                                  type="button"
+                                  disabled={action.disabled}
+                                  onClick={() => openMediaRootLocalPathDialog(root)}
+                                >
+                                  <HardDrive size={16} />
+                                  {action.label}
+                                </button>
+                              ) : null}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="empty-list compact">尚未配置本地媒体库地址。</div>
+                    )}
                   </div>
-                ) : (
-                  <div className="empty-list compact">尚未配置本地媒体库地址。</div>
-                )}
+                ) : null}
               </section>
 
               {homeRecapCard ? (

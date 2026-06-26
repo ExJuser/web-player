@@ -925,12 +925,64 @@ button {
 
 .media-library-card {
   display: grid;
-  gap: 12px;
+  align-content: start;
+  gap: 10px;
 }
 
-.media-library-add-button {
+.media-library-toggle {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
   width: 100%;
-  min-height: 34px;
+  min-height: 38px;
+  padding: 0 10px 0 12px;
+  border: 1px solid #2b323d;
+  border-radius: 6px;
+  background: #20252d;
+  color: #f5f7fb;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.16s ease, background 0.16s ease, box-shadow 0.16s ease;
+}
+
+.media-library-toggle:hover,
+.media-library-toggle:focus-visible,
+.media-library-toggle[aria-expanded="true"] {
+  border-color: #38c7ee;
+  background: #17242d;
+  box-shadow: 0 0 0 2px rgba(0, 161, 214, 0.16);
+}
+
+.media-library-toggle span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.media-library-toggle span:nth-child(2) {
+  color: #8e97a5;
+  font-size: 13px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.media-library-toggle-chevron {
+  flex: none;
+  color: #79dfff;
+  transition: transform 0.16s ease;
+}
+
+.media-library-toggle[aria-expanded="true"] .media-library-toggle-chevron {
+  transform: rotate(180deg);
+}
+
+.media-library-panel {
+  min-width: 0;
 }
 
 .media-library-current {
@@ -992,6 +1044,33 @@ button {
 .media-library-list {
   display: grid;
   gap: 8px;
+  max-height: min(320px, 36vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 2px;
+  scrollbar-color: rgba(142, 151, 165, 0.58) rgba(20, 22, 26, 0.35);
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+}
+
+.media-library-list::-webkit-scrollbar {
+  width: 10px;
+}
+
+.media-library-list::-webkit-scrollbar-track {
+  border-radius: 999px;
+  background: rgba(20, 22, 26, 0.35);
+}
+
+.media-library-list::-webkit-scrollbar-thumb {
+  min-height: 48px;
+  border: 2px solid rgba(20, 22, 26, 0.35);
+  border-radius: 999px;
+  background: rgba(142, 151, 165, 0.58);
+}
+
+.media-library-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 161, 214, 0.72);
 }
 
 .media-library-row {
@@ -3408,6 +3487,7 @@ button {
 .app-shell.theme-light .home-list-card,
 .app-shell.theme-light .library-folder-result,
 .app-shell.theme-light .home-stats div,
+.app-shell.theme-light .media-library-toggle,
 .app-shell.theme-light .media-library-row,
 .app-shell.theme-light .home-recap-output,
 .app-shell.theme-light .library-search-answer,
@@ -3426,6 +3506,26 @@ button {
 .app-shell.theme-light .delete-file-preview {
   border-color: #d7e0ea;
   background: #f8fafc;
+}
+
+.app-shell.theme-light .media-library-toggle {
+  color: #172033;
+}
+
+.app-shell.theme-light .media-library-toggle:hover,
+.app-shell.theme-light .media-library-toggle:focus-visible,
+.app-shell.theme-light .media-library-toggle[aria-expanded="true"] {
+  border-color: #00a1d6;
+  background: #eef7fb;
+  box-shadow: 0 0 0 2px rgba(0, 161, 214, 0.14);
+}
+
+.app-shell.theme-light .media-library-toggle span:nth-child(2) {
+  color: #475467;
+}
+
+.app-shell.theme-light .media-library-toggle-chevron {
+  color: #0077a8;
 }
 
 .app-shell.theme-light .tag-chip,
