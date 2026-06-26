@@ -14,6 +14,13 @@ export type TagMergeSuggestion = {
   score: number;
 };
 
+export type TagUsageStat = {
+  key: string;
+  tag: string;
+  videoCount: number;
+  videoIds: string[];
+};
+
 const tagSeparators = /[\s,，、;；|]+/u;
 
 const synonymGroups = [
@@ -134,6 +141,38 @@ export function mergeTags(existingTags: string[], incomingTags: string[]) {
     nextTags.push(tag);
   });
   return nextTags;
+}
+
+export function buildGlobalTagUsageStats(videoTags: Record<string, string[]>): TagUsageStat[] {
+  const statsByKey = new Map<string, TagUsageStat>();
+
+  Object.entries(videoTags).forEach(([videoId, tags]) => {
+    const seenKeysInVideo = new Set<string>();
+    tags.forEach((tag) => {
+      const key = normalizeTagKey(tag);
+      if (!key || seenKeysInVideo.has(key)) return;
+      seenKeysInVideo.add(key);
+
+      const existing = statsByKey.get(key);
+      if (existing) {
+        existing.videoCount += 1;
+        existing.videoIds.push(videoId);
+        return;
+      }
+
+      statsByKey.set(key, {
+        key,
+        tag,
+        videoCount: 1,
+        videoIds: [videoId],
+      });
+    });
+  });
+
+  return Array.from(statsByKey.values()).sort((a, b) => {
+    if (b.videoCount !== a.videoCount) return b.videoCount - a.videoCount;
+    return a.tag.localeCompare(b.tag, "zh-Hans-CN");
+  });
 }
 
 export function getTagSearchScore(query: string, tags: string[]) {

@@ -48,3 +48,20 @@ test("scores tag search matches higher than loose text matches", () => {
   assert.equal(tagUtils.getTagSearchScore("长镜", ["长镜头"]), 20);
   assert.equal(tagUtils.getTagSearchScore("悬疑", ["美腿"]), 0);
 });
+
+test("builds global tag usage stats by tagged video count", () => {
+  assert.deepEqual(
+    tagUtils.buildGlobalTagUsageStats({
+      "root-a:video-1": ["好看", "美女", "好 看"],
+      "root-a:video-2": ["美女", "剧情"],
+      "root-b:video-3": ["好看", "AI-字幕"],
+      "root-b:video-4": ["  ", "ＡＩ字幕"],
+    }),
+    [
+      { key: "好看", tag: "好看", videoCount: 2, videoIds: ["root-a:video-1", "root-b:video-3"] },
+      { key: "美女", tag: "美女", videoCount: 2, videoIds: ["root-a:video-1", "root-a:video-2"] },
+      { key: "ai字幕", tag: "AI-字幕", videoCount: 2, videoIds: ["root-b:video-3", "root-b:video-4"] },
+      { key: "剧情", tag: "剧情", videoCount: 1, videoIds: ["root-a:video-2"] },
+    ],
+  );
+});
