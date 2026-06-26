@@ -1,4 +1,5 @@
 type MediaRootForUi = {
+  label?: string;
   source?: "browser" | "local";
   localPath?: string;
 };
@@ -41,6 +42,16 @@ export function getMediaRootLocalPathAction(root: MediaRootForUi) {
     disabled: isConfigured,
     label: isConfigured ? "本机路径已配置" : "配置本机路径",
   };
+}
+
+export type HomeMediaMode = "all" | "anime" | "special";
+
+export function isMediaRootInHomeMode(root: MediaRootForUi, mode: HomeMediaMode) {
+  if (mode === "all") return true;
+
+  const normalizedLabel = (root.label ?? "").trim();
+  if (mode === "anime") return normalizedLabel.toLowerCase() === "anime";
+  return normalizedLabel.toUpperCase().endsWith("AV");
 }
 
 export function createSubtitleControlOptions(subtitles: SubtitleForUi[]) {

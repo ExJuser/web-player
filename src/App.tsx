@@ -290,8 +290,10 @@ import {
   createPersistedEmbeddedSubtitles,
   createSubtitleControlOptions,
   getMediaRootLocalPathAction,
+  isMediaRootInHomeMode,
   resolveRestoredEmbeddedSubtitleSelection,
   resolveSubtitleSelection,
+  type HomeMediaMode,
 } from "./playerUiState";
 import {
   createTagPairKey,
@@ -1976,6 +1978,7 @@ export default function App() {
     defaultPlayerPreferences.isPlaylistSortReversed,
   );
   const [shortcuts, setShortcuts] = useState<ShortcutMap>(defaultPlayerPreferences.shortcuts);
+  const [homeMediaMode, setHomeMediaMode] = useState<HomeMediaMode>("all");
   const [isSeriesMode, setIsSeriesMode] = useState(defaultPlayerPreferences.isSeriesMode);
   const [selectedSeriesKey, setSelectedSeriesKey] = useState(defaultPlayerPreferences.selectedSeriesKey);
   const [isCinemaMode, setIsCinemaMode] = useState(defaultPlayerPreferences.isCinemaMode);
@@ -2201,9 +2204,32 @@ export default function App() {
     }
   }, [isPhotoAlbumsLoading, loadPhotoAlbumDirectory]);
 
+  const homeModeMediaRoots = useMemo(
+    () => (localConfig?.mediaRoots ?? []).filter((root) => isMediaRootInHomeMode(root, homeMediaMode)),
+    [homeMediaMode, localConfig],
+  );
+  const homeModeMediaRootIds = useMemo(
+    () => new Set(homeModeMediaRoots.map((root) => root.id)),
+    [homeModeMediaRoots],
+  );
+  const modeFilteredVideos = useMemo(
+    () =>
+      homeMediaMode === "all"
+        ? videos
+        : videos.filter((video) => Boolean(video.mediaRootId && homeModeMediaRootIds.has(video.mediaRootId))),
+    [homeMediaMode, homeModeMediaRootIds, videos],
+  );
+  const modeFilteredMediaRootStatuses = useMemo(
+    () =>
+      homeMediaMode === "all"
+        ? mediaRootStatuses
+        : mediaRootStatuses.filter((status) => homeModeMediaRootIds.has(status.id)),
+    [homeMediaMode, homeModeMediaRootIds, mediaRootStatuses],
+  );
+  const homeMediaModeLabel = homeMediaMode === "anime" ? "追番模式" : homeMediaMode === "special" ? "特殊模式" : "全部";
   const playlistVideos = useMemo(
-    () => getSortedVideos(videos, isSeriesMode ? "name" : playlistSortMode, isSeriesMode ? false : isPlaylistSortReversed),
-    [isPlaylistSortReversed, isSeriesMode, playlistSortMode, videos],
+    () => getSortedVideos(modeFilteredVideos, isSeriesMode ? "name" : playlistSortMode, isSeriesMode ? false : isPlaylistSortReversed),
+    [isPlaylistSortReversed, isSeriesMode, modeFilteredVideos, playlistSortMode],
   );
   const seriesOptions = useMemo(() => {
     const seriesByKey = new Map<string, { key: string; title: string; count: number; mediaRootLabel?: string }>();
@@ -2232,8 +2258,9 @@ export default function App() {
   }, [playlistVideos]);
   const seriesFilteredVideos = useMemo(() => {
     if (!isSeriesMode || selectedSeriesKey === "all") return playlistVideos;
+    if (!seriesOptions.some((series) => series.key === selectedSeriesKey)) return playlistVideos;
     return playlistVideos.filter((video) => scopedSeriesKeyForVideo(video, seriesTitleByVideoId.get(video.id) ?? "") === selectedSeriesKey);
-  }, [isSeriesMode, playlistVideos, selectedSeriesKey, seriesTitleByVideoId]);
+  }, [isSeriesMode, playlistVideos, selectedSeriesKey, seriesOptions, seriesTitleByVideoId]);
   const currentVideo = useMemo(
     () => videos.find((item) => item.id === currentVideoId) ?? null,
     [currentVideoId, videos],
@@ -2266,10 +2293,10 @@ export default function App() {
   }, [activeBangumiSeries, isSeriesMode, playlistVideos, seriesTitleByVideoId]);
   const canClearPlaylistProgress = useMemo(() => {
     if (isSeriesMode) return activeSeriesProgressVideoIds.some((videoId) => Boolean(progressStore[videoId]));
-    return Boolean(videos.length && Object.keys(progressStore).length);
-  }, [activeSeriesProgressVideoIds, isSeriesMode, progressStore, videos.length]);
+    return modeFilteredVideos.some((video) => Boolean(progressStore[video.id]));
+  }, [activeSeriesProgressVideoIds, isSeriesMode, modeFilteredVideos, progressStore]);
   const clearPlaylistProgressTitle =
-    isSeriesMode && activeBangumiSeries ? `清除《${activeBangumiSeries.title}》观看记录` : "清空当前文件夹观看记录";
+    isSeriesMode && activeBangumiSeries ? `清除《${activeBangumiSeries.title}》观看记录` : "清空当前模式观看记录";
   const currentVideoSourceAspectRatio = currentVideo?.width && currentVideo.height ? currentVideo.width / currentVideo.height : 9 / 16;
   const normalizedVideoRotation = ((videoRotation % 360) + 360) % 360;
   const isVideoSideways = normalizedVideoRotation === 90 || normalizedVideoRotation === 270;
@@ -2361,16 +2388,16 @@ export default function App() {
   );
   const resumableHomeCards = useMemo(
     () =>
-      videos
+      modeFilteredVideos
         .map(createHomeVideoCard)
         .filter((card) => isResumableProgress(card.progress))
         .sort((a, b) => (b.progress?.updatedAt ?? 0) - (a.progress?.updatedAt ?? 0)),
-    [createHomeVideoCard, videos],
+    [createHomeVideoCard, modeFilteredVideos],
   );
   const primaryResumeCard = resumableHomeCards[0] ?? null;
   const recentHomeCards = useMemo(
     () =>
-      videos
+      modeFilteredVideos
         .map(createHomeVideoCard)
         .filter((card) => Boolean(card.progress))
         .sort((a, b) => {
@@ -2379,11 +2406,11 @@ export default function App() {
           return aCompleted - bCompleted || (b.progress?.updatedAt ?? 0) - (a.progress?.updatedAt ?? 0);
         })
         .slice(0, 6),
-    [createHomeVideoCard, videos],
+    [createHomeVideoCard, modeFilteredVideos],
   );
   const favoriteHomeCards = useMemo(
     () =>
-      videos
+      modeFilteredVideos
         .filter((video) => favoriteVideoIds.has(video.id))
         .map(createHomeVideoCard)
         .sort((a, b) => {
@@ -2396,7 +2423,7 @@ export default function App() {
           );
         })
         .slice(0, 6),
-    [createHomeVideoCard, favoriteVideoIds, videos],
+    [createHomeVideoCard, favoriteVideoIds, modeFilteredVideos],
   );
   const nextEpisodeCard = useMemo(() => {
     const sourceVideo = primaryResumeCard?.video ?? recentHomeCards[0]?.video ?? currentVideo;
@@ -2437,15 +2464,16 @@ export default function App() {
   }, [favoriteHomeCards, isHomeViewVisible, nextEpisodeCard, primaryHomeCard, recentHomeCards, visibleVideos]);
   const thumbnailQueueVideoIdsKey = useMemo(() => thumbnailQueueVideoIds.join("\n"), [thumbnailQueueVideoIds]);
   const libraryStats = useMemo(() => {
-    const completed = videos.filter((video) => progressStore[video.id]?.completed).length;
-    const unfinished = videos.filter((video) => isResumableProgress(progressStore[video.id])).length;
+    const completed = modeFilteredVideos.filter((video) => progressStore[video.id]?.completed).length;
+    const unfinished = modeFilteredVideos.filter((video) => isResumableProgress(progressStore[video.id])).length;
+    const favorites = modeFilteredVideos.filter((video) => favoriteVideoIds.has(video.id)).length;
     return {
-      total: videos.length,
+      total: modeFilteredVideos.length,
       unfinished,
       completed,
-      favorites: favoriteVideoIds.size,
+      favorites,
     };
-  }, [favoriteVideoIds.size, progressStore, videos]);
+  }, [favoriteVideoIds, modeFilteredVideos, progressStore]);
   const selectedPhotoAlbum = useMemo(
     () => photoAlbums.find((album) => album.id === selectedPhotoAlbumId) ?? null,
     [photoAlbums, selectedPhotoAlbumId],
@@ -2579,7 +2607,7 @@ export default function App() {
       if (!normalizedQuery) return [];
 
       const folderResults = new Map<string, LibrarySearchResult>();
-      videos.forEach((video) => {
+      modeFilteredVideos.forEach((video) => {
         const folderTitle = libraryFolderTitleForVideo(video);
         const folderPath = libraryFolderPathForVideo(video);
         const mediaRoot = video.mediaRootId ? localConfig?.mediaRoots.find((root) => root.id === video.mediaRootId) : null;
@@ -2695,7 +2723,7 @@ export default function App() {
         .sort((a, b) => b.score - a.score || collator.compare(a.title, b.title))
         .slice(0, limit);
     },
-    [createLibraryFolderResult, favoriteVideoIds, localConfig, progressStore, videoTags, videos, videosByLibraryFolderKey],
+    [createLibraryFolderResult, favoriteVideoIds, localConfig, modeFilteredVideos, progressStore, videoTags, videosByLibraryFolderKey],
   );
   const createLibrarySearchCandidates = useCallback(
     (localResults: LibrarySearchResult[]): LibrarySearchCandidate[] => {
@@ -3847,7 +3875,7 @@ export default function App() {
   }, [deleteCandidate, deleteLocalVideo]);
 
   const clearFolderProgress = useCallback(() => {
-    if (!videos.length) return;
+    if (!modeFilteredVideos.length) return;
     if (isSeriesMode && activeBangumiSeries) {
       const targetVideoIds = new Set(activeSeriesProgressVideoIds);
       if (!targetVideoIds.size) return;
@@ -3880,8 +3908,19 @@ export default function App() {
       element.currentTime = 0;
     }
     setCurrentTime(0);
-    replaceProgressStore({}, "已清空当前文件夹的观看记录");
-  }, [activeBangumiSeries, activeSeriesProgressVideoIds, currentVideoId, isSeriesMode, replaceProgressStore, videos.length]);
+    const targetVideoIds = new Set(modeFilteredVideos.map((video) => video.id));
+    const nextStore = { ...progressStoreRef.current };
+    let didClear = false;
+    targetVideoIds.forEach((videoId) => {
+      clearedProgressVideoIdsRef.current.add(videoId);
+      if (nextStore[videoId]) {
+        delete nextStore[videoId];
+        didClear = true;
+      }
+    });
+    if (!didClear) return;
+    replaceProgressStore(nextStore, "已清空当前模式的观看记录");
+  }, [activeBangumiSeries, activeSeriesProgressVideoIds, currentVideoId, isSeriesMode, modeFilteredVideos, replaceProgressStore]);
 
   const persistCurrentProgress = useCallback(
     (completed = false) => {
@@ -5664,7 +5703,7 @@ export default function App() {
         .map((id) => candidateById.get(id))
         .filter((candidate): candidate is LibrarySearchCandidate => Boolean(candidate))
         .forEach((candidate, index) => {
-          const video = videos.find((item) => item.id === candidate.id);
+          const video = modeFilteredVideos.find((item) => item.id === candidate.id);
           if (!video) return;
           const key = libraryFolderKeyForVideo(video);
           if (aiResultsByKey.has(key)) return;
@@ -5689,8 +5728,8 @@ export default function App() {
     createLibrarySearchCandidates,
     librarySearchQuery,
     localConfig,
+    modeFilteredVideos,
     searchLibraryLocally,
-    videos,
     videosByLibraryFolderKey,
   ]);
 
@@ -6373,7 +6412,7 @@ export default function App() {
   };
 
   const progressPercent = duration ? Math.min(100, (currentTime / duration) * 100) : 0;
-  const primaryHomeTitle = primaryResumeCard ? "继续观看" : videos.length ? "开始观看" : "准备播放";
+  const primaryHomeTitle = primaryResumeCard ? "继续观看" : modeFilteredVideos.length ? "开始观看" : "准备播放";
   const primaryHomeAction = primaryResumeCard ? "继续播放" : "播放第一个视频";
   const formatHomeProgressLabel = (card: HomeVideoCard) => {
     if (card.progress?.completed) return "已看完";
@@ -6618,12 +6657,18 @@ export default function App() {
                 ) : (
                   <div className="home-empty-state">
                     <FolderOpen size={42} />
-                    <h2>新增一个媒体库开始播放</h2>
-                    <p>播放器会把你选择的目录加入全局媒体库，扫描视频、匹配字幕并保存观看进度。</p>
-                    <button className="primary-button" type="button" onClick={requestAddMediaLibrary} disabled={isScanning}>
-                      <FolderOpen size={18} />
-                      {isScanning ? "扫描中" : "新增媒体库"}
-                    </button>
+                    <h2>{videos.length ? `当前${homeMediaModeLabel}没有可播放视频` : "新增一个媒体库开始播放"}</h2>
+                    <p>
+                      {videos.length
+                        ? "切换到全部模式，或确认对应媒体库已完成扫描。"
+                        : "播放器会把你选择的目录加入全局媒体库，扫描视频、匹配字幕并保存观看进度。"}
+                    </p>
+                    {!videos.length ? (
+                      <button className="primary-button" type="button" onClick={requestAddMediaLibrary} disabled={isScanning}>
+                        <FolderOpen size={18} />
+                        {isScanning ? "扫描中" : "新增媒体库"}
+                      </button>
+                    ) : null}
                   </div>
                 )}
               </section>
@@ -6659,6 +6704,42 @@ export default function App() {
             </div>
 
             <aside className="home-side-column">
+              <section className="home-mode-card">
+                <div className="home-section-header">
+                  <h2>媒体模式</h2>
+                  <span>{homeMediaModeLabel}</span>
+                </div>
+                <div className="home-mode-switch" role="group" aria-label="首页媒体库模式">
+                  <button
+                    className={homeMediaMode === "all" ? "active" : ""}
+                    type="button"
+                    onClick={() => setHomeMediaMode("all")}
+                    aria-pressed={homeMediaMode === "all"}
+                  >
+                    <Play size={15} />
+                    全部
+                  </button>
+                  <button
+                    className={homeMediaMode === "anime" ? "active" : ""}
+                    type="button"
+                    onClick={() => setHomeMediaMode("anime")}
+                    aria-pressed={homeMediaMode === "anime"}
+                  >
+                    <Subtitles size={15} />
+                    追番模式
+                  </button>
+                  <button
+                    className={homeMediaMode === "special" ? "active" : ""}
+                    type="button"
+                    onClick={() => setHomeMediaMode("special")}
+                    aria-pressed={homeMediaMode === "special"}
+                  >
+                    <ShieldCheck size={15} />
+                    特殊模式
+                  </button>
+                </div>
+              </section>
+
               <section className="home-stats">
                 <div>
                   <strong>{libraryStats.total}</strong>
@@ -6686,17 +6767,17 @@ export default function App() {
                   aria-controls="home-media-library-panel"
                   onClick={() => setIsMediaLibraryPanelOpen((isOpen) => !isOpen)}
                 >
-                  <span>全局媒体库</span>
-                  <span>{`${mediaRootStatuses.filter((status) => status.status === "ready").length} / ${localConfig?.mediaRoots.length ?? 0} 可用`}</span>
+                  <span>{homeMediaMode === "all" ? "全局媒体库" : `${homeMediaModeLabel}媒体库`}</span>
+                  <span>{`${modeFilteredMediaRootStatuses.filter((status) => status.status === "ready").length} / ${homeModeMediaRoots.length} 可用`}</span>
                   <ChevronDown className="media-library-toggle-chevron" size={16} aria-hidden="true" />
                 </button>
                 {isMediaLibraryPanelOpen ? (
                   <div id="home-media-library-panel" className="media-library-panel">
-                    {localConfig?.mediaRoots.length ? (
+                    {homeModeMediaRoots.length ? (
                       <div className="media-library-list">
-                        {localConfig.mediaRoots.map((root) => {
+                        {homeModeMediaRoots.map((root) => {
                           const action = getMediaRootLocalPathAction(root);
-                          const status = mediaRootStatuses.find((item) => item.id === root.id);
+                          const status = modeFilteredMediaRootStatuses.find((item) => item.id === root.id);
                           return (
                             <div className="media-library-row" key={root.id}>
                               <strong>{root.label}</strong>
@@ -6721,7 +6802,7 @@ export default function App() {
                         })}
                       </div>
                     ) : (
-                      <div className="empty-list compact">尚未配置本地媒体库地址。</div>
+                      <div className="empty-list compact">当前模式没有匹配的媒体库。</div>
                     )}
                   </div>
                 ) : null}
@@ -6793,7 +6874,7 @@ export default function App() {
                     placeholder="搜索片名，或描述想看的内容"
                     aria-label="片库搜索"
                   />
-                  <button type="submit" disabled={isLibrarySearchLoading || !videos.length} title="搜索片库">
+                  <button type="submit" disabled={isLibrarySearchLoading || !modeFilteredVideos.length} title="搜索片库">
                     <Search size={17} />
                   </button>
                 </form>
@@ -7398,13 +7479,17 @@ export default function App() {
         <div className="playlist-header">
           <div className="playlist-title-row">
             <span>
-              {videos.length
+              {modeFilteredVideos.length
                 ? playlistFilter === "favorites"
-                  ? `${visibleVideos.length} / ${videos.length} 个收藏`
+                  ? `${visibleVideos.length} / ${modeFilteredVideos.length} 个收藏`
                   : isSeriesMode
-                    ? `${visibleVideos.length} / ${videos.length} 个视频`
-                    : `${videos.length} 个视频`
-                : "等待新增媒体库"}
+                    ? `${visibleVideos.length} / ${modeFilteredVideos.length} 个视频`
+                    : homeMediaMode === "all"
+                      ? `${modeFilteredVideos.length} 个视频`
+                      : `${homeMediaModeLabel} · ${modeFilteredVideos.length} 个视频`
+                : videos.length
+                  ? `当前${homeMediaModeLabel}没有视频`
+                  : "等待新增媒体库"}
             </span>
           </div>
           <div className={`playlist-tools ${isSeriesMode ? "series-mode" : ""}`}>
@@ -7412,7 +7497,7 @@ export default function App() {
               className={`series-mode-button ${isSeriesMode ? "active" : ""}`}
               type="button"
               onClick={toggleSeriesMode}
-              disabled={!videos.length}
+              disabled={!modeFilteredVideos.length}
               title={isSeriesMode ? "关闭追番模式" : "打开追番模式"}
               aria-pressed={isSeriesMode}
             >
@@ -7487,7 +7572,7 @@ export default function App() {
               title="排序方式"
               value={playlistSortMode}
               onChange={(event) => updatePlaylistSortMode(event.target.value as PlaylistSortMode)}
-              disabled={!videos.length}
+              disabled={!modeFilteredVideos.length}
             >
               {playlistSortOptions.map((option) => (
                 <option key={option.value} value={option.value}>
@@ -7499,7 +7584,7 @@ export default function App() {
               className={`playlist-order-button ${isPlaylistSortReversed ? "active" : ""}`}
               type="button"
               onClick={togglePlaylistSortDirection}
-              disabled={!videos.length}
+              disabled={!modeFilteredVideos.length}
               title={isPlaylistSortReversed ? "切换为正序" : "切换为倒序"}
               aria-label={isPlaylistSortReversed ? "切换为正序" : "切换为倒序"}
             >
@@ -7531,7 +7616,7 @@ export default function App() {
                   className={playlistFilter === "all" ? "active" : ""}
                   type="button"
                   onClick={() => setPlaylistFilter("all")}
-                  disabled={!videos.length}
+                  disabled={!modeFilteredVideos.length}
                 >
                   全部
                 </button>
@@ -7539,7 +7624,7 @@ export default function App() {
                   className={playlistFilter === "favorites" ? "active" : ""}
                   type="button"
                   onClick={() => setPlaylistFilter("favorites")}
-                  disabled={!videos.length}
+                  disabled={!modeFilteredVideos.length}
                 >
                   <Star size={14} />
                 </button>
@@ -7657,7 +7742,8 @@ export default function App() {
           ) : null}
 
           {!videos.length ? <div className="empty-list">{message}</div> : null}
-          {videos.length && !visibleVideos.length ? <div className="empty-list">还没有收藏的视频</div> : null}
+          {videos.length && !modeFilteredVideos.length ? <div className="empty-list">当前{homeMediaModeLabel}没有视频</div> : null}
+          {modeFilteredVideos.length && !visibleVideos.length ? <div className="empty-list">还没有收藏的视频</div> : null}
         </div>
       </aside>
       ) : null}

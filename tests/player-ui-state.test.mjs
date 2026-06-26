@@ -19,6 +19,26 @@ test("browser media root with localPath renders a disabled configured action", (
   );
 });
 
+test("home anime mode includes duplicate Anime media roots by label", () => {
+  assert.equal(uiState.isMediaRootInHomeMode({ id: "anime-a", label: "Anime" }, "anime"), true);
+  assert.equal(uiState.isMediaRootInHomeMode({ id: "anime-b", label: " anime " }, "anime"), true);
+});
+
+test("home special mode includes media roots with AV suffix", () => {
+  ["3DAV", "国产AV", "欧美AV", "JAV"].forEach((label) => {
+    assert.equal(uiState.isMediaRootInHomeMode({ label }, "special"), true);
+  });
+});
+
+test("home special mode excludes media roots without AV suffix", () => {
+  assert.equal(uiState.isMediaRootInHomeMode({ label: "Anime" }, "special"), false);
+  assert.equal(uiState.isMediaRootInHomeMode({ label: "AV资料备份" }, "special"), false);
+});
+
+test("home all mode includes unlabeled and temporary media roots", () => {
+  assert.equal(uiState.isMediaRootInHomeMode({}, "all"), true);
+});
+
 test("subtitle options include loaded subtitles before manual selection", () => {
   const options = uiState.createSubtitleControlOptions([
     { id: "subtitle:1", name: "Episode 01.ass", isManual: false },
