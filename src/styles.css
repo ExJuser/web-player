@@ -3449,7 +3449,22 @@ button {
 }
 
 .tag-editor-form .primary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   height: 38px;
+  min-width: 76px;
+}
+
+.tag-query-button.loading svg {
+  animation: tag-query-spin 0.9s linear infinite;
+}
+
+@keyframes tag-query-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .tag-editor-form input::placeholder {

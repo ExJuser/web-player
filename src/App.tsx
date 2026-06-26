@@ -1966,6 +1966,7 @@ export default function App() {
   const [isTagDialogOpen, setIsTagDialogOpen] = useState(false);
   const [tagInput, setTagInput] = useState("");
   const [tagMessage, setTagMessage] = useState("");
+  const [isTagSuggestionLoading, setIsTagSuggestionLoading] = useState(false);
   const [tagMergePrompt, setTagMergePrompt] = useState<TagMergePrompt | null>(null);
   const [playlistFilter, setPlaylistFilter] = useState<PlaylistFilter>("all");
   const [playlistSortMode, setPlaylistSortMode] = useState<PlaylistSortMode>(
@@ -3309,6 +3310,7 @@ export default function App() {
       }
 
       if (localConfig?.ai.configured && allTags.length) {
+        setIsTagSuggestionLoading(true);
         try {
           const aiSuggestion = await fetchJson<AiTagMergeSuggestionResponse>("/api/ai/tags/merge-suggestion", {
             method: "POST",
@@ -3329,6 +3331,8 @@ export default function App() {
           }
         } catch {
           setTagMessage("AI 标签合并建议不可用，已使用离线规则。");
+        } finally {
+          setIsTagSuggestionLoading(false);
         }
       }
     }
@@ -3344,8 +3348,9 @@ export default function App() {
   }, [currentVideo, getAllLibraryTags, localConfig, replaceVideoTags]);
 
   const submitTagInput = useCallback(() => {
+    if (isTagSuggestionLoading) return;
     void addTagsToCurrentVideo(parseTagInput(tagInput));
-  }, [addTagsToCurrentVideo, tagInput]);
+  }, [addTagsToCurrentVideo, isTagSuggestionLoading, tagInput]);
 
   const removeTagFromCurrentVideo = useCallback((tag: string) => {
     if (!currentVideo) return;
@@ -8200,8 +8205,13 @@ export default function App() {
               }}
               disabled={!currentVideo}
             />
-            <button className="primary-button" type="submit" disabled={!currentVideo || !tagInput.trim()}>
-              添加
+            <button
+              className={`primary-button tag-query-button${isTagSuggestionLoading ? " loading" : ""}`}
+              type="submit"
+              disabled={!currentVideo || !tagInput.trim() || isTagSuggestionLoading}
+            >
+              {isTagSuggestionLoading ? <RefreshCw aria-hidden="true" size={16} /> : null}
+              {isTagSuggestionLoading ? "查询中" : "添加"}
             </button>
           </form>
 
