@@ -309,6 +309,7 @@ import {
   type TagMergeSuggestion
 } from "./tagUtils";
 import {
+  clearPhotoAlbumFolderHandle,
   clearRecentFolderHandle,
   createDefaultPlayerDataStore,
   createProgress,
@@ -317,9 +318,11 @@ import {
   loadLegacyPlayerDataStore,
   loadGlobalPlayerDataStore,
   loadPlayerDataStore,
+  readPhotoAlbumFolderHandle,
   readCachedThumbnail,
   saveGlobalPlayerDataStore,
   writeCachedThumbnail,
+  writePhotoAlbumFolderHandle,
   writeRecentFolderHandle
 } from "./playerStorage";
 
@@ -1926,6 +1929,7 @@ export default function App() {
   const photoAlbumProgressRef = useRef<Record<string, PhotoAlbumProgress>>({});
   const favoritePhotoAlbumIdsRef = useRef(new Set<string>());
   const photoAlbumPreferencesRef = useRef(defaultPhotoAlbumPreferences);
+  const photoAlbumAutoLoadAttemptedRef = useRef(false);
   const bangumiMatchRunIdRef = useRef(0);
   const thumbnailLoadRunIdRef = useRef(0);
   const isScanningRef = useRef(false);
@@ -2184,7 +2188,7 @@ export default function App() {
   }, []);
 
   const loadPhotoAlbumDirectory = useCallback(
-    async (directory: FileSystemDirectoryHandle) => {
+    async (directory: FileSystemDirectoryHandle, options?: { remember?: boolean }) => {
       setIsPhotoAlbumsLoading(true);
       setPhotoAlbumMessage("正在扫描写真集...");
       try {
@@ -2220,6 +2224,9 @@ export default function App() {
           },
         ]);
         setHasLoadedPhotoAlbums(true);
+        if (options?.remember !== false) {
+          await writePhotoAlbumFolderHandle(directory).catch(() => undefined);
+        }
         setPhotoAlbumMessage(
           scan.albums.length
             ? `已从“${scan.rootLabel}”加载 ${scan.albums.length} 本写真集，扫描 ${scan.scannedFiles} 张图片`
@@ -2252,6 +2259,29 @@ export default function App() {
       }
     }
   }, [isPhotoAlbumsLoading, loadPhotoAlbumDirectory]);
+
+  useEffect(() => {
+    if (activeView !== "photos" || hasLoadedPhotoAlbums || isPhotoAlbumsLoading || photoAlbumAutoLoadAttemptedRef.current) return;
+    photoAlbumAutoLoadAttemptedRef.current = true;
+    void (async () => {
+      try {
+        const directory = await readPhotoAlbumFolderHandle();
+        if (!directory) {
+          setPhotoAlbumMessage("首次选择写真集文件夹后，下次进入会自动复用。");
+          return;
+        }
+        const canReadDirectory = await ensureDirectoryReadPermission(directory);
+        if (!canReadDirectory) {
+          setPhotoAlbumMessage(`浏览器需要重新授权“${directory.name}”，请重新选择写真集文件夹。`);
+          return;
+        }
+        await loadPhotoAlbumDirectory(directory, { remember: true });
+      } catch (error) {
+        await clearPhotoAlbumFolderHandle().catch(() => undefined);
+        setPhotoAlbumMessage(error instanceof Error ? error.message : "读取已保存的写真集文件夹失败，请重新选择。");
+      }
+    })();
+  }, [activeView, hasLoadedPhotoAlbums, isPhotoAlbumsLoading, loadPhotoAlbumDirectory]);
 
   const homeModeMediaRoots = useMemo(
     () => (localConfig?.mediaRoots ?? []).filter((root) => isMediaRootInHomeMode(root, homeMediaMode)),
@@ -5994,6 +6024,7 @@ export default function App() {
       }
       if (shouldClearRecentFolder) {
         await clearRecentFolderHandle().catch(() => undefined);
+        await clearPhotoAlbumFolderHandle().catch(() => undefined);
         clearLoadedMedia();
         directoryRef.current = null;
         libraryIdRef.current = null;

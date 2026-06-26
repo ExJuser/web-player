@@ -18,6 +18,7 @@ import {
   RECENT_FOLDER_DB_NAME,
   RECENT_FOLDER_KEY,
   RECENT_FOLDER_STORE_NAME,
+  PHOTO_ALBUM_FOLDER_KEY,
   thumbnailCacheVersion,
   defaultPlayerSettings,
   defaultPlayerPreferences,
@@ -433,6 +434,29 @@ export async function clearRecentFolderHandle() {
   if (!("indexedDB" in window)) return;
   await runObjectStoreRequest<undefined>(RECENT_FOLDER_STORE_NAME, "readwrite", (store) =>
     store.delete(RECENT_FOLDER_KEY),
+  );
+}
+
+export async function readPhotoAlbumFolderHandle() {
+  if (!("indexedDB" in window)) return null;
+  return (await runObjectStoreRequest<FileSystemDirectoryHandle | undefined>(
+    RECENT_FOLDER_STORE_NAME,
+    "readonly",
+    (store) => store.get(PHOTO_ALBUM_FOLDER_KEY),
+  )) ?? null;
+}
+
+export async function writePhotoAlbumFolderHandle(directory: FileSystemDirectoryHandle) {
+  if (!("indexedDB" in window)) return;
+  await runObjectStoreRequest<IDBValidKey>(RECENT_FOLDER_STORE_NAME, "readwrite", (store) =>
+    store.put(directory, PHOTO_ALBUM_FOLDER_KEY),
+  );
+}
+
+export async function clearPhotoAlbumFolderHandle() {
+  if (!("indexedDB" in window)) return;
+  await runObjectStoreRequest<undefined>(RECENT_FOLDER_STORE_NAME, "readwrite", (store) =>
+    store.delete(PHOTO_ALBUM_FOLDER_KEY),
   );
 }
 
