@@ -884,6 +884,15 @@ async function resolvePhotoParentDirectory(rootDirectory: FileSystemDirectoryHan
   return directory;
 }
 
+async function photoFileExists(parentDirectory: FileSystemDirectoryHandle, name: string) {
+  try {
+    await parentDirectory.getFileHandle(name);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function createCachedPhotoAlbumScan(scan: Awaited<ReturnType<typeof collectPhotoAlbumsFromDirectory>>): CachedPhotoAlbumScan {
   return {
     version: photoAlbumScanCacheVersion,
@@ -2127,6 +2136,8 @@ export default function App() {
     relativePath: string;
     parentDirectory?: FileSystemDirectoryHandle;
   } | null>(null);
+  const [photoDeleteError, setPhotoDeleteError] = useState("");
+  const [isPhotoDeletePending, setIsPhotoDeletePending] = useState(false);
   const [mediaRootLabelPrompt, setMediaRootLabelPrompt] = useState<MediaRootLabelPrompt | null>(null);
   const [existingMediaRootPrompt, setExistingMediaRootPrompt] = useState<ExistingMediaRootPrompt | null>(null);
   const [mediaRootLocalPathDialog, setMediaRootLocalPathDialog] = useState<MediaRootLocalPathDialog | null>(null);
@@ -2345,7 +2356,7 @@ export default function App() {
     }
 
     try {
-      const directory = await window.showDirectoryPicker({ mode: "read" });
+      const directory = await window.showDirectoryPicker({ mode: "readwrite" });
       await loadPhotoAlbumDirectory(directory);
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
@@ -4585,6 +4596,7 @@ export default function App() {
       return;
     }
 
+    setPhotoDeleteError("");
     setPhotoDeleteCandidate({
       albumId: selectedPhotoAlbum.id,
       albumTitle: selectedPhotoAlbum.title,
@@ -4597,10 +4609,13 @@ export default function App() {
   }, [currentPhotoIndex, selectedPhotoAlbum]);
 
   const confirmDeleteCurrentPhoto = useCallback(async () => {
-    if (!photoDeleteCandidate) return;
+    if (!photoDeleteCandidate || isPhotoDeletePending) return;
+    setPhotoDeleteError("");
+    setIsPhotoDeletePending(true);
     const album = photoAlbumsRef.current.find((item) => item.id === photoDeleteCandidate.albumId);
     const photo = album?.images.find((image) => image.id === photoDeleteCandidate.imageId);
     if (!album || !photo) {
+      setIsPhotoDeletePending(false);
       setPhotoDeleteCandidate(null);
       setPhotoAlbumMessage("这张图片已经不在当前写真集中。");
       return;
@@ -4610,18 +4625,23 @@ export default function App() {
       const rootDirectory = photoAlbumDirectoryRef.current ?? (await readPhotoAlbumFolderHandle().catch(() => null));
       const parentDirectory = photo.parentDirectory ?? photoDeleteCandidate.parentDirectory ?? (rootDirectory ? await resolvePhotoParentDirectory(rootDirectory, photo.relativePath) : null);
       if (!parentDirectory?.removeEntry) {
-        setPhotoDeleteCandidate(null);
-        setPhotoAlbumMessage("当前图片来源不支持直接删除，请刷新写真集或在文件管理器中删除。");
+        setPhotoDeleteError("当前图片来源不支持直接删除，请刷新写真集或在文件管理器中删除。");
+        setIsPhotoDeletePending(false);
         return;
       }
 
       if (!(await hasDirectoryWritePermission(parentDirectory))) {
-        setPhotoDeleteCandidate(null);
-        setPhotoAlbumMessage("为避免浏览器原生确认框，当前未启用应用内删除写真图片。请在文件管理器中删除。");
+        setPhotoDeleteError("当前写真集文件夹没有写入权限。请返回写真集页重新选择文件夹后再删除。");
+        setIsPhotoDeletePending(false);
         return;
       }
 
       await parentDirectory.removeEntry(photo.name);
+      if (await photoFileExists(parentDirectory, photo.name)) {
+        setPhotoDeleteError("浏览器没有删除这个本地文件，请确认文件未被占用，并重新选择写真集文件夹授予写入权限。");
+        setIsPhotoDeletePending(false);
+        return;
+      }
 
       setPhotoDeleteCandidate(null);
 
@@ -4629,7 +4649,7 @@ export default function App() {
       const remainingImages = album.images
         .filter((image) => image.id !== photo.id)
         .map((image, index) => ({ ...image, index }));
-      const nextPhotoIndex = Math.min(photoDeleteCandidate.imageIndex, Math.max(remainingImages.length - 1, 0));
+      const nextPhotoIndex = Math.min(Math.max(photoDeleteCandidate.imageIndex - 1, 0), Math.max(remainingImages.length - 1, 0));
       const nextProgress = { ...photoAlbumProgressRef.current };
       let nextFavorites = favoritePhotoAlbumIdsRef.current;
       let nextSelectedAlbumId: string | null = album.id;
@@ -4732,10 +4752,11 @@ export default function App() {
           : `已删除《${photo.name}》，《${album.title}》已无图片`,
       );
     } catch {
-      setPhotoDeleteCandidate(null);
-      setPhotoAlbumMessage("删除写真图片失败，请确认浏览器仍有文件夹写入权限。");
+      setPhotoDeleteError("删除写真图片失败，请确认浏览器仍有文件夹写入权限，或重新选择写真集文件夹。");
+    } finally {
+      setIsPhotoDeletePending(false);
     }
-  }, [photoDeleteCandidate, saveCurrentPhotoAlbumStore]);
+  }, [isPhotoDeletePending, photoDeleteCandidate, saveCurrentPhotoAlbumStore]);
 
   const updatePhotoAlbumSortMode = useCallback(
     (nextSortMode: PhotoAlbumSortMode) => {
@@ -6528,6 +6549,8 @@ export default function App() {
     setIsShortcutDialogOpen(false);
     setDeleteCandidate(null);
     setPhotoDeleteCandidate(null);
+    setPhotoDeleteError("");
+    setIsPhotoDeletePending(false);
     setIsFolderDialogOpen(false);
     setTimelinePreview({
       time: 0,
@@ -6757,9 +6780,10 @@ export default function App() {
         return;
       }
 
-      if (event.key === "Escape" && photoDeleteCandidate) {
+      if (event.key === "Escape" && photoDeleteCandidate && !isPhotoDeletePending) {
         event.preventDefault();
         setPhotoDeleteCandidate(null);
+        setPhotoDeleteError("");
         return;
       }
 
@@ -6978,6 +7002,7 @@ export default function App() {
     deleteCandidate,
     exitPrivacyMode,
     photoDeleteCandidate,
+    isPhotoDeletePending,
     isCinemaMode,
     isClearCacheConfirmOpen,
     isPrivacyMode,
@@ -7799,7 +7824,7 @@ export default function App() {
                 <ChevronLeft size={34} />
               </button>
               {currentPhoto && currentPhotoUrl ? (
-                <img src={currentPhotoUrl} alt={currentPhoto.name} draggable={false} />
+                <img key={currentPhoto.id} src={currentPhotoUrl} alt={currentPhoto.name} draggable={false} />
               ) : (
                 <div className="photo-empty-state">没有可显示的图片</div>
               )}
@@ -8510,7 +8535,14 @@ export default function App() {
       </div>
     ) : null}
     {photoDeleteCandidate ? (
-      <div className="modal-backdrop" role="presentation" onMouseDown={() => setPhotoDeleteCandidate(null)}>
+      <div
+        className="modal-backdrop"
+        role="presentation"
+        onMouseDown={() => {
+          if (isPhotoDeletePending) return;
+          setPhotoDeleteCandidate(null);
+        }}
+      >
         <section
           aria-labelledby="delete-photo-title"
           aria-modal="true"
@@ -8523,6 +8555,7 @@ export default function App() {
             className="dialog-close"
             type="button"
             onClick={() => setPhotoDeleteCandidate(null)}
+            disabled={isPhotoDeletePending}
           >
             <X size={18} />
           </button>
@@ -8537,13 +8570,14 @@ export default function App() {
             <strong>{photoDeleteCandidate.name}</strong>
             <span>{photoDeleteCandidate.relativePath || photoDeleteCandidate.albumTitle}</span>
           </div>
+          {photoDeleteError ? <div className="dialog-inline-error">{photoDeleteError}</div> : null}
           <div className="dialog-actions">
-            <button className="secondary-button" type="button" onClick={() => setPhotoDeleteCandidate(null)}>
+            <button className="secondary-button" type="button" onClick={() => setPhotoDeleteCandidate(null)} disabled={isPhotoDeletePending}>
               取消
             </button>
-            <button className="danger-button" type="button" onClick={() => void confirmDeleteCurrentPhoto()}>
+            <button className="danger-button" type="button" onClick={() => void confirmDeleteCurrentPhoto()} disabled={isPhotoDeletePending}>
               <Trash2 size={18} />
-              删除图片
+              {isPhotoDeletePending ? "删除中" : "删除图片"}
             </button>
           </div>
         </section>
