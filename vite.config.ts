@@ -12,7 +12,6 @@ import react from "@vitejs/plugin-react";
 import {
   classifyMediaProbe,
   createCompatibleMediaUrl,
-  createVideoPlayability,
   getCachedCompatibleMedia,
   mediaContentTypeForPath,
   probeMediaFile,
@@ -376,22 +375,6 @@ function resolveMediaPath(config, rootId, relativePath) {
 function findMediaRoot(config, rootId) {
   const id = typeof rootId === "string" ? rootId.trim() : "";
   return normalizeMediaRoots(config).find((root) => root.id === id) ?? null;
-}
-
-async function createScannedVideoPlayability(root, video, filePath) {
-  return createVideoPlayability({
-    root,
-    video,
-    filePath,
-    compatibleMediaRoot,
-    runProcess,
-  });
-}
-
-async function scanConfiguredMediaRootsWithPlayability(config) {
-  return scanConfiguredMediaRoots(config, {
-    createVideoPlayability: createScannedVideoPlayability,
-  });
 }
 
 async function probeMedia(config, payload) {
@@ -1378,7 +1361,7 @@ function playerDataApiPlugin(env) {
       }
 
       if (url.pathname === "/api/media-roots/scan" && request.method === "GET") {
-        sendJson(response, 200, await scanConfiguredMediaRootsWithPlayability(await loadAppConfig()));
+        sendJson(response, 200, await scanConfiguredMediaRoots(await loadAppConfig()));
         return;
       }
 

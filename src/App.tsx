@@ -1297,6 +1297,10 @@ type CompatibleRemuxResponse = {
   playability: NonNullable<VideoItem["playability"]>;
 };
 
+type MediaProbeResponse = {
+  playability: NonNullable<VideoItem["playability"]>;
+};
+
 function playableUrlForVideo(video: VideoItem) {
   return video.playability?.compatibleUrl || video.url;
 }
@@ -1952,6 +1956,7 @@ export default function App() {
   const [isEmbeddedSubtitleDialogOpen, setIsEmbeddedSubtitleDialogOpen] = useState(false);
   const [embeddedSubtitleMessage, setEmbeddedSubtitleMessage] = useState("");
   const [isEmbeddedSubtitleLoading, setIsEmbeddedSubtitleLoading] = useState(false);
+  const [mediaProbeVideoId, setMediaProbeVideoId] = useState<string | null>(null);
   const [compatibleMediaVideoId, setCompatibleMediaVideoId] = useState<string | null>(null);
   const [compatibleMediaMessage, setCompatibleMediaMessage] = useState("");
   const [isAiPanelOpen, setIsAiPanelOpen] = useState(false);
@@ -2851,13 +2856,16 @@ export default function App() {
       localConfig?.ffmpeg.ffmpeg &&
       localConfig.ffmpeg.ffprobe,
   );
-  const compatibleMediaAction = getCompatibleMediaAction(currentVideo, {
-    canUseServerTools: Boolean(
+  const canUseServerMediaTools = Boolean(
+    currentVideo &&
       currentMediaRootId &&
-        supportsServerFileAccess(currentMediaLibraryRoot) &&
-        localConfig?.ffmpeg.ffmpeg &&
-        localConfig.ffmpeg.ffprobe,
-    ),
+      currentVideo.playbackSource === "server" &&
+      supportsServerFileAccess(currentMediaLibraryRoot) &&
+      localConfig?.ffmpeg.ffmpeg &&
+      localConfig.ffmpeg.ffprobe,
+  );
+  const compatibleMediaAction = getCompatibleMediaAction(currentVideo, {
+    canUseServerTools: canUseServerMediaTools,
   });
   const canCreateCompatibleMedia = compatibleMediaAction.canCreate;
   const resolveMediaRootId = useCallback((directoryName: string) => {
@@ -3286,6 +3294,42 @@ export default function App() {
       return didChange ? nextVideos : previous;
     });
   }, []);
+
+  useEffect(() => {
+    if (!currentVideo || !currentMediaRootId || !canUseServerMediaTools) return;
+    if (currentVideo.playability || mediaProbeVideoId === currentVideo.id) return;
+
+    let isCancelled = false;
+    const videoId = currentVideo.id;
+    setMediaProbeVideoId(videoId);
+    fetchJson<MediaProbeResponse>("/api/media/probe", {
+      method: "POST",
+      body: JSON.stringify({
+        rootId: currentMediaRootId,
+        relativePath: currentVideo.relativePath,
+      }),
+    })
+      .then((payload) => {
+        if (isCancelled) return;
+        updateVideoPlayability(videoId, payload.playability);
+      })
+      .catch((error) => {
+        if (isCancelled) return;
+        updateVideoPlayability(videoId, {
+          status: "unknown",
+          reason: error instanceof Error ? `媒体探测失败：${error.message}` : "媒体探测失败。",
+        });
+      })
+      .finally(() => {
+        if (!isCancelled) {
+          setMediaProbeVideoId((currentId) => (currentId === videoId ? null : currentId));
+        }
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [canUseServerMediaTools, currentMediaRootId, currentVideo, mediaProbeVideoId, updateVideoPlayability]);
 
   const updateProgress = useCallback(
     (video: VideoItem, currentTime: number, duration: number, completed?: boolean) => {
@@ -6670,9 +6714,13 @@ export default function App() {
                     </div>
                   ))}
                 </dl>
-                {compatibleMediaAction.visible ? (
+                {compatibleMediaAction.visible || mediaProbeVideoId === currentVideo.id ? (
                   <div className="compatible-media-status">
-                    <span>{currentVideo.playability?.reason ?? "当前视频尚未探测播放兼容性。"}</span>
+                    <span>
+                      {mediaProbeVideoId === currentVideo.id
+                        ? "正在探测媒体兼容性..."
+                        : currentVideo.playability?.reason ?? "当前视频尚未探测播放兼容性。"}
+                    </span>
                     {canCreateCompatibleMedia ? (
                       <button
                         className="secondary-button"

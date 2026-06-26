@@ -173,7 +173,7 @@ To enable embedded subtitle extraction, install `ffmpeg` and `ffprobe` on your s
 
 The home view uses a global media library: every configured media root is scanned into one playlist, search index, progress store, favorites list, and tag store. Local roots and browser roots with `localPath` are scanned automatically by the local dev server. Browser roots without `localPath` stay visible in the media library card as needing access/configuration and are not auto-scanned.
 
-When a video's media root has a server-readable path, the player can use `ffprobe` to detect codec/container compatibility, extract embedded text subtitles, and offer a manual compatible MP4 generation action for files that can be remuxed without transcoding. Image subtitle formats such as PGS and VobSub are detected but not OCR'd.
+When a video's media root has a server-readable path, the player can use `ffprobe` on the selected video to detect codec/container compatibility, extract embedded text subtitles, and offer a manual compatible MP4 generation action for files that can be remuxed without transcoding. Image subtitle formats such as PGS and VobSub are detected but not OCR'd.
 
 The compatible MP4 action is intentionally limited to safe remux candidates, such as H.264 video with AAC/MP3 audio in a browser-unfriendly container. HEVC, 10-bit video, DTS/TrueHD audio, and other formats that require transcoding are reported with an explanation and are not processed automatically.
 
