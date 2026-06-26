@@ -133,6 +133,11 @@ function isSubtitleFile(name: string) {
 const PHOTO_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif", ".bmp"]);
 const photoAlbumPageSize = 48;
 const photoThumbnailWindowSize = 24;
+const photoAlbumSortOptions: Array<{ value: PhotoAlbumSortMode; label: string }> = [
+  { value: "updated", label: "最近更新" },
+  { value: "name", label: "名称" },
+  { value: "count", label: "图片数" },
+];
 
 function isPhotoFile(name: string) {
   return hasExtension(name, PHOTO_EXTENSIONS);
@@ -6218,7 +6223,7 @@ export default function App() {
             >
               {theme === "dark" ? <Sun size={17} /> : <Moon size={17} />}
             </button>
-            {!isPrivacyMode ? (
+            {!isPrivacyMode && !isPhotoAlbumViewVisible ? (
               <button className="primary-button" type="button" onClick={requestAddMediaLibrary} disabled={isScanning}>
                 <FolderOpen size={18} />
                 {isScanning ? "扫描中" : "新增媒体库"}
@@ -6510,20 +6515,14 @@ export default function App() {
                     收藏
                   </button>
                 </div>
-                <select
-                  className="compact-select photo-sort-select"
+                <ControlSelect
+                  label="排序"
+                  ariaLabel="写真集排序"
                   value={photoAlbumSortMode}
-                  onChange={(event) => updatePhotoAlbumSortMode(event.target.value as PhotoAlbumSortMode)}
-                  aria-label="写真集排序"
-                >
-                  <option value="updated">最近更新</option>
-                  <option value="name">名称</option>
-                  <option value="count">图片数</option>
-                </select>
-                <button className="secondary-button" type="button" onClick={() => void choosePhotoAlbumDirectory()} disabled={isPhotoAlbumsLoading}>
-                  <FolderOpen size={16} />
-                  {isPhotoAlbumsLoading ? "扫描中" : hasLoadedPhotoAlbums ? "重新选择" : "选择文件夹"}
-                </button>
+                  options={photoAlbumSortOptions}
+                  onChange={updatePhotoAlbumSortMode}
+                  className="photo-sort-control"
+                />
               </div>
             </section>
 
