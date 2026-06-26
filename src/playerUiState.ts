@@ -83,6 +83,22 @@ export function shouldShowHomeRecapCard(mode: HomeMediaMode) {
   return mode === "anime";
 }
 
+export function resolvePlayerEntrySeriesMode(mode: HomeMediaMode, seriesKey: string | null | undefined) {
+  if (mode === "anime") {
+    return {
+      isSeriesMode: true,
+      selectedSeriesKey: seriesKey || "all",
+      resetPlaylistFilter: true,
+    };
+  }
+
+  return {
+    isSeriesMode: false,
+    selectedSeriesKey: "all",
+    resetPlaylistFilter: false,
+  };
+}
+
 export function createSubtitleControlOptions(subtitles: SubtitleForUi[]) {
   return [
     { value: "off", label: "字幕关闭" },

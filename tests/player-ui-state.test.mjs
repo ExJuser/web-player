@@ -85,6 +85,23 @@ test("home recap card entry is shown only in anime mode", () => {
   assert.equal(uiState.shouldShowHomeRecapCard("special"), false);
 });
 
+test("anime player entry enables series mode for the current folder series", () => {
+  assert.deepEqual(uiState.resolvePlayerEntrySeriesMode("anime", "root-1::show-a"), {
+    isSeriesMode: true,
+    selectedSeriesKey: "root-1::show-a",
+    resetPlaylistFilter: true,
+  });
+});
+
+test("non-anime player entry uses regular playlist mode", () => {
+  assert.deepEqual(uiState.resolvePlayerEntrySeriesMode("all", "root-1::show-a"), {
+    isSeriesMode: false,
+    selectedSeriesKey: "all",
+    resetPlaylistFilter: false,
+  });
+  assert.equal(uiState.resolvePlayerEntrySeriesMode("special", null).isSeriesMode, false);
+});
+
 test("subtitle options include loaded subtitles before manual selection", () => {
   const options = uiState.createSubtitleControlOptions([
     { id: "subtitle:1", name: "Episode 01.ass", isManual: false },

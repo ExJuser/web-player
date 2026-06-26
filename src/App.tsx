@@ -293,6 +293,7 @@ import {
   createSubtitleControlOptions,
   getMediaRootLocalPathAction,
   isMediaRootInHomeMode,
+  resolvePlayerEntrySeriesMode,
   resolveRestoredEmbeddedSubtitleSelection,
   resolveSubtitleSelection,
   shouldShowHomeRecapCard,
@@ -4048,11 +4049,40 @@ export default function App() {
     setIsHoldSpeedActive(false);
   }, []);
 
-  const selectVideo = useCallback(
+  const syncSeriesModeForPlayerEntry = useCallback(
     (videoId: string) => {
+      const targetVideo = videosRef.current.find((video) => video.id === videoId) ?? null;
+      const targetSeriesKey = targetVideo
+        ? scopedSeriesKeyForVideo(targetVideo, seriesTitleByVideoId.get(targetVideo.id) ?? inferSeriesTitle(targetVideo))
+        : null;
+      const nextSeriesMode = resolvePlayerEntrySeriesMode(homeMediaMode, targetSeriesKey);
+      const currentPreferences = playerPreferencesRef.current;
+
+      setIsSeriesMenuOpen(false);
+      if (nextSeriesMode.resetPlaylistFilter) setPlaylistFilter("all");
+
+      if (
+        currentPreferences.isSeriesMode === nextSeriesMode.isSeriesMode &&
+        currentPreferences.selectedSeriesKey === nextSeriesMode.selectedSeriesKey
+      ) {
+        return;
+      }
+
+      replacePlayerPreferences({
+        ...currentPreferences,
+        isSeriesMode: nextSeriesMode.isSeriesMode,
+        selectedSeriesKey: nextSeriesMode.selectedSeriesKey,
+      });
+    },
+    [homeMediaMode, replacePlayerPreferences, seriesTitleByVideoId],
+  );
+
+  const selectVideo = useCallback(
+    (videoId: string, options?: { syncSeriesMode?: boolean }) => {
       cancelAutoNextPrompt();
       persistCurrentProgress();
       resetHoldSpeedState();
+      if (options?.syncSeriesMode !== false) syncSeriesModeForPlayerEntry(videoId);
       setActiveView("player");
       pendingAutoPlayVideoIdRef.current = videoId;
       autoSubtitleSelectionVideoIdRef.current = videoId;
@@ -4074,7 +4104,7 @@ export default function App() {
       setVideoAspectRatio(16 / 9);
       focusPlayer();
     },
-    [cancelAutoNextPrompt, focusPlayer, persistCurrentProgress, resetHoldSpeedState],
+    [cancelAutoNextPrompt, focusPlayer, persistCurrentProgress, resetHoldSpeedState, syncSeriesModeForPlayerEntry],
   );
 
   const openVideoFromHome = useCallback(
@@ -4095,7 +4125,7 @@ export default function App() {
         isSeriesMode: true,
         selectedSeriesKey: result.key,
       });
-      selectVideo(targetVideo.id);
+      selectVideo(targetVideo.id, { syncSeriesMode: false });
     },
     [replacePlayerPreferences, selectVideo],
   );
