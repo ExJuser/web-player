@@ -5,6 +5,7 @@ coverage/
 .cache/
 .local-web-player-data/
 config/app.json
+AGENTS.md
 
 .agents/
 .codex/
