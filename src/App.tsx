@@ -131,6 +131,8 @@ function isSubtitleFile(name: string) {
 }
 
 const PHOTO_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif", ".bmp"]);
+const photoAlbumPageSize = 48;
+const photoThumbnailWindowSize = 24;
 
 function isPhotoFile(name: string) {
   return hasExtension(name, PHOTO_EXTENSIONS);
@@ -1660,6 +1662,7 @@ export default function App() {
   const [photoAlbumFilter, setPhotoAlbumFilter] = useState<PhotoAlbumViewFilter>(
     defaultPhotoAlbumPreferences.favoritesOnly ? "favorites" : "all",
   );
+  const [photoAlbumPage, setPhotoAlbumPage] = useState(1);
   const [photoAlbumMessage, setPhotoAlbumMessage] = useState("选择一个写真集文件夹后开始扫描图片。");
   const [isPhotoAlbumsLoading, setIsPhotoAlbumsLoading] = useState(false);
   const [hasLoadedPhotoAlbums, setHasLoadedPhotoAlbums] = useState(false);
@@ -1856,6 +1859,7 @@ export default function App() {
           });
         });
         setPhotoAlbums(scan.albums);
+        setPhotoAlbumPage(1);
         setPhotoRootStatuses([
           {
             id: scan.rootId,
@@ -2174,6 +2178,13 @@ export default function App() {
       return b.updatedAt - a.updatedAt || collator.compare(a.title, b.title);
     });
   }, [favoritePhotoAlbumIds, photoAlbumFilter, photoAlbumSortMode, photoAlbums]);
+  const photoAlbumPageCount = Math.max(1, Math.ceil(visiblePhotoAlbums.length / photoAlbumPageSize));
+  const pagedPhotoAlbums = useMemo(() => {
+    const start = (photoAlbumPage - 1) * photoAlbumPageSize;
+    return visiblePhotoAlbums.slice(start, start + photoAlbumPageSize);
+  }, [photoAlbumPage, visiblePhotoAlbums]);
+  const photoAlbumPageStart = visiblePhotoAlbums.length ? (photoAlbumPage - 1) * photoAlbumPageSize + 1 : 0;
+  const photoAlbumPageEnd = Math.min(photoAlbumPage * photoAlbumPageSize, visiblePhotoAlbums.length);
   const photoAlbumStats = useMemo(() => {
     const completed = photoAlbums.filter((album) => photoAlbumProgress[album.id]?.completed).length;
     return {
@@ -2183,6 +2194,16 @@ export default function App() {
       completed,
     };
   }, [favoritePhotoAlbumIds.size, photoAlbumProgress, photoAlbums]);
+  const visiblePhotoThumbnails = useMemo(() => {
+    if (!selectedPhotoAlbum) return [];
+    const halfWindow = Math.floor(photoThumbnailWindowSize / 2);
+    const maxStart = Math.max(selectedPhotoAlbum.images.length - photoThumbnailWindowSize, 0);
+    const start = Math.min(Math.max(currentPhotoIndex - halfWindow, 0), maxStart);
+    return selectedPhotoAlbum.images.slice(start, start + photoThumbnailWindowSize);
+  }, [currentPhotoIndex, selectedPhotoAlbum]);
+  useEffect(() => {
+    setPhotoAlbumPage((page) => Math.min(Math.max(page, 1), photoAlbumPageCount));
+  }, [photoAlbumPageCount]);
   const findMatchedSubtitleForVideo = useCallback(
     (video: VideoItem) => {
       const videoBasePath = basePathOf(video.relativePath);
@@ -3704,6 +3725,7 @@ export default function App() {
       };
       photoAlbumPreferencesRef.current = nextPreferences;
       setPhotoAlbumSortMode(nextSortMode);
+      setPhotoAlbumPage(1);
       void saveCurrentPhotoAlbumStore({ preferences: nextPreferences }).catch(() => {
         setPhotoAlbumMessage("写真集偏好保存失败。");
       });
@@ -3719,6 +3741,7 @@ export default function App() {
       };
       photoAlbumPreferencesRef.current = nextPreferences;
       setPhotoAlbumFilter(nextFilter);
+      setPhotoAlbumPage(1);
       void saveCurrentPhotoAlbumStore({ preferences: nextPreferences }).catch(() => {
         setPhotoAlbumMessage("写真集偏好保存失败。");
       });
@@ -6542,7 +6565,37 @@ export default function App() {
             ) : null}
 
             {visiblePhotoAlbums.length ? (
-              <section className="photo-album-grid">{visiblePhotoAlbums.map(renderPhotoAlbumCard)}</section>
+              <>
+                <section className="photo-album-grid">{pagedPhotoAlbums.map(renderPhotoAlbumCard)}</section>
+                {photoAlbumPageCount > 1 ? (
+                  <nav className="photo-pagination" aria-label="写真集分页">
+                    <span>
+                      {photoAlbumPageStart}-{photoAlbumPageEnd} / {visiblePhotoAlbums.length}
+                    </span>
+                    <div>
+                      <button
+                        className="secondary-button"
+                        type="button"
+                        onClick={() => setPhotoAlbumPage((page) => Math.max(page - 1, 1))}
+                        disabled={photoAlbumPage <= 1}
+                      >
+                        <ChevronLeft size={16} />
+                        上一页
+                      </button>
+                      <strong>{photoAlbumPage} / {photoAlbumPageCount}</strong>
+                      <button
+                        className="secondary-button"
+                        type="button"
+                        onClick={() => setPhotoAlbumPage((page) => Math.min(page + 1, photoAlbumPageCount))}
+                        disabled={photoAlbumPage >= photoAlbumPageCount}
+                      >
+                        下一页
+                        <ChevronRight size={16} />
+                      </button>
+                    </div>
+                  </nav>
+                ) : null}
+              </>
             ) : (
               <section className="home-section photo-empty-state">
                 <Images size={42} />
@@ -6612,7 +6665,7 @@ export default function App() {
                 <span>{currentPhoto?.name ?? selectedPhotoAlbum.title}</span>
               </div>
               <div className="photo-thumbnails" aria-label="图片缩略图">
-                {selectedPhotoAlbum.images.map((image) => (
+                {visiblePhotoThumbnails.map((image) => (
                   <button
                     className={image.index === currentPhotoIndex ? "active" : ""}
                     key={image.id}

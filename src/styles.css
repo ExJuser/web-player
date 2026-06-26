@@ -311,6 +311,7 @@ button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 8px;
   min-width: 92px;
   height: 38px;
   padding: 0 14px;
@@ -891,6 +892,30 @@ button {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 14px;
+}
+
+.photo-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #8e97a5;
+  font-size: 13px;
+}
+
+.photo-pagination > div {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  min-width: 0;
+}
+
+.photo-pagination strong {
+  min-width: 68px;
+  color: #f5f7fb;
+  font-size: 13px;
+  text-align: center;
 }
 
 .photo-album-card {
@@ -4460,6 +4485,16 @@ button {
   .photo-album-grid {
     grid-template-columns: 1fr;
     gap: 10px;
+  }
+
+  .photo-pagination,
+  .photo-pagination > div {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .photo-pagination .secondary-button {
+    width: 100%;
   }
 
   .photo-album-card {
