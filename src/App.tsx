@@ -132,6 +132,7 @@ function isSubtitleFile(name: string) {
 
 const PHOTO_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif", ".bmp"]);
 const photoAlbumPageSize = 48;
+const cacheStatusPageSize = 10;
 const photoThumbnailWindowSize = 24;
 const photoAlbumSortOptions: Array<{ value: PhotoAlbumSortMode; label: string }> = [
   { value: "updated", label: "最近更新" },
@@ -944,6 +945,230 @@ type LibraryAiSearchResponse = {
   matchIds: string[];
 };
 
+const japaneseSimplifiedCharacterPairs: Array<[string, string]> = [
+  ["亜", "亚"],
+  ["悪", "恶"],
+  ["圧", "压"],
+  ["囲", "围"],
+  ["為", "为"],
+  ["隠", "隐"],
+  ["栄", "荣"],
+  ["駅", "驿"],
+  ["円", "圆"],
+  ["応", "应"],
+  ["桜", "樱"],
+  ["穏", "稳"],
+  ["仮", "假"],
+  ["価", "价"],
+  ["画", "画"],
+  ["会", "会"],
+  ["絵", "绘"],
+  ["開", "开"],
+  ["階", "阶"],
+  ["楽", "乐"],
+  ["覚", "觉"],
+  ["学", "学"],
+  ["関", "关"],
+  ["観", "观"],
+  ["気", "气"],
+  ["帰", "归"],
+  ["亀", "龟"],
+  ["旧", "旧"],
+  ["拠", "据"],
+  ["挙", "举"],
+  ["峡", "峡"],
+  ["狭", "狭"],
+  ["郷", "乡"],
+  ["暁", "晓"],
+  ["区", "区"],
+  ["経", "经"],
+  ["恵", "惠"],
+  ["軽", "轻"],
+  ["継", "继"],
+  ["撃", "击"],
+  ["県", "县"],
+  ["倹", "俭"],
+  ["険", "险"],
+  ["広", "广"],
+  ["鉱", "矿"],
+  ["号", "号"],
+  ["黒", "黑"],
+  ["済", "济"],
+  ["斎", "斋"],
+  ["剤", "剂"],
+  ["雑", "杂"],
+  ["参", "参"],
+  ["桟", "栈"],
+  ["蚕", "蚕"],
+  ["姉", "姊"],
+  ["糸", "丝"],
+  ["児", "儿"],
+  ["実", "实"],
+  ["写", "写"],
+  ["社", "社"],
+  ["者", "者"],
+  ["寿", "寿"],
+  ["収", "收"],
+  ["従", "从"],
+  ["渋", "涩"],
+  ["獣", "兽"],
+  ["縦", "纵"],
+  ["粛", "肃"],
+  ["処", "处"],
+  ["緒", "绪"],
+  ["勝", "胜"],
+  ["将", "将"],
+  ["小", "小"],
+  ["焼", "烧"],
+  ["祥", "祥"],
+  ["称", "称"],
+  ["乗", "乘"],
+  ["嬢", "娘"],
+  ["条", "条"],
+  ["浄", "净"],
+  ["剰", "剩"],
+  ["畳", "叠"],
+  ["穣", "穰"],
+  ["譲", "让"],
+  ["醸", "酿"],
+  ["触", "触"],
+  ["嘱", "嘱"],
+  ["真", "真"],
+  ["寝", "寝"],
+  ["慎", "慎"],
+  ["図", "图"],
+  ["粋", "粹"],
+  ["酔", "醉"],
+  ["随", "随"],
+  ["髄", "髓"],
+  ["瀬", "濑"],
+  ["声", "声"],
+  ["斉", "齐"],
+  ["静", "静"],
+  ["摂", "摄"],
+  ["専", "专"],
+  ["戦", "战"],
+  ["浅", "浅"],
+  ["潜", "潜"],
+  ["繊", "纤"],
+  ["践", "践"],
+  ["銭", "钱"],
+  ["禅", "禅"],
+  ["双", "双"],
+  ["壮", "壮"],
+  ["争", "争"],
+  ["荘", "庄"],
+  ["捜", "搜"],
+  ["挿", "插"],
+  ["巣", "巢"],
+  ["総", "总"],
+  ["聡", "聪"],
+  ["蔵", "藏"],
+  ["属", "属"],
+  ["続", "续"],
+  ["堕", "堕"],
+  ["体", "体"],
+  ["対", "对"],
+  ["帯", "带"],
+  ["滝", "泷"],
+  ["択", "择"],
+  ["沢", "泽"],
+  ["単", "单"],
+  ["団", "团"],
+  ["弾", "弹"],
+  ["遅", "迟"],
+  ["昼", "昼"],
+  ["鋳", "铸"],
+  ["著", "著"],
+  ["庁", "厅"],
+  ["徴", "征"],
+  ["聴", "听"],
+  ["懲", "惩"],
+  ["鎮", "镇"],
+  ["塚", "冢"],
+  ["逓", "递"],
+  ["鉄", "铁"],
+  ["転", "转"],
+  ["伝", "传"],
+  ["都", "都"],
+  ["灯", "灯"],
+  ["当", "当"],
+  ["党", "党"],
+  ["島", "岛"],
+  ["働", "动"],
+  ["徳", "德"],
+  ["独", "独"],
+  ["読", "读"],
+  ["届", "届"],
+  ["縄", "绳"],
+  ["難", "难"],
+  ["弐", "贰"],
+  ["悩", "恼"],
+  ["脳", "脑"],
+  ["覇", "霸"],
+  ["拝", "拜"],
+  ["売", "卖"],
+  ["麦", "麦"],
+  ["発", "发"],
+  ["髪", "发"],
+  ["抜", "拔"],
+  ["浜", "滨"],
+  ["払", "拂"],
+  ["仏", "佛"],
+  ["辺", "边"],
+  ["変", "变"],
+  ["歩", "步"],
+  ["宝", "宝"],
+  ["豊", "丰"],
+  ["没", "没"],
+  ["翻", "翻"],
+  ["満", "满"],
+  ["黙", "默"],
+  ["薬", "药"],
+  ["訳", "译"],
+  ["予", "予"],
+  ["余", "余"],
+  ["誉", "誉"],
+  ["揺", "摇"],
+  ["様", "样"],
+  ["謡", "谣"],
+  ["来", "来"],
+  ["乱", "乱"],
+  ["覧", "览"],
+  ["竜", "龙"],
+  ["隆", "隆"],
+  ["両", "两"],
+  ["猟", "猎"],
+  ["緑", "绿"],
+  ["涙", "泪"],
+  ["塁", "垒"],
+  ["礼", "礼"],
+  ["戻", "戻"],
+  ["鈴", "铃"],
+  ["霊", "灵"],
+  ["齢", "龄"],
+  ["暦", "历"],
+  ["歴", "历"],
+  ["恋", "恋"],
+  ["練", "练"],
+  ["錬", "炼"],
+  ["炉", "炉"],
+  ["労", "劳"],
+  ["郎", "郎"],
+  ["楼", "楼"],
+  ["湾", "湾"],
+];
+
+const librarySearchCharacterAlternatives = japaneseSimplifiedCharacterPairs.reduce((map, [japanese, simplified]) => {
+  const japaneseAlternatives = map.get(japanese) ?? new Set<string>();
+  japaneseAlternatives.add(simplified);
+  map.set(japanese, japaneseAlternatives);
+  const simplifiedAlternatives = map.get(simplified) ?? new Set<string>();
+  simplifiedAlternatives.add(japanese);
+  map.set(simplified, simplifiedAlternatives);
+  return map;
+}, new Map<string, Set<string>>());
+
 type AiTagMergeSuggestionResponse = {
   existingTag?: string;
   newTag?: string;
@@ -1281,8 +1506,38 @@ function normalizeLibrarySearchText(value: string) {
     .trim();
 }
 
+function createLibrarySearchTextVariants(value: string, limit = 24) {
+  const normalized = normalizeLibrarySearchText(value);
+  if (!normalized) return [];
+
+  const variants = [""];
+  for (const character of normalized) {
+    const alternatives = [character, ...(librarySearchCharacterAlternatives.get(character) ?? [])];
+    const uniqueAlternatives = Array.from(new Set(alternatives));
+    const nextVariants: string[] = [];
+    for (const variant of variants) {
+      for (const alternative of uniqueAlternatives) {
+        nextVariants.push(`${variant}${alternative}`);
+        if (nextVariants.length >= limit) break;
+      }
+      if (nextVariants.length >= limit) break;
+    }
+    variants.splice(0, variants.length, ...nextVariants);
+  }
+
+  return Array.from(new Set(variants.map(normalizeLibrarySearchText))).filter(Boolean);
+}
+
 function tokenizeLibrarySearchQuery(query: string) {
   return normalizeLibrarySearchText(query).split(/\s+/).filter((token) => token.length >= 2);
+}
+
+function createLibrarySearchTokenVariants(query: string) {
+  return tokenizeLibrarySearchQuery(query).flatMap((token) => createLibrarySearchTextVariants(token, 8));
+}
+
+function includesAnyLibrarySearchVariant(searchable: string[], variants: string[]) {
+  return variants.some((variant) => searchable.some((value) => value.includes(variant)));
 }
 
 function hasAiLibrarySearchIntent(query: string) {
@@ -1645,6 +1900,7 @@ export default function App() {
   const [librarySearchMessage, setLibrarySearchMessage] = useState("");
   const [librarySearchMode, setLibrarySearchMode] = useState<LibrarySearchMode>("idle");
   const [isLibrarySearchLoading, setIsLibrarySearchLoading] = useState(false);
+  const [librarySearchSubmittedQuery, setLibrarySearchSubmittedQuery] = useState("");
   const [bangumiMatchesBySeriesKey, setBangumiMatchesBySeriesKey] = useState<Record<string, BangumiSeriesMatch>>({});
   const [cacheStatus, setCacheStatus] = useState<CacheStatus | null>(null);
   const [cacheStatusMessage, setCacheStatusMessage] = useState("");
@@ -1652,6 +1908,7 @@ export default function App() {
   const [hasLoadedCacheStatus, setHasLoadedCacheStatus] = useState(false);
   const [isCacheStatusDialogOpen, setIsCacheStatusDialogOpen] = useState(false);
   const [selectedCacheItemIds, setSelectedCacheItemIds] = useState<Set<string>>(() => new Set());
+  const [cacheStatusPage, setCacheStatusPage] = useState(1);
   const [isClearCacheConfirmOpen, setIsClearCacheConfirmOpen] = useState(false);
   const [isClearingCache, setIsClearingCache] = useState(false);
   const [libraryId, setLibraryId] = useState<string | null>(null);
@@ -2247,6 +2504,9 @@ export default function App() {
     (query: string, limit = 8): LibrarySearchResult[] => {
       const normalizedQuery = normalizeLibrarySearchText(query);
       const tokens = tokenizeLibrarySearchQuery(query);
+      const queryVariants = createLibrarySearchTextVariants(query);
+      const alternateQueryVariants = queryVariants.filter((variant) => variant !== normalizedQuery);
+      const tokenVariants = createLibrarySearchTokenVariants(query);
       if (!normalizedQuery) return [];
 
       const folderResults = new Map<string, LibrarySearchResult>();
@@ -2272,33 +2532,37 @@ export default function App() {
         let score = 0;
         const reasons: string[] = [];
 
-        if (searchable[0].includes(normalizedQuery)) {
+        if (includesAnyLibrarySearchVariant([searchable[0]], queryVariants)) {
           score += 40;
           reasons.push("文件夹匹配");
         }
-        if (searchable[1].includes(normalizedQuery)) {
+        if (includesAnyLibrarySearchVariant([searchable[1]], queryVariants)) {
           score += 32;
           reasons.push("目录匹配");
         }
-        if (searchable[2].includes(normalizedQuery)) {
+        if (includesAnyLibrarySearchVariant([searchable[2]], queryVariants)) {
           score += 24;
           reasons.push("文件夹匹配");
         }
-        if (searchable[3].includes(normalizedQuery)) {
+        if (includesAnyLibrarySearchVariant([searchable[3]], queryVariants)) {
           score += 18;
           reasons.push("目录匹配");
         }
-        if (searchable[4].includes(normalizedQuery)) {
+        if (includesAnyLibrarySearchVariant([searchable[4]], queryVariants)) {
           score += 10;
           reasons.push("文件名匹配");
         }
-        if (searchable[5].includes(normalizedQuery)) {
+        if (includesAnyLibrarySearchVariant([searchable[5]], queryVariants)) {
           score += 6;
           reasons.push("路径匹配");
         }
-        if (searchable[7].includes(normalizedQuery)) {
+        if (includesAnyLibrarySearchVariant([searchable[7]], queryVariants)) {
           score += 12;
           reasons.push("媒体库匹配");
+        }
+        if (alternateQueryVariants.length && includesAnyLibrarySearchVariant(searchable, alternateQueryVariants)) {
+          score += 8;
+          reasons.push("中日字形匹配");
         }
         const tagScore = getTagSearchScore(query, tags);
         if (tagScore > 0) {
@@ -2316,6 +2580,17 @@ export default function App() {
           if (searchable[7].includes(token)) score += 4;
           score += Math.floor(getTagSearchScore(token, tags) / 4);
         });
+        tokenVariants
+          .filter((token) => !tokens.includes(token))
+          .forEach((token) => {
+            if (searchable[0].includes(token)) score += 8;
+            if (searchable[1].includes(token)) score += 6;
+            if (searchable[2].includes(token)) score += 5;
+            if (searchable[3].includes(token)) score += 4;
+            if (searchable[4].includes(token)) score += 2;
+            if (searchable[5].includes(token)) score += 1;
+            if (searchable[7].includes(token)) score += 3;
+          });
 
         const progress = progressStore[video.id];
         if (score <= 0) return;
@@ -5303,9 +5578,11 @@ export default function App() {
       setLibrarySearchMode("idle");
       setLibrarySearchMessage("输入片名、关键词或想看的内容。");
       setLibrarySearchResults([]);
+      setLibrarySearchSubmittedQuery("");
       return;
     }
 
+    setLibrarySearchSubmittedQuery(query);
     const localResults = searchLibraryLocally(query);
     setLibrarySearchResults(localResults);
     const needsAi = Boolean(localConfig?.ai.configured) && shouldUseAiLibrarySearch(query, localResults);
@@ -5367,6 +5644,13 @@ export default function App() {
     videosByLibraryFolderKey,
   ]);
 
+  const librarySearchPreviewResults = useMemo(() => {
+    const query = librarySearchQuery.trim();
+    if (!query || query === librarySearchSubmittedQuery) return [];
+    return searchLibraryLocally(query, 3);
+  }, [librarySearchQuery, librarySearchSubmittedQuery, searchLibraryLocally]);
+  const shouldShowLibrarySearchPreview = Boolean(librarySearchQuery.trim() && librarySearchQuery.trim() !== librarySearchSubmittedQuery);
+
   const loadCacheStatus = useCallback(async () => {
     setIsCacheStatusLoading(true);
     setCacheStatusMessage("");
@@ -5389,6 +5673,14 @@ export default function App() {
   const selectedCacheBytes = selectedCacheItems.reduce((sum, item) => sum + item.bytes, 0);
   const selectedCacheFiles = selectedCacheItems.reduce((sum, item) => sum + item.files, 0);
   const isAllCacheSelected = cacheStatusItems.length > 0 && cacheStatusItems.every((item) => selectedCacheItemIds.has(item.id));
+  const cacheStatusPageCount = Math.max(1, Math.ceil(cacheStatusItems.length / cacheStatusPageSize));
+  const visibleCacheStatusPage = Math.min(Math.max(cacheStatusPage, 1), cacheStatusPageCount);
+  const pagedCacheStatusItems = useMemo(() => {
+    const start = (visibleCacheStatusPage - 1) * cacheStatusPageSize;
+    return cacheStatusItems.slice(start, start + cacheStatusPageSize);
+  }, [cacheStatusItems, visibleCacheStatusPage]);
+  const cacheStatusPageStart = cacheStatusItems.length ? (visibleCacheStatusPage - 1) * cacheStatusPageSize + 1 : 0;
+  const cacheStatusPageEnd = Math.min(visibleCacheStatusPage * cacheStatusPageSize, cacheStatusItems.length);
 
   useEffect(() => {
     if (!cacheStatus) return;
@@ -5398,6 +5690,10 @@ export default function App() {
       return next.size === previous.size ? previous : next;
     });
   }, [cacheStatus]);
+
+  useEffect(() => {
+    setCacheStatusPage((page) => Math.min(Math.max(page, 1), cacheStatusPageCount));
+  }, [cacheStatusPageCount]);
 
   const toggleCacheItemSelection = useCallback((id: string, checked: boolean) => {
     setSelectedCacheItemIds((previous) => {
@@ -5459,6 +5755,7 @@ export default function App() {
   }, [clearCurrentLibraryRuntimeData, clearLoadedMedia, isAllCacheSelected, selectedCacheItems]);
 
   const openCacheStatusDialog = useCallback(() => {
+    setCacheStatusPage(1);
     setIsCacheStatusDialogOpen(true);
     void loadCacheStatus();
   }, [loadCacheStatus]);
@@ -6447,6 +6744,21 @@ export default function App() {
                     <Search size={17} />
                   </button>
                 </form>
+                {shouldShowLibrarySearchPreview ? (
+                  <div className="library-search-preview">
+                    <div className="library-search-preview-header">
+                      <span>搜索预览</span>
+                      <small>仅本地匹配，不调用 AI</small>
+                    </div>
+                    {librarySearchPreviewResults.length ? (
+                      <div className="home-compact-list library-search-preview-results">
+                        {librarySearchPreviewResults.map(renderLibraryFolderResult)}
+                      </div>
+                    ) : (
+                      <div className="empty-list compact">本地预览暂无命中</div>
+                    )}
+                  </div>
+                ) : null}
                 <div className={`library-search-status ${librarySearchMode}`}>
                   {isLibrarySearchLoading ? "搜索中..." : librarySearchMessage || "明确片名会直接本地检索，复杂描述才调用 AI。"}
                 </div>
@@ -7656,7 +7968,7 @@ export default function App() {
             </div>
 
             <div className="cache-status-list">
-              {cacheStatusItems.map((item) => (
+              {pagedCacheStatusItems.map((item) => (
                 <label className={`cache-status-row ${selectedCacheItemIds.has(item.id) ? "selected" : ""}`} key={item.id}>
                   <span className="cache-status-check">
                     <input
@@ -7691,6 +8003,35 @@ export default function App() {
                 <div className="ai-empty-state">暂无缓存状态。</div>
               ) : null}
             </div>
+
+            {cacheStatusItems.length > cacheStatusPageSize ? (
+              <nav className="cache-status-pagination" aria-label="缓存状态分页">
+                <span>
+                  {cacheStatusPageStart}-{cacheStatusPageEnd} / {cacheStatusItems.length}
+                </span>
+                <div>
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    onClick={() => setCacheStatusPage((page) => Math.max(page - 1, 1))}
+                    disabled={visibleCacheStatusPage <= 1}
+                  >
+                    <ChevronLeft size={16} />
+                    上一页
+                  </button>
+                  <strong>{visibleCacheStatusPage} / {cacheStatusPageCount}</strong>
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    onClick={() => setCacheStatusPage((page) => Math.min(page + 1, cacheStatusPageCount))}
+                    disabled={visibleCacheStatusPage >= cacheStatusPageCount}
+                  >
+                    下一页
+                    <ChevronRight size={16} />
+                  </button>
+                </div>
+              </nav>
+            ) : null}
           </section>
 
           <div className="cache-status-dialog-actions">
