@@ -54,6 +54,7 @@ import type {
   PlayerLibraryMetadata,
   PlayerMediaRootStatus,
   PlayerPreferences,
+  CachedPhotoAlbumScan,
   PhotoAlbum,
   PhotoAlbumImage,
   PhotoAlbumProgress,
@@ -74,7 +75,10 @@ import type {
 } from "./playerTypes";
 import {
   defaultPhotoAlbumPreferences,
+  loadCachedPhotoAlbumScan,
   loadPhotoAlbumStore,
+  photoAlbumScanCacheVersion,
+  saveCachedPhotoAlbumScan,
   savePhotoAlbumStore
 } from "./photoAlbumStorage";
 import {
@@ -138,6 +142,7 @@ const PHOTO_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif", ".av
 const photoAlbumPageSize = 24;
 const cacheStatusPageSize = 10;
 const photoThumbnailWindowSize = 24;
+const photoAlbumScanCacheStaleMs = 24 * 60 * 60 * 1000;
 const photoAlbumSortOptions: Array<{ value: PhotoAlbumSortMode; label: string }> = [
   { value: "updated", label: "最近更新" },
   { value: "name", label: "名称" },
@@ -287,6 +292,12 @@ async function ensureDirectoryReadPermission(directory: FileSystemDirectoryHandl
   if (currentPermission === "granted") return true;
   const nextPermission = await directory.requestPermission?.(descriptor);
   return nextPermission !== "denied";
+}
+
+async function hasDirectoryReadPermission(directory: FileSystemDirectoryHandle) {
+  const descriptor = { mode: "read" as const };
+  const currentPermission = await directory.queryPermission?.(descriptor);
+  return currentPermission === undefined || currentPermission === "granted";
 }
 
 import { ControlSelect } from "./ControlSelect";
@@ -856,6 +867,44 @@ async function collectPhotoAlbumsFromDirectory(directory: FileSystemDirectoryHan
   const rootId = `browser-photo:${sanitizeLibraryName(rootLabel)}-${hashString(rootLabel)}`;
 
   return collectPhotoAlbumsFromBrowserFiles(rootLabel, rootId, photoFiles);
+}
+
+function createCachedPhotoAlbumScan(scan: Awaited<ReturnType<typeof collectPhotoAlbumsFromDirectory>>): CachedPhotoAlbumScan {
+  return {
+    version: photoAlbumScanCacheVersion,
+    rootId: scan.rootId,
+    rootName: scan.rootLabel,
+    albums: scan.albums,
+    scannedFiles: scan.scannedFiles,
+    updatedAt: Date.now(),
+  };
+}
+
+function createPhotoAlbumRootStatusFromCache(cache: CachedPhotoAlbumScan, status: PlayerMediaRootStatus["status"] = "ready", error?: string): PlayerMediaRootStatus {
+  return {
+    id: cache.rootId,
+    label: cache.rootName,
+    source: "browser",
+    status,
+    videoCount: cache.albums.length,
+    scannedFiles: cache.scannedFiles,
+    updatedAt: cache.updatedAt,
+    error,
+  };
+}
+
+async function getPhotoImageFileFromDirectory(directory: FileSystemDirectoryHandle, relativePath: string) {
+  const parts = relativePath.replace(/\\/g, "/").split("/").filter(Boolean);
+  const fileName = parts.pop();
+  if (!fileName || !isPhotoFile(fileName)) return null;
+
+  let currentDirectory = directory;
+  for (const part of parts) {
+    currentDirectory = await currentDirectory.getDirectoryHandle(part);
+  }
+
+  const fileHandle = await currentDirectory.getFileHandle(fileName);
+  return fileHandle.getFile();
 }
 
 function escapeVttText(text: string) {
@@ -1935,6 +1984,7 @@ export default function App() {
   const favoritePhotoAlbumIdsRef = useRef(new Set<string>());
   const photoAlbumPreferencesRef = useRef(defaultPhotoAlbumPreferences);
   const photoAlbumAutoLoadAttemptedRef = useRef(false);
+  const photoAlbumDirectoryRef = useRef<FileSystemDirectoryHandle | null>(null);
   const bangumiMatchRunIdRef = useRef(0);
   const thumbnailLoadRunIdRef = useRef(0);
   const isScanningRef = useRef(false);
@@ -1959,6 +2009,7 @@ export default function App() {
   const playbackStatsSessionRef = useRef<{ key: string; lastTime: number | null; hasCountedPlay: boolean } | null>(null);
   const photoAlbumsRef = useRef<PhotoAlbum[]>([]);
   const photoObjectUrlsRef = useRef<Record<string, string>>({});
+  const photoImageFilePromisesRef = useRef<Record<string, Promise<File | null>>>({});
   const [videos, setVideos] = useState<VideoItem[]>([]);
   const [subtitles, setSubtitles] = useState<SubtitleItem[]>([]);
   const [localConfig, setLocalConfig] = useState<LocalConfig | null>(null);
@@ -2171,6 +2222,15 @@ export default function App() {
     setPhotoAlbumFilter(store.preferences.favoritesOnly ? "favorites" : "all");
   }, []);
 
+  const applyCachedPhotoAlbumScan = useCallback((cache: CachedPhotoAlbumScan, options?: { status?: PlayerMediaRootStatus["status"]; message?: string; error?: string }) => {
+    photoAlbumsRef.current = cache.albums;
+    setPhotoAlbums(cache.albums);
+    setPhotoAlbumPage(1);
+    setPhotoRootStatuses([createPhotoAlbumRootStatusFromCache(cache, options?.status, options?.error)]);
+    setHasLoadedPhotoAlbums(true);
+    setPhotoAlbumMessage(options?.message ?? `已加载“${cache.rootName}”上次扫描结果，包含 ${cache.albums.length} 本写真集`);
+  }, []);
+
   const applyPlayerDataStore = useCallback((nextDataStore: PlayerDataStore) => {
     progressStoreRef.current = nextDataStore.progress;
     playerPreferencesRef.current = nextDataStore.preferences;
@@ -2197,6 +2257,7 @@ export default function App() {
 
   const loadPhotoAlbumDirectory = useCallback(
     async (directory: FileSystemDirectoryHandle, options?: { remember?: boolean }) => {
+      photoAlbumDirectoryRef.current = directory;
       setIsPhotoAlbumsLoading(true);
       setPhotoAlbumMessage("正在扫描写真集...");
       try {
@@ -2218,7 +2279,9 @@ export default function App() {
         Object.values(photoObjectUrlsRef.current).forEach((url) => URL.revokeObjectURL(url));
         photoObjectUrlsRef.current = {};
         setPhotoObjectUrls({});
+        const cachedScan = createCachedPhotoAlbumScan(scan);
         setPhotoAlbums(scan.albums);
+        photoAlbumsRef.current = scan.albums;
         setPhotoAlbumPage(1);
         setPhotoRootStatuses([
           {
@@ -2235,6 +2298,7 @@ export default function App() {
         if (options?.remember !== false) {
           await writePhotoAlbumFolderHandle(directory).catch(() => undefined);
         }
+        await saveCachedPhotoAlbumScan(cachedScan).catch(() => undefined);
         setPhotoAlbumMessage(
           scan.albums.length
             ? `已从“${scan.rootLabel}”加载 ${scan.albums.length} 本写真集，扫描 ${scan.scannedFiles} 张图片`
@@ -2268,12 +2332,57 @@ export default function App() {
     }
   }, [isPhotoAlbumsLoading, loadPhotoAlbumDirectory]);
 
+  const refreshPhotoAlbumDirectory = useCallback(async () => {
+    if (isPhotoAlbumsLoading) return;
+    const directory = photoAlbumDirectoryRef.current ?? (await readPhotoAlbumFolderHandle().catch(() => null));
+    if (!directory) {
+      setPhotoAlbumMessage("请先选择写真集文件夹。");
+      return;
+    }
+
+    const canReadDirectory = await ensureDirectoryReadPermission(directory);
+    if (!canReadDirectory) {
+      setPhotoAlbumMessage(`浏览器需要重新授权“${directory.name}”，请重新选择写真集文件夹。`);
+      return;
+    }
+
+    await loadPhotoAlbumDirectory(directory, { remember: true });
+  }, [isPhotoAlbumsLoading, loadPhotoAlbumDirectory]);
+
   useEffect(() => {
     if (activeView !== "photos" || hasLoadedPhotoAlbums || isPhotoAlbumsLoading || photoAlbumAutoLoadAttemptedRef.current) return;
     photoAlbumAutoLoadAttemptedRef.current = true;
     void (async () => {
       try {
-        const directory = await readPhotoAlbumFolderHandle();
+        const [directory, cachedScan, store] = await Promise.all([
+          readPhotoAlbumFolderHandle(),
+          loadCachedPhotoAlbumScan(),
+          loadPhotoAlbumStore().catch(() => ({
+            version: 1,
+            favorites: [],
+            progress: {},
+            preferences: defaultPhotoAlbumPreferences,
+          })),
+        ]);
+        applyPhotoAlbumStore(store);
+        if (cachedScan) {
+          let canReadDirectory = false;
+          if (directory) {
+            canReadDirectory = await hasDirectoryReadPermission(directory);
+            photoAlbumDirectoryRef.current = canReadDirectory ? directory : null;
+          }
+          const isStale = Date.now() - cachedScan.updatedAt > photoAlbumScanCacheStaleMs;
+          applyCachedPhotoAlbumScan(cachedScan, {
+            status: canReadDirectory ? "ready" : "needsAccess",
+            message: canReadDirectory
+              ? isStale
+                ? `已加载“${cachedScan.rootName}”上次扫描结果，超过 24 小时未刷新，可手动刷新`
+                : `已加载“${cachedScan.rootName}”上次扫描结果，未重新扫描磁盘`
+              : `已加载“${cachedScan.rootName}”上次扫描结果；如需查看图片或刷新，请重新授权文件夹`,
+            error: canReadDirectory ? undefined : "需要重新授权浏览器目录。",
+          });
+          return;
+        }
         if (!directory) {
           setPhotoAlbumMessage("首次选择写真集文件夹后，下次进入会自动复用。");
           return;
@@ -2607,21 +2716,23 @@ export default function App() {
   }, [currentPhotoIndex, selectedPhotoAlbum]);
   useEffect(() => {
     const neededImages = new Map<string, PhotoAlbumImage>();
+    const directory = photoAlbumDirectoryRef.current;
     if (activeView === "photos") {
       pagedPhotoAlbums.forEach((album) => {
         const coverImage = album.images[0];
-        if (coverImage?.file && !coverImage.url) neededImages.set(coverImage.id, coverImage);
+        if (coverImage && !coverImage.url && (coverImage.file || directory)) neededImages.set(coverImage.id, coverImage);
       });
     } else if (activeView === "photoViewer" && selectedPhotoAlbum) {
       const currentImage = selectedPhotoAlbum.images[currentPhotoIndex];
-      if (currentImage?.file && !currentImage.url) neededImages.set(currentImage.id, currentImage);
+      if (currentImage && !currentImage.url && (currentImage.file || directory)) neededImages.set(currentImage.id, currentImage);
       visiblePhotoThumbnails.forEach((image) => {
-        if (image.file && !image.url) neededImages.set(image.id, image);
+        if (!image.url && (image.file || directory)) neededImages.set(image.id, image);
       });
     }
 
     const nextUrls = { ...photoObjectUrlsRef.current };
     let didChange = false;
+    const missingImages: PhotoAlbumImage[] = [];
 
     Object.entries(photoObjectUrlsRef.current).forEach(([id, url]) => {
       if (!neededImages.has(id)) {
@@ -2635,6 +2746,8 @@ export default function App() {
       if (!nextUrls[id] && image.file) {
         nextUrls[id] = URL.createObjectURL(image.file);
         didChange = true;
+      } else if (!nextUrls[id] && directory) {
+        missingImages.push(image);
       }
     });
 
@@ -2642,6 +2755,33 @@ export default function App() {
       photoObjectUrlsRef.current = nextUrls;
       setPhotoObjectUrls(nextUrls);
     }
+
+    if (!directory || !missingImages.length) return;
+
+    let isCancelled = false;
+    missingImages.forEach((image) => {
+      if (!photoImageFilePromisesRef.current[image.id]) {
+        photoImageFilePromisesRef.current[image.id] = getPhotoImageFileFromDirectory(directory, image.relativePath).catch(() => null);
+      }
+      void photoImageFilePromisesRef.current[image.id].then((file) => {
+        delete photoImageFilePromisesRef.current[image.id];
+        if (isCancelled || !file || photoObjectUrlsRef.current[image.id]) return;
+        const url = URL.createObjectURL(file);
+        if (isCancelled) {
+          URL.revokeObjectURL(url);
+          return;
+        }
+        photoObjectUrlsRef.current = {
+          ...photoObjectUrlsRef.current,
+          [image.id]: url,
+        };
+        setPhotoObjectUrls(photoObjectUrlsRef.current);
+      });
+    });
+
+    return () => {
+      isCancelled = true;
+    };
   }, [activeView, currentPhotoIndex, pagedPhotoAlbums, selectedPhotoAlbum, visiblePhotoThumbnails]);
   useEffect(() => {
     return () => {
@@ -7336,6 +7476,10 @@ export default function App() {
                   onChange={updatePhotoAlbumSortMode}
                   className="photo-sort-control"
                 />
+                <button className="secondary-button" type="button" onClick={() => void refreshPhotoAlbumDirectory()} disabled={isPhotoAlbumsLoading}>
+                  <RefreshCw size={16} className={isPhotoAlbumsLoading ? "spin-icon" : undefined} />
+                  {isPhotoAlbumsLoading ? "扫描中" : "刷新"}
+                </button>
               </div>
             </section>
 

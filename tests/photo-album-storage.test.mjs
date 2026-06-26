@@ -42,3 +42,68 @@ test("photo album store keeps valid favorites, progress, and preferences", () =>
     favoritesOnly: true,
   });
 });
+
+test("invalid photo album scan cache is ignored", () => {
+  assert.equal(storage.parseCachedPhotoAlbumScan(JSON.stringify({ version: 0 })), null);
+  assert.equal(storage.parseCachedPhotoAlbumScan(JSON.stringify({
+    version: storage.photoAlbumScanCacheVersion,
+    rootId: "photos",
+    rootName: "Photos",
+    albums: "bad",
+  })), null);
+});
+
+test("photo album scan cache keeps valid albums and drops invalid images", () => {
+  const parsed = storage.parseCachedPhotoAlbumScan(JSON.stringify({
+    version: storage.photoAlbumScanCacheVersion,
+    rootId: "photos",
+    rootName: "Photos",
+    scannedFiles: 3,
+    updatedAt: 100,
+    albums: [
+      {
+        id: "photos|Set",
+        title: "Set",
+        relativePath: "Set",
+        mediaRootId: "photos",
+        mediaRootLabel: "Photos",
+        coverImageUrl: "blob:old",
+        totalSize: 300,
+        updatedAt: 90,
+        images: [
+          {
+            id: "img-1",
+            name: "001.jpg",
+            relativePath: "Set\\001.jpg",
+            url: "blob:old",
+            size: 100,
+            lastModified: 80,
+            mediaRootId: "photos",
+            index: 9,
+          },
+          {
+            id: "",
+            name: "bad.jpg",
+            relativePath: "Set/bad.jpg",
+            mediaRootId: "photos",
+          },
+        ],
+      },
+      {
+        id: "photos|Empty",
+        title: "Empty",
+        relativePath: "Empty",
+        mediaRootId: "photos",
+        mediaRootLabel: "Photos",
+        images: [],
+      },
+    ],
+  }));
+
+  assert.equal(parsed.rootId, "photos");
+  assert.equal(parsed.rootName, "Photos");
+  assert.equal(parsed.scannedFiles, 3);
+  assert.equal(parsed.albums.length, 1);
+  assert.equal(parsed.albums[0].imageCount, 1);
+  assert.equal(parsed.albums[0].images[0].relativePath, "Set/001.jpg");
+});

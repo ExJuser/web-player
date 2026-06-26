@@ -1,5 +1,6 @@
 export type FileSystemDirectoryHandle = {
   values(): AsyncIterable<FileSystemDirectoryHandle | FileSystemFileHandle>;
+  getDirectoryHandle(name: string, options?: { create?: boolean }): Promise<FileSystemDirectoryHandle>;
   getFileHandle(name: string, options?: { create?: boolean }): Promise<FileSystemFileHandle>;
   removeEntry?(name: string, options?: { recursive?: boolean }): Promise<void>;
   queryPermission?(descriptor?: { mode?: "read" | "readwrite" }): Promise<PermissionState>;
@@ -266,6 +267,15 @@ export type PhotoAlbumStore = {
   favorites: string[];
   progress: Record<string, PhotoAlbumProgress>;
   preferences: PhotoAlbumPreferences;
+};
+
+export type CachedPhotoAlbumScan = {
+  version: number;
+  rootId: string;
+  rootName: string;
+  albums: PhotoAlbum[];
+  scannedFiles: number;
+  updatedAt: number;
 };
 
 export type PhotoAlbumRootStatus = PlayerMediaRootStatus;
