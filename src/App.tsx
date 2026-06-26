@@ -2445,7 +2445,7 @@ export default function App() {
   );
   const videosByLibraryFolderKey = useMemo(() => {
     const grouped = new Map<string, VideoItem[]>();
-    playlistVideos.forEach((video) => {
+    modeFilteredVideos.forEach((video) => {
       const key = libraryFolderKeyForVideo(video);
       const existing = grouped.get(key);
       if (existing) {
@@ -2455,7 +2455,7 @@ export default function App() {
       }
     });
     return grouped;
-  }, [playlistVideos]);
+  }, [modeFilteredVideos]);
   const createLibraryFolderResult = useCallback(
     (folderVideos: VideoItem[], representativeVideo: VideoItem, score: number, reason: string): LibrarySearchResult => {
       const sortedVideos = [...folderVideos].sort((a, b) => compareNaturalRelativePath(a.relativePath, b.relativePath));
@@ -2844,10 +2844,10 @@ export default function App() {
       resumableHomeCards.forEach((card) => addVideo(card.video));
       favoriteHomeCards.forEach((card) => addVideo(card.video));
       recentHomeCards.forEach((card) => addVideo(card.video));
-      playlistVideos.forEach(addVideo);
+      modeFilteredVideos.forEach(addVideo);
       return candidates;
     },
-    [createHomeVideoCard, favoriteHomeCards, favoriteVideoIds, playlistVideos, recentHomeCards, resumableHomeCards, videoTags],
+    [createHomeVideoCard, favoriteHomeCards, favoriteVideoIds, modeFilteredVideos, recentHomeCards, resumableHomeCards, videoTags],
   );
   const currentVideoSubtitles = useMemo(() => {
     if (!currentVideo) return [];
