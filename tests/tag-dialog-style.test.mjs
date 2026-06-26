@@ -11,3 +11,17 @@ test("tag editor input and add button use the same control height", () => {
   assert.match(inputRule?.groups?.body ?? "", /height:\s*38px;/);
   assert.match(buttonRule?.groups?.body ?? "", /height:\s*38px;/);
 });
+
+test("tag chips have explicit light theme colors in app and root theme scopes", () => {
+  const appShellRule = styles.match(
+    /\.app-shell\.theme-light \.tag-chip,\s*\.app-shell\.theme-light \.tag-editor-chip\s*\{(?<body>[^}]+)\}/,
+  );
+  const rootRule = styles.match(
+    /:root\[data-theme="light"\] \.tag-chip,\s*:root\[data-theme="light"\] \.tag-editor-chip\s*\{(?<body>[^}]+)\}/,
+  );
+
+  for (const body of [appShellRule?.groups?.body ?? "", rootRule?.groups?.body ?? ""]) {
+    assert.match(body, /background:\s*#e1f5fd;/);
+    assert.match(body, /color:\s*#0077a8;/);
+  }
+});

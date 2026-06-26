@@ -3995,6 +3995,12 @@ button {
   color: #0077a8;
 }
 
+.app-shell.theme-light .tag-editor-chip:hover {
+  border-color: rgba(0, 161, 214, 0.42);
+  background: #c9effc;
+  color: #005f86;
+}
+
 .app-shell.theme-light .tag-chip.more {
   background: #eef2f6;
   color: #667085;
@@ -4421,6 +4427,24 @@ button {
   border-color: rgba(0, 161, 214, 0.28);
   background: rgba(0, 161, 214, 0.1);
   color: #0077a8;
+}
+
+:root[data-theme="light"] .tag-chip,
+:root[data-theme="light"] .tag-editor-chip {
+  border-color: rgba(0, 161, 214, 0.28);
+  background: #e1f5fd;
+  color: #0077a8;
+}
+
+:root[data-theme="light"] .tag-editor-chip:hover {
+  border-color: rgba(0, 161, 214, 0.42);
+  background: #c9effc;
+  color: #005f86;
+}
+
+:root[data-theme="light"] .tag-chip.more {
+  background: #eef2f6;
+  color: #667085;
 }
 
 :root[data-theme="light"] .dialog-icon.danger {
