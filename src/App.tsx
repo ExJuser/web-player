@@ -4967,172 +4967,176 @@ export default function App() {
       setIsScanning(true);
       setMessage(options?.restored ? "正在恢复授权媒体库..." : "正在扫描媒体库...");
 
-      const canReadDirectory = await ensureDirectoryReadPermission(directory);
-      if (!canReadDirectory) {
-        if (options?.remember) {
-          await clearRecentFolderHandle().catch(() => undefined);
+      try {
+        const canReadDirectory = await ensureDirectoryReadPermission(directory);
+        if (!canReadDirectory) {
+          if (options?.remember) {
+            await clearRecentFolderHandle().catch(() => undefined);
+          }
+          setMessage("需要允许写入文件夹，才能在本地保存播放进度。");
+          return;
         }
-        setMessage("需要允许写入文件夹，才能在本地保存播放进度。");
-        return;
-      }
 
-      const nextMediaRootId = options?.promptForLabel
-        ? await ensureMediaRootForDirectory(directory)
-        : resolveMediaRootId(directory.name);
-      if (options?.promptForLabel && !nextMediaRootId) {
-        if (options?.remember) {
-          await clearRecentFolderHandle().catch(() => undefined);
+        const nextMediaRootId = options?.promptForLabel
+          ? await ensureMediaRootForDirectory(directory)
+          : resolveMediaRootId(directory.name);
+        if (options?.promptForLabel && !nextMediaRootId) {
+          if (options?.remember) {
+            await clearRecentFolderHandle().catch(() => undefined);
+          }
+          setMessage("已取消添加媒体库");
+          return;
         }
-        setMessage("已取消添加媒体库");
-        return;
-      }
-      if (!nextMediaRootId) {
-        setMessage("无法匹配媒体根，请重新添加媒体库。");
-        return;
-      }
+        if (!nextMediaRootId) {
+          setMessage("无法匹配媒体根，请重新添加媒体库。");
+          return;
+        }
 
-      let media = createEmptyMediaCollection();
-      directoryRef.current = directory;
-      libraryIdRef.current = "global";
-      setLibraryId("global");
-      setMediaRootId(nextMediaRootId);
-      setEmbeddedSubtitleTracks([]);
-      setEmbeddedSubtitleMessage("");
-      setSubtitleSummary("");
-      setSubtitleAnswer("");
-      setAiMessage("");
-      updateSelectedSubtitleId("off");
-      setPlaylistFilter("all");
-      setActiveView("home");
+        let media = createEmptyMediaCollection();
+        directoryRef.current = directory;
+        libraryIdRef.current = "global";
+        setLibraryId("global");
+        setMediaRootId(nextMediaRootId);
+        setEmbeddedSubtitleTracks([]);
+        setEmbeddedSubtitleMessage("");
+        setSubtitleSummary("");
+        setSubtitleAnswer("");
+        setAiMessage("");
+        updateSelectedSubtitleId("off");
+        setPlaylistFilter("all");
+        setActiveView("home");
 
-      for await (const batch of collectVideos(directory, nextMediaRootId)) {
-        media = mergeMediaBatch(media, {
-          ...batch,
-          videos: batch.videos.map((video) => ({ ...video, mediaRootId: nextMediaRootId ?? undefined })),
-        });
-        setMessage(
-          `正在扫描，已找到 ${media.videos.length} 个视频，已过滤 ${media.filteredSmallVideos} 个小文件或特殊命名视频，已检查 ${media.scannedFiles} 个媒体文件`,
+        for await (const batch of collectVideos(directory, nextMediaRootId)) {
+          media = mergeMediaBatch(media, {
+            ...batch,
+            videos: batch.videos.map((video) => ({ ...video, mediaRootId: nextMediaRootId ?? undefined })),
+          });
+          setMessage(
+            `正在扫描，已找到 ${media.videos.length} 个视频，已过滤 ${media.filteredSmallVideos} 个小文件或特殊命名视频，已检查 ${media.scannedFiles} 个媒体文件`,
+          );
+        }
+
+        media = sortMediaCollection(media);
+        media = {
+          ...media,
+          videos: mergeVideoRuntimeState(
+            media.videos.map((video) => ({ ...video, mediaRootId: nextMediaRootId ?? undefined })),
+            videosRef.current,
+          ),
+        };
+        const nextSubtitles = await Promise.all(
+          media.subtitles.map(async (subtitle) => ({
+            ...subtitle,
+            url: subtitle.url || (await createSubtitleUrl(subtitle)),
+          })),
         );
-      }
+        media = { ...media, subtitles: nextSubtitles };
 
-      media = sortMediaCollection(media);
-      media = {
-        ...media,
-        videos: mergeVideoRuntimeState(
-          media.videos.map((video) => ({ ...video, mediaRootId: nextMediaRootId ?? undefined })),
-          videosRef.current,
-        ),
-      };
-      const nextSubtitles = await Promise.all(
-        media.subtitles.map(async (subtitle) => ({
-          ...subtitle,
-          url: subtitle.url || (await createSubtitleUrl(subtitle)),
-        })),
-      );
-      media = { ...media, subtitles: nextSubtitles };
-
-      let nextDataStore = buildPlayerDataStore();
-      const root = (localConfigRef.current?.mediaRoots ?? []).find((item) => item.id === nextMediaRootId);
-      if (root) {
-        nextDataStore = await importLegacyStoreForScannedRoot(root, media.videos, nextDataStore);
-      }
-
-      const metadata = createLibraryMetadata(directory, media);
-      const legacyDataStore = await loadLegacyPlayerDataStore(directory);
-      if (legacyDataStore) {
-        const legacyToGlobalId = new Map(media.videos.map((video) => [createLegacyVideoId(video.relativePath, video), video.id]));
-        const nextProgress = { ...nextDataStore.progress };
-        Object.entries(legacyDataStore.progress).forEach(([legacyId, progress]) => {
-          const globalId = legacyToGlobalId.get(legacyId);
-          if (globalId && !nextProgress[globalId]) nextProgress[globalId] = progress;
-        });
-        nextDataStore = { ...nextDataStore, progress: nextProgress };
-        try {
-          await deleteLegacyPlayerDataStore(directory);
-        } catch {
-          setMessage(`已导入旧进度，但无法删除资源库里的 ${PROGRESS_FILE_NAME}。`);
+        let nextDataStore = buildPlayerDataStore();
+        const root = (localConfigRef.current?.mediaRoots ?? []).find((item) => item.id === nextMediaRootId);
+        if (root) {
+          nextDataStore = await importLegacyStoreForScannedRoot(root, media.videos, nextDataStore);
         }
-      }
 
-      const existingVideosOutsideRoot = videosRef.current.filter((video) => video.mediaRootId !== nextMediaRootId);
-      const replacedVideos = videosRef.current.filter((video) => video.mediaRootId === nextMediaRootId);
-      revokeVideoUrls(replacedVideos);
-      const mergedVideos = getSortedVideos(
-        [...existingVideosOutsideRoot, ...mergeVideoRuntimeState(media.videos, replacedVideos)],
-        playerPreferencesRef.current.playlistSortMode,
-        playerPreferencesRef.current.isPlaylistSortReversed,
-      );
+        const metadata = createLibraryMetadata(directory, media);
+        const legacyDataStore = await loadLegacyPlayerDataStore(directory);
+        if (legacyDataStore) {
+          const legacyToGlobalId = new Map(media.videos.map((video) => [createLegacyVideoId(video.relativePath, video), video.id]));
+          const nextProgress = { ...nextDataStore.progress };
+          Object.entries(legacyDataStore.progress).forEach(([legacyId, progress]) => {
+            const globalId = legacyToGlobalId.get(legacyId);
+            if (globalId && !nextProgress[globalId]) nextProgress[globalId] = progress;
+          });
+          nextDataStore = { ...nextDataStore, progress: nextProgress };
+          try {
+            await deleteLegacyPlayerDataStore(directory);
+          } catch {
+            setMessage(`已导入旧进度，但无法删除资源库里的 ${PROGRESS_FILE_NAME}。`);
+          }
+        }
 
-      const existingSubtitlesOutsideRoot = subtitlesRef.current.filter((subtitle) => {
-        if (subtitle.mediaRootId) return subtitle.mediaRootId !== nextMediaRootId;
-        const matchedVideo = subtitle.videoId ? videosRef.current.find((video) => video.id === subtitle.videoId) : null;
-        return matchedVideo?.mediaRootId !== nextMediaRootId;
-      });
-      subtitlesRef.current
-        .filter((subtitle) => !existingSubtitlesOutsideRoot.includes(subtitle) && subtitle.url && isObjectUrl(subtitle.url))
-        .forEach((subtitle) => URL.revokeObjectURL(subtitle.url));
-      let mergedSubtitles = [...existingSubtitlesOutsideRoot, ...media.subtitles];
+        const existingVideosOutsideRoot = videosRef.current.filter((video) => video.mediaRootId !== nextMediaRootId);
+        const replacedVideos = videosRef.current.filter((video) => video.mediaRootId === nextMediaRootId);
+        revokeVideoUrls(replacedVideos);
+        const mergedVideos = getSortedVideos(
+          [...existingVideosOutsideRoot, ...mergeVideoRuntimeState(media.videos, replacedVideos)],
+          playerPreferencesRef.current.playlistSortMode,
+          playerPreferencesRef.current.isPlaylistSortReversed,
+        );
 
-      const rootStatuses = mediaRootStatuses.filter((status) => status.id !== nextMediaRootId);
-      const rootStatus: PlayerMediaRootStatus = {
-        id: nextMediaRootId ?? directory.name,
-        label: root?.label ?? directory.name,
-        source: root?.source ?? "browser",
-        status: "ready",
-        videoCount: media.videos.length,
-        scannedFiles: media.scannedFiles,
-        updatedAt: Date.now(),
-      };
-      const nextRootStatuses = [...rootStatuses, rootStatus];
-      const globalMetadata: PlayerGlobalMetadata = {
-        id: "global",
-        name: "全局媒体库",
-        videoCount: mergedVideos.length,
-        scannedFiles: nextRootStatuses.reduce((sum, status) => sum + status.scannedFiles, 0),
-        updatedAt: Date.now(),
-        mediaRoots: nextRootStatuses,
-      };
-      nextDataStore = { ...nextDataStore, metadata: globalMetadata };
+        const existingSubtitlesOutsideRoot = subtitlesRef.current.filter((subtitle) => {
+          if (subtitle.mediaRootId) return subtitle.mediaRootId !== nextMediaRootId;
+          const matchedVideo = subtitle.videoId ? videosRef.current.find((video) => video.id === subtitle.videoId) : null;
+          return matchedVideo?.mediaRootId !== nextMediaRootId;
+        });
+        subtitlesRef.current
+          .filter((subtitle) => !existingSubtitlesOutsideRoot.includes(subtitle) && subtitle.url && isObjectUrl(subtitle.url))
+          .forEach((subtitle) => URL.revokeObjectURL(subtitle.url));
+        let mergedSubtitles = [...existingSubtitlesOutsideRoot, ...media.subtitles];
 
-      const restoredEmbeddedSubtitles = await restoreCachedEmbeddedSubtitles(
-        nextDataStore.embeddedSubtitles,
-        mergedVideos,
-        nextMediaRootId,
-      );
-      if (restoredEmbeddedSubtitles.length) {
-        const restoredIds = new Set(restoredEmbeddedSubtitles.map((subtitle) => subtitle.id));
-        mergedSubtitles = [...mergedSubtitles.filter((subtitle) => !restoredIds.has(subtitle.id)), ...restoredEmbeddedSubtitles];
-      }
+        const rootStatuses = mediaRootStatuses.filter((status) => status.id !== nextMediaRootId);
+        const rootStatus: PlayerMediaRootStatus = {
+          id: nextMediaRootId ?? directory.name,
+          label: root?.label ?? directory.name,
+          source: root?.source ?? "browser",
+          status: "ready",
+          videoCount: media.videos.length,
+          scannedFiles: media.scannedFiles,
+          updatedAt: Date.now(),
+        };
+        const nextRootStatuses = [...rootStatuses, rootStatus];
+        const globalMetadata: PlayerGlobalMetadata = {
+          id: "global",
+          name: "全局媒体库",
+          videoCount: mergedVideos.length,
+          scannedFiles: nextRootStatuses.reduce((sum, status) => sum + status.scannedFiles, 0),
+          updatedAt: Date.now(),
+          mediaRoots: nextRootStatuses,
+        };
+        nextDataStore = { ...nextDataStore, metadata: globalMetadata };
 
-      videosRef.current = mergedVideos;
-      subtitlesRef.current = mergedSubtitles;
-      libraryMetadataRef.current = globalMetadata;
-      setMediaRootStatuses(nextRootStatuses);
-      setVideos(mergedVideos);
-      setSubtitles(mergedSubtitles);
-      applyPlayerDataStore(nextDataStore);
-      await saveGlobalPlayerDataStore({
-        ...nextDataStore,
-        embeddedSubtitles: createPersistedEmbeddedSubtitles(mergedSubtitles),
-      }).catch(() => undefined);
-
-      if (mergedVideos.length) {
-        const resumeTarget = getLatestResumableVideo(media.videos, nextDataStore.progress);
-        const sortedVideos = getSortedVideos(
+        const restoredEmbeddedSubtitles = await restoreCachedEmbeddedSubtitles(
+          nextDataStore.embeddedSubtitles,
           mergedVideos,
-          nextDataStore.preferences.playlistSortMode,
-          nextDataStore.preferences.isPlaylistSortReversed,
+          nextMediaRootId,
         );
-        setCurrentVideoId((currentId) => currentId ?? resumeTarget?.video.id ?? sortedVideos[0]?.id ?? null);
-      }
-      setMessage(
-        media.videos.length
-          ? `${options?.restored ? "已恢复" : "已加载"} ${media.videos.length} 个视频，已过滤 ${media.filteredSmallVideos} 个小文件或特殊命名视频`
-          : "这个文件夹里没有可播放的视频文件",
-      );
+        if (restoredEmbeddedSubtitles.length) {
+          const restoredIds = new Set(restoredEmbeddedSubtitles.map((subtitle) => subtitle.id));
+          mergedSubtitles = [...mergedSubtitles.filter((subtitle) => !restoredIds.has(subtitle.id)), ...restoredEmbeddedSubtitles];
+        }
 
-      if (options?.remember) {
-        await writeRecentFolderHandle(directory).catch(() => undefined);
+        videosRef.current = mergedVideos;
+        subtitlesRef.current = mergedSubtitles;
+        libraryMetadataRef.current = globalMetadata;
+        setMediaRootStatuses(nextRootStatuses);
+        setVideos(mergedVideos);
+        setSubtitles(mergedSubtitles);
+        applyPlayerDataStore(nextDataStore);
+        await saveGlobalPlayerDataStore({
+          ...nextDataStore,
+          embeddedSubtitles: createPersistedEmbeddedSubtitles(mergedSubtitles),
+        }).catch(() => undefined);
+
+        if (mergedVideos.length) {
+          const resumeTarget = getLatestResumableVideo(media.videos, nextDataStore.progress);
+          const sortedVideos = getSortedVideos(
+            mergedVideos,
+            nextDataStore.preferences.playlistSortMode,
+            nextDataStore.preferences.isPlaylistSortReversed,
+          );
+          setCurrentVideoId((currentId) => currentId ?? resumeTarget?.video.id ?? sortedVideos[0]?.id ?? null);
+        }
+        setMessage(
+          media.videos.length
+            ? `${options?.restored ? "已恢复" : "已加载"} ${media.videos.length} 个视频，已过滤 ${media.filteredSmallVideos} 个小文件或特殊命名视频`
+            : "这个文件夹里没有可播放的视频文件",
+        );
+
+        if (options?.remember) {
+          await writeRecentFolderHandle(directory).catch(() => undefined);
+        }
+      } finally {
+        setIsScanning(false);
       }
     },
     [
