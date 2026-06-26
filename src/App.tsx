@@ -2445,7 +2445,7 @@ export default function App() {
   );
   const videosByLibraryFolderKey = useMemo(() => {
     const grouped = new Map<string, VideoItem[]>();
-    playlistVideos.forEach((video) => {
+    videos.forEach((video) => {
       const key = libraryFolderKeyForVideo(video);
       const existing = grouped.get(key);
       if (existing) {
@@ -2455,7 +2455,7 @@ export default function App() {
       }
     });
     return grouped;
-  }, [playlistVideos]);
+  }, [videos]);
   const createLibraryFolderResult = useCallback(
     (folderVideos: VideoItem[], representativeVideo: VideoItem, score: number, reason: string): LibrarySearchResult => {
       const sortedVideos = [...folderVideos].sort((a, b) => compareNaturalRelativePath(a.relativePath, b.relativePath));
@@ -2698,7 +2698,7 @@ export default function App() {
       if (!normalizedQuery) return [];
 
       const folderResults = new Map<string, LibrarySearchResult>();
-      modeFilteredVideos.forEach((video) => {
+      videos.forEach((video) => {
         const folderTitle = libraryFolderTitleForVideo(video);
         const folderPath = libraryFolderPathForVideo(video);
         const mediaRoot = video.mediaRootId ? localConfig?.mediaRoots.find((root) => root.id === video.mediaRootId) : null;
@@ -2814,7 +2814,7 @@ export default function App() {
         .sort((a, b) => b.score - a.score || collator.compare(a.title, b.title))
         .slice(0, limit);
     },
-    [createLibraryFolderResult, favoriteVideoIds, localConfig, modeFilteredVideos, progressStore, videoTags, videosByLibraryFolderKey],
+    [createLibraryFolderResult, favoriteVideoIds, localConfig, progressStore, videoTags, videos, videosByLibraryFolderKey],
   );
   const createLibrarySearchCandidates = useCallback(
     (localResults: LibrarySearchResult[]): LibrarySearchCandidate[] => {
@@ -2844,10 +2844,10 @@ export default function App() {
       resumableHomeCards.forEach((card) => addVideo(card.video));
       favoriteHomeCards.forEach((card) => addVideo(card.video));
       recentHomeCards.forEach((card) => addVideo(card.video));
-      playlistVideos.forEach(addVideo);
+      videos.forEach(addVideo);
       return candidates;
     },
-    [createHomeVideoCard, favoriteHomeCards, favoriteVideoIds, playlistVideos, recentHomeCards, resumableHomeCards, videoTags],
+    [createHomeVideoCard, favoriteHomeCards, favoriteVideoIds, recentHomeCards, resumableHomeCards, videoTags, videos],
   );
   const currentVideoSubtitles = useMemo(() => {
     if (!currentVideo) return [];
@@ -6035,7 +6035,7 @@ export default function App() {
         .map((id) => candidateById.get(id))
         .filter((candidate): candidate is LibrarySearchCandidate => Boolean(candidate))
         .forEach((candidate, index) => {
-          const video = modeFilteredVideos.find((item) => item.id === candidate.id);
+          const video = videos.find((item) => item.id === candidate.id);
           if (!video) return;
           const key = libraryFolderKeyForVideo(video);
           if (aiResultsByKey.has(key)) return;
@@ -6060,8 +6060,8 @@ export default function App() {
     createLibrarySearchCandidates,
     librarySearchQuery,
     localConfig,
-    modeFilteredVideos,
     searchLibraryLocally,
+    videos,
     videosByLibraryFolderKey,
   ]);
 
@@ -7241,7 +7241,7 @@ export default function App() {
                     placeholder="搜索片名，或描述想看的内容"
                     aria-label="片库搜索"
                   />
-                  <button type="submit" disabled={isLibrarySearchLoading || !modeFilteredVideos.length} title="搜索片库">
+                  <button type="submit" disabled={isLibrarySearchLoading || !videos.length} title="搜索片库">
                     <Search size={17} />
                   </button>
                 </form>
