@@ -200,6 +200,34 @@ async function getPathStats(targetPath) {
   }
 }
 
+function createDanmakuSourcePath(sourceId, options = {}) {
+  const encodedName = `${encodeURIComponent(sourceId)}.json`;
+  return path.join(danmakuSourcesRoot, options.legacy ? `${sourceId}.json` : encodedName);
+}
+
+async function getDanmakuSourcesStats() {
+  try {
+    const entries = await readdir(danmakuSourcesRoot, { withFileTypes: true });
+    const files = entries.filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith(".json"));
+    const stats = await Promise.all(files.map((entry) => stat(path.join(danmakuSourcesRoot, entry.name))));
+    return {
+      bytes: stats.reduce((sum, entryStat) => sum + entryStat.size, 0),
+      files: stats.length,
+      updatedAt: stats.reduce((latest, entryStat) => Math.max(latest, entryStat.mtimeMs), 0) || null,
+    };
+  } catch (error) {
+    if (error && error.code === "ENOENT") {
+      return { bytes: 0, files: 0, updatedAt: null };
+    }
+    return {
+      bytes: 0,
+      files: 0,
+      updatedAt: null,
+      error: error instanceof Error ? error.message : "Unable to inspect danmaku sources.",
+    };
+  }
+}
+
 async function createCacheStatus() {
   const definitions = [
     { id: "bangumi-matches", label: "Bangumi 匹配", path: bangumiMatchesRoot },
@@ -209,7 +237,7 @@ async function createCacheStatus() {
     { id: "photo-albums", label: "写真集数据", path: photoAlbumsRoot },
     { id: "subtitles", label: "内封字幕", path: embeddedSubtitlesRoot },
     { id: "compatible-media", label: "兼容播放缓存", path: compatibleMediaRoot },
-    { id: "danmaku-sources", label: "弹幕源", path: danmakuSourcesRoot },
+    { id: "danmaku-sources", label: "弹幕源", path: danmakuSourcesRoot, getStats: getDanmakuSourcesStats },
     { id: "ai-summaries", label: "AI 字幕总结", path: path.join(aiRoot, "summaries") },
     { id: "ai-qa", label: "AI 字幕问答", path: path.join(aiRoot, "qa") },
     { id: "ai-recaps", label: "AI 进度回顾", path: path.join(aiRoot, "recaps") },
@@ -219,20 +247,34 @@ async function createCacheStatus() {
   const items = await Promise.all(
     definitions.map(async (definition) => ({
       ...definition,
-      ...(await getPathStats(definition.path)),
+      ...(await (definition.getStats ? definition.getStats() : getPathStats(definition.path))),
     })),
   );
   const visibleItems = items.filter((item) => item.bytes > 0 || item.files > 0 || item.updatedAt || item.error);
   const databaseItem = await localDataStore.createDatabaseStatusItem();
   if (databaseItem) visibleItems.push(databaseItem);
+  const rootStats = await getPathStats(dataRoot);
   const totalBytes = visibleItems.reduce((sum, item) => sum + item.bytes, 0);
   const totalFiles = visibleItems.reduce((sum, item) => sum + item.files, 0);
+  const unclassifiedBytes = Math.max(rootStats.bytes - totalBytes, 0);
+  const unclassifiedFiles = Math.max(rootStats.files - totalFiles, 0);
+  if (unclassifiedBytes > 0 || unclassifiedFiles > 0) {
+    visibleItems.push({
+      id: "other-local-data",
+      label: "其他本地数据",
+      path: dataRoot,
+      bytes: unclassifiedBytes,
+      files: unclassifiedFiles,
+      updatedAt: rootStats.updatedAt,
+      clearable: false,
+    });
+  }
   const updatedAt = visibleItems.reduce((latest, item) => Math.max(latest, item.updatedAt ?? 0), 0) || null;
 
   return {
     rootPath: dataRoot,
-    totalBytes,
-    totalFiles,
+    totalBytes: rootStats.bytes,
+    totalFiles: rootStats.files,
     updatedAt,
     items: visibleItems,
   };
@@ -256,6 +298,8 @@ async function clearCacheItems(payload) {
   const itemsById = new Map(currentStatus.items.map((item) => [item.id, item]));
   const invalidId = uniqueIds.find((id) => !itemsById.has(id));
   if (invalidId) throw new Error("Unknown cache item.");
+  const readonlyId = uniqueIds.find((id) => itemsById.get(id)?.clearable === false);
+  if (readonlyId) throw new Error("This cache item is read-only.");
 
   for (const id of uniqueIds) {
     const item = itemsById.get(id);
@@ -778,14 +822,16 @@ async function writeDanmakuSource(record) {
     updatedAt: Date.now(),
   };
   const payload = { source, comments: record.comments };
-  await writeJsonFile(path.join(danmakuSourcesRoot, `${source.id}.json`), payload);
+  await writeJsonFile(createDanmakuSourcePath(source.id), payload);
   return payload;
 }
 
 async function readDanmakuSource(sourceId) {
   const id = typeof sourceId === "string" ? sourceId : "";
   if (!/^[A-Za-z0-9:_-]{1,120}$/.test(id)) throw new Error("Invalid danmaku source id.");
-  const payload = await readJsonFile(path.join(danmakuSourcesRoot, `${id}.json`), null);
+  const payload =
+    (await readJsonFile(createDanmakuSourcePath(id), null)) ??
+    (await readJsonFile(createDanmakuSourcePath(id, { legacy: true }), null));
   if (!payload?.source || !Array.isArray(payload?.comments)) throw new Error("弹幕源缓存不存在。");
   return payload;
 }

@@ -120,6 +120,26 @@ test("sqlite incremental writes keep unrelated player data", async () => {
   }
 });
 
+test("sqlite database status includes wal and shm sidecar files", async () => {
+  const context = await createTempStore();
+  try {
+    await context.store.initialize();
+    context.store.close();
+    await writeFile(path.join(context.dataRoot, "web-player.sqlite-wal"), "wal", "utf8");
+    await writeFile(path.join(context.dataRoot, "web-player.sqlite-shm"), "shm", "utf8");
+
+    const status = await context.store.createDatabaseStatusItem();
+
+    assert.equal(status.id, "sqlite-database");
+    assert.equal(status.files, 3);
+    assert.ok(status.bytes >= 6);
+    assert.ok(status.updatedAt);
+  } finally {
+    context.store.close();
+    await rm(context.root, { recursive: true, force: true });
+  }
+});
+
 test("sqlite progress upsert ignores stale writes and preserves known duration", async () => {
   const context = await createTempStore();
   try {

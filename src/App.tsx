@@ -1159,6 +1159,7 @@ type CacheStatusItem = {
   files: number;
   updatedAt: number | null;
   error?: string;
+  clearable?: boolean;
 };
 
 type CacheStatus = {
@@ -7215,13 +7216,16 @@ export default function App() {
   }, []);
 
   const cacheStatusItems = cacheStatus?.items ?? [];
+  const clearableCacheStatusItems = useMemo(() => cacheStatusItems.filter((item) => item.clearable !== false), [cacheStatusItems]);
   const selectedCacheItems = useMemo(
-    () => cacheStatusItems.filter((item) => selectedCacheItemIds.has(item.id)),
-    [cacheStatusItems, selectedCacheItemIds],
+    () => clearableCacheStatusItems.filter((item) => selectedCacheItemIds.has(item.id)),
+    [clearableCacheStatusItems, selectedCacheItemIds],
   );
+  const selectedCacheItemIdsList = useMemo(() => selectedCacheItems.map((item) => item.id), [selectedCacheItems]);
   const selectedCacheBytes = selectedCacheItems.reduce((sum, item) => sum + item.bytes, 0);
   const selectedCacheFiles = selectedCacheItems.reduce((sum, item) => sum + item.files, 0);
-  const isAllCacheSelected = cacheStatusItems.length > 0 && cacheStatusItems.every((item) => selectedCacheItemIds.has(item.id));
+  const isAllCacheSelected =
+    clearableCacheStatusItems.length > 0 && clearableCacheStatusItems.every((item) => selectedCacheItemIds.has(item.id));
   const cacheStatusPageCount = Math.max(1, Math.ceil(cacheStatusItems.length / cacheStatusPageSize));
   const visibleCacheStatusPage = Math.min(Math.max(cacheStatusPage, 1), cacheStatusPageCount);
   const pagedCacheStatusItems = useMemo(() => {
@@ -7233,7 +7237,7 @@ export default function App() {
 
   useEffect(() => {
     if (!cacheStatus) return;
-    const availableIds = new Set(cacheStatus.items.map((item) => item.id));
+    const availableIds = new Set(cacheStatus.items.filter((item) => item.clearable !== false).map((item) => item.id));
     setSelectedCacheItemIds((previous) => {
       const next = new Set(Array.from(previous).filter((id) => availableIds.has(id)));
       return next.size === previous.size ? previous : next;
@@ -7258,11 +7262,11 @@ export default function App() {
 
   const toggleAllCacheItems = useCallback(() => {
     setSelectedCacheItemIds((previous) => {
-      if (!cacheStatusItems.length) return previous;
-      const shouldSelectAll = !cacheStatusItems.every((item) => previous.has(item.id));
-      return shouldSelectAll ? new Set(cacheStatusItems.map((item) => item.id)) : new Set();
+      if (!clearableCacheStatusItems.length) return previous;
+      const shouldSelectAll = !clearableCacheStatusItems.every((item) => previous.has(item.id));
+      return shouldSelectAll ? new Set(clearableCacheStatusItems.map((item) => item.id)) : new Set();
     });
-  }, [cacheStatusItems]);
+  }, [clearableCacheStatusItems]);
 
   const requestClearSelectedCache = useCallback(() => {
     if (!selectedCacheItems.length) return;
@@ -7277,7 +7281,7 @@ export default function App() {
     try {
       const response = await fetchJson<ClearCacheResponse>("/api/cache-status/clear", {
         method: "POST",
-        body: JSON.stringify({ ids: selectedCacheItems.map((item) => item.id) }),
+        body: JSON.stringify({ ids: selectedCacheItemIdsList }),
       });
       setCacheStatus(response.status);
       setSelectedCacheItemIds(new Set());
@@ -7302,7 +7306,15 @@ export default function App() {
     } finally {
       setIsClearingCache(false);
     }
-  }, [clearCurrentLibraryRuntimeData, clearLoadedMedia, isAllCacheSelected, selectedCacheItems]);
+  }, [
+    clearCurrentLibraryRuntimeData,
+    clearLoadedMedia,
+    clearPhotoAlbumFolderHandle,
+    clearRecentFolderHandle,
+    isAllCacheSelected,
+    selectedCacheItemIdsList,
+    selectedCacheItems.length,
+  ]);
 
   const openCacheStatusDialog = useCallback(() => {
     setCacheStatusPage(1);
@@ -10075,18 +10087,22 @@ export default function App() {
 
             <div className="cache-status-list">
               {pagedCacheStatusItems.map((item) => (
-                <label className={`cache-status-row ${selectedCacheItemIds.has(item.id) ? "selected" : ""}`} key={item.id}>
+                <label
+                  className={`cache-status-row ${selectedCacheItemIds.has(item.id) ? "selected" : ""} ${item.clearable === false ? "disabled" : ""}`}
+                  key={item.id}
+                >
                   <span className="cache-status-check">
                     <input
                       type="checkbox"
                       checked={selectedCacheItemIds.has(item.id)}
                       onChange={(event) => toggleCacheItemSelection(item.id, event.target.checked)}
-                      disabled={isClearingCache}
+                      disabled={isClearingCache || item.clearable === false}
                     />
                   </span>
                   <span className="cache-status-row-main">
                     <strong>{item.label}</strong>
                     <span>{item.path}</span>
+                    {item.clearable === false ? <small>仅统计展示，不支持从这里清除。</small> : null}
                     {item.error ? <small>{item.error}</small> : null}
                   </span>
                   <dl>

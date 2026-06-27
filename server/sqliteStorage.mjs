@@ -834,14 +834,20 @@ export class LocalDataSqliteStore {
 
   async createDatabaseStatusItem() {
     try {
-      const entryStat = await stat(this.databasePath);
+      const databaseDir = path.dirname(this.databasePath);
+      const databaseBaseName = path.basename(this.databasePath);
+      const entries = await readdir(databaseDir, { withFileTypes: true });
+      const databaseFiles = entries
+        .filter((entry) => entry.isFile() && (entry.name === databaseBaseName || entry.name.startsWith(`${databaseBaseName}-`)))
+        .map((entry) => path.join(databaseDir, entry.name));
+      const stats = await Promise.all(databaseFiles.map((filePath) => stat(filePath)));
       return {
         id: "sqlite-database",
         label: "SQLite 数据库",
         path: this.databasePath,
-        bytes: entryStat.size,
-        files: 1,
-        updatedAt: entryStat.mtimeMs,
+        bytes: stats.reduce((sum, entryStat) => sum + entryStat.size, 0),
+        files: stats.length,
+        updatedAt: stats.reduce((latest, entryStat) => Math.max(latest, entryStat.mtimeMs), 0) || null,
       };
     } catch {
       return null;

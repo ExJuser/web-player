@@ -4065,6 +4065,11 @@ button {
   background: #17242d;
 }
 
+.cache-status-row.disabled {
+  cursor: default;
+  opacity: 0.72;
+}
+
 .cache-status-check {
   display: inline-flex;
   align-items: center;
