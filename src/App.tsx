@@ -10354,7 +10354,7 @@ export default function App() {
                     <input
                       value={danmakuManualUrl}
                       onChange={(event) => setDanmakuManualUrl(event.target.value)}
-                      placeholder="https://www.bilibili.com/video/BV... 或 bangumi ep 链接"
+                      placeholder="https://www.bilibili.com/video/BV..."
                       disabled={isDanmakuLoading}
                     />
                   </label>
