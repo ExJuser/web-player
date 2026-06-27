@@ -1,6 +1,7 @@
 node_modules/
 dist/
 coverage/
+.worktrees/
 .npm-cache/
 .cache/
 .local-web-player-data/
