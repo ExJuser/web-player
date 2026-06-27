@@ -539,7 +539,19 @@ export class LocalDataSqliteStore {
         return;
       }
       this.db
-        .prepare('INSERT INTO video_progress (library_id, video_id, "current_time", duration, completed, updated_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(library_id, video_id) DO UPDATE SET "current_time" = excluded."current_time", duration = excluded.duration, completed = excluded.completed, updated_at = excluded.updated_at')
+        .prepare(`
+          INSERT INTO video_progress (library_id, video_id, "current_time", duration, completed, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?)
+          ON CONFLICT(library_id, video_id) DO UPDATE SET
+            "current_time" = excluded."current_time",
+            duration = CASE
+              WHEN excluded.duration > 0 THEN excluded.duration
+              ELSE video_progress.duration
+            END,
+            completed = excluded.completed,
+            updated_at = excluded.updated_at
+          WHERE excluded.updated_at >= video_progress.updated_at
+        `)
         .run(libraryId, videoId, Number(progress.currentTime) || 0, Number(progress.duration) || 0, progress.completed ? 1 : 0, Number(progress.updatedAt) || now());
     });
   }
@@ -555,7 +567,19 @@ export class LocalDataSqliteStore {
 
   upsertProgressSync(libraryId, videoId, progress) {
     this.db
-      .prepare('INSERT INTO video_progress (library_id, video_id, "current_time", duration, completed, updated_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(library_id, video_id) DO UPDATE SET "current_time" = excluded."current_time", duration = excluded.duration, completed = excluded.completed, updated_at = excluded.updated_at')
+      .prepare(`
+        INSERT INTO video_progress (library_id, video_id, "current_time", duration, completed, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        ON CONFLICT(library_id, video_id) DO UPDATE SET
+          "current_time" = excluded."current_time",
+          duration = CASE
+            WHEN excluded.duration > 0 THEN excluded.duration
+            ELSE video_progress.duration
+          END,
+          completed = excluded.completed,
+          updated_at = excluded.updated_at
+        WHERE excluded.updated_at >= video_progress.updated_at
+      `)
       .run(libraryId, videoId, Number(progress.currentTime) || 0, Number(progress.duration) || 0, progress.completed ? 1 : 0, Number(progress.updatedAt) || now());
   }
 

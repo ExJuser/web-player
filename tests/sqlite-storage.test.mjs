@@ -119,3 +119,43 @@ test("sqlite incremental writes keep unrelated player data", async () => {
     await rm(context.root, { recursive: true, force: true });
   }
 });
+
+test("sqlite progress upsert ignores stale writes and preserves known duration", async () => {
+  const context = await createTempStore();
+  try {
+    await context.store.initialize();
+
+    context.store.upsertProgress("global", "video1", {
+      currentTime: 80,
+      duration: 120,
+      completed: false,
+      updatedAt: 3000,
+    });
+    context.store.upsertProgress("global", "video1", {
+      currentTime: 5,
+      duration: 10,
+      completed: false,
+      updatedAt: 2000,
+    });
+
+    let store = context.store.loadPlayerDataStore("global");
+    assert.equal(store.items.video1.currentTime, 80);
+    assert.equal(store.items.video1.duration, 120);
+    assert.equal(store.items.video1.updatedAt, 3000);
+
+    context.store.upsertProgress("global", "video1", {
+      currentTime: 90,
+      duration: 0,
+      completed: false,
+      updatedAt: 4000,
+    });
+
+    store = context.store.loadPlayerDataStore("global");
+    assert.equal(store.items.video1.currentTime, 90);
+    assert.equal(store.items.video1.duration, 120);
+    assert.equal(store.items.video1.updatedAt, 4000);
+  } finally {
+    context.store.close();
+    await rm(context.root, { recursive: true, force: true });
+  }
+});

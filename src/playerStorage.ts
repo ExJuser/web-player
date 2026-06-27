@@ -33,6 +33,7 @@ const LEGACY_THUMBNAIL_STORE_NAME = "thumbnails";
 
 export function createProgress(currentTime: number, duration: number, completed = false): PlaybackProgress | null {
   if (!Number.isFinite(currentTime) || !Number.isFinite(duration)) return null;
+  if (!completed && currentTime < 0.5) return null;
   return {
     currentTime,
     duration,
@@ -54,6 +55,7 @@ export function parseProgressItems(source: unknown): ProgressStore {
       Number.isFinite(progress.updatedAt) &&
       typeof progress.completed === "boolean"
     ) {
+      if (!progress.completed && progress.currentTime < 0.5) continue;
       store[key] = progress;
     }
   }

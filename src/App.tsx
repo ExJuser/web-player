@@ -3885,7 +3885,15 @@ export default function App() {
       }
 
       const previous = progressStoreRef.current[video.id];
-      const progress = createProgress(currentTime, duration, completed ?? previous?.completed ?? false);
+      const nextDuration =
+        Number.isFinite(duration) && duration > 0
+          ? duration
+          : previous?.duration && previous.duration > 0
+            ? previous.duration
+            : video.duration && video.duration > 0
+              ? video.duration
+              : 0;
+      const progress = createProgress(currentTime, nextDuration, completed ?? previous?.completed ?? false);
       if (!progress) return;
 
       const nextStore = {
