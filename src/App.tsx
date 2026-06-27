@@ -35,7 +35,7 @@ import {
   VolumeX,
   Volume2,
 } from "lucide-react";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 
 import {
   createAiLibrarySearchResults,
@@ -1336,6 +1336,19 @@ type TagMergePrompt = {
   suggestion: TagMergeSuggestion;
 };
 
+type DialogOffset = {
+  x: number;
+  y: number;
+};
+
+type DialogDragState = {
+  pointerId: number;
+  startX: number;
+  startY: number;
+  originX: number;
+  originY: number;
+};
+
 type ExistingMediaRootPrompt = {
   directoryName: string;
   mediaRootLabel: string;
@@ -2034,6 +2047,8 @@ export default function App() {
   const videoTagsRef = useRef<VideoTagStore>({});
   const videoStatsRef = useRef<VideoStatsStore>({});
   const tagMergeDecisionsRef = useRef<TagMergeDecisionStore>({});
+  const tagDialogRef = useRef<HTMLElement | null>(null);
+  const tagDialogDragRef = useRef<DialogDragState | null>(null);
   const videosRef = useRef<VideoItem[]>([]);
   const subtitlesRef = useRef<SubtitleItem[]>([]);
   const localConfigRef = useRef<LocalConfig | null>(null);
@@ -2143,6 +2158,8 @@ export default function App() {
   const [tagMessage, setTagMessage] = useState("");
   const [isTagSuggestionLoading, setIsTagSuggestionLoading] = useState(false);
   const [tagMergePrompt, setTagMergePrompt] = useState<TagMergePrompt | null>(null);
+  const [tagDialogOffset, setTagDialogOffset] = useState<DialogOffset>({ x: 0, y: 0 });
+  const [isTagDialogDragging, setIsTagDialogDragging] = useState(false);
   const [playlistFilter, setPlaylistFilter] = useState<PlaylistFilter>("all");
   const [playlistSortMode, setPlaylistSortMode] = useState<PlaylistSortMode>(
     defaultPlayerPreferences.playlistSortMode,
@@ -3835,6 +3852,67 @@ export default function App() {
     });
     void addTagsToCurrentVideo(pendingTags, { skipPrompt: true });
   }, [addTagsToCurrentVideo, replaceTagMergeDecisions, tagMergePrompt]);
+
+  const clampTagDialogOffset = useCallback((offset: DialogOffset) => {
+    const dialog = tagDialogRef.current;
+    if (!dialog) return offset;
+
+    const rect = dialog.getBoundingClientRect();
+    const margin = 12;
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const halfWidth = rect.width / 2;
+    const halfHeight = rect.height / 2;
+    const maxX = Math.max(0, viewportWidth / 2 - halfWidth - margin);
+    const minX = Math.min(0, -viewportWidth / 2 + halfWidth + margin);
+    const maxY = Math.max(0, viewportHeight / 2 - halfHeight - margin);
+    const minY = Math.min(0, -viewportHeight / 2 + halfHeight + margin);
+
+    return {
+      x: Math.min(maxX, Math.max(minX, offset.x)),
+      y: Math.min(maxY, Math.max(minY, offset.y)),
+    };
+  }, []);
+
+  const startTagDialogDrag = useCallback((event: ReactPointerEvent<HTMLElement>) => {
+    if (event.button !== 0) return;
+    const origin = tagDialogOffset;
+    tagDialogDragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      originX: origin.x,
+      originY: origin.y,
+    };
+    setIsTagDialogDragging(true);
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }, [tagDialogOffset]);
+
+  const moveTagDialogDrag = useCallback((event: ReactPointerEvent<HTMLElement>) => {
+    const dragState = tagDialogDragRef.current;
+    if (!dragState || dragState.pointerId !== event.pointerId) return;
+    setTagDialogOffset(clampTagDialogOffset({
+      x: dragState.originX + event.clientX - dragState.startX,
+      y: dragState.originY + event.clientY - dragState.startY,
+    }));
+  }, [clampTagDialogOffset]);
+
+  const stopTagDialogDrag = useCallback((event: ReactPointerEvent<HTMLElement>) => {
+    const dragState = tagDialogDragRef.current;
+    if (!dragState || dragState.pointerId !== event.pointerId) return;
+    tagDialogDragRef.current = null;
+    setIsTagDialogDragging(false);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isTagDialogOpen) return;
+    tagDialogDragRef.current = null;
+    setTagDialogOffset({ x: 0, y: 0 });
+    setIsTagDialogDragging(false);
+  }, [isTagDialogOpen]);
 
   const clearCurrentLibraryRuntimeData = useCallback(() => {
     progressStoreRef.current = {};
@@ -9114,12 +9192,14 @@ export default function App() {
       </div>
     ) : null}
     {isTagDialogOpen ? (
-      <div className="modal-backdrop" role="presentation" onMouseDown={() => setIsTagDialogOpen(false)}>
+      <div className="modal-backdrop tag-dialog-backdrop" role="presentation" onMouseDown={() => setIsTagDialogOpen(false)}>
         <section
+          ref={tagDialogRef}
           aria-labelledby="tag-dialog-title"
           aria-modal="true"
-          className="tag-dialog"
+          className={`tag-dialog${isTagDialogDragging ? " dragging" : ""}`}
           role="dialog"
+          style={{ transform: `translate(${tagDialogOffset.x}px, ${tagDialogOffset.y}px)` }}
           onMouseDown={(event) => event.stopPropagation()}
         >
           <button
@@ -9130,7 +9210,13 @@ export default function App() {
           >
             <X size={18} />
           </button>
-          <div className="tag-dialog-header">
+          <div
+            className="tag-dialog-header"
+            onPointerCancel={stopTagDialogDrag}
+            onPointerDown={startTagDialogDrag}
+            onPointerMove={moveTagDialogDrag}
+            onPointerUp={stopTagDialogDrag}
+          >
             <div className="dialog-icon">
               <Tags size={28} />
             </div>

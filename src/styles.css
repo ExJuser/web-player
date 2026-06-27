@@ -3138,6 +3138,11 @@ button {
   backdrop-filter: blur(12px);
 }
 
+.tag-dialog-backdrop {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
 .folder-dialog,
 .delete-dialog,
 .media-root-label-dialog,
@@ -3767,6 +3772,11 @@ button {
   background: #151922;
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.45);
   color: #f5f7fb;
+  will-change: transform;
+}
+
+.tag-dialog.dragging {
+  user-select: none;
 }
 
 .tag-dialog-header {
@@ -3775,6 +3785,13 @@ button {
   align-items: center;
   gap: 12px;
   padding-right: 36px;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.tag-dialog.dragging .tag-dialog-header {
+  cursor: grabbing;
 }
 
 .tag-editor-current {
