@@ -721,52 +721,6 @@ function parseAniGamerDanmakuPayload(payload) {
   return dedupeDanmakuComments(comments);
 }
 
-function parseAssTime(value) {
-  const match = /^(\d+):(\d{2}):(\d{2})(?:\.(\d{1,2}))?$/.exec(String(value || "").trim());
-  if (!match) return 0;
-  return Number(match[1]) * 3600 + Number(match[2]) * 60 + Number(match[3]) + Number(match[4] || 0) / 100;
-}
-
-function parseImportedDanmakuText(text) {
-  const trimmed = String(text || "").trim();
-  if (!trimmed) return [];
-
-  if (trimmed.startsWith("<")) return parseBilibiliXmlDanmaku(trimmed);
-
-  try {
-    const parsed = JSON.parse(trimmed);
-    const items = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.comments) ? parsed.comments : Array.isArray(parsed?.data) ? parsed.data : [];
-    const comments = items.flatMap((item, index) => {
-      const comment = createDanmakuComment({
-        id: item?.id ? `manual:${item.id}` : `manual:${index}`,
-        time: Number(item?.time ?? item?.start ?? item?.stime ?? 0),
-        text: String(item?.text ?? item?.message ?? item?.comment ?? ""),
-        mode: item?.mode,
-        color: item?.color,
-        simplifiedText: item?.simplifiedText,
-      });
-      return comment ? [comment] : [];
-    });
-    return dedupeDanmakuComments(comments);
-  } catch {
-    // Continue with ASS parsing.
-  }
-
-  const comments = trimmed.split(/\r?\n/).flatMap((line, index) => {
-    if (!line.startsWith("Dialogue:")) return [];
-    const parts = line.slice("Dialogue:".length).split(",");
-    if (parts.length < 10) return [];
-    const textValue = parts.slice(9).join(",").replace(/\{[^}]*}/g, "").replace(/\\N/g, " ");
-    const comment = createDanmakuComment({
-      id: `manual:${index}`,
-      time: parseAssTime(parts[1]),
-      text: textValue,
-    });
-    return comment ? [comment] : [];
-  });
-  return dedupeDanmakuComments(comments);
-}
-
 async function resolveBilibiliCid(parsed) {
   if (parsed.kind === "cid") return { cid: parsed.value, title: `Bilibili CID ${parsed.value}` };
   if (parsed.kind === "ep") {
@@ -887,18 +841,6 @@ async function fetchDanmakuSource(payload) {
   if (!record) throw new Error("Unsupported danmaku provider.");
   if (!record.comments.length) throw new Error("没有解析到弹幕。");
   return writeDanmakuSource(record);
-}
-
-async function importDanmakuSource(payload) {
-  const text = typeof payload?.text === "string" ? payload.text : "";
-  const comments = parseImportedDanmakuText(text);
-  if (!comments.length) throw new Error("没有解析到可用弹幕。");
-  return writeDanmakuSource({
-    provider: "manual",
-    title: typeof payload?.title === "string" && payload.title.trim() ? payload.title.trim().slice(0, 160) : "手动导入弹幕",
-    sourceUrl: "manual:import",
-    comments,
-  });
 }
 
 async function searchDanmakuSources(payload) {
@@ -1908,12 +1850,6 @@ function playerDataApiPlugin(env) {
       if (url.pathname === "/api/danmaku/fetch" && request.method === "POST") {
         const payload = JSON.parse((await readBody(request)).toString("utf8"));
         sendJson(response, 200, await fetchDanmakuSource(payload));
-        return;
-      }
-
-      if (url.pathname === "/api/danmaku/import" && request.method === "POST") {
-        const payload = JSON.parse((await readBody(request)).toString("utf8"));
-        sendJson(response, 200, await importDanmakuSource(payload));
         return;
       }
 

@@ -2235,7 +2235,6 @@ export default function App() {
   const [currentDanmakuSource, setCurrentDanmakuSource] = useState<DanmakuSource | null>(null);
   const [danmakuCandidates, setDanmakuCandidates] = useState<DanmakuSearchCandidate[]>([]);
   const [danmakuManualUrl, setDanmakuManualUrl] = useState("");
-  const [danmakuImportText, setDanmakuImportText] = useState("");
   const [danmakuMessage, setDanmakuMessage] = useState("");
   const [isDanmakuDialogOpen, setIsDanmakuDialogOpen] = useState(false);
   const [isDanmakuLoading, setIsDanmakuLoading] = useState(false);
@@ -6674,7 +6673,7 @@ export default function App() {
         }),
       });
       setDanmakuCandidates(response.candidates);
-      setDanmakuMessage(response.candidates.length ? `找到 ${response.candidates.length} 个候选弹幕源。` : "没有找到公开候选，可粘贴 Bilibili/动画疯链接或导入文件。");
+      setDanmakuMessage(response.candidates.length ? `找到 ${response.candidates.length} 个候选弹幕源。` : "没有找到公开候选，可粘贴 Bilibili/动画疯链接。");
     } catch (error) {
       setDanmakuMessage(error instanceof Error ? error.message : "弹幕源匹配失败。");
     } finally {
@@ -6704,30 +6703,6 @@ export default function App() {
     },
     [applyDanmakuSourcePayload, currentVideo],
   );
-
-  const importDanmakuText = useCallback(async () => {
-    if (!currentVideo || !danmakuImportText.trim()) {
-      setDanmakuMessage("请粘贴 XML、JSON 或 ASS 弹幕内容。");
-      return;
-    }
-    setIsDanmakuLoading(true);
-    setDanmakuMessage("正在导入弹幕...");
-    try {
-      const payload = await fetchJson<DanmakuSourcePayload>("/api/danmaku/import", {
-        method: "POST",
-        body: JSON.stringify({
-          title: `${currentVideo.name} 手动弹幕`,
-          text: danmakuImportText,
-        }),
-      });
-      applyDanmakuSourcePayload(payload, { persist: true, message: `已导入 ${payload.comments.length} 条弹幕。` });
-      setDanmakuImportText("");
-    } catch (error) {
-      setDanmakuMessage(error instanceof Error ? error.message : "弹幕导入失败。");
-    } finally {
-      setIsDanmakuLoading(false);
-    }
-  }, [applyDanmakuSourcePayload, currentVideo, danmakuImportText]);
 
   const translateCurrentDanmaku = useCallback(async () => {
     if (!currentDanmakuSource) {
@@ -9200,7 +9175,7 @@ export default function App() {
                   type="button"
                   onClick={() => {
                     setIsDanmakuDialogOpen(true);
-                    setDanmakuMessage(currentDanmakuSource ? `当前弹幕源：${currentDanmakuSource.title}` : "匹配或导入弹幕后显示在视频上方。");
+                    setDanmakuMessage(currentDanmakuSource ? `当前弹幕源：${currentDanmakuSource.title}` : "匹配或拉取弹幕后显示在视频上方。");
                   }}
                   disabled={!currentVideo || !isSeriesMode}
                   title={isSeriesMode ? "弹幕源和弹幕设置" : "弹幕只在追番模式的剧集播放中可用"}
@@ -10394,21 +10369,7 @@ export default function App() {
               </section>
             </div>
 
-            <label className="danmaku-field danmaku-import">
-              <span>导入 XML / JSON / ASS 弹幕</span>
-              <textarea
-                value={danmakuImportText}
-                onChange={(event) => setDanmakuImportText(event.target.value)}
-                placeholder="粘贴弹幕文件内容"
-                disabled={isDanmakuLoading}
-              />
-            </label>
-            <div className="danmaku-footer">
-              <button className="secondary-button" type="button" onClick={importDanmakuText} disabled={!danmakuImportText.trim() || isDanmakuLoading}>
-                导入弹幕
-              </button>
-              <span className={isDanmakuLoading ? "ai-loading" : "ai-empty-state"}>{danmakuMessage || "弹幕数量较多时会先去重再翻译，减少请求次数和 token 消耗。"}</span>
-            </div>
+            <span className={isDanmakuLoading ? "ai-loading" : "ai-empty-state"}>{danmakuMessage || "弹幕数量较多时会先去重再翻译，减少请求次数和 token 消耗。"}</span>
           </section>
         </div>
       ) : null}

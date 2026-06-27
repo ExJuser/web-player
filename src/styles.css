@@ -4187,14 +4187,12 @@ button {
 }
 
 .danmaku-dialog::-webkit-scrollbar,
-.danmaku-candidate-list::-webkit-scrollbar,
-.danmaku-import textarea::-webkit-scrollbar {
+.danmaku-candidate-list::-webkit-scrollbar {
   width: 8px;
 }
 
 .danmaku-dialog::-webkit-scrollbar-thumb,
-.danmaku-candidate-list::-webkit-scrollbar-thumb,
-.danmaku-import textarea::-webkit-scrollbar-thumb {
+.danmaku-candidate-list::-webkit-scrollbar-thumb {
   border-radius: 999px;
   background: rgba(142, 151, 165, 0.45);
 }
@@ -4249,17 +4247,11 @@ button {
   line-height: 1.4;
 }
 
-.danmaku-actions,
-.danmaku-footer {
+.danmaku-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 10px;
-}
-
-.danmaku-footer span {
-  flex: 1;
-  min-width: 0;
 }
 
 .danmaku-field {
@@ -4290,14 +4282,6 @@ button {
 .danmaku-field input[type="range"],
 .toggle-row input {
   accent-color: #00a1d6;
-}
-
-.danmaku-import textarea {
-  min-height: 112px;
-  max-height: 180px;
-  padding: 10px;
-  resize: vertical;
-  line-height: 1.45;
 }
 
 .danmaku-candidate-list {
@@ -5954,10 +5938,6 @@ button {
     grid-template-columns: 1fr;
   }
 
-  .danmaku-footer {
-    align-items: stretch;
-    flex-direction: column;
-  }
 }
 
 .app-shell.theme-light .danmaku-dialog,
