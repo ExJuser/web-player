@@ -23,6 +23,8 @@ import {
   RECENT_FOLDER_STORE_NAME,
   PHOTO_ALBUM_FOLDER_KEY,
   thumbnailCacheVersion,
+  danmakuSpeedMin,
+  danmakuSpeedMax,
   defaultDanmakuPreferences,
   defaultPlayerSettings,
   defaultPlayerPreferences,
@@ -224,7 +226,7 @@ export function parseDanmakuPreferences(source: unknown): DanmakuPreferences {
   return {
     enabled: typeof preferences.enabled === "boolean" ? preferences.enabled : defaultDanmakuPreferences.enabled,
     opacity: 1,
-    speed: boundedNumber(preferences.speed, defaultDanmakuPreferences.speed, 4, 14),
+    speed: boundedNumber(preferences.speed, defaultDanmakuPreferences.speed, danmakuSpeedMin, danmakuSpeedMax),
     density: boundedNumber(preferences.density, defaultDanmakuPreferences.density, 0.2, 1),
     displayArea: boundedNumber(preferences.displayArea, defaultDanmakuPreferences.displayArea, 0.25, 1),
     fontSize: boundedNumber(preferences.fontSize, defaultDanmakuPreferences.fontSize, 14, 36),

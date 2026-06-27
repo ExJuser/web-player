@@ -133,6 +133,9 @@ import {
   thumbnailGenerationTimeout,
   thumbnailEncodeTimeout,
   playlistScrollFrameDelay,
+  danmakuSpeedMin,
+  danmakuSpeedMax,
+  danmakuSpeedStep,
   defaultShortcuts,
   defaultPlayerSettings,
   defaultPlayerPreferences,
@@ -10340,9 +10343,9 @@ export default function App() {
                   <span>速度 {danmakuPreferences.speed.toFixed(1)}s</span>
                   <input
                     type="range"
-                    min={4}
-                    max={14}
-                    step={0.5}
+                    min={danmakuSpeedMin}
+                    max={danmakuSpeedMax}
+                    step={danmakuSpeedStep}
                     value={danmakuPreferences.speed}
                     onChange={(event) => replaceDanmakuPreferences({ ...danmakuPreferences, speed: Number(event.target.value) })}
                   />

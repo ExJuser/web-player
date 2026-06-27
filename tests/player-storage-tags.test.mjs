@@ -118,6 +118,11 @@ test("player data stores parse danmaku selections and bounded preferences", () =
   assert.equal(parsed.danmakuPreferences.showSimplified, false);
 });
 
+test("danmaku preferences allow slower speed settings", () => {
+  const parsed = storage.parseDanmakuPreferences({ speed: 99 });
+  assert.equal(parsed.speed, 32);
+});
+
 test("player preferences remember the home media mode", () => {
   const parsed = storage.parsePlayerDataStore(JSON.stringify({
     version: 5,

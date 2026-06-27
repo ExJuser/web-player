@@ -46,6 +46,9 @@ export const thumbnailCacheTimeout = 3000;
 export const thumbnailGenerationTimeout = 12000;
 export const thumbnailEncodeTimeout = 3000;
 export const playlistScrollFrameDelay = 16;
+export const danmakuSpeedMin = 4;
+export const danmakuSpeedMax = 32;
+export const danmakuSpeedStep = 1;
 export const defaultShortcuts: ShortcutMap = {
   togglePlay: "Space",
   seekBackward: "ArrowLeft",
