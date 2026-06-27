@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
-import { access, mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
+import { access, readdir, stat } from "node:fs/promises";
 import path from "node:path";
+import { readJsonFile, writeJsonFile } from "./jsonFiles.mjs";
 
 const videoExtensions = new Set([".mp4", ".webm", ".ogg", ".mov", ".m4v", ".mkv"]);
 const subtitleExtensions = new Set([".srt", ".vtt"]);
@@ -15,19 +16,6 @@ function isIgnoredVideoFile(fileName) {
 
 function shouldFilterVideoFile(fileName, size) {
   return size < smallVideoFileThresholdBytes || isIgnoredVideoFile(fileName);
-}
-
-async function readJsonFile(filePath, fallback) {
-  try {
-    return JSON.parse(await readFile(filePath, "utf8"));
-  } catch {
-    return fallback;
-  }
-}
-
-async function writeJsonFile(filePath, payload) {
-  await mkdir(path.dirname(filePath), { recursive: true });
-  await writeFile(filePath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
 }
 
 function hashValue(value) {

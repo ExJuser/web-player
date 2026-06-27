@@ -34,6 +34,7 @@ import {
   dedupeDanmakuComments,
   parseDanmakuUrl,
 } from "./src/danmakuUtils";
+import { readJsonFile, writeJsonFile } from "./server/jsonFiles.mjs";
 import { LocalDataSqliteStore } from "./server/sqliteStorage.mjs";
 
 const dataRoot = path.resolve(__dirname, ".local-web-player-data");
@@ -140,25 +141,12 @@ function readBody(request) {
   });
 }
 
-async function readJsonFile(filePath, fallback) {
-  try {
-    return JSON.parse(await readFile(filePath, "utf8"));
-  } catch {
-    return fallback;
-  }
-}
-
 async function readTextFile(filePath, fallback = null) {
   try {
     return await readFile(filePath, "utf8");
   } catch {
     return fallback;
   }
-}
-
-async function writeJsonFile(filePath, payload) {
-  await mkdir(path.dirname(filePath), { recursive: true });
-  await writeFile(filePath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
 }
 
 function hashValue(value) {

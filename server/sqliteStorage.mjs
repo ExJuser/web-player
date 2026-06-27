@@ -1,6 +1,7 @@
-import { mkdir, readFile, readdir, stat } from "node:fs/promises";
+import { mkdir, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { readJsonFile } from "./jsonFiles.mjs";
 
 const schemaVersion = 1;
 const playerStoreVersion = 5;
@@ -18,14 +19,6 @@ function parseJson(value, fallback) {
   if (value === null || value === undefined || value === "") return fallback;
   try {
     return JSON.parse(value);
-  } catch {
-    return fallback;
-  }
-}
-
-async function readJsonFile(filePath, fallback) {
-  try {
-    return JSON.parse(await readFile(filePath, "utf8"));
   } catch {
     return fallback;
   }
