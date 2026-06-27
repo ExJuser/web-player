@@ -7818,6 +7818,17 @@ export default function App() {
             )}
           </div>
           <div className="top-actions">
+            {!isPrivacyMode && !isPhotoAlbumViewVisible ? (
+              <button
+                className="primary-button top-add-library-button"
+                type="button"
+                onClick={requestAddMediaLibrary}
+                disabled={isScanning}
+              >
+                <FolderOpen size={18} />
+                {isScanning ? "扫描中" : "新增媒体库"}
+              </button>
+            ) : null}
             {!isPrivacyMode && videos.length && !isHomeViewVisible ? (
               <button className="secondary-button top-home-button" type="button" onClick={showHomeView}>
                 首页
