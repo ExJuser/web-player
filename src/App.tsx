@@ -73,6 +73,7 @@ import type {
   PlayerGlobalMetadata,
   PlayerLibraryMetadata,
   PlayerMediaRootStatus,
+  PlayerPersistentSettings,
   PlayerPreferences,
   CachedPhotoAlbumScan,
   PhotoAlbum,
@@ -497,11 +498,29 @@ function clamp(value: number, min: number, max: number) {
 }
 
 function readStoredVolume() {
-  return defaultPlayerSettings.volume;
+  if (typeof window === "undefined") return defaultPlayerSettings.volume;
+  try {
+    const storedVolume = window.localStorage.getItem(playerVolumeStorageKey);
+    if (storedVolume === null) return defaultPlayerSettings.volume;
+    const parsedVolume = Number(storedVolume);
+    return Number.isFinite(parsedVolume) ? clamp(parsedVolume, 0, 1) : defaultPlayerSettings.volume;
+  } catch {
+    return defaultPlayerSettings.volume;
+  }
+}
+
+function writeStoredVolume(volume: number) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(playerVolumeStorageKey, String(clamp(volume, 0, 1)));
+  } catch {
+    // localStorage can be unavailable in private or restricted contexts.
+  }
 }
 
 type AppTheme = "dark" | "light";
 
+const playerVolumeStorageKey = "local-web-player-volume";
 const appThemeStorageKey = "local-web-player-theme";
 
 function readStoredTheme(): AppTheme {
@@ -2111,6 +2130,7 @@ async function loadVideoThumbnail(libraryId: string | null, video: VideoItem) {
 }
 
 export default function App() {
+  const initialVolumeRef = useRef(readStoredVolume());
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const previewVideoRef = useRef<HTMLVideoElement | null>(null);
   const previewCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -2138,7 +2158,11 @@ export default function App() {
   const libraryMetadataRef = useRef<PlayerDataStore["metadata"] | undefined>(undefined);
   const progressStoreRef = useRef<ProgressStore>({});
   const playerPreferencesRef = useRef<PlayerPreferences>(defaultPlayerPreferences);
-  const playerSettingsRef = useRef(defaultPlayerSettings);
+  const playerSettingsRef = useRef<PlayerPersistentSettings>({
+    ...defaultPlayerSettings,
+    volume: initialVolumeRef.current,
+  });
+  const hasLoadedPlayerDataStoreRef = useRef(false);
   const favoriteVideoIdsRef = useRef(new Set<string>());
   const videoTagsRef = useRef<VideoTagStore>({});
   const videoStatsRef = useRef<VideoStatsStore>({});
@@ -2337,7 +2361,7 @@ export default function App() {
   } | null>(null);
   const [playerOverlayFeedback, setPlayerOverlayFeedback] = useState("");
   const [autoNextPrompt, setAutoNextPrompt] = useState<AutoNextPrompt | null>(null);
-  const [volume, setVolume] = useState(readStoredVolume);
+  const [volume, setVolume] = useState(initialVolumeRef.current);
   const [isMuted, setIsMuted] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [seekStep, setSeekStep] = useState(15);
@@ -2448,6 +2472,7 @@ export default function App() {
   }, []);
 
   const applyPlayerDataStore = useCallback((nextDataStore: PlayerDataStore) => {
+    hasLoadedPlayerDataStoreRef.current = true;
     progressStoreRef.current = nextDataStore.progress;
     playerPreferencesRef.current = nextDataStore.preferences;
     playerSettingsRef.current = nextDataStore.settings;
@@ -5995,12 +6020,17 @@ export default function App() {
     if (!element) return;
     element.volume = volume;
     element.muted = isMuted;
+  }, [currentVideo, isMuted, volume]);
+
+  useEffect(() => {
+    writeStoredVolume(volume);
     playerSettingsRef.current = {
       ...playerSettingsRef.current,
       volume,
     };
+    if (!hasLoadedPlayerDataStoreRef.current) return;
     saveCurrentPlayerDataStore({ settings: playerSettingsRef.current }).catch(() => undefined);
-  }, [currentVideo, isMuted, saveCurrentPlayerDataStore, volume]);
+  }, [saveCurrentPlayerDataStore, volume]);
 
   useEffect(() => {
     const element = videoRef.current;

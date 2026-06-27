@@ -153,6 +153,28 @@ test("player preferences remember stat playlist sort modes", () => {
   }
 });
 
+test("player settings remember bounded volume", () => {
+  const parsed = storage.parsePlayerDataStore(JSON.stringify({
+    version: 5,
+    items: {},
+    favorites: [],
+    settings: {
+      volume: 1.5,
+      skipFolderAccessPrompt: true,
+    },
+  }));
+
+  assert.equal(parsed.settings.volume, 1);
+  assert.equal(parsed.settings.skipFolderAccessPrompt, true);
+
+  const oldStore = storage.parsePlayerDataStore(JSON.stringify({
+    version: 4,
+    items: {},
+    favorites: [],
+  }));
+  assert.equal(oldStore.settings.volume, 0.85);
+});
+
 test("default player data store contains tag containers", () => {
   const store = storage.createDefaultPlayerDataStore();
 
