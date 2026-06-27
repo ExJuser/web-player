@@ -113,6 +113,29 @@ test("special mode combines media root folder and user tag as default searchable
   assert.equal(results[0].representativeVideo.id, videos[0].id);
 });
 
+test("special mode can search by tag filters without text query", () => {
+  const videos = [
+    createVideo({ id: "root-special|actor/a.mp4|100|1", name: "a.mp4", relativePath: "actor/a.mp4" }),
+    createVideo({ id: "root-special|actor/b.mp4|100|2", name: "b.mp4", relativePath: "actor/b.mp4", lastModified: 2 }),
+  ];
+
+  const results = librarySearchUtils.searchLibraryEntries("", videos, {
+    mode: "special",
+    ...createSearchContext({
+      tagFilters: ["剧情"],
+      videoTags: {
+        [videos[0].id]: ["剧情", "长镜头"],
+        [videos[1].id]: ["动作"],
+      },
+    }),
+  });
+
+  assert.deepEqual(
+    results.map((result) => ({ kind: result.kind, videoId: result.representativeVideo.id, reason: result.reason })),
+    [{ kind: "video", videoId: videos[0].id, reason: "标签筛选" }],
+  );
+});
+
 test("all and anime modes keep folder-level library search results", () => {
   const videos = [
     createVideo({ id: "root-anime|show/01.mp4|100|1", name: "01.mp4", relativePath: "show/01.mp4", mediaRootId: "root-anime" }),

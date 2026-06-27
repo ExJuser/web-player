@@ -1,4 +1,4 @@
-import { getTagSearchScore } from "./tagUtils";
+import { doTagsSatisfyAllFilters, getTagSearchScore } from "./tagUtils";
 
 export const librarySearchResultPageSize = 24;
 
@@ -17,6 +17,7 @@ export type LibrarySearchContext<Progress = unknown> = {
   progressByVideoId?: Record<string, Progress | undefined>;
   favoriteVideoIds?: ReadonlySet<string>;
   isResumableProgress?: (progress: Progress | undefined) => boolean;
+  tagFilters?: string[];
   videoTags?: Record<string, string[] | undefined>;
 };
 
@@ -204,10 +205,15 @@ function scoreVideo<Video extends LibrarySearchVideo, Progress>(
   const tokenVariants = createLibrarySearchTokenVariants(query);
   const searchable = getSearchableFields(video, context);
   const tags = context.videoTags?.[video.id] ?? [];
-  let score = 0;
-  const reasons: string[] = [];
+  const hasTagFilters = Boolean(context.tagFilters?.length);
+  if (hasTagFilters && !doTagsSatisfyAllFilters(tags, context.tagFilters ?? [])) {
+    return { score: 0, reason: "标签筛选" };
+  }
 
-  if (context.mode === "special" && !matchesRequiredSpecialTerms(searchable, query, tags)) {
+  let score = normalizedQuery ? 0 : hasTagFilters ? 30 : 0;
+  const reasons: string[] = normalizedQuery ? [] : hasTagFilters ? ["标签筛选"] : [];
+
+  if (context.mode === "special" && normalizedQuery && !matchesRequiredSpecialTerms(searchable, query, tags)) {
     return { score: 0, reason: "关键词匹配" };
   }
 
@@ -345,7 +351,8 @@ export function searchLibraryEntries<Video extends LibrarySearchVideo, Progress>
   context: LibrarySearchContext<Progress>,
   limit?: number,
 ) {
-  if (!normalizeLibrarySearchText(query)) return [];
+  const hasTagFilters = Boolean(context.tagFilters?.length);
+  if (!normalizeLibrarySearchText(query) && !hasTagFilters) return [];
   const folderVideosByKey = groupVideosByLibraryFolderKey(videos);
   const scoredVideos = videos
     .map((video) => ({ video, ...scoreVideo(video, query, context) }))

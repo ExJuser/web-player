@@ -49,6 +49,13 @@ test("scores tag search matches higher than loose text matches", () => {
   assert.equal(tagUtils.getTagSearchScore("悬疑", ["美腿"]), 0);
 });
 
+test("requires every selected tag filter to match by normalized key", () => {
+  assert.equal(tagUtils.doTagsSatisfyAllFilters(["剧情", "AI-字幕"], []), true);
+  assert.equal(tagUtils.doTagsSatisfyAllFilters(["剧情", "AI-字幕", "长镜头"], ["剧情", "ＡＩ字幕"]), true);
+  assert.equal(tagUtils.doTagsSatisfyAllFilters(["剧情", "AI-字幕"], ["剧情", "长镜头"]), false);
+  assert.equal(tagUtils.doTagsSatisfyAllFilters(["剧情"], ["  ", "剧情"]), true);
+});
+
 test("builds global tag usage stats by tagged video count", () => {
   assert.deepEqual(
     tagUtils.buildGlobalTagUsageStats({
