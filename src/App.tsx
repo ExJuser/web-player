@@ -1534,6 +1534,7 @@ type CompatibleRemuxResponse = {
 
 type MediaProbeResponse = {
   playability: NonNullable<VideoItem["playability"]>;
+  metadata?: VideoMetadata;
 };
 
 function playableUrlForVideo(video: VideoItem) {
@@ -1963,9 +1964,77 @@ function waitForDrawableVideoFrame(element: HTMLVideoElement) {
   return new Promise<void>((resolve) => window.setTimeout(resolve, 80));
 }
 
-function getVideoElementMetadata(element: HTMLVideoElement): VideoMetadata {
+function readUint64(data: DataView, offset: number) {
+  const high = data.getUint32(offset);
+  const low = data.getUint32(offset + 4);
+  return high * 2 ** 32 + low;
+}
+
+function parseMp4MovieDuration(buffer: ArrayBuffer) {
+  const data = new DataView(buffer);
+  let offset = 8;
+
+  while (offset + 8 <= data.byteLength) {
+    const size = data.getUint32(offset);
+    const type = String.fromCharCode(
+      data.getUint8(offset + 4),
+      data.getUint8(offset + 5),
+      data.getUint8(offset + 6),
+      data.getUint8(offset + 7),
+    );
+    const headerSize = size === 1 ? 16 : 8;
+    const boxSize = size === 1 ? readUint64(data, offset + 8) : size;
+    if (boxSize < headerSize || offset + boxSize > data.byteLength) break;
+
+    if (type === "mvhd") {
+      const version = data.getUint8(offset + headerSize);
+      const timescaleOffset = offset + headerSize + (version === 1 ? 20 : 12);
+      const durationOffset = timescaleOffset + 4;
+      if (durationOffset + (version === 1 ? 8 : 4) > offset + boxSize) return undefined;
+      const timescale = data.getUint32(timescaleOffset);
+      const duration = version === 1 ? readUint64(data, durationOffset) : data.getUint32(durationOffset);
+      return timescale > 0 && duration > 0 ? duration / timescale : undefined;
+    }
+
+    offset += boxSize;
+  }
+
+  return undefined;
+}
+
+async function readMp4DurationFromFile(file: File) {
+  if (!/\.(?:mp4|m4v|mov)$/i.test(file.name)) return undefined;
+  let offset = 0;
+  const maxBoxHeaderBytes = 16;
+
+  while (offset + 8 <= file.size) {
+    const header = new DataView(await file.slice(offset, Math.min(file.size, offset + maxBoxHeaderBytes)).arrayBuffer());
+    const size = header.getUint32(0);
+    const type = String.fromCharCode(header.getUint8(4), header.getUint8(5), header.getUint8(6), header.getUint8(7));
+    const headerSize = size === 1 ? 16 : 8;
+    const boxSize = size === 1 && header.byteLength >= 16 ? readUint64(header, 8) : size;
+    if (boxSize < headerSize) break;
+    if (type === "moov") {
+      const maxMoovBytes = 32 * 1024 * 1024;
+      if (boxSize > maxMoovBytes) return undefined;
+      return parseMp4MovieDuration(await file.slice(offset, offset + boxSize).arrayBuffer());
+    }
+    offset += boxSize;
+  }
+
+  return undefined;
+}
+
+function selectTrustedDuration(candidates: Array<number | undefined>) {
+  const durations = candidates.filter((value): value is number => typeof value === "number" && Number.isFinite(value) && value > 0);
+  if (!durations.length) return undefined;
+  return Math.min(...durations);
+}
+
+async function getVideoElementMetadata(element: HTMLVideoElement, video?: VideoItem): Promise<VideoMetadata> {
+  const fileDuration = video?.file ? await readMp4DurationFromFile(video.file).catch(() => undefined) : undefined;
   return {
-    duration: Number.isFinite(element.duration) ? element.duration : undefined,
+    duration: selectTrustedDuration([fileDuration, Number.isFinite(element.duration) ? element.duration : undefined]),
     width: element.videoWidth || undefined,
     height: element.videoHeight || undefined,
   };
@@ -1997,7 +2066,7 @@ async function loadVideoMetadata(video: VideoItem) {
       await waitForMediaEvent(element, "loadedmetadata");
     }
 
-    const metadata = getVideoElementMetadata(element);
+    const metadata = await getVideoElementMetadata(element, video);
     cleanup();
     return metadata;
   } catch (error) {
@@ -2057,7 +2126,7 @@ async function createVideoThumbnailBlob(video: VideoItem) {
       await waitForMediaEvent(element, "loadedmetadata");
     }
 
-    const metadata = getVideoElementMetadata(element);
+    const metadata = await getVideoElementMetadata(element, video);
     const displaySize = getVideoDisplaySize(metadata.width, metadata.height);
     const width = displaySize?.width;
     const height = displaySize?.height;
@@ -2148,6 +2217,7 @@ export default function App() {
   const playerRef = useRef<HTMLDivElement | null>(null);
   const controlBarRef = useRef<HTMLDivElement | null>(null);
   const playlistRef = useRef<HTMLDivElement | null>(null);
+  const currentVideoIdRef = useRef<string | null>(null);
   const playbackClockFrameRef = useRef<number | null>(null);
   const saveTimerRef = useRef<number | null>(null);
   const playlistAutoScrollTimerRef = useRef<number | null>(null);
@@ -2282,6 +2352,7 @@ export default function App() {
   const [isClearingCache, setIsClearingCache] = useState(false);
   const [libraryId, setLibraryId] = useState<string | null>(null);
   const [currentVideoId, setCurrentVideoId] = useState<string | null>(null);
+  currentVideoIdRef.current = currentVideoId;
   const [activeView, setActiveView] = useState<ActiveView>("home");
   const [photoAlbums, setPhotoAlbums] = useState<PhotoAlbum[]>([]);
   const [photoRootStatuses, setPhotoRootStatuses] = useState<PlayerMediaRootStatus[]>([]);
@@ -3859,6 +3930,9 @@ export default function App() {
       .then((payload) => {
         if (isCancelled) return;
         updateVideoPlayability(videoId, payload.playability);
+        if (payload.metadata) {
+          updateVideoMetadata(videoId, payload.metadata);
+        }
       })
       .catch((error) => {
         if (isCancelled) return;
@@ -4486,8 +4560,8 @@ export default function App() {
       const element = videoRef.current;
       const previous = progressStoreRef.current[video.id];
       const nextDuration =
-        video.id === currentVideoId && element && Number.isFinite(element.duration) && element.duration > 0
-          ? element.duration
+        video.id === currentVideoId && element
+          ? selectTrustedDuration([video.duration, element.duration]) || 1
           : previous?.duration && previous.duration > 0
             ? previous.duration
             : 1;
@@ -4670,7 +4744,7 @@ export default function App() {
     (completed = false) => {
       const element = videoRef.current;
       if (!element || !currentVideo) return;
-      updateProgress(currentVideo, element.currentTime, element.duration || duration, completed);
+      updateProgress(currentVideo, element.currentTime, selectTrustedDuration([currentVideo.duration, element.duration, duration]) || 0, completed);
     },
     [currentVideo, duration, updateProgress],
   );
@@ -5979,7 +6053,7 @@ export default function App() {
       }
 
       setCurrentTime(element.currentTime);
-      const nextDuration = element.duration || 0;
+      const nextDuration = selectTrustedDuration([currentVideo.duration, element.duration]) || 0;
       setDuration((previousDuration) =>
         Math.abs(previousDuration - nextDuration) > 0.05 ? nextDuration : previousDuration,
       );
@@ -5993,7 +6067,7 @@ export default function App() {
         playbackClockFrameRef.current = null;
       }
     };
-  }, [currentVideo?.id, isPlaying, shouldUseHighFrequencyPlaybackClock]);
+  }, [currentVideo?.duration, currentVideo?.id, isPlaying, shouldUseHighFrequencyPlaybackClock]);
 
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -6033,15 +6107,15 @@ export default function App() {
         : 0;
 
     const handleLoadedMetadata = () => {
-      setDuration(element.duration || 0);
+      const currentVideoId = currentVideo.id;
+      void getVideoElementMetadata(element, currentVideo).then((metadata) => {
+        if (videoRef.current !== element || currentVideoIdRef.current !== currentVideoId) return;
+        setDuration(metadata.duration || element.duration || 0);
+        updateVideoMetadata(currentVideoId, metadata);
+      });
       if (element.videoWidth > 0 && element.videoHeight > 0) {
         setVideoAspectRatio(getPlayerFrameAspectRatio());
       }
-      updateVideoMetadata(currentVideo.id, {
-        duration: element.duration || undefined,
-        width: element.videoWidth || undefined,
-        height: element.videoHeight || undefined,
-      });
       if (resumeAt > 0) {
         element.currentTime = resumeAt;
         setCurrentTime(resumeAt);
@@ -7779,7 +7853,7 @@ export default function App() {
   };
 
   const handleDurationChange = (event: React.SyntheticEvent<HTMLVideoElement>) => {
-    const nextDuration = event.currentTarget.duration || 0;
+    const nextDuration = selectTrustedDuration([currentVideo?.duration, event.currentTarget.duration]) || 0;
     setDuration(nextDuration);
     if (!currentVideo || !Number.isFinite(nextDuration) || nextDuration <= 0) return;
     updateSpecialVideoStats(currentVideo, (stats) => ({
@@ -7792,14 +7866,15 @@ export default function App() {
   const handleTimeUpdate = () => {
     const element = videoRef.current;
     if (!element || !currentVideo) return;
+    const nextDuration = selectTrustedDuration([currentVideo.duration, element.duration]) || 0;
     setCurrentTime(element.currentTime);
-    setDuration(element.duration || 0);
+    setDuration(nextDuration);
 
     if (saveTimerRef.current) return;
     saveTimerRef.current = window.setTimeout(() => {
       saveTimerRef.current = null;
-      updateProgress(currentVideo, element.currentTime, element.duration || 0);
-      recordPlaybackProgressForStats(currentVideo, element.currentTime, element.duration || 0);
+      updateProgress(currentVideo, element.currentTime, nextDuration);
+      recordPlaybackProgressForStats(currentVideo, element.currentTime, nextDuration);
     }, 1500);
   };
 

@@ -437,6 +437,11 @@ async function probeMedia(config, payload) {
   return {
     probe: result.probe,
     canRemux: result.canRemux,
+    metadata: {
+      duration: result.probe?.format?.duration,
+      width: result.probe?.video?.width,
+      height: result.probe?.video?.height,
+    },
     playability: {
       ...result.playability,
       ...(cached.compatibleUrl ? { compatibleUrl: cached.compatibleUrl } : {}),
