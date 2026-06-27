@@ -29,6 +29,8 @@ import {
   defaultShortcuts
 } from "./playerConstants";
 
+const LEGACY_THUMBNAIL_STORE_NAME = "thumbnails";
+
 export function createProgress(currentTime: number, duration: number, completed = false): PlaybackProgress | null {
   if (!Number.isFinite(currentTime) || !Number.isFinite(duration)) return null;
   return {
@@ -509,12 +511,28 @@ function createThumbnailId(libraryId: string, videoId: string) {
   return `${libraryId}.${thumbnailCacheVersion}.${(hash >>> 0).toString(36)}`;
 }
 
+function createLegacyVideoIdCandidate(videoId: string) {
+  const parts = videoId.split("|");
+  if (parts.length < 4) return null;
+  return parts.slice(1).join("|");
+}
+
 export async function readCachedThumbnail(libraryId: string | null, videoId: string) {
   if (!libraryId) return null;
-  const response = await fetch(createApiUrl(`thumbnails/${encodeURIComponent(createThumbnailId(libraryId, videoId))}`));
-  if (response.status === 404) return null;
-  if (!response.ok) throw new Error(await readApiError(response));
-  return response.blob();
+  const thumbnailIds = [createThumbnailId(libraryId, videoId)];
+  const legacyVideoId = libraryId === "global" ? createLegacyVideoIdCandidate(videoId) : null;
+  if (legacyVideoId) {
+    thumbnailIds.push(createThumbnailId(libraryId, legacyVideoId));
+  }
+
+  for (const thumbnailId of thumbnailIds) {
+    const response = await fetch(createApiUrl(`thumbnails/${encodeURIComponent(thumbnailId)}`));
+    if (response.status === 404) continue;
+    if (!response.ok) throw new Error(await readApiError(response));
+    return response.blob();
+  }
+
+  return null;
 }
 
 export async function writeCachedThumbnail(libraryId: string | null, videoId: string, thumbnail: Blob) {
@@ -525,6 +543,82 @@ export async function writeCachedThumbnail(libraryId: string | null, videoId: st
     body: thumbnail,
   });
   if (!response.ok) throw new Error(await readApiError(response));
+}
+
+async function readLegacyIndexedDbThumbnails() {
+  if (!("indexedDB" in window)) return [];
+  const database = await openRecentFolderDatabase();
+  if (!database.objectStoreNames.contains(LEGACY_THUMBNAIL_STORE_NAME)) {
+    database.close();
+    return [];
+  }
+
+  return new Promise<Array<{ key: string; blob: Blob }>>((resolve, reject) => {
+    const transaction = database.transaction(LEGACY_THUMBNAIL_STORE_NAME, "readonly");
+    const store = transaction.objectStore(LEGACY_THUMBNAIL_STORE_NAME);
+    const keysRequest = store.getAllKeys();
+    const valuesRequest = store.getAll();
+    let keys: IDBValidKey[] = [];
+    let values: unknown[] = [];
+
+    keysRequest.onsuccess = () => {
+      keys = keysRequest.result;
+    };
+    valuesRequest.onsuccess = () => {
+      values = valuesRequest.result;
+    };
+    transaction.oncomplete = () => {
+      database.close();
+      resolve(
+        keys.flatMap((key, index) => {
+          const value = values[index];
+          return typeof key === "string" && value instanceof Blob ? [{ key, blob: value }] : [];
+        }),
+      );
+    };
+    transaction.onerror = () => {
+      database.close();
+      reject(transaction.error);
+    };
+  });
+}
+
+async function clearLegacyIndexedDbThumbnails() {
+  const database = await openRecentFolderDatabase();
+  if (!database.objectStoreNames.contains(LEGACY_THUMBNAIL_STORE_NAME)) {
+    database.close();
+    return;
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    const transaction = database.transaction(LEGACY_THUMBNAIL_STORE_NAME, "readwrite");
+    transaction.objectStore(LEGACY_THUMBNAIL_STORE_NAME).clear();
+    transaction.oncomplete = () => {
+      database.close();
+      resolve();
+    };
+    transaction.onerror = () => {
+      database.close();
+      reject(transaction.error);
+    };
+  });
+}
+
+export async function migrateLegacyCachedThumbnailsToLocalData() {
+  const entries = await readLegacyIndexedDbThumbnails();
+  if (!entries.length) return 0;
+
+  for (const { key, blob } of entries) {
+    const response = await fetch(createApiUrl(`thumbnails/${encodeURIComponent(createThumbnailId("global", key))}`), {
+      method: "PUT",
+      headers: { "Content-Type": blob.type || "application/octet-stream" },
+      body: blob,
+    });
+    if (!response.ok) throw new Error(await readApiError(response));
+  }
+
+  await clearLegacyIndexedDbThumbnails();
+  return entries.length;
 }
 
 export async function readRecentFolderHandle() {

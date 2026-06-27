@@ -170,6 +170,7 @@ const photoViewerWarmRadius = 4;
 const photoViewerDecodeRadius = 2;
 const photoObjectUrlCacheLimit = 48;
 const photoAlbumScanCacheStaleMs = 24 * 60 * 60 * 1000;
+let hasStartedLegacyThumbnailMigration = false;
 const photoAlbumSortOptions: Array<{ value: PhotoAlbumSortMode; label: string }> = [
   { value: "updated", label: "最近更新" },
   { value: "name", label: "名称" },
@@ -388,6 +389,7 @@ import {
   loadLegacyPlayerDataStore,
   loadGlobalPlayerDataStore,
   loadPlayerDataStore,
+  migrateLegacyCachedThumbnailsToLocalData,
   readPhotoAlbumFolderHandle,
   readCachedThumbnail,
   saveGlobalPlayerDataStore,
@@ -2213,6 +2215,13 @@ export default function App() {
   const librarySearchResultsRef = useRef<HTMLDivElement | null>(null);
   const librarySearchLoadMoreRef = useRef<HTMLDivElement | null>(null);
   const librarySearchRunIdRef = useRef(0);
+
+  useEffect(() => {
+    if (hasStartedLegacyThumbnailMigration) return;
+    hasStartedLegacyThumbnailMigration = true;
+    void migrateLegacyCachedThumbnailsToLocalData().catch(() => undefined);
+  }, []);
+
   const [videos, setVideos] = useState<VideoItem[]>([]);
   const [subtitles, setSubtitles] = useState<SubtitleItem[]>([]);
   const [danmakuSelections, setDanmakuSelections] = useState<DanmakuSelectionStore>({});
