@@ -131,6 +131,30 @@ export function findTagMergeSuggestion(
   return null;
 }
 
+export function splitTagsByExistingMatch(incomingTags: string[], existingTags: string[]) {
+  const existingTagByKey = new Map<string, string>();
+  existingTags.forEach((tag) => {
+    const key = normalizeTagKey(tag);
+    if (!key || existingTagByKey.has(key)) return;
+    existingTagByKey.set(key, tag);
+  });
+
+  const resolvedTags: string[] = [];
+  const unmatchedTags: string[] = [];
+  incomingTags.forEach((tag) => {
+    const existingTag = existingTagByKey.get(normalizeTagKey(tag));
+    if (existingTag) {
+      resolvedTags.push(existingTag);
+      return;
+    }
+
+    resolvedTags.push(tag);
+    unmatchedTags.push(tag);
+  });
+
+  return { resolvedTags, unmatchedTags };
+}
+
 export function mergeTags(existingTags: string[], incomingTags: string[]) {
   const seenKeys = new Set(existingTags.map(normalizeTagKey).filter(Boolean));
   const nextTags = [...existingTags];

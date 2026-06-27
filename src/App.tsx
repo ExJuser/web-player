@@ -327,6 +327,7 @@ import {
   mergeTags,
   normalizeTagKey,
   parseTagInput,
+  splitTagsByExistingMatch,
   type TagMergeSuggestion
 } from "./tagUtils";
 import {
@@ -3845,12 +3846,14 @@ export default function App() {
       return;
     }
 
-    if (!options?.skipPrompt) {
-      const suggestion = incomingTags
+    const { resolvedTags, unmatchedTags } = splitTagsByExistingMatch(incomingTags, allTags);
+
+    if (!options?.skipPrompt && unmatchedTags.length) {
+      const suggestion = unmatchedTags
         .map((tag) => findTagMergeSuggestion(tag, allTags, tagMergeDecisionsRef.current))
         .find((item): item is TagMergeSuggestion => Boolean(item));
       if (suggestion) {
-        setTagMergePrompt({ pendingTags: incomingTags, suggestion });
+        setTagMergePrompt({ pendingTags: resolvedTags, suggestion });
         setTagMessage("");
         return;
       }
@@ -3860,11 +3863,11 @@ export default function App() {
         try {
           const aiSuggestion = await fetchJson<AiTagMergeSuggestionResponse>("/api/ai/tags/merge-suggestion", {
             method: "POST",
-            body: JSON.stringify({ newTags: incomingTags, existingTags: allTags }),
+            body: JSON.stringify({ newTags: unmatchedTags, existingTags: allTags }),
           });
           if (aiSuggestion.newTag && aiSuggestion.existingTag) {
             setTagMergePrompt({
-              pendingTags: incomingTags,
+              pendingTags: resolvedTags,
               suggestion: {
                 newTag: aiSuggestion.newTag,
                 existingTag: aiSuggestion.existingTag,
@@ -3883,7 +3886,7 @@ export default function App() {
       }
     }
 
-    const nextTags = mergeTags(existingVideoTags, incomingTags);
+    const nextTags = mergeTags(existingVideoTags, resolvedTags);
     const nextVideoTags = {
       ...videoTagsRef.current,
       [currentVideo.id]: nextTags,
