@@ -2158,6 +2158,7 @@ export default function App() {
   const libraryIdRef = useRef<string | null>(null);
   const libraryMetadataRef = useRef<PlayerDataStore["metadata"] | undefined>(undefined);
   const progressStoreRef = useRef<ProgressStore>({});
+  const playerDataSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
   const playerPreferencesRef = useRef<PlayerPreferences>(defaultPlayerPreferences);
   const playerSettingsRef = useRef<PlayerPersistentSettings>({
     ...defaultPlayerSettings,
@@ -2429,7 +2430,11 @@ export default function App() {
 
   const saveCurrentPlayerDataStore = useCallback(
     async (overrides?: Partial<PlayerDataStore>) => {
-      await saveGlobalPlayerDataStore(buildPlayerDataStore(overrides));
+      const saveOperation = playerDataSaveQueueRef.current
+        .catch(() => undefined)
+        .then(() => saveGlobalPlayerDataStore(buildPlayerDataStore(overrides)));
+      playerDataSaveQueueRef.current = saveOperation.catch(() => undefined);
+      await saveOperation;
     },
     [buildPlayerDataStore],
   );
