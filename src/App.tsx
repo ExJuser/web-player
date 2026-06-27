@@ -2148,6 +2148,7 @@ export default function App() {
   const playerRef = useRef<HTMLDivElement | null>(null);
   const controlBarRef = useRef<HTMLDivElement | null>(null);
   const playlistRef = useRef<HTMLDivElement | null>(null);
+  const playbackClockFrameRef = useRef<number | null>(null);
   const saveTimerRef = useRef<number | null>(null);
   const playlistAutoScrollTimerRef = useRef<number | null>(null);
   const controlsHideTimerRef = useRef<number | null>(null);
@@ -3228,6 +3229,8 @@ export default function App() {
   );
   const currentMediaRootId = currentVideo?.mediaRootId ?? mediaRootId;
   const isDanmakuAvailable = Boolean(currentVideo && homeMediaMode === "anime" && isSeriesMode);
+  const shouldUseHighFrequencyPlaybackClock =
+    danmakuPreferences.enabled && isDanmakuAvailable && danmakuComments.length > 0 && !isPrivacyMode;
   const currentDanmakuSelection = currentVideo ? danmakuSelections[currentVideo.id] ?? null : null;
   const activeDanmakuComments = useMemo(() => {
     if (!danmakuPreferences.enabled || !currentVideo || !danmakuComments.length || isPrivacyMode) return [];
@@ -5961,6 +5964,37 @@ export default function App() {
     setVideoRotation(0);
     setCompatibleMediaMessage("");
   }, [currentVideo?.id]);
+
+  useEffect(() => {
+    if (playbackClockFrameRef.current) {
+      window.cancelAnimationFrame(playbackClockFrameRef.current);
+      playbackClockFrameRef.current = null;
+    }
+    if (!isPlaying || !currentVideo || !shouldUseHighFrequencyPlaybackClock) return;
+
+    const syncPlaybackClock = () => {
+      const element = videoRef.current;
+      if (!element || element.paused || element.ended) {
+        playbackClockFrameRef.current = null;
+        return;
+      }
+
+      setCurrentTime(element.currentTime);
+      const nextDuration = element.duration || 0;
+      setDuration((previousDuration) =>
+        Math.abs(previousDuration - nextDuration) > 0.05 ? nextDuration : previousDuration,
+      );
+      playbackClockFrameRef.current = window.requestAnimationFrame(syncPlaybackClock);
+    };
+
+    playbackClockFrameRef.current = window.requestAnimationFrame(syncPlaybackClock);
+    return () => {
+      if (playbackClockFrameRef.current) {
+        window.cancelAnimationFrame(playbackClockFrameRef.current);
+        playbackClockFrameRef.current = null;
+      }
+    };
+  }, [currentVideo?.id, isPlaying, shouldUseHighFrequencyPlaybackClock]);
 
   useEffect(() => {
     const handleFullscreenChange = () => {
