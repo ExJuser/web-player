@@ -1534,6 +1534,237 @@ button {
   font-size: 12px;
 }
 
+.special-insights-card {
+  min-width: 0;
+}
+
+.special-insight-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.special-insight-summary div {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid #2b323d;
+  border-radius: 6px;
+  background: #20252d;
+}
+
+.special-insight-summary strong {
+  overflow: hidden;
+  color: #f5f7fb;
+  font-size: 18px;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.special-insight-summary span,
+.special-insight-subtle {
+  color: #8e97a5;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.special-insight-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.special-insight-tabs button {
+  display: inline-flex;
+  min-width: 0;
+  min-height: 32px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  overflow: hidden;
+  border: 1px solid #2b323d;
+  border-radius: 6px;
+  padding: 0 8px;
+  background: #20252d;
+  color: #aab1bd;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.special-insight-tabs button:hover,
+.special-insight-tabs button:focus-visible,
+.special-insight-tabs button.active {
+  border-color: rgba(56, 199, 238, 0.54);
+  color: #79dfff;
+  outline: none;
+}
+
+.special-insight-tabs button.active {
+  background: rgba(0, 161, 214, 0.18);
+}
+
+.special-insight-tabs svg {
+  flex: 0 0 auto;
+}
+
+.special-insight-list {
+  display: grid;
+  gap: 6px;
+}
+
+.special-insight-list.compact {
+  margin-top: 6px;
+}
+
+.special-insight-video-row {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid #2b323d;
+  border-radius: 6px;
+  background: #20252d;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.special-insight-video-row:hover,
+.special-insight-video-row:focus-visible {
+  border-color: rgba(56, 199, 238, 0.46);
+  background: #17242d;
+  outline: none;
+}
+
+.special-insight-rank {
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(0, 161, 214, 0.16);
+  color: #79dfff;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.special-insight-row-copy {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.special-insight-row-copy strong,
+.special-insight-row-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.special-insight-row-copy strong {
+  color: #f5f7fb;
+  font-size: 13px;
+  line-height: 1.25;
+}
+
+.special-insight-row-copy small {
+  color: #8e97a5;
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+.special-tag-groups {
+  display: grid;
+  gap: 10px;
+}
+
+.special-tag-group {
+  display: grid;
+  gap: 6px;
+}
+
+.special-tag-group > span,
+.special-insight-cleanup > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #aab1bd;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.special-tag-group > div {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.special-tag-group small {
+  color: #8e97a5;
+  font-size: 12px;
+}
+
+.special-tag-insight {
+  display: inline-flex;
+  max-width: 100%;
+  min-height: 28px;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  border: 1px solid rgba(0, 161, 214, 0.22);
+  border-radius: 999px;
+  padding: 0 9px;
+  background: rgba(0, 161, 214, 0.1);
+  color: #79dfff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  letter-spacing: 0;
+}
+
+.special-tag-insight:hover,
+.special-tag-insight:focus-visible {
+  border-color: rgba(56, 199, 238, 0.5);
+  background: rgba(0, 161, 214, 0.18);
+  outline: none;
+}
+
+.special-tag-insight span,
+.special-tag-insight strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.special-tag-insight span {
+  min-width: 0;
+}
+
+.special-tag-insight strong {
+  flex: 0 0 auto;
+  color: #f5f7fb;
+  font-weight: 800;
+}
+
+.special-insight-cleanup {
+  display: grid;
+  gap: 6px;
+}
+
 .media-library-card {
   display: grid;
   align-content: start;
@@ -4412,6 +4643,82 @@ button {
   border-color: rgba(0, 161, 214, 0.42);
   background: #e1f5fd;
   color: #0077a8;
+}
+
+.app-shell.theme-light .special-insight-summary div,
+.app-shell.theme-light .special-insight-tabs button,
+.app-shell.theme-light .special-insight-video-row,
+:root[data-theme="light"] .special-insight-summary div,
+:root[data-theme="light"] .special-insight-tabs button,
+:root[data-theme="light"] .special-insight-video-row {
+  border-color: #d7e0ea;
+  background: #f8fafc;
+}
+
+.app-shell.theme-light .special-insight-summary strong,
+.app-shell.theme-light .special-insight-row-copy strong,
+.app-shell.theme-light .special-tag-insight strong,
+:root[data-theme="light"] .special-insight-summary strong,
+:root[data-theme="light"] .special-insight-row-copy strong,
+:root[data-theme="light"] .special-tag-insight strong {
+  color: #172033;
+}
+
+.app-shell.theme-light .special-insight-summary span,
+.app-shell.theme-light .special-insight-subtle,
+.app-shell.theme-light .special-insight-row-copy small,
+.app-shell.theme-light .special-tag-group small,
+:root[data-theme="light"] .special-insight-summary span,
+:root[data-theme="light"] .special-insight-subtle,
+:root[data-theme="light"] .special-insight-row-copy small,
+:root[data-theme="light"] .special-tag-group small {
+  color: #667085;
+}
+
+.app-shell.theme-light .special-insight-tabs button,
+.app-shell.theme-light .special-tag-group > span,
+.app-shell.theme-light .special-insight-cleanup > span,
+:root[data-theme="light"] .special-insight-tabs button,
+:root[data-theme="light"] .special-tag-group > span,
+:root[data-theme="light"] .special-insight-cleanup > span {
+  color: #475467;
+}
+
+.app-shell.theme-light .special-insight-tabs button:hover,
+.app-shell.theme-light .special-insight-tabs button:focus-visible,
+.app-shell.theme-light .special-insight-tabs button.active,
+.app-shell.theme-light .special-insight-video-row:hover,
+.app-shell.theme-light .special-insight-video-row:focus-visible,
+:root[data-theme="light"] .special-insight-tabs button:hover,
+:root[data-theme="light"] .special-insight-tabs button:focus-visible,
+:root[data-theme="light"] .special-insight-tabs button.active,
+:root[data-theme="light"] .special-insight-video-row:hover,
+:root[data-theme="light"] .special-insight-video-row:focus-visible {
+  border-color: rgba(0, 161, 214, 0.42);
+  background: #eef7fb;
+  color: #0077a8;
+}
+
+.app-shell.theme-light .special-insight-rank,
+:root[data-theme="light"] .special-insight-rank {
+  background: #e1f5fd;
+  color: #0077a8;
+}
+
+.app-shell.theme-light .special-tag-insight,
+:root[data-theme="light"] .special-tag-insight {
+  border-color: rgba(0, 161, 214, 0.28);
+  background: #e1f5fd;
+  color: #0077a8;
+}
+
+.app-shell.theme-light .special-tag-insight:hover,
+.app-shell.theme-light .special-tag-insight:focus-visible,
+:root[data-theme="light"] .special-tag-insight:hover,
+:root[data-theme="light"] .special-tag-insight:focus-visible {
+  border-color: rgba(0, 161, 214, 0.42);
+  background: #c9effc;
+  color: #005f86;
 }
 
 .app-shell.theme-light .media-library-toggle:hover,

@@ -2,10 +2,13 @@ import {
   ArrowDownUp,
   ArrowLeft,
   ArrowUp,
+  Activity,
+  BarChart3,
   CheckCircle2,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Clock3,
   ExternalLink,
   Folder,
   FolderOpen,
@@ -44,6 +47,12 @@ import {
   searchLibraryEntries,
   type LibrarySearchEntry,
 } from "./librarySearchUtils";
+import {
+  buildSpecialModeInsights,
+  type SpecialInsightTab,
+  type SpecialModeTagInsight,
+  type SpecialModeVideoInsight,
+} from "./specialInsights";
 import type {
   ActiveView,
   AutoNextPrompt,
@@ -399,6 +408,15 @@ function formatRelativeTime(value: number) {
   const diffDays = Math.floor(diffHours / 24);
   if (diffDays < 7) return `${diffDays} 天前`;
   return formatModifiedTime(value);
+}
+
+function formatCumulativeDuration(seconds: number) {
+  if (!Number.isFinite(seconds) || seconds <= 0) return "0 分钟";
+  const value = Math.floor(seconds);
+  const hours = Math.floor(value / 3600);
+  const minutes = Math.floor((value % 3600) / 60);
+  if (hours > 0) return minutes > 0 ? `${hours}小时${minutes}分` : `${hours}小时`;
+  return `${Math.max(1, minutes)} 分钟`;
 }
 
 function formatResolution(width?: number, height?: number) {
@@ -2131,6 +2149,7 @@ export default function App() {
   const [librarySearchMode, setLibrarySearchMode] = useState<LibrarySearchMode>("idle");
   const [isLibrarySearchLoading, setIsLibrarySearchLoading] = useState(false);
   const [librarySearchSubmittedSignature, setLibrarySearchSubmittedSignature] = useState("");
+  const [specialInsightTab, setSpecialInsightTab] = useState<SpecialInsightTab>("played");
   const [bangumiMatchesBySeriesKey, setBangumiMatchesBySeriesKey] = useState<Record<string, BangumiSeriesMatch>>({});
   const [cacheStatus, setCacheStatus] = useState<CacheStatus | null>(null);
   const [cacheStatusMessage, setCacheStatusMessage] = useState("");
@@ -2776,6 +2795,13 @@ export default function App() {
       favorites,
     };
   }, [favoriteVideoIds, modeFilteredVideos, progressStore]);
+  const specialModeInsights = useMemo(
+    () =>
+      homeMediaMode === "special"
+        ? buildSpecialModeInsights(modeFilteredVideos, videoStatsRef.current, videoTags, progressStore)
+        : null,
+    [homeMediaMode, modeFilteredVideos, progressStore, videoStatsRevision, videoTags],
+  );
   const selectedPhotoAlbum = useMemo(
     () => photoAlbums.find((album) => album.id === selectedPhotoAlbumId) ?? null,
     [photoAlbums, selectedPhotoAlbumId],
@@ -6643,6 +6669,24 @@ export default function App() {
     searchLibraryLocally,
   ]);
 
+  const runSpecialInsightTagSearch = useCallback(
+    (tag: string) => {
+      const query = tag.trim();
+      if (!query) return;
+      librarySearchRunIdRef.current += 1;
+      setLibrarySearchQuery(query);
+      setLibrarySearchAnswer("");
+      setIsLibrarySearchLoading(false);
+      setLibrarySearchSubmittedSignature(createLibrarySearchSignature(query));
+      setLibrarySearchVisibleCount(librarySearchResultPageSize);
+      const localResults = searchLibraryLocally(query);
+      setLibrarySearchResults(localResults);
+      setLibrarySearchMode(localResults.length ? "local" : "empty");
+      setLibrarySearchMessage(localResults.length ? "已按标签筛选特殊模式视频。" : "特殊模式本地没有找到匹配结果。");
+    },
+    [searchLibraryLocally],
+  );
+
   const librarySearchPreviewResults = useMemo(() => {
     const query = librarySearchQuery.trim();
     if (!query || librarySearchDraftSignature === librarySearchSubmittedSignature) return [];
@@ -7422,6 +7466,68 @@ export default function App() {
       </span>
     );
   };
+  const specialInsightTabOptions: Array<{ value: SpecialInsightTab; label: string; icon: React.ReactNode }> = [
+    { value: "played", label: "播放最久", icon: <Clock3 size={14} /> },
+    { value: "count", label: "次数最多", icon: <BarChart3 size={14} /> },
+    { value: "emission", label: "发射最多", icon: <Rocket size={14} /> },
+    { value: "active", label: "最近活跃", icon: <Activity size={14} /> },
+  ];
+  const specialInsightRankingVideos = specialModeInsights
+    ? {
+        played: specialModeInsights.videosByPlayedDuration,
+        count: specialModeInsights.videosByPlayCount,
+        emission: specialModeInsights.videosByEmissionCount,
+        active: specialModeInsights.videosByRecentActivity,
+      }[specialInsightTab]
+    : [];
+  const formatSpecialInsightVideoMetric = (insight: SpecialModeVideoInsight) => {
+    if (specialInsightTab === "played") {
+      const intensity = insight.playIntensity ? ` · 约 ${insight.playIntensity.toFixed(1)} 遍` : "";
+      return `${formatCumulativeDuration(insight.stats.totalPlayedSeconds)}${intensity}`;
+    }
+    if (specialInsightTab === "count") return `${insight.stats.playCount} 次播放`;
+    if (specialInsightTab === "emission") return `${insight.stats.emissionCount} 次发射`;
+    return formatRelativeTime(insight.activeAt);
+  };
+  const renderSpecialInsightVideoRow = (insight: SpecialModeVideoInsight, index: number) => (
+    <button
+      className="special-insight-video-row"
+      key={`${specialInsightTab}-${insight.video.id}`}
+      type="button"
+      onClick={() => openVideoFromHome(insight.video)}
+      title={insight.video.relativePath || insight.video.name}
+    >
+      <span className="special-insight-rank">{index + 1}</span>
+      <span className="special-insight-row-copy">
+        <strong>{insight.video.name}</strong>
+        <small>{formatSpecialInsightVideoMetric(insight)}</small>
+        {renderTagChips(insight.tags, { limit: 2, compact: true })}
+      </span>
+    </button>
+  );
+  const renderSpecialTagInsightButton = (
+    insight: SpecialModeTagInsight,
+    metric: "videoCount" | "played" | "emission",
+  ) => {
+    const value =
+      metric === "videoCount"
+        ? `${insight.videoCount} 个`
+        : metric === "played"
+          ? formatCumulativeDuration(insight.totalPlayedSeconds)
+          : `${insight.emissionCount} 次`;
+    return (
+      <button
+        className="special-tag-insight"
+        key={`${metric}-${insight.key}`}
+        type="button"
+        onClick={() => runSpecialInsightTagSearch(insight.tag)}
+        title={`筛选标签：${insight.tag}`}
+      >
+        <span>{insight.tag}</span>
+        <strong>{value}</strong>
+      </button>
+    );
+  };
   const renderHomeListCard = (card: HomeVideoCard, index: number) => (
     <button
       key={card.video.id}
@@ -7785,6 +7891,118 @@ export default function App() {
                   <span>收藏</span>
                 </div>
               </section>
+
+              {specialModeInsights && specialModeInsights.summary.totalVideos ? (
+                <section className="home-section special-insights-card">
+                  <div className="home-section-header">
+                    <h2>特殊模式洞察</h2>
+                    <span>{specialModeInsights.summary.taggedVideos} 个已打标签</span>
+                  </div>
+                  <div className="special-insight-summary">
+                    <div>
+                      <strong>{formatCumulativeDuration(specialModeInsights.summary.totalPlayedSeconds)}</strong>
+                      <span>累计播放</span>
+                    </div>
+                    <div>
+                      <strong>{specialModeInsights.summary.playCount}</strong>
+                      <span>播放次数</span>
+                    </div>
+                    <div>
+                      <strong>{specialModeInsights.summary.emissionCount}</strong>
+                      <span>发射次数</span>
+                    </div>
+                    <div>
+                      <strong>{Math.round(specialModeInsights.summary.tagCoverage * 100)}%</strong>
+                      <span>标签覆盖</span>
+                    </div>
+                  </div>
+                  <div className="special-insight-subtle">
+                    最近发射：
+                    {specialModeInsights.summary.lastEmissionAt
+                      ? formatRelativeTime(specialModeInsights.summary.lastEmissionAt)
+                      : "暂无记录"}
+                  </div>
+                  <div className="special-insight-tabs" role="tablist" aria-label="特殊模式视频榜单">
+                    {specialInsightTabOptions.map((option) => (
+                      <button
+                        className={specialInsightTab === option.value ? "active" : ""}
+                        key={option.value}
+                        type="button"
+                        role="tab"
+                        aria-selected={specialInsightTab === option.value}
+                        onClick={() => setSpecialInsightTab(option.value)}
+                      >
+                        {option.icon}
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                  {specialInsightRankingVideos.length ? (
+                    <div className="special-insight-list">
+                      {specialInsightRankingVideos.map(renderSpecialInsightVideoRow)}
+                    </div>
+                  ) : (
+                    <div className="empty-list compact">当前榜单暂无统计记录。</div>
+                  )}
+                  <div className="special-tag-groups">
+                    <div className="special-tag-group">
+                      <span>
+                        <Tags size={14} />
+                        热门标签
+                      </span>
+                      <div>
+                        {specialModeInsights.tagsByVideoCount.length ? (
+                          specialModeInsights.tagsByVideoCount.map((insight) =>
+                            renderSpecialTagInsightButton(insight, "videoCount"),
+                          )
+                        ) : (
+                          <small>暂无标签</small>
+                        )}
+                      </div>
+                    </div>
+                    <div className="special-tag-group">
+                      <span>
+                        <Clock3 size={14} />
+                        播放标签
+                      </span>
+                      <div>
+                        {specialModeInsights.tagsByPlayedDuration.length ? (
+                          specialModeInsights.tagsByPlayedDuration.map((insight) =>
+                            renderSpecialTagInsightButton(insight, "played"),
+                          )
+                        ) : (
+                          <small>暂无播放统计</small>
+                        )}
+                      </div>
+                    </div>
+                    <div className="special-tag-group">
+                      <span>
+                        <Rocket size={14} />
+                        发射标签
+                      </span>
+                      <div>
+                        {specialModeInsights.tagsByEmissionCount.length ? (
+                          specialModeInsights.tagsByEmissionCount.map((insight) =>
+                            renderSpecialTagInsightButton(insight, "emission"),
+                          )
+                        ) : (
+                          <small>暂无发射统计</small>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  {specialModeInsights.untaggedActiveVideos.length ? (
+                    <div className="special-insight-cleanup">
+                      <span>待整理</span>
+                      <div className="special-insight-list compact">
+                        {specialModeInsights.untaggedActiveVideos.map((insight, index) =>
+                          renderSpecialInsightVideoRow(insight, index),
+                        )}
+                      </div>
+                    </div>
+                  ) : null}
+                </section>
+              ) : null}
 
               <section className="home-section media-library-card">
                 <button

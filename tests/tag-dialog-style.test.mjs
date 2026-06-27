@@ -25,3 +25,10 @@ test("tag chips have explicit light theme colors in app and root theme scopes", 
     assert.match(body, /color:\s*#0077a8;/);
   }
 });
+
+test("special insight controls have light theme coverage in app and root theme scopes", () => {
+  assert.match(styles, /\.app-shell\.theme-light \.special-tag-insight,/);
+  assert.match(styles, /:root\[data-theme="light"\] \.special-tag-insight\s*\{/);
+  assert.match(styles, /\.app-shell\.theme-light \.special-insight-tabs button:hover,/);
+  assert.match(styles, /:root\[data-theme="light"\] \.special-insight-video-row:focus-visible\s*\{/);
+});
