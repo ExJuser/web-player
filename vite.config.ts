@@ -827,7 +827,7 @@ function normalizeAiLibrarySearchAnswer(parsed, matchIds) {
     return normalizeAiLibrarySearchAnswer(nested, matchIds);
   }
   if (answer && !/^\s*\{[\s\S]*\}\s*$/.test(answer)) return answer.slice(0, 240);
-  return matchIds.length ? "AI 已匹配到本地文件夹。" : "AI 未找到明确匹配，已保留本地结果。";
+  return matchIds.length ? "AI 已匹配到本地条目。" : "AI 未找到明确匹配，已保留本地结果。";
 }
 
 function normalizeLibrarySearchCandidates(source) {
