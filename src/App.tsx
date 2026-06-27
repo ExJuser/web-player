@@ -928,6 +928,17 @@ async function resolvePhotoParentDirectory(rootDirectory: FileSystemDirectoryHan
   return directory;
 }
 
+async function resolvePhotoAlbumDirectory(rootDirectory: FileSystemDirectoryHandle, relativePath: string) {
+  const directoryParts = relativePath.replace(/\\/g, "/").split("/").filter(Boolean);
+  let directory = rootDirectory;
+
+  for (const part of directoryParts) {
+    directory = await directory.getDirectoryHandle(part);
+  }
+
+  return directory;
+}
+
 async function photoFileExists(parentDirectory: FileSystemDirectoryHandle, name: string) {
   try {
     await parentDirectory.getFileHandle(name);
@@ -2194,6 +2205,13 @@ export default function App() {
     name: string;
     relativePath: string;
     parentDirectory?: FileSystemDirectoryHandle;
+  } | null>(null);
+  const [photoAlbumDeleteCandidate, setPhotoAlbumDeleteCandidate] = useState<{
+    albumId: string;
+    title: string;
+    relativePath: string;
+    imageCount: number;
+    totalSize: number;
   } | null>(null);
   const [photoDeleteError, setPhotoDeleteError] = useState("");
   const [isPhotoDeletePending, setIsPhotoDeletePending] = useState(false);
@@ -4631,6 +4649,27 @@ export default function App() {
     setPhotoAlbumMessage(`已清除《${selectedPhotoAlbum.title}》的阅读进度`);
   }, [saveCurrentPhotoAlbumStore, selectedPhotoAlbum]);
 
+  const clearPhotoAlbumAccessAfterWritePermissionDenied = useCallback(async () => {
+    await clearPhotoAlbumFolderHandle().catch(() => undefined);
+    await clearCachedPhotoAlbumScan().catch(() => undefined);
+    Object.values(photoObjectUrlsRef.current).forEach((url) => URL.revokeObjectURL(url));
+    photoAlbumDirectoryRef.current = null;
+    photoAlbumsRef.current = [];
+    photoObjectUrlsRef.current = {};
+    setPhotoAlbums([]);
+    setPhotoRootStatuses([]);
+    setPhotoObjectUrls({});
+    setPhotoAlbumPage(1);
+    setCurrentPhotoIndex(0);
+    setSelectedPhotoAlbumId(null);
+    setPhotoDeleteCandidate(null);
+    setPhotoAlbumDeleteCandidate(null);
+    setPhotoDeleteError("");
+    setHasLoadedPhotoAlbums(true);
+    setActiveView("photos");
+    setPhotoAlbumMessage("旧写真集目录记录没有写入权限，已自动清除。请重新选择写真集文件夹以授予删除权限。");
+  }, []);
+
   const requestDeleteCurrentPhoto = useCallback(() => {
     if (!selectedPhotoAlbum) return;
     const photo = selectedPhotoAlbum.images[currentPhotoIndex];
@@ -4650,6 +4689,17 @@ export default function App() {
       parentDirectory: photo.parentDirectory,
     });
   }, [currentPhotoIndex, selectedPhotoAlbum]);
+
+  const requestDeletePhotoAlbum = useCallback((album: PhotoAlbum) => {
+    setPhotoDeleteError("");
+    setPhotoAlbumDeleteCandidate({
+      albumId: album.id,
+      title: album.title,
+      relativePath: album.relativePath,
+      imageCount: album.imageCount,
+      totalSize: album.totalSize,
+    });
+  }, []);
 
   const confirmDeleteCurrentPhoto = useCallback(async () => {
     if (!photoDeleteCandidate || isPhotoDeletePending) return;
@@ -4674,23 +4724,7 @@ export default function App() {
       }
 
       if (!(await hasDirectoryWritePermission(parentDirectory))) {
-        await clearPhotoAlbumFolderHandle().catch(() => undefined);
-        await clearCachedPhotoAlbumScan().catch(() => undefined);
-        Object.values(photoObjectUrlsRef.current).forEach((url) => URL.revokeObjectURL(url));
-        photoAlbumDirectoryRef.current = null;
-        photoAlbumsRef.current = [];
-        photoObjectUrlsRef.current = {};
-        setPhotoAlbums([]);
-        setPhotoRootStatuses([]);
-        setPhotoObjectUrls({});
-        setPhotoAlbumPage(1);
-        setCurrentPhotoIndex(0);
-        setSelectedPhotoAlbumId(null);
-        setPhotoDeleteCandidate(null);
-        setPhotoDeleteError("");
-        setHasLoadedPhotoAlbums(true);
-        setActiveView("photos");
-        setPhotoAlbumMessage("旧写真集目录记录没有写入权限，已自动清除。请重新选择写真集文件夹以授予删除权限。");
+        await clearPhotoAlbumAccessAfterWritePermissionDenied();
         setIsPhotoDeletePending(false);
         return;
       }
@@ -4815,7 +4849,140 @@ export default function App() {
     } finally {
       setIsPhotoDeletePending(false);
     }
-  }, [isPhotoDeletePending, photoDeleteCandidate, saveCurrentPhotoAlbumStore]);
+  }, [clearPhotoAlbumAccessAfterWritePermissionDenied, isPhotoDeletePending, photoDeleteCandidate, saveCurrentPhotoAlbumStore]);
+
+  const confirmDeletePhotoAlbum = useCallback(async () => {
+    if (!photoAlbumDeleteCandidate || isPhotoDeletePending) return;
+    setPhotoDeleteError("");
+    setIsPhotoDeletePending(true);
+
+    const album = photoAlbumsRef.current.find((item) => item.id === photoAlbumDeleteCandidate.albumId);
+    if (!album) {
+      setIsPhotoDeletePending(false);
+      setPhotoAlbumDeleteCandidate(null);
+      setPhotoAlbumMessage("这本写真集已经不在当前列表中。");
+      return;
+    }
+
+    try {
+      const rootDirectory = photoAlbumDirectoryRef.current ?? (await readPhotoAlbumFolderHandle().catch(() => null));
+      if (!rootDirectory?.removeEntry) {
+        setPhotoDeleteError("当前写真集来源不支持直接删除，请刷新写真集或在文件管理器中删除。");
+        setIsPhotoDeletePending(false);
+        return;
+      }
+
+      const albumDirectory = await resolvePhotoAlbumDirectory(rootDirectory, album.relativePath);
+      if (!albumDirectory.removeEntry) {
+        setPhotoDeleteError("当前写真集来源不支持直接删除，请刷新写真集或在文件管理器中删除。");
+        setIsPhotoDeletePending(false);
+        return;
+      }
+
+      if (!(await hasDirectoryWritePermission(albumDirectory))) {
+        await clearPhotoAlbumAccessAfterWritePermissionDenied();
+        setIsPhotoDeletePending(false);
+        return;
+      }
+
+      for (const image of album.images) {
+        await albumDirectory.removeEntry(image.name);
+        if (await photoFileExists(albumDirectory, image.name)) {
+          setPhotoDeleteError("浏览器没有删除这本写真集中的部分图片，请确认文件未被占用，并重新选择写真集文件夹授予写入权限。");
+          setIsPhotoDeletePending(false);
+          return;
+        }
+      }
+
+      const albumPathParts = album.relativePath.replace(/\\/g, "/").split("/").filter(Boolean);
+      if (albumPathParts.length) {
+        try {
+          const parentDirectory = await resolvePhotoAlbumDirectory(rootDirectory, albumPathParts.slice(0, -1).join("/"));
+          await parentDirectory.removeEntry?.(albumPathParts[albumPathParts.length - 1]);
+        } catch {
+          // The album folder may contain non-photo files; removing the images is the required destructive action.
+        }
+      }
+
+      const nextAlbums = photoAlbumsRef.current.filter((item) => item.id !== album.id);
+      const nextProgress = { ...photoAlbumProgressRef.current };
+      delete nextProgress[album.id];
+      let nextFavorites = favoritePhotoAlbumIdsRef.current;
+      if (favoritePhotoAlbumIdsRef.current.has(album.id)) {
+        nextFavorites = new Set(favoritePhotoAlbumIdsRef.current);
+        nextFavorites.delete(album.id);
+      }
+
+      const nextPhotoObjectUrls = { ...photoObjectUrlsRef.current };
+      album.images.forEach((image) => {
+        const objectUrl = photoObjectUrlsRef.current[image.id];
+        if (objectUrl) URL.revokeObjectURL(objectUrl);
+        if (isObjectUrl(image.url)) URL.revokeObjectURL(image.url);
+        delete nextPhotoObjectUrls[image.id];
+        delete photoImageFilePromisesRef.current[image.id];
+      });
+
+      photoAlbumsRef.current = nextAlbums;
+      photoAlbumProgressRef.current = nextProgress;
+      favoritePhotoAlbumIdsRef.current = nextFavorites;
+      photoObjectUrlsRef.current = nextPhotoObjectUrls;
+      setPhotoAlbums(nextAlbums);
+      setPhotoRootStatuses((statuses) =>
+        statuses.map((status) =>
+          status.id === album.mediaRootId
+            ? {
+                ...status,
+                videoCount: nextAlbums.filter((item) => item.mediaRootId === album.mediaRootId).length,
+                scannedFiles: Math.max(status.scannedFiles - album.imageCount, 0),
+                updatedAt: Date.now(),
+              }
+            : status,
+        ),
+      );
+      setPhotoObjectUrls(nextPhotoObjectUrls);
+      setPhotoAlbumProgress(nextProgress);
+      setFavoritePhotoAlbumIds(nextFavorites);
+      if (selectedPhotoAlbumId === album.id) {
+        setSelectedPhotoAlbumId(null);
+        setCurrentPhotoIndex(0);
+        setActiveView("photos");
+      }
+      setPhotoAlbumPage(1);
+      setPhotoAlbumDeleteCandidate(null);
+
+      await saveCurrentPhotoAlbumStore({
+        progress: nextProgress,
+        favorites: Array.from(nextFavorites),
+      });
+
+      void loadCachedPhotoAlbumScan()
+        .then((cache) => {
+          if (!cache || cache.rootId !== album.mediaRootId) return;
+          if (!cache.albums.some((cachedAlbum) => cachedAlbum.id === album.id)) return;
+          return saveCachedPhotoAlbumScan({
+            ...cache,
+            albums: cache.albums.filter((cachedAlbum) => cachedAlbum.id !== album.id),
+            scannedFiles: Math.max(cache.scannedFiles - album.imageCount, 0),
+            updatedAt: Date.now(),
+          });
+        })
+        .catch(() => {
+          setPhotoAlbumMessage("写真集已删除，但扫描缓存更新失败，下次刷新会修正。");
+        });
+
+      setPhotoAlbumMessage(`已删除《${album.title}》及其中 ${album.imageCount} 张图片`);
+    } catch {
+      setPhotoDeleteError("删除整本写真集失败，请确认浏览器仍有文件夹写入权限，或重新选择写真集文件夹。");
+    } finally {
+      setIsPhotoDeletePending(false);
+    }
+  }, [
+    clearPhotoAlbumAccessAfterWritePermissionDenied,
+    isPhotoDeletePending,
+    photoAlbumDeleteCandidate,
+    saveCurrentPhotoAlbumStore,
+    selectedPhotoAlbumId,
+  ]);
 
   const updatePhotoAlbumSortMode = useCallback(
     (nextSortMode: PhotoAlbumSortMode) => {
@@ -6882,6 +7049,13 @@ export default function App() {
         return;
       }
 
+      if (event.key === "Escape" && photoAlbumDeleteCandidate && !isPhotoDeletePending) {
+        event.preventDefault();
+        setPhotoAlbumDeleteCandidate(null);
+        setPhotoDeleteError("");
+        return;
+      }
+
       if (event.key === "Escape" && isClearCacheConfirmOpen) {
         event.preventDefault();
         setIsClearCacheConfirmOpen(false);
@@ -6956,7 +7130,7 @@ export default function App() {
         return;
       }
 
-      if (!currentVideo || isShortcutDialogOpen || deleteCandidate || photoDeleteCandidate || isFormControl(event.target)) return;
+      if (!currentVideo || isShortcutDialogOpen || deleteCandidate || photoDeleteCandidate || photoAlbumDeleteCandidate || isFormControl(event.target)) return;
 
       if (isPrivacyMode) {
         if (eventCode === activeShortcuts.seekBackward) {
@@ -7096,6 +7270,7 @@ export default function App() {
     stopRightMouseHoldSpeed,
     deleteCandidate,
     exitPrivacyMode,
+    photoAlbumDeleteCandidate,
     photoDeleteCandidate,
     isPhotoDeletePending,
     isCinemaMode,
@@ -7367,6 +7542,15 @@ export default function App() {
                 从头
               </button>
             ) : null}
+            <button
+              className="danger-button photo-album-delete-button"
+              type="button"
+              onClick={() => requestDeletePhotoAlbum(album)}
+              title="删除整本写真集"
+            >
+              <Trash2 size={16} />
+              删除
+            </button>
           </div>
         </div>
       </article>
@@ -8740,6 +8924,69 @@ export default function App() {
             <button className="danger-button" type="button" onClick={() => void confirmDeleteCurrentPhoto()} disabled={isPhotoDeletePending}>
               <Trash2 size={18} />
               {isPhotoDeletePending ? "删除中" : "删除图片"}
+            </button>
+          </div>
+        </section>
+      </div>
+    ) : null}
+    {photoAlbumDeleteCandidate ? (
+      <div
+        className="modal-backdrop"
+        role="presentation"
+        onMouseDown={() => {
+          if (isPhotoDeletePending) return;
+          setPhotoAlbumDeleteCandidate(null);
+          setPhotoDeleteError("");
+        }}
+      >
+        <section
+          aria-labelledby="delete-photo-album-title"
+          aria-modal="true"
+          className="delete-dialog"
+          role="dialog"
+          onMouseDown={(event) => event.stopPropagation()}
+        >
+          <button
+            aria-label="关闭"
+            className="dialog-close"
+            type="button"
+            onClick={() => {
+              setPhotoAlbumDeleteCandidate(null);
+              setPhotoDeleteError("");
+            }}
+            disabled={isPhotoDeletePending}
+          >
+            <X size={18} />
+          </button>
+          <div className="dialog-icon danger">
+            <Trash2 size={28} />
+          </div>
+          <div className="dialog-copy">
+            <h2 id="delete-photo-album-title">删除整本写真集？</h2>
+            <p>这个操作会直接从本地磁盘删除这本写真集中的图片文件，删除后无法在播放器内恢复。</p>
+          </div>
+          <div className="delete-file-preview">
+            <strong>{photoAlbumDeleteCandidate.title}</strong>
+            <span>
+              {(photoAlbumDeleteCandidate.relativePath || "根目录")} · {photoAlbumDeleteCandidate.imageCount} 张 · {formatFileSize(photoAlbumDeleteCandidate.totalSize)}
+            </span>
+          </div>
+          {photoDeleteError ? <div className="dialog-inline-error">{photoDeleteError}</div> : null}
+          <div className="dialog-actions">
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={() => {
+                setPhotoAlbumDeleteCandidate(null);
+                setPhotoDeleteError("");
+              }}
+              disabled={isPhotoDeletePending}
+            >
+              取消
+            </button>
+            <button className="danger-button" type="button" onClick={() => void confirmDeletePhotoAlbum()} disabled={isPhotoDeletePending}>
+              <Trash2 size={18} />
+              {isPhotoDeletePending ? "删除中" : "删除整本"}
             </button>
           </div>
         </section>

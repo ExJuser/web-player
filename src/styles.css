@@ -1230,8 +1230,21 @@ button {
 
 .photo-album-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   margin-top: auto;
+}
+
+.photo-album-actions .secondary-button,
+.photo-album-actions .danger-button {
+  min-width: auto;
+  width: auto;
+  height: 34px;
+  padding: 0 10px;
+}
+
+.photo-album-delete-button {
+  margin-left: auto;
 }
 
 .photo-empty-state {
