@@ -1153,6 +1153,41 @@ button {
   gap: 10px;
 }
 
+.photo-toolbar-actions .playlist-filter,
+.photo-toolbar-actions .control-select-trigger,
+.photo-toolbar-actions .secondary-button {
+  height: 34px;
+  font-size: 13px;
+}
+
+.photo-toolbar-actions .playlist-filter {
+  align-items: center;
+  padding: 0;
+}
+
+.photo-toolbar-actions .playlist-filter button {
+  height: 32px;
+  padding: 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.photo-toolbar-actions .control-group {
+  gap: 6px;
+  margin-left: 0;
+}
+
+.photo-toolbar-actions .control-group-label {
+  color: #8e97a5;
+  font-size: 13px;
+}
+
+.photo-toolbar-actions .secondary-button {
+  min-width: 82px;
+  padding: 0 12px;
+  font-weight: 600;
+}
+
 .photo-sort-control {
   margin-left: 0;
 }
@@ -1164,10 +1199,6 @@ button {
 .photo-sort-control .control-select-list {
   top: calc(100% + 6px);
   bottom: auto;
-}
-
-.photo-sort-control .control-group-label {
-  color: #8e97a5;
 }
 
 .photo-stats {

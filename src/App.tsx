@@ -2483,7 +2483,7 @@ export default function App() {
     setPhotoAlbumPage(1);
     setPhotoRootStatuses([createPhotoAlbumRootStatusFromCache(cache, options?.status, options?.error)]);
     setHasLoadedPhotoAlbums(true);
-    setPhotoAlbumMessage(options?.message ?? `已加载“${cache.rootName}”上次扫描结果，包含 ${cache.albums.length} 本写真集`);
+    setPhotoAlbumMessage(options?.message ?? `已加载“${cache.rootName}”上次扫描结果，包含 ${cache.albums.length} 本相册`);
   }, []);
 
   const applyPlayerDataStore = useCallback((nextDataStore: PlayerDataStore) => {
@@ -2563,7 +2563,7 @@ export default function App() {
         await saveCachedPhotoAlbumScan(cachedScan).catch(() => undefined);
         setPhotoAlbumMessage(
           scan.albums.length
-            ? `已从“${scan.rootLabel}”加载 ${scan.albums.length} 本写真集，扫描 ${scan.scannedFiles} 张图片`
+            ? `已从“${scan.rootLabel}”加载 ${scan.albums.length} 本相册，扫描 ${scan.scannedFiles} 张图片`
             : `“${scan.rootLabel}”里没有找到包含图片的文件夹`,
         );
       } catch (error) {
@@ -8594,8 +8594,7 @@ export default function App() {
           <section className="photo-dashboard" aria-label="写真集">
             <section className="photo-toolbar home-section">
               <div>
-                <span className="home-section-eyebrow">写真集</span>
-                <h2>本地写真集</h2>
+                <h2>本地相册</h2>
                 <p>{photoAlbumMessage}</p>
               </div>
               <div className="photo-toolbar-actions">
