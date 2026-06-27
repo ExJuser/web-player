@@ -1645,6 +1645,15 @@ button {
   gap: 6px;
 }
 
+.home-primary-column .special-insight-summary,
+.home-primary-column .special-insight-tabs {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.home-primary-column .special-insight-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .special-insight-list.compact {
   margin-top: 6px;
 }
@@ -1713,6 +1722,10 @@ button {
 .special-tag-groups {
   display: grid;
   gap: 10px;
+}
+
+.home-primary-column .special-tag-groups {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .special-tag-group {
@@ -5360,6 +5373,16 @@ button {
 
   .top-actions .primary-button {
     flex: 1;
+  }
+
+  .home-primary-column .special-insight-summary,
+  .home-primary-column .special-insight-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .home-primary-column .special-insight-list,
+  .home-primary-column .special-tag-groups {
+    grid-template-columns: 1fr;
   }
 
   .video-element,
