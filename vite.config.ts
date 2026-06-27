@@ -2,7 +2,7 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { access, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import http from "node:http";
 import https from "node:https";
 import path from "node:path";
@@ -34,6 +34,7 @@ import {
   dedupeDanmakuComments,
   parseDanmakuUrl,
 } from "./src/danmakuUtils";
+import { clearLocalCacheItems, createCacheStatus as createLocalCacheStatus, createDanmakuSourcesStats } from "./server/cacheStatus.mjs";
 import { readJsonFile, writeJsonFile } from "./server/jsonFiles.mjs";
 import { LocalDataSqliteStore } from "./server/sqliteStorage.mjs";
 
@@ -153,164 +154,40 @@ function hashValue(value) {
   return createHash("sha256").update(value).digest("hex");
 }
 
-async function getPathStats(targetPath) {
-  try {
-    const entryStat = await stat(targetPath);
-    if (!entryStat.isDirectory()) {
-      return {
-        bytes: entryStat.size,
-        files: entryStat.isFile() ? 1 : 0,
-        updatedAt: entryStat.mtimeMs,
-      };
-    }
-
-    let bytes = 0;
-    let files = 0;
-    let updatedAt = null;
-    const entries = await readdir(targetPath, { withFileTypes: true });
-    for (const entry of entries) {
-      const childStats = await getPathStats(path.join(targetPath, entry.name));
-      bytes += childStats.bytes;
-      files += childStats.files;
-      updatedAt = Math.max(updatedAt ?? 0, childStats.updatedAt ?? 0) || null;
-    }
-    return { bytes, files, updatedAt };
-  } catch (error) {
-    if (error && error.code === "ENOENT") {
-      return { bytes: 0, files: 0, updatedAt: null };
-    }
-    return {
-      bytes: 0,
-      files: 0,
-      updatedAt: null,
-      error: error instanceof Error ? error.message : "Unable to inspect cache path.",
-    };
-  }
-}
-
 function createDanmakuSourcePath(sourceId, options = {}) {
   const encodedName = `${encodeURIComponent(sourceId)}.json`;
   return path.join(danmakuSourcesRoot, options.legacy ? `${sourceId}.json` : encodedName);
 }
 
-async function getDanmakuSourcesStats() {
-  try {
-    const entries = await readdir(danmakuSourcesRoot, { withFileTypes: true });
-    const files = entries.filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith(".json"));
-    const stats = await Promise.all(files.map((entry) => stat(path.join(danmakuSourcesRoot, entry.name))));
-    return {
-      bytes: stats.reduce((sum, entryStat) => sum + entryStat.size, 0),
-      files: stats.length,
-      updatedAt: stats.reduce((latest, entryStat) => Math.max(latest, entryStat.mtimeMs), 0) || null,
-    };
-  } catch (error) {
-    if (error && error.code === "ENOENT") {
-      return { bytes: 0, files: 0, updatedAt: null };
-    }
-    return {
-      bytes: 0,
-      files: 0,
-      updatedAt: null,
-      error: error instanceof Error ? error.message : "Unable to inspect danmaku sources.",
-    };
-  }
-}
+const cacheStatusDefinitions = [
+  { id: "bangumi-matches", label: "Bangumi 匹配", path: bangumiMatchesRoot },
+  { id: "global", label: "全局播放数据", path: globalDataPath },
+  { id: "libraries", label: "播放数据", path: librariesRoot },
+  { id: "thumbnails", label: "视频缩略图", path: thumbnailsRoot },
+  { id: "photo-albums", label: "写真集数据", path: photoAlbumsRoot },
+  { id: "subtitles", label: "内封字幕", path: embeddedSubtitlesRoot },
+  { id: "compatible-media", label: "兼容播放缓存", path: compatibleMediaRoot },
+  { id: "danmaku-sources", label: "弹幕源", path: danmakuSourcesRoot, getStats: () => createDanmakuSourcesStats(danmakuSourcesRoot) },
+  { id: "ai-summaries", label: "AI 字幕总结", path: path.join(aiRoot, "summaries") },
+  { id: "ai-qa", label: "AI 字幕问答", path: path.join(aiRoot, "qa") },
+  { id: "ai-recaps", label: "AI 进度回顾", path: path.join(aiRoot, "recaps") },
+  { id: "index", label: "索引数据", path: indexPath },
+];
 
 async function createCacheStatus() {
-  const definitions = [
-    { id: "bangumi-matches", label: "Bangumi 匹配", path: bangumiMatchesRoot },
-    { id: "global", label: "全局播放数据", path: globalDataPath },
-    { id: "libraries", label: "播放数据", path: librariesRoot },
-    { id: "thumbnails", label: "视频缩略图", path: thumbnailsRoot },
-    { id: "photo-albums", label: "写真集数据", path: photoAlbumsRoot },
-    { id: "subtitles", label: "内封字幕", path: embeddedSubtitlesRoot },
-    { id: "compatible-media", label: "兼容播放缓存", path: compatibleMediaRoot },
-    { id: "danmaku-sources", label: "弹幕源", path: danmakuSourcesRoot, getStats: getDanmakuSourcesStats },
-    { id: "ai-summaries", label: "AI 字幕总结", path: path.join(aiRoot, "summaries") },
-    { id: "ai-qa", label: "AI 字幕问答", path: path.join(aiRoot, "qa") },
-    { id: "ai-recaps", label: "AI 进度回顾", path: path.join(aiRoot, "recaps") },
-    { id: "index", label: "索引数据", path: indexPath },
-  ];
-
-  const items = await Promise.all(
-    definitions.map(async (definition) => ({
-      ...definition,
-      ...(await (definition.getStats ? definition.getStats() : getPathStats(definition.path))),
-    })),
-  );
-  const visibleItems = items.filter((item) => item.bytes > 0 || item.files > 0 || item.updatedAt || item.error);
-  const databaseItem = await localDataStore.createDatabaseStatusItem();
-  if (databaseItem) visibleItems.push(databaseItem);
-  const rootStats = await getPathStats(dataRoot);
-  const totalBytes = visibleItems.reduce((sum, item) => sum + item.bytes, 0);
-  const totalFiles = visibleItems.reduce((sum, item) => sum + item.files, 0);
-  const unclassifiedBytes = Math.max(rootStats.bytes - totalBytes, 0);
-  const unclassifiedFiles = Math.max(rootStats.files - totalFiles, 0);
-  if (unclassifiedBytes > 0 || unclassifiedFiles > 0) {
-    visibleItems.push({
-      id: "other-local-data",
-      label: "其他本地数据",
-      path: dataRoot,
-      bytes: unclassifiedBytes,
-      files: unclassifiedFiles,
-      updatedAt: rootStats.updatedAt,
-      clearable: false,
-    });
-  }
-  const updatedAt = visibleItems.reduce((latest, item) => Math.max(latest, item.updatedAt ?? 0), 0) || null;
-
-  return {
-    rootPath: dataRoot,
-    totalBytes: rootStats.bytes,
-    totalFiles: rootStats.files,
-    updatedAt,
-    items: visibleItems,
-  };
-}
-
-function assertCachePathIsSafe(targetPath) {
-  const resolvedDataRoot = path.resolve(dataRoot);
-  const resolvedTarget = path.resolve(targetPath);
-  const rootWithSeparator = resolvedDataRoot.endsWith(path.sep) ? resolvedDataRoot : `${resolvedDataRoot}${path.sep}`;
-  if (resolvedTarget !== resolvedDataRoot && !resolvedTarget.startsWith(rootWithSeparator)) {
-    throw new Error("Refusing to clear a path outside the local data directory.");
-  }
+  return createLocalCacheStatus({
+    dataRoot,
+    definitions: cacheStatusDefinitions,
+    createDatabaseStatusItem: () => localDataStore.createDatabaseStatusItem(),
+  });
 }
 
 async function clearCacheItems(payload) {
-  const ids = Array.isArray(payload?.ids) ? payload.ids.filter((id) => typeof id === "string") : [];
-  const uniqueIds = Array.from(new Set(ids));
-  if (!uniqueIds.length) throw new Error("No cache items selected.");
-
-  const currentStatus = await createCacheStatus();
-  const itemsById = new Map(currentStatus.items.map((item) => [item.id, item]));
-  const invalidId = uniqueIds.find((id) => !itemsById.has(id));
-  if (invalidId) throw new Error("Unknown cache item.");
-  const readonlyId = uniqueIds.find((id) => itemsById.get(id)?.clearable === false);
-  if (readonlyId) throw new Error("This cache item is read-only.");
-
-  for (const id of uniqueIds) {
-    const item = itemsById.get(id);
-    assertCachePathIsSafe(item.path);
-    await rm(item.path, { recursive: true, force: true });
-  }
-
-  const cacheKindsByStatusId = {
-    thumbnails: ["thumbnail"],
-    "danmaku-sources": ["danmaku-source"],
-    "ai-summaries": ["ai-summary"],
-    "ai-qa": ["ai-qa"],
-    "ai-recaps": ["ai-recap"],
-    "bangumi-matches": ["bangumi-match"],
-    "compatible-media": ["compatible-media"],
-    subtitles: ["embedded-subtitle"],
-  };
-  localDataStore.clearCacheEntriesByKinds(uniqueIds.flatMap((id) => cacheKindsByStatusId[id] ?? []));
-
-  return {
-    cleared: uniqueIds,
-    status: await createCacheStatus(),
-  };
+  return clearLocalCacheItems(payload, {
+    dataRoot,
+    createStatus: createCacheStatus,
+    clearCacheEntriesByKinds: (kinds) => localDataStore.clearCacheEntriesByKinds(kinds),
+  });
 }
 
 function normalizeMediaRoots(config) {
