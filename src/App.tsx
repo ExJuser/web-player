@@ -1553,6 +1553,14 @@ function getDanmakuLane(comment: DanmakuComment, laneCount: number) {
   return Number.parseInt(hash.slice(0, 8), 16) % laneCount;
 }
 
+function formatDanmakuSpeedLevel(speed: number) {
+  if (speed <= 16) return "较快";
+  if (speed <= 20) return "稍快";
+  if (speed <= 24) return "中等";
+  if (speed <= 28) return "稍慢";
+  return "较慢";
+}
+
 const DANMAKU_LANE_LINE_HEIGHT = 1.12;
 
 function getDanmakuLaneCount(displayArea: number, fontSize: number, layerHeight: number) {
@@ -10375,8 +10383,9 @@ export default function App() {
                   </label>
                 </div>
                 <label className="danmaku-field">
-                  <span>速度 {danmakuPreferences.speed.toFixed(1)}s</span>
+                  <span>速度 {formatDanmakuSpeedLevel(danmakuPreferences.speed)}</span>
                   <input
+                    aria-label="弹幕速度"
                     type="range"
                     min={danmakuSpeedMin}
                     max={danmakuSpeedMax}

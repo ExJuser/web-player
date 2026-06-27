@@ -111,7 +111,7 @@ test("player data stores parse danmaku selections and bounded preferences", () =
   });
   assert.equal(parsed.danmakuPreferences.enabled, false);
   assert.equal(parsed.danmakuPreferences.opacity, 1);
-  assert.equal(parsed.danmakuPreferences.speed, 4);
+  assert.equal(parsed.danmakuPreferences.speed, 16);
   assert.equal(parsed.danmakuPreferences.density, 0.2);
   assert.equal(parsed.danmakuPreferences.displayArea, 1);
   assert.equal(parsed.danmakuPreferences.fontSize, 36);
