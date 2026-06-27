@@ -83,6 +83,7 @@ export const defaultDanmakuPreferences: DanmakuPreferences = {
   speed: 8,
   density: 0.7,
   displayArea: 0.55,
+  fontSize: 20,
   showSimplified: true,
 };
 

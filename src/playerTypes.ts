@@ -126,6 +126,7 @@ export type DanmakuPreferences = {
   speed: number;
   density: number;
   displayArea: number;
+  fontSize: number;
   showSimplified: boolean;
 };
 

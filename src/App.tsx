@@ -135,7 +135,7 @@ import {
   defaultDanmakuPreferences,
   shortcutGroups
 } from "./playerConstants";
-import { createDanmakuComment } from "./danmakuUtils";
+import { createDanmakuComment, stableHash } from "./danmakuUtils";
 
 
 function isVideoFile(name: string) {
@@ -1527,6 +1527,18 @@ function formatPlayabilityStatus(playability?: VideoItem["playability"]) {
 function formatCodecSummary(playability?: VideoItem["playability"]) {
   if (!playability) return "未探测";
   return [playability.videoCodec, playability.audioCodec, playability.pixelFormat].filter(Boolean).join(" / ") || "未探测";
+}
+
+function getDanmakuLane(comment: DanmakuComment, laneCount: number) {
+  if (laneCount <= 1) return 0;
+  const hash = stableHash(`${comment.id}:${comment.hash}:${comment.time.toFixed(3)}`);
+  return Number.parseInt(hash.slice(0, 8), 16) % laneCount;
+}
+
+function formatDanmakuLaneTop(lane: number, laneCount: number, displayArea: number) {
+  if (laneCount <= 1) return "0%";
+  const percent = (lane / laneCount) * Math.min(1, Math.max(0.25, displayArea)) * 100;
+  return `${percent.toFixed(3)}%`;
 }
 
 function normalizeLocalConfig(config: LocalConfig): LocalConfig {
@@ -8806,12 +8818,14 @@ export default function App() {
                   {
                     "--danmaku-opacity": danmakuPreferences.opacity,
                     "--danmaku-speed": `${danmakuPreferences.speed}s`,
+                    "--danmaku-font-size": `${danmakuPreferences.fontSize}px`,
+                    "--danmaku-play-state": isPlaying ? "running" : "paused",
                   } as React.CSSProperties
                 }
               >
-                {activeDanmakuComments.map((comment, index) => {
+                {activeDanmakuComments.map((comment) => {
                   const elapsed = Math.max(0, currentTime - comment.time);
-                  const lane = index % danmakuLaneCount;
+                  const lane = getDanmakuLane(comment, danmakuLaneCount);
                   const text = danmakuPreferences.showSimplified ? comment.simplifiedText || comment.text : comment.text;
                   return (
                     <span
@@ -8821,6 +8835,8 @@ export default function App() {
                         {
                           "--danmaku-lane": lane,
                           "--danmaku-lanes": danmakuLaneCount,
+                          "--danmaku-lane-top": formatDanmakuLaneTop(lane, danmakuLaneCount, danmakuPreferences.displayArea),
+                          "--danmaku-lane-offset": `${Math.round(lane * danmakuPreferences.fontSize * 1.35)}px`,
                           "--danmaku-delay": `-${elapsed}s`,
                           color: comment.color,
                         } as React.CSSProperties
@@ -10262,6 +10278,17 @@ export default function App() {
                     step={0.05}
                     value={danmakuPreferences.displayArea}
                     onChange={(event) => replaceDanmakuPreferences({ ...danmakuPreferences, displayArea: Number(event.target.value) })}
+                  />
+                </label>
+                <label className="danmaku-field">
+                  <span>字号 {Math.round(danmakuPreferences.fontSize)}px</span>
+                  <input
+                    type="range"
+                    min={14}
+                    max={36}
+                    step={1}
+                    value={danmakuPreferences.fontSize}
+                    onChange={(event) => replaceDanmakuPreferences({ ...danmakuPreferences, fontSize: Number(event.target.value) })}
                   />
                 </label>
               </section>

@@ -507,18 +507,19 @@ button {
   pointer-events: none;
   overflow: hidden;
   opacity: var(--danmaku-opacity, 0.9);
+  contain: layout paint style;
 }
 
 .danmaku-item {
   position: absolute;
-  top: calc((var(--danmaku-lane, 0) / max(var(--danmaku-lanes, 1), 1)) * 55%);
+  top: var(--danmaku-lane-top, 0%);
   left: 100%;
   max-width: min(70%, 720px);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   color: #f8fafc;
-  font-size: 20px;
+  font-size: var(--danmaku-font-size, 20px);
   font-weight: 700;
   line-height: 1.25;
   text-shadow:
@@ -527,7 +528,10 @@ button {
     0 0 9px rgba(0, 0, 0, 0.72);
   animation: danmaku-scroll var(--danmaku-speed, 8s) linear both;
   animation-delay: var(--danmaku-delay, 0s);
+  animation-play-state: var(--danmaku-play-state, running);
   will-change: transform;
+  backface-visibility: hidden;
+  transform: translate3d(0, 0, 0);
 }
 
 .danmaku-item.mode-top,
@@ -542,15 +546,15 @@ button {
 
 .danmaku-item.mode-bottom {
   top: auto;
-  bottom: calc(18% + (var(--danmaku-lane, 0) * 28px));
+  bottom: calc(18% + var(--danmaku-lane-offset, 0px));
 }
 
 @keyframes danmaku-scroll {
   from {
-    transform: translateX(0);
+    transform: translate3d(0, 0, 0);
   }
   to {
-    transform: translateX(calc(-100vw - 100%));
+    transform: translate3d(calc(-100vw - 100%), 0, 0);
   }
 }
 

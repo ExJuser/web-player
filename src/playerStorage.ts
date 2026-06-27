@@ -223,6 +223,7 @@ export function parseDanmakuPreferences(source: unknown): DanmakuPreferences {
     speed: boundedNumber(preferences.speed, defaultDanmakuPreferences.speed, 4, 14),
     density: boundedNumber(preferences.density, defaultDanmakuPreferences.density, 0.2, 1),
     displayArea: boundedNumber(preferences.displayArea, defaultDanmakuPreferences.displayArea, 0.25, 1),
+    fontSize: boundedNumber(preferences.fontSize, defaultDanmakuPreferences.fontSize, 14, 36),
     showSimplified:
       typeof preferences.showSimplified === "boolean"
         ? preferences.showSimplified
