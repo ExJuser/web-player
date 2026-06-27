@@ -4906,7 +4906,7 @@ export default function App() {
       const remainingImages = album.images
         .filter((image) => image.id !== photo.id)
         .map((image, index) => ({ ...image, index }));
-      const nextPhotoIndex = Math.min(Math.max(photoDeleteCandidate.imageIndex - 1, 0), Math.max(remainingImages.length - 1, 0));
+      const nextPhotoIndex = Math.min(Math.max(photoDeleteCandidate.imageIndex, 0), Math.max(remainingImages.length - 1, 0));
       const nextProgress = { ...photoAlbumProgressRef.current };
       let nextFavorites = favoritePhotoAlbumIdsRef.current;
       let nextSelectedAlbumId: string | null = album.id;
