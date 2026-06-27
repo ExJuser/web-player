@@ -1239,8 +1239,8 @@ button {
 .photo-album-copy > span {
   overflow: hidden;
   color: #8e97a5;
-  font-size: 12px;
-  line-height: 1.35;
+  font-size: 13px;
+  line-height: 1.4;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
