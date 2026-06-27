@@ -3301,7 +3301,6 @@ export default function App() {
   const isDanmakuAvailable = Boolean(currentVideo && homeMediaMode === "anime" && isSeriesMode);
   const shouldUseHighFrequencyPlaybackClock =
     danmakuPreferences.enabled && isDanmakuAvailable && danmakuComments.length > 0 && !isPrivacyMode;
-  const currentDanmakuSelection = currentVideo ? danmakuSelections[currentVideo.id] ?? null : null;
   const activeDanmakuComments = useMemo(() => {
     if (!danmakuPreferences.enabled || !currentVideo || !danmakuComments.length || isPrivacyMode) return [];
     const durationSeconds = danmakuPreferences.speed;
@@ -10374,35 +10373,25 @@ export default function App() {
               <section className="danmaku-panel">
                 <div className="danmaku-panel-header">
                   <strong>显示设置</strong>
-                  <span>{currentDanmakuSelection ? currentDanmakuSelection.sourceName : "未绑定当前视频"}</span>
                 </div>
-                <label className="toggle-row">
-                  <input
-                    type="checkbox"
-                    checked={danmakuPreferences.enabled}
-                    onChange={(event) => replaceDanmakuPreferences({ ...danmakuPreferences, enabled: event.target.checked })}
-                  />
-                  <span>显示弹幕</span>
-                </label>
-                <label className="toggle-row">
-                  <input
-                    type="checkbox"
-                    checked={danmakuPreferences.showSimplified}
-                    onChange={(event) => replaceDanmakuPreferences({ ...danmakuPreferences, showSimplified: event.target.checked })}
-                  />
-                  <span>优先显示简体中文</span>
-                </label>
-                <label className="danmaku-field">
-                  <span>透明度 {Math.round(danmakuPreferences.opacity * 100)}%</span>
-                  <input
-                    type="range"
-                    min={0.2}
-                    max={1}
-                    step={0.05}
-                    value={danmakuPreferences.opacity}
-                    onChange={(event) => replaceDanmakuPreferences({ ...danmakuPreferences, opacity: Number(event.target.value) })}
-                  />
-                </label>
+                <div className="danmaku-toggle-line">
+                  <label className="toggle-row">
+                    <input
+                      type="checkbox"
+                      checked={danmakuPreferences.enabled}
+                      onChange={(event) => replaceDanmakuPreferences({ ...danmakuPreferences, enabled: event.target.checked, opacity: 1 })}
+                    />
+                    <span>显示弹幕</span>
+                  </label>
+                  <label className="toggle-row">
+                    <input
+                      type="checkbox"
+                      checked={danmakuPreferences.showSimplified}
+                      onChange={(event) => replaceDanmakuPreferences({ ...danmakuPreferences, showSimplified: event.target.checked, opacity: 1 })}
+                    />
+                    <span>优先显示简体中文</span>
+                  </label>
+                </div>
                 <label className="danmaku-field">
                   <span>速度 {danmakuPreferences.speed.toFixed(1)}s</span>
                   <input

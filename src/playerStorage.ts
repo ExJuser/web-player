@@ -223,7 +223,7 @@ export function parseDanmakuPreferences(source: unknown): DanmakuPreferences {
   const preferences = source as Partial<DanmakuPreferences>;
   return {
     enabled: typeof preferences.enabled === "boolean" ? preferences.enabled : defaultDanmakuPreferences.enabled,
-    opacity: boundedNumber(preferences.opacity, defaultDanmakuPreferences.opacity, 0.2, 1),
+    opacity: 1,
     speed: boundedNumber(preferences.speed, defaultDanmakuPreferences.speed, 4, 14),
     density: boundedNumber(preferences.density, defaultDanmakuPreferences.density, 0.2, 1),
     displayArea: boundedNumber(preferences.displayArea, defaultDanmakuPreferences.displayArea, 0.25, 1),

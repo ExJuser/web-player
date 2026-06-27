@@ -79,7 +79,7 @@ export const defaultPlayerSettings = {
 
 export const defaultDanmakuPreferences: DanmakuPreferences = {
   enabled: true,
-  opacity: 0.9,
+  opacity: 1,
   speed: 8,
   density: 0.7,
   displayArea: 0.55,

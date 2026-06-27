@@ -4403,6 +4403,14 @@ button {
   height: 16px;
 }
 
+.danmaku-toggle-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 18px;
+  min-width: 0;
+}
+
 .tag-dialog {
   position: relative;
   display: grid;
@@ -6013,6 +6021,12 @@ button {
 
   .danmaku-dialog-grid {
     grid-template-columns: 1fr;
+  }
+
+  .danmaku-toggle-line {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 6px;
   }
 
 }
