@@ -42,6 +42,21 @@ test("detects near duplicate tags with fuzzy similarity", () => {
   assert.equal(suggestion?.reason, "相似标签");
 });
 
+test("splits incoming tags by exact existing normalized matches", () => {
+  assert.deepEqual(
+    tagUtils.splitTagsByExistingMatch(["无码"], ["丝妹", "无码"]),
+    { resolvedTags: ["无码"], unmatchedTags: [] },
+  );
+  assert.deepEqual(
+    tagUtils.splitTagsByExistingMatch(["无码", "剧情"], ["无码"]),
+    { resolvedTags: ["无码", "剧情"], unmatchedTags: ["剧情"] },
+  );
+  assert.deepEqual(
+    tagUtils.splitTagsByExistingMatch(["ＡＩ-字幕"], ["AI字幕"]),
+    { resolvedTags: ["AI字幕"], unmatchedTags: [] },
+  );
+});
+
 test("scores tag search matches higher than loose text matches", () => {
   assert.equal(tagUtils.getTagSearchScore("美腿", ["美腿", "剧情"]), 32);
   assert.equal(tagUtils.getTagSearchScore("腿玩年", ["美腿"]), 28);
