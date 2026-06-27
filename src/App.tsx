@@ -10140,12 +10140,15 @@ export default function App() {
             aria-labelledby="danmaku-title"
             className="danmaku-dialog"
           >
-            <header className="modal-header">
-              <div>
-                <p>追番弹幕</p>
-                <h2 id="danmaku-title">弹幕源</h2>
-              </div>
-              <button className="icon-button" type="button" onClick={() => setIsDanmakuDialogOpen(false)} title="关闭弹幕设置">
+            <header className="danmaku-dialog-header">
+              <h2 id="danmaku-title">追番弹幕</h2>
+              <button
+                aria-label="关闭"
+                className="dialog-close"
+                type="button"
+                onClick={() => setIsDanmakuDialogOpen(false)}
+                title="关闭弹幕设置"
+              >
                 <X size={18} />
               </button>
             </header>

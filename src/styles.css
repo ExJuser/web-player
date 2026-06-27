@@ -4137,6 +4137,18 @@ button {
   background: rgba(142, 151, 165, 0.45);
 }
 
+.danmaku-dialog-header {
+  min-width: 0;
+  padding-right: 44px;
+}
+
+.danmaku-dialog-header h2 {
+  margin: 0;
+  color: #f5f7fb;
+  font-size: 16px;
+  line-height: 1.35;
+}
+
 .danmaku-dialog-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.2fr) minmax(260px, 0.8fr);
@@ -5897,6 +5909,11 @@ button {
 :root[data-theme="light"] .danmaku-panel {
   border-color: #d7e0ea;
   background: #f8fafc;
+}
+
+.app-shell.theme-light .danmaku-dialog-header h2,
+:root[data-theme="light"] .danmaku-dialog-header h2 {
+  color: #172033;
 }
 
 .app-shell.theme-light .danmaku-field,
