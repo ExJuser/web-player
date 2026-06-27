@@ -56,6 +56,10 @@ import {
 import type {
   ActiveView,
   AutoNextPrompt,
+  DanmakuComment,
+  DanmakuPreferences,
+  DanmakuSelectionStore,
+  DanmakuSource,
   DataTransferItemWithHandle,
   EmbeddedSubtitleTrack,
   FileSystemDirectoryHandle,
@@ -128,8 +132,10 @@ import {
   defaultShortcuts,
   defaultPlayerSettings,
   defaultPlayerPreferences,
+  defaultDanmakuPreferences,
   shortcutGroups
 } from "./playerConstants";
+import { createDanmakuComment } from "./danmakuUtils";
 
 
 function isVideoFile(name: string) {
@@ -299,6 +305,8 @@ function hasStoredData(store: PlayerDataStore) {
       Object.keys(store.videoStats).length ||
       Object.keys(store.tagMergeDecisions).length ||
       store.embeddedSubtitles.length ||
+      Object.keys(store.danmakuSelections).length ||
+      JSON.stringify(store.danmakuPreferences) !== JSON.stringify(defaultDanmakuPreferences) ||
       JSON.stringify(store.preferences) !== JSON.stringify(defaultPlayerPreferences)
   );
 }
@@ -1128,6 +1136,25 @@ type LibrarySearchCandidate = {
 type LibraryAiSearchResponse = {
   answer: string;
   matchIds: string[];
+};
+
+type DanmakuSourcePayload = {
+  source: DanmakuSource;
+  comments: DanmakuComment[];
+  reused?: number;
+  requested?: number;
+};
+
+type DanmakuSearchCandidate = {
+  provider: DanmakuSource["provider"];
+  title: string;
+  sourceUrl: string;
+  confidence: "high" | "medium" | "low";
+  reason: string;
+};
+
+type DanmakuSearchResponse = {
+  candidates: DanmakuSearchCandidate[];
 };
 
 const japaneseSimplifiedCharacterPairs: Array<[string, string]> = [
@@ -2080,6 +2107,8 @@ export default function App() {
   const tagDialogDragRef = useRef<DialogDragState | null>(null);
   const videosRef = useRef<VideoItem[]>([]);
   const subtitlesRef = useRef<SubtitleItem[]>([]);
+  const danmakuSelectionsRef = useRef<DanmakuSelectionStore>({});
+  const danmakuPreferencesRef = useRef<DanmakuPreferences>(defaultDanmakuPreferences);
   const localConfigRef = useRef<LocalConfig | null>(null);
   const cachedEmbeddedSubtitleLookupKeysRef = useRef(new Set<string>());
   const bangumiMatchesBySeriesKeyRef = useRef<Record<string, BangumiSeriesMatch>>({});
@@ -2118,6 +2147,16 @@ export default function App() {
   const librarySearchRunIdRef = useRef(0);
   const [videos, setVideos] = useState<VideoItem[]>([]);
   const [subtitles, setSubtitles] = useState<SubtitleItem[]>([]);
+  const [danmakuSelections, setDanmakuSelections] = useState<DanmakuSelectionStore>({});
+  const [danmakuPreferences, setDanmakuPreferences] = useState<DanmakuPreferences>(defaultDanmakuPreferences);
+  const [danmakuComments, setDanmakuComments] = useState<DanmakuComment[]>([]);
+  const [currentDanmakuSource, setCurrentDanmakuSource] = useState<DanmakuSource | null>(null);
+  const [danmakuCandidates, setDanmakuCandidates] = useState<DanmakuSearchCandidate[]>([]);
+  const [danmakuManualUrl, setDanmakuManualUrl] = useState("");
+  const [danmakuImportText, setDanmakuImportText] = useState("");
+  const [danmakuMessage, setDanmakuMessage] = useState("");
+  const [isDanmakuDialogOpen, setIsDanmakuDialogOpen] = useState(false);
+  const [isDanmakuLoading, setIsDanmakuLoading] = useState(false);
   const [localConfig, setLocalConfig] = useState<LocalConfig | null>(null);
   const [mediaRootStatuses, setMediaRootStatuses] = useState<PlayerMediaRootStatus[]>([]);
   const [mediaRootId, setMediaRootId] = useState<string | null>(null);
@@ -2284,6 +2323,8 @@ export default function App() {
   isMainVideoLoadingRef.current = isMainVideoLoading;
   videosRef.current = videos;
   subtitlesRef.current = subtitles;
+  danmakuSelectionsRef.current = danmakuSelections;
+  danmakuPreferencesRef.current = danmakuPreferences;
   photoAlbumsRef.current = photoAlbums;
   selectedSubtitleIdRef.current = selectedSubtitleId;
   localConfigRef.current = localConfig;
@@ -2309,6 +2350,8 @@ export default function App() {
       videoStats: videoStatsRef.current,
       tagMergeDecisions: tagMergeDecisionsRef.current,
       embeddedSubtitles: createPersistedEmbeddedSubtitles(subtitlesRef.current),
+      danmakuSelections: danmakuSelectionsRef.current,
+      danmakuPreferences: danmakuPreferencesRef.current,
       preferences: playerPreferencesRef.current,
       settings: playerSettingsRef.current,
       metadata: libraryMetadataRef.current,
@@ -2370,6 +2413,8 @@ export default function App() {
     videoTagsRef.current = nextDataStore.videoTags;
     videoStatsRef.current = nextDataStore.videoStats;
     tagMergeDecisionsRef.current = nextDataStore.tagMergeDecisions;
+    danmakuSelectionsRef.current = nextDataStore.danmakuSelections;
+    danmakuPreferencesRef.current = nextDataStore.danmakuPreferences;
     libraryMetadataRef.current = nextDataStore.metadata;
     setProgressStore(nextDataStore.progress);
     setPlaylistSortMode(nextDataStore.preferences.playlistSortMode);
@@ -2384,6 +2429,8 @@ export default function App() {
     setFavoriteVideoIds(new Set(nextDataStore.favorites));
     setVideoTags(nextDataStore.videoTags);
     setTagMergeDecisions(nextDataStore.tagMergeDecisions);
+    setDanmakuSelections(nextDataStore.danmakuSelections);
+    setDanmakuPreferences(nextDataStore.danmakuPreferences);
   }, []);
 
   const loadPhotoAlbumDirectory = useCallback(
@@ -3041,6 +3088,17 @@ export default function App() {
     [adaptiveColumns],
   );
   const currentMediaRootId = currentVideo?.mediaRootId ?? mediaRootId;
+  const isDanmakuAvailable = Boolean(currentVideo && homeMediaMode === "anime" && isSeriesMode);
+  const currentDanmakuSelection = currentVideo ? danmakuSelections[currentVideo.id] ?? null : null;
+  const activeDanmakuComments = useMemo(() => {
+    if (!danmakuPreferences.enabled || !currentVideo || !danmakuComments.length || isPrivacyMode) return [];
+    const durationSeconds = danmakuPreferences.speed;
+    const displayLimit = Math.max(12, Math.round(90 * danmakuPreferences.density));
+    return danmakuComments
+      .filter((comment) => comment.time <= currentTime && currentTime - comment.time <= durationSeconds)
+      .slice(-displayLimit);
+  }, [currentTime, currentVideo, danmakuComments, danmakuPreferences.density, danmakuPreferences.enabled, danmakuPreferences.speed, isPrivacyMode]);
+  const danmakuLaneCount = Math.max(3, Math.round(10 * danmakuPreferences.displayArea));
   const currentMediaLibraryRoot = useMemo(() => {
     const roots = localConfig?.mediaRoots ?? [];
     if (currentMediaRootId) {
@@ -6341,6 +6399,176 @@ export default function App() {
     }
   }, [canCreateCompatibleMedia, compatibleMediaVideoId, currentMediaRootId, currentVideo, updateVideoPlayability]);
 
+  const applyDanmakuSourcePayload = useCallback(
+    (payload: DanmakuSourcePayload, options?: { persist?: boolean; message?: string }) => {
+      const nextComments = payload.comments.map((comment) => createDanmakuComment(comment)).filter((comment): comment is DanmakuComment => Boolean(comment));
+      setCurrentDanmakuSource(payload.source);
+      setDanmakuComments(nextComments);
+      setDanmakuMessage(options?.message ?? `已加载 ${nextComments.length} 条弹幕。`);
+
+      if (options?.persist && currentVideo) {
+        const nextSelections = {
+          ...danmakuSelectionsRef.current,
+          [currentVideo.id]: {
+            sourceId: payload.source.id,
+            sourceName: payload.source.title,
+            provider: payload.source.provider,
+            updatedAt: Date.now(),
+          },
+        };
+        danmakuSelectionsRef.current = nextSelections;
+        setDanmakuSelections(nextSelections);
+        void saveCurrentPlayerDataStore({ danmakuSelections: nextSelections }).catch(() => undefined);
+      }
+    },
+    [currentVideo, saveCurrentPlayerDataStore],
+  );
+
+  const loadDanmakuSource = useCallback(
+    async (sourceId: string, options?: { silent?: boolean }) => {
+      if (!sourceId) return;
+      if (!options?.silent) {
+        setIsDanmakuLoading(true);
+        setDanmakuMessage("正在加载弹幕缓存...");
+      }
+      try {
+        const payload = await fetchJson<DanmakuSourcePayload>("/api/danmaku/source", {
+          method: "POST",
+          body: JSON.stringify({ sourceId }),
+        });
+        applyDanmakuSourcePayload(payload, { message: `已恢复 ${payload.comments.length} 条弹幕。` });
+      } catch (error) {
+        setCurrentDanmakuSource(null);
+        setDanmakuComments([]);
+        if (!options?.silent) setDanmakuMessage(error instanceof Error ? error.message : "弹幕缓存加载失败。");
+      } finally {
+        if (!options?.silent) setIsDanmakuLoading(false);
+      }
+    },
+    [applyDanmakuSourcePayload],
+  );
+
+  useEffect(() => {
+    if (!currentVideo) {
+      setCurrentDanmakuSource(null);
+      setDanmakuComments([]);
+      return;
+    }
+    const selection = danmakuSelectionsRef.current[currentVideo.id];
+    if (!selection) {
+      setCurrentDanmakuSource(null);
+      setDanmakuComments([]);
+      return;
+    }
+    void loadDanmakuSource(selection.sourceId, { silent: true });
+  }, [currentVideo, loadDanmakuSource]);
+
+  const searchDanmakuSources = useCallback(async () => {
+    if (!currentVideo) return;
+    setIsDanmakuDialogOpen(true);
+    setIsDanmakuLoading(true);
+    setDanmakuMessage("正在匹配弹幕源...");
+    try {
+      const response = await fetchJson<DanmakuSearchResponse>("/api/danmaku/search", {
+        method: "POST",
+        body: JSON.stringify({
+          title: activeBangumiSeries?.title || seriesTitleByVideoId.get(currentVideo.id) || inferSeriesTitle(currentVideo),
+          videoName: currentVideo.name,
+          url: danmakuManualUrl,
+        }),
+      });
+      setDanmakuCandidates(response.candidates);
+      setDanmakuMessage(response.candidates.length ? `找到 ${response.candidates.length} 个候选弹幕源。` : "没有找到公开候选，可粘贴 Bilibili/动画疯链接或导入文件。");
+    } catch (error) {
+      setDanmakuMessage(error instanceof Error ? error.message : "弹幕源匹配失败。");
+    } finally {
+      setIsDanmakuLoading(false);
+    }
+  }, [activeBangumiSeries, currentVideo, danmakuManualUrl, seriesTitleByVideoId]);
+
+  const fetchDanmakuFromUrl = useCallback(
+    async (url: string) => {
+      if (!currentVideo || !url.trim()) {
+        setDanmakuMessage("请输入弹幕链接。");
+        return;
+      }
+      setIsDanmakuLoading(true);
+      setDanmakuMessage("正在拉取弹幕...");
+      try {
+        const payload = await fetchJson<DanmakuSourcePayload>("/api/danmaku/fetch", {
+          method: "POST",
+          body: JSON.stringify({ url: url.trim() }),
+        });
+        applyDanmakuSourcePayload(payload, { persist: true, message: `已加载 ${payload.comments.length} 条弹幕。` });
+      } catch (error) {
+        setDanmakuMessage(error instanceof Error ? error.message : "弹幕拉取失败。");
+      } finally {
+        setIsDanmakuLoading(false);
+      }
+    },
+    [applyDanmakuSourcePayload, currentVideo],
+  );
+
+  const importDanmakuText = useCallback(async () => {
+    if (!currentVideo || !danmakuImportText.trim()) {
+      setDanmakuMessage("请粘贴 XML、JSON 或 ASS 弹幕内容。");
+      return;
+    }
+    setIsDanmakuLoading(true);
+    setDanmakuMessage("正在导入弹幕...");
+    try {
+      const payload = await fetchJson<DanmakuSourcePayload>("/api/danmaku/import", {
+        method: "POST",
+        body: JSON.stringify({
+          title: `${currentVideo.name} 手动弹幕`,
+          text: danmakuImportText,
+        }),
+      });
+      applyDanmakuSourcePayload(payload, { persist: true, message: `已导入 ${payload.comments.length} 条弹幕。` });
+      setDanmakuImportText("");
+    } catch (error) {
+      setDanmakuMessage(error instanceof Error ? error.message : "弹幕导入失败。");
+    } finally {
+      setIsDanmakuLoading(false);
+    }
+  }, [applyDanmakuSourcePayload, currentVideo, danmakuImportText]);
+
+  const translateCurrentDanmaku = useCallback(async () => {
+    if (!currentDanmakuSource) {
+      setDanmakuMessage("请先加载弹幕源。");
+      return;
+    }
+    if (!localConfig?.ai.configured) {
+      setDanmakuMessage("未配置 DEEPSEEK_API_KEY，只能使用本地繁简转换。");
+      return;
+    }
+    setIsDanmakuLoading(true);
+    setDanmakuMessage("正在去重并批量翻译弹幕...");
+    try {
+      const payload = await fetchJson<DanmakuSourcePayload>("/api/ai/danmaku/translate", {
+        method: "POST",
+        body: JSON.stringify({ sourceId: currentDanmakuSource.id }),
+      });
+      applyDanmakuSourcePayload(payload, {
+        persist: true,
+        message: `翻译完成：复用 ${payload.reused ?? 0} 条，请求 ${payload.requested ?? 0} 条。`,
+      });
+    } catch (error) {
+      setDanmakuMessage(error instanceof Error ? error.message : "弹幕翻译失败。");
+    } finally {
+      setIsDanmakuLoading(false);
+    }
+  }, [applyDanmakuSourcePayload, currentDanmakuSource, localConfig?.ai.configured]);
+
+  const replaceDanmakuPreferences = useCallback(
+    (nextPreferences: DanmakuPreferences) => {
+      danmakuPreferencesRef.current = nextPreferences;
+      setDanmakuPreferences(nextPreferences);
+      void saveCurrentPlayerDataStore({ danmakuPreferences: nextPreferences }).catch(() => undefined);
+    },
+    [saveCurrentPlayerDataStore],
+  );
+
   const extractEmbeddedSubtitle = useCallback(
     async (track: EmbeddedSubtitleTrack) => {
       if (!currentVideo || !currentMediaRootId || !track.extractable) return;
@@ -8472,6 +8700,41 @@ export default function App() {
               </div>
             ) : null}
 
+            {isDanmakuAvailable && activeDanmakuComments.length ? (
+              <div
+                className="danmaku-layer"
+                aria-hidden="true"
+                style={
+                  {
+                    "--danmaku-opacity": danmakuPreferences.opacity,
+                    "--danmaku-speed": `${danmakuPreferences.speed}s`,
+                  } as React.CSSProperties
+                }
+              >
+                {activeDanmakuComments.map((comment, index) => {
+                  const elapsed = Math.max(0, currentTime - comment.time);
+                  const lane = index % danmakuLaneCount;
+                  const text = danmakuPreferences.showSimplified ? comment.simplifiedText || comment.text : comment.text;
+                  return (
+                    <span
+                      key={`${comment.id}:${Math.floor(comment.time * 10)}`}
+                      className={`danmaku-item mode-${comment.mode}`}
+                      style={
+                        {
+                          "--danmaku-lane": lane,
+                          "--danmaku-lanes": danmakuLaneCount,
+                          "--danmaku-delay": `-${elapsed}s`,
+                          color: comment.color,
+                        } as React.CSSProperties
+                      }
+                    >
+                      {text}
+                    </span>
+                  );
+                })}
+              </div>
+            ) : null}
+
             {launchEffectKey ? (
               <div key={launchEffectKey} className="rocket-launch-effect" aria-hidden="true">
                 <div className="rocket-launch-effect__sky">
@@ -8717,6 +8980,20 @@ export default function App() {
               >
                 AI
               </button>
+              {homeMediaMode === "anime" ? (
+                <button
+                  className={`icon-button ${danmakuPreferences.enabled && currentDanmakuSource ? "active" : ""}`}
+                  type="button"
+                  onClick={() => {
+                    setIsDanmakuDialogOpen(true);
+                    setDanmakuMessage(currentDanmakuSource ? `当前弹幕源：${currentDanmakuSource.title}` : "匹配或导入弹幕后显示在视频上方。");
+                  }}
+                  disabled={!currentVideo || !isSeriesMode}
+                  title={isSeriesMode ? "弹幕源和弹幕设置" : "弹幕只在追番模式的剧集播放中可用"}
+                >
+                  弹
+                </button>
+              ) : null}
               <button
                 className={`icon-button ${currentVideoTags.length ? "active" : ""}`}
                 type="button"
@@ -9755,6 +10032,159 @@ export default function App() {
         </section>
       </div>
     ) : null}
+    {isDanmakuDialogOpen ? (
+        <div className="modal-backdrop" role="presentation" onMouseDown={(event) => {
+          if (event.target === event.currentTarget) setIsDanmakuDialogOpen(false);
+        }}>
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="danmaku-title"
+            className="danmaku-dialog"
+          >
+            <header className="modal-header">
+              <div>
+                <p>追番弹幕</p>
+                <h2 id="danmaku-title">弹幕源</h2>
+              </div>
+              <button className="icon-button" type="button" onClick={() => setIsDanmakuDialogOpen(false)} title="关闭弹幕设置">
+                <X size={18} />
+              </button>
+            </header>
+
+            <div className="danmaku-dialog-grid">
+              <section className="danmaku-panel">
+                <div className="danmaku-panel-header">
+                  <strong>{currentDanmakuSource ? currentDanmakuSource.title : "未加载弹幕"}</strong>
+                  <span>{currentDanmakuSource ? `${currentDanmakuSource.commentCount} 条` : currentVideo?.name ?? "未选择视频"}</span>
+                </div>
+                <div className="danmaku-actions">
+                  <button className="primary-button" type="button" onClick={searchDanmakuSources} disabled={!isDanmakuAvailable || isDanmakuLoading}>
+                    <Search size={16} />
+                    自动匹配
+                  </button>
+                  <button className="secondary-button" type="button" onClick={translateCurrentDanmaku} disabled={!currentDanmakuSource || isDanmakuLoading}>
+                    <RefreshCw size={16} />
+                    翻译/转换
+                  </button>
+                </div>
+                <label className="danmaku-field">
+                  <span>Bilibili / 动画疯链接</span>
+                  <input
+                    value={danmakuManualUrl}
+                    onChange={(event) => setDanmakuManualUrl(event.target.value)}
+                    placeholder="https://www.bilibili.com/video/BV... 或动画疯 sn 链接"
+                    disabled={isDanmakuLoading}
+                  />
+                </label>
+                <button className="secondary-button" type="button" onClick={() => fetchDanmakuFromUrl(danmakuManualUrl)} disabled={!danmakuManualUrl.trim() || isDanmakuLoading}>
+                  拉取链接弹幕
+                </button>
+                {danmakuCandidates.length ? (
+                  <div className="danmaku-candidate-list">
+                    {danmakuCandidates.map((candidate) => (
+                      <button
+                        key={`${candidate.provider}:${candidate.sourceUrl}`}
+                        className="danmaku-candidate"
+                        type="button"
+                        onClick={() => fetchDanmakuFromUrl(candidate.sourceUrl)}
+                        disabled={isDanmakuLoading}
+                      >
+                        <strong>{candidate.title}</strong>
+                        <span>{candidate.provider === "bilibili" ? "Bilibili" : candidate.provider === "aniGamer" ? "动画疯" : "手动"} · {candidate.reason}</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </section>
+
+              <section className="danmaku-panel">
+                <div className="danmaku-panel-header">
+                  <strong>显示设置</strong>
+                  <span>{currentDanmakuSelection ? currentDanmakuSelection.sourceName : "未绑定当前视频"}</span>
+                </div>
+                <label className="toggle-row">
+                  <input
+                    type="checkbox"
+                    checked={danmakuPreferences.enabled}
+                    onChange={(event) => replaceDanmakuPreferences({ ...danmakuPreferences, enabled: event.target.checked })}
+                  />
+                  <span>显示弹幕</span>
+                </label>
+                <label className="toggle-row">
+                  <input
+                    type="checkbox"
+                    checked={danmakuPreferences.showSimplified}
+                    onChange={(event) => replaceDanmakuPreferences({ ...danmakuPreferences, showSimplified: event.target.checked })}
+                  />
+                  <span>优先显示简体中文</span>
+                </label>
+                <label className="danmaku-field">
+                  <span>透明度 {Math.round(danmakuPreferences.opacity * 100)}%</span>
+                  <input
+                    type="range"
+                    min={0.2}
+                    max={1}
+                    step={0.05}
+                    value={danmakuPreferences.opacity}
+                    onChange={(event) => replaceDanmakuPreferences({ ...danmakuPreferences, opacity: Number(event.target.value) })}
+                  />
+                </label>
+                <label className="danmaku-field">
+                  <span>速度 {danmakuPreferences.speed.toFixed(1)}s</span>
+                  <input
+                    type="range"
+                    min={4}
+                    max={14}
+                    step={0.5}
+                    value={danmakuPreferences.speed}
+                    onChange={(event) => replaceDanmakuPreferences({ ...danmakuPreferences, speed: Number(event.target.value) })}
+                  />
+                </label>
+                <label className="danmaku-field">
+                  <span>密度 {Math.round(danmakuPreferences.density * 100)}%</span>
+                  <input
+                    type="range"
+                    min={0.2}
+                    max={1}
+                    step={0.05}
+                    value={danmakuPreferences.density}
+                    onChange={(event) => replaceDanmakuPreferences({ ...danmakuPreferences, density: Number(event.target.value) })}
+                  />
+                </label>
+                <label className="danmaku-field">
+                  <span>显示区域 {Math.round(danmakuPreferences.displayArea * 100)}%</span>
+                  <input
+                    type="range"
+                    min={0.25}
+                    max={1}
+                    step={0.05}
+                    value={danmakuPreferences.displayArea}
+                    onChange={(event) => replaceDanmakuPreferences({ ...danmakuPreferences, displayArea: Number(event.target.value) })}
+                  />
+                </label>
+              </section>
+            </div>
+
+            <label className="danmaku-field danmaku-import">
+              <span>导入 XML / JSON / ASS 弹幕</span>
+              <textarea
+                value={danmakuImportText}
+                onChange={(event) => setDanmakuImportText(event.target.value)}
+                placeholder="粘贴弹幕文件内容"
+                disabled={isDanmakuLoading}
+              />
+            </label>
+            <div className="danmaku-footer">
+              <button className="secondary-button" type="button" onClick={importDanmakuText} disabled={!danmakuImportText.trim() || isDanmakuLoading}>
+                导入弹幕
+              </button>
+              <span className={isDanmakuLoading ? "ai-loading" : "ai-empty-state"}>{danmakuMessage || "弹幕数量较多时会先去重再翻译，减少请求次数和 token 消耗。"}</span>
+            </div>
+          </section>
+        </div>
+      ) : null}
+
     {isAiPanelOpen ? (
       <div className="modal-backdrop" role="presentation" onMouseDown={() => setIsAiPanelOpen(false)}>
         <section

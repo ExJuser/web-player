@@ -92,6 +92,52 @@ export type PersistedEmbeddedSubtitle = {
   embeddedTrack: EmbeddedSubtitleTrack;
 };
 
+export type DanmakuProvider = "bilibili" | "aniGamer" | "manual";
+
+export type DanmakuCommentMode = "scroll" | "top" | "bottom";
+
+export type DanmakuComment = {
+  id: string;
+  time: number;
+  text: string;
+  simplifiedText?: string;
+  mode: DanmakuCommentMode;
+  color?: string;
+  hash: string;
+  sourceLanguage?: "zh-Hans" | "zh-Hant" | "ja" | "en" | "mixed" | "unknown";
+};
+
+export type DanmakuSource = {
+  id: string;
+  provider: DanmakuProvider;
+  title: string;
+  sourceUrl: string;
+  language: "zh-Hans" | "zh-Hant" | "ja" | "en" | "mixed" | "unknown";
+  commentCount: number;
+  translatedCount: number;
+  updatedAt: number;
+  requiresCredential?: boolean;
+  error?: string;
+};
+
+export type DanmakuPreferences = {
+  enabled: boolean;
+  opacity: number;
+  speed: number;
+  density: number;
+  displayArea: number;
+  showSimplified: boolean;
+};
+
+export type DanmakuSelection = {
+  sourceId: string;
+  sourceName: string;
+  provider: DanmakuProvider;
+  updatedAt: number;
+};
+
+export type DanmakuSelectionStore = Record<string, DanmakuSelection>;
+
 export type PlaybackProgress = {
   currentTime: number;
   duration: number;
@@ -159,6 +205,8 @@ export type PlayerDataStore = {
   videoStats: VideoStatsStore;
   tagMergeDecisions: TagMergeDecisionStore;
   embeddedSubtitles: PersistedEmbeddedSubtitle[];
+  danmakuSelections: DanmakuSelectionStore;
+  danmakuPreferences: DanmakuPreferences;
   preferences: PlayerPreferences;
   settings: PlayerPersistentSettings;
   metadata?: PlayerLibraryMetadata | PlayerGlobalMetadata;
