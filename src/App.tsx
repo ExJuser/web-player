@@ -461,6 +461,19 @@ function isFormControl(target: EventTarget | null) {
   return target.isContentEditable || ["INPUT", "SELECT", "TEXTAREA", "BUTTON"].includes(target.tagName);
 }
 
+function blurClickedButton(target: EventTarget | null) {
+  if (!(target instanceof Element)) return;
+  const button = target.closest("button");
+  if (!(button instanceof HTMLButtonElement) || button.disabled) return;
+  if (button.classList.contains("shortcut-key-button")) return;
+
+  window.setTimeout(() => {
+    if (document.activeElement === button) {
+      button.blur();
+    }
+  }, 0);
+}
+
 function formatShortcutKey(code: string) {
   if (code === "Space") return "空格";
   if (code === "Slash") return "?";
@@ -4072,6 +4085,17 @@ export default function App() {
     document.documentElement.dataset.theme = theme;
     window.localStorage.setItem(appThemeStorageKey, theme);
   }, [theme]);
+
+  useEffect(() => {
+    const handleClick = (event: MouseEvent) => {
+      blurClickedButton(event.target);
+    };
+
+    document.addEventListener("click", handleClick);
+    return () => {
+      document.removeEventListener("click", handleClick);
+    };
+  }, []);
 
   const handleShortcutCapture = useCallback(
     (event: React.KeyboardEvent<HTMLButtonElement>, action: ShortcutAction) => {

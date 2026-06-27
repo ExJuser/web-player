@@ -61,7 +61,7 @@ export function ControlSelect<T extends ControlSelectValue>({
     if (disabled) return;
     onChange(nextValue);
     setIsOpen(false);
-    window.requestAnimationFrame(() => triggerRef.current?.focus());
+    window.requestAnimationFrame(() => triggerRef.current?.blur());
   };
 
   return (
