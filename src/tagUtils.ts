@@ -143,6 +143,13 @@ export function mergeTags(existingTags: string[], incomingTags: string[]) {
   return nextTags;
 }
 
+export function doTagsSatisfyAllFilters(tags: string[], filters: string[]) {
+  const filterKeys = filters.map(normalizeTagKey).filter(Boolean);
+  if (!filterKeys.length) return true;
+  const tagKeys = new Set(tags.map(normalizeTagKey).filter(Boolean));
+  return filterKeys.every((key) => tagKeys.has(key));
+}
+
 export function buildGlobalTagUsageStats(videoTags: Record<string, string[]>): TagUsageStat[] {
   const statsByKey = new Map<string, TagUsageStat>();
 

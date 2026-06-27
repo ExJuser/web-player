@@ -317,6 +317,7 @@ import {
 } from "./playerUiState";
 import {
   createTagPairKey,
+  doTagsSatisfyAllFilters,
   findTagMergeSuggestion,
   getTagSearchScore,
   mergeTags,
@@ -1711,6 +1712,11 @@ function tokenizeLibrarySearchQuery(query: string) {
   return normalizeLibrarySearchText(query).split(/\s+/).filter((token) => token.length >= 2);
 }
 
+function createLibrarySearchSignature(query: string, tags: string[]) {
+  const tagSignature = tags.map(normalizeTagKey).filter(Boolean).join("|");
+  return `${query.trim()}\n${tagSignature}`;
+}
+
 function createLibrarySearchTokenVariants(query: string) {
   return tokenizeLibrarySearchQuery(query).flatMap((token) => createLibrarySearchTextVariants(token, 8));
 }
@@ -2090,7 +2096,9 @@ export default function App() {
   const [librarySearchMessage, setLibrarySearchMessage] = useState("");
   const [librarySearchMode, setLibrarySearchMode] = useState<LibrarySearchMode>("idle");
   const [isLibrarySearchLoading, setIsLibrarySearchLoading] = useState(false);
-  const [librarySearchSubmittedQuery, setLibrarySearchSubmittedQuery] = useState("");
+  const [librarySearchSubmittedSignature, setLibrarySearchSubmittedSignature] = useState("");
+  const [librarySearchTagInput, setLibrarySearchTagInput] = useState("");
+  const [librarySearchTagFilters, setLibrarySearchTagFilters] = useState<string[]>([]);
   const [bangumiMatchesBySeriesKey, setBangumiMatchesBySeriesKey] = useState<Record<string, BangumiSeriesMatch>>({});
   const [cacheStatus, setCacheStatus] = useState<CacheStatus | null>(null);
   const [cacheStatusMessage, setCacheStatusMessage] = useState("");
@@ -2487,6 +2495,17 @@ export default function App() {
   );
   const homeMediaModeLabel = homeMediaMode === "anime" ? "追番模式" : homeMediaMode === "special" ? "特殊模式" : "全部";
   const playerMediaModeLabel = homeMediaMode === "anime" ? "追番" : homeMediaMode === "special" ? "特殊" : "全部";
+  const activeLibrarySearchTagFilters = useMemo(
+    () => (homeMediaMode === "special" ? librarySearchTagFilters : []),
+    [homeMediaMode, librarySearchTagFilters],
+  );
+  const librarySearchDraftSignature = useMemo(
+    () => createLibrarySearchSignature(librarySearchQuery, activeLibrarySearchTagFilters),
+    [activeLibrarySearchTagFilters, librarySearchQuery],
+  );
+  const effectiveLibrarySearchMode = homeMediaMode === "special" && librarySearchMode === "ai" ? "local" : librarySearchMode;
+  const visibleLibrarySearchMessage = homeMediaMode === "special" && librarySearchMode === "ai" ? "" : librarySearchMessage;
+  const visibleLibrarySearchAnswer = homeMediaMode === "special" ? "" : librarySearchAnswer;
   const playlistVideos = useMemo(
     () =>
       getSortedVideos(
@@ -2900,14 +2919,18 @@ export default function App() {
   const searchLibraryLocally = useCallback(
     (query: string, limit = 8): LibrarySearchResult[] => {
       const normalizedQuery = normalizeLibrarySearchText(query);
+      const hasTagFilters = activeLibrarySearchTagFilters.length > 0;
       const tokens = tokenizeLibrarySearchQuery(query);
       const queryVariants = createLibrarySearchTextVariants(query);
       const alternateQueryVariants = queryVariants.filter((variant) => variant !== normalizedQuery);
       const tokenVariants = createLibrarySearchTokenVariants(query);
-      if (!normalizedQuery) return [];
+      if (!normalizedQuery && !hasTagFilters) return [];
 
       const folderResults = new Map<string, LibrarySearchResult>();
       modeFilteredVideos.forEach((video) => {
+        const tags = videoTags[video.id] ?? [];
+        if (hasTagFilters && !doTagsSatisfyAllFilters(tags, activeLibrarySearchTagFilters)) return;
+
         const folderTitle = libraryFolderTitleForVideo(video);
         const folderPath = libraryFolderPathForVideo(video);
         const mediaRoot = video.mediaRootId ? localConfig?.mediaRoots.find((root) => root.id === video.mediaRootId) : null;
@@ -2925,9 +2948,8 @@ export default function App() {
           baseNameWithoutExtension(video.name),
           mediaRootLabel,
         ].map(normalizeLibrarySearchText);
-        const tags = videoTags[video.id] ?? [];
-        let score = 0;
-        const reasons: string[] = [];
+        let score = normalizedQuery ? 0 : 30;
+        const reasons: string[] = normalizedQuery ? [] : ["标签筛选"];
 
         if (includesAnyLibrarySearchVariant([searchable[0]], queryVariants)) {
           score += 40;
@@ -3023,7 +3045,16 @@ export default function App() {
         .sort((a, b) => b.score - a.score || collator.compare(a.title, b.title))
         .slice(0, limit);
     },
-    [createLibraryFolderResult, favoriteVideoIds, localConfig, modeFilteredVideos, progressStore, videoTags, videosByLibraryFolderKey],
+    [
+      activeLibrarySearchTagFilters,
+      createLibraryFolderResult,
+      favoriteVideoIds,
+      localConfig,
+      modeFilteredVideos,
+      progressStore,
+      videoTags,
+      videosByLibraryFolderKey,
+    ],
   );
   const createLibrarySearchCandidates = useCallback(
     (localResults: LibrarySearchResult[]): LibrarySearchCandidate[] => {
@@ -3069,6 +3100,19 @@ export default function App() {
           basePathOf(subtitle.relativePath) === currentBasePath),
     );
   }, [currentVideo, subtitles]);
+  const addLibrarySearchTagFilters = useCallback((input: string) => {
+    const incomingTags = parseTagInput(input);
+    if (!incomingTags.length) return;
+    setLibrarySearchTagFilters((currentTags) => mergeTags(currentTags, incomingTags));
+    setLibrarySearchTagInput("");
+  }, []);
+  const removeLibrarySearchTagFilter = useCallback((tag: string) => {
+    const tagKey = normalizeTagKey(tag);
+    setLibrarySearchTagFilters((currentTags) => currentTags.filter((currentTag) => normalizeTagKey(currentTag) !== tagKey));
+  }, []);
+  const clearLibrarySearchTagFilters = useCallback(() => {
+    setLibrarySearchTagFilters([]);
+  }, []);
   const subtitleControlOptions = useMemo(
     () => createSubtitleControlOptions(currentVideoSubtitles),
     [currentVideoSubtitles],
@@ -6416,27 +6460,36 @@ export default function App() {
 
   const runLibrarySearch = useCallback(async () => {
     const query = librarySearchQuery.trim();
+    const hasTagFilters = activeLibrarySearchTagFilters.length > 0;
+    const isSpecialSearch = homeMediaMode === "special";
     setLibrarySearchAnswer("");
-    if (!query) {
+    if (!query && !hasTagFilters) {
       setLibrarySearchMode("idle");
-      setLibrarySearchMessage("输入片名、关键词或想看的内容。");
+      setLibrarySearchMessage(isSpecialSearch ? "输入片名关键词，或添加一个标签筛选。" : "输入片名、关键词或想看的内容。");
       setLibrarySearchResults([]);
-      setLibrarySearchSubmittedQuery("");
+      setLibrarySearchSubmittedSignature("");
       return;
     }
 
-    setLibrarySearchSubmittedQuery(query);
+    setLibrarySearchSubmittedSignature(librarySearchDraftSignature);
     const localResults = searchLibraryLocally(query);
     setLibrarySearchResults(localResults);
-    const needsAi = Boolean(localConfig?.ai.configured) && shouldUseAiLibrarySearch(query, localResults);
+    const needsAi =
+      !isSpecialSearch &&
+      Boolean(localConfig?.ai.configured) &&
+      shouldUseAiLibrarySearch(query, localResults);
     if (!needsAi) {
       setLibrarySearchMode(localResults.length ? "local" : "empty");
       setLibrarySearchMessage(
-        localResults.length
-          ? "本地检索已命中，未调用大模型。"
-          : localConfig?.ai.configured
-            ? "本地没有找到匹配结果。"
-            : "本地没有找到匹配结果，且未配置 DEEPSEEK_API_KEY。",
+        isSpecialSearch
+          ? localResults.length
+            ? "特殊模式仅使用本地标签/关键词搜索。"
+            : "特殊模式本地没有找到匹配结果。"
+          : localResults.length
+            ? "本地检索已命中，未调用大模型。"
+            : localConfig?.ai.configured
+              ? "本地没有找到匹配结果。"
+              : "本地没有找到匹配结果，且未配置 DEEPSEEK_API_KEY。",
       );
       return;
     }
@@ -6480,6 +6533,9 @@ export default function App() {
   }, [
     createLibraryFolderResult,
     createLibrarySearchCandidates,
+    activeLibrarySearchTagFilters,
+    homeMediaMode,
+    librarySearchDraftSignature,
     librarySearchQuery,
     localConfig,
     modeFilteredVideos,
@@ -6489,10 +6545,19 @@ export default function App() {
 
   const librarySearchPreviewResults = useMemo(() => {
     const query = librarySearchQuery.trim();
-    if (!query || query === librarySearchSubmittedQuery) return [];
+    if ((!query && !activeLibrarySearchTagFilters.length) || librarySearchDraftSignature === librarySearchSubmittedSignature) return [];
     return searchLibraryLocally(query, 3);
-  }, [librarySearchQuery, librarySearchSubmittedQuery, searchLibraryLocally]);
-  const shouldShowLibrarySearchPreview = Boolean(librarySearchQuery.trim() && librarySearchQuery.trim() !== librarySearchSubmittedQuery);
+  }, [
+    activeLibrarySearchTagFilters.length,
+    librarySearchDraftSignature,
+    librarySearchQuery,
+    librarySearchSubmittedSignature,
+    searchLibraryLocally,
+  ]);
+  const shouldShowLibrarySearchPreview = Boolean(
+    (librarySearchQuery.trim() || activeLibrarySearchTagFilters.length) &&
+      librarySearchDraftSignature !== librarySearchSubmittedSignature,
+  );
 
   const loadCacheStatus = useCallback(async () => {
     setIsCacheStatusLoading(true);
@@ -7659,7 +7724,7 @@ export default function App() {
               <section className="home-section library-search-card">
                 <div className="home-section-header">
                   <h2>片库搜索</h2>
-                  <span>{librarySearchMode === "ai" ? "AI 辅助" : "本地优先"}</span>
+                  <span>{homeMediaMode === "special" ? "本地筛选" : effectiveLibrarySearchMode === "ai" ? "AI 辅助" : "本地优先"}</span>
                 </div>
                 <form
                   className="library-search-form"
@@ -7672,13 +7737,65 @@ export default function App() {
                     type="search"
                     value={librarySearchQuery}
                     onChange={(event) => setLibrarySearchQuery(event.target.value)}
-                    placeholder="搜索片名，或描述想看的内容"
+                    placeholder={homeMediaMode === "special" ? "搜索片名，可搭配标签筛选" : "搜索片名，或描述想看的内容"}
                     aria-label="片库搜索"
                   />
-                  <button type="submit" disabled={isLibrarySearchLoading || !modeFilteredVideos.length} title="搜索片库">
+                  <button
+                    type="submit"
+                    disabled={
+                      isLibrarySearchLoading ||
+                      !modeFilteredVideos.length ||
+                      (!librarySearchQuery.trim() && !activeLibrarySearchTagFilters.length)
+                    }
+                    title="搜索片库"
+                  >
                     <Search size={17} />
                   </button>
                 </form>
+                {homeMediaMode === "special" ? (
+                  <div className="library-search-tag-filter" aria-label="特殊模式标签筛选">
+                    <form
+                      className="library-search-tag-form"
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        addLibrarySearchTagFilters(librarySearchTagInput);
+                      }}
+                    >
+                      <span aria-hidden="true">
+                        <Tags size={15} />
+                      </span>
+                      <input
+                        type="text"
+                        value={librarySearchTagInput}
+                        onChange={(event) => setLibrarySearchTagInput(event.target.value)}
+                        placeholder="添加标签，空格或逗号分隔"
+                        aria-label="添加片库筛选标签"
+                      />
+                      <button type="submit" disabled={!librarySearchTagInput.trim()}>
+                        添加
+                      </button>
+                    </form>
+                    {activeLibrarySearchTagFilters.length ? (
+                      <div className="library-search-tag-chips" aria-label="已选标签筛选">
+                        {activeLibrarySearchTagFilters.map((tag) => (
+                          <button
+                            className="library-search-tag-chip"
+                            key={normalizeTagKey(tag)}
+                            type="button"
+                            onClick={() => removeLibrarySearchTagFilter(tag)}
+                            title={`移除标签 ${tag}`}
+                          >
+                            <span>{tag}</span>
+                            <X size={13} aria-hidden="true" />
+                          </button>
+                        ))}
+                        <button className="library-search-tag-clear" type="button" onClick={clearLibrarySearchTagFilters}>
+                          清空
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
                 {shouldShowLibrarySearchPreview ? (
                   <div className="library-search-preview">
                     <div className="library-search-preview-header">
@@ -7694,10 +7811,13 @@ export default function App() {
                     )}
                   </div>
                 ) : null}
-                <div className={`library-search-status ${librarySearchMode}`}>
-                  {isLibrarySearchLoading ? "搜索中..." : librarySearchMessage || "明确片名会直接本地检索，复杂描述才调用 AI。"}
+                <div className={`library-search-status ${effectiveLibrarySearchMode}`}>
+                  {isLibrarySearchLoading
+                    ? "搜索中..."
+                    : visibleLibrarySearchMessage ||
+                      (homeMediaMode === "special" ? "特殊模式仅使用本地标签/关键词搜索。" : "明确片名会直接本地检索，复杂描述才调用 AI。")}
                 </div>
-                {librarySearchAnswer ? <div className="library-search-answer">{librarySearchAnswer}</div> : null}
+                {visibleLibrarySearchAnswer ? <div className="library-search-answer">{visibleLibrarySearchAnswer}</div> : null}
                 {librarySearchResults.length ? (
                   <div className="home-compact-list library-search-results">
                     {librarySearchResults.map(renderLibraryFolderResult)}
