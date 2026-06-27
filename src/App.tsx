@@ -37,6 +37,11 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
+import {
+  applyLibrarySearchResultLimit,
+  getVisibleLibrarySearchResults,
+  librarySearchResultPageSize,
+} from "./librarySearchUtils";
 import type {
   ActiveView,
   AutoNextPrompt,
@@ -2059,6 +2064,8 @@ export default function App() {
   const photoAlbumsRef = useRef<PhotoAlbum[]>([]);
   const photoObjectUrlsRef = useRef<Record<string, string>>({});
   const photoImageFilePromisesRef = useRef<Record<string, Promise<File | null>>>({});
+  const librarySearchResultsRef = useRef<HTMLDivElement | null>(null);
+  const librarySearchLoadMoreRef = useRef<HTMLDivElement | null>(null);
   const [videos, setVideos] = useState<VideoItem[]>([]);
   const [subtitles, setSubtitles] = useState<SubtitleItem[]>([]);
   const [localConfig, setLocalConfig] = useState<LocalConfig | null>(null);
@@ -2086,6 +2093,7 @@ export default function App() {
   const [isHomeProgressRecapLoading, setIsHomeProgressRecapLoading] = useState(false);
   const [librarySearchQuery, setLibrarySearchQuery] = useState("");
   const [librarySearchResults, setLibrarySearchResults] = useState<LibrarySearchResult[]>([]);
+  const [librarySearchVisibleCount, setLibrarySearchVisibleCount] = useState(librarySearchResultPageSize);
   const [librarySearchAnswer, setLibrarySearchAnswer] = useState("");
   const [librarySearchMessage, setLibrarySearchMessage] = useState("");
   const [librarySearchMode, setLibrarySearchMode] = useState<LibrarySearchMode>("idle");
@@ -2898,7 +2906,7 @@ export default function App() {
   );
   const canUseHomeRecapSubtitle = Boolean(homeRecapSubtitle || canUseHomeEmbeddedSubtitles);
   const searchLibraryLocally = useCallback(
-    (query: string, limit = 8): LibrarySearchResult[] => {
+    (query: string, limit?: number): LibrarySearchResult[] => {
       const normalizedQuery = normalizeLibrarySearchText(query);
       const tokens = tokenizeLibrarySearchQuery(query);
       const queryVariants = createLibrarySearchTextVariants(query);
@@ -3019,9 +3027,10 @@ export default function App() {
           ),
         );
       });
-      return Array.from(folderResults.values())
-        .sort((a, b) => b.score - a.score || collator.compare(a.title, b.title))
-        .slice(0, limit);
+      const sortedResults = Array.from(folderResults.values()).sort(
+        (a, b) => b.score - a.score || collator.compare(a.title, b.title),
+      );
+      return applyLibrarySearchResultLimit(sortedResults, limit);
     },
     [createLibraryFolderResult, favoriteVideoIds, localConfig, modeFilteredVideos, progressStore, videoTags, videosByLibraryFolderKey],
   );
@@ -6421,11 +6430,13 @@ export default function App() {
       setLibrarySearchMode("idle");
       setLibrarySearchMessage("输入片名、关键词或想看的内容。");
       setLibrarySearchResults([]);
+      setLibrarySearchVisibleCount(librarySearchResultPageSize);
       setLibrarySearchSubmittedQuery("");
       return;
     }
 
     setLibrarySearchSubmittedQuery(query);
+    setLibrarySearchVisibleCount(librarySearchResultPageSize);
     const localResults = searchLibraryLocally(query);
     setLibrarySearchResults(localResults);
     const needsAi = Boolean(localConfig?.ai.configured) && shouldUseAiLibrarySearch(query, localResults);
@@ -6468,11 +6479,13 @@ export default function App() {
         });
       const aiResults = Array.from(aiResultsByKey.values());
       setLibrarySearchResults(aiResults.length ? aiResults : localResults);
+      setLibrarySearchVisibleCount(librarySearchResultPageSize);
       setLibrarySearchAnswer(response.answer);
       setLibrarySearchMessage(aiResults.length ? "AI 已从本地候选中挑选结果。" : "AI 未返回明确条目，保留本地结果。");
     } catch (error) {
       setLibrarySearchMode(localResults.length ? "local" : "empty");
       setLibrarySearchResults(localResults);
+      setLibrarySearchVisibleCount(librarySearchResultPageSize);
       setLibrarySearchMessage(error instanceof Error ? error.message : "AI 搜索失败，已保留本地结果。");
     } finally {
       setIsLibrarySearchLoading(false);
@@ -6493,6 +6506,28 @@ export default function App() {
     return searchLibraryLocally(query, 3);
   }, [librarySearchQuery, librarySearchSubmittedQuery, searchLibraryLocally]);
   const shouldShowLibrarySearchPreview = Boolean(librarySearchQuery.trim() && librarySearchQuery.trim() !== librarySearchSubmittedQuery);
+  const { visibleResults: visibleLibrarySearchResults, hasMoreResults: hasMoreLibrarySearchResults } = useMemo(
+    () => getVisibleLibrarySearchResults(librarySearchResults, librarySearchVisibleCount),
+    [librarySearchResults, librarySearchVisibleCount],
+  );
+  const loadMoreLibrarySearchResults = useCallback(() => {
+    setLibrarySearchVisibleCount((count) => Math.min(count + librarySearchResultPageSize, librarySearchResults.length));
+  }, [librarySearchResults.length]);
+
+  useEffect(() => {
+    if (!hasMoreLibrarySearchResults || !librarySearchResultsRef.current || !librarySearchLoadMoreRef.current) return;
+    if (typeof IntersectionObserver === "undefined") return;
+    const root = librarySearchResultsRef.current;
+    const target = librarySearchLoadMoreRef.current;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) loadMoreLibrarySearchResults();
+      },
+      { root, rootMargin: "40px 0px 80px", threshold: 0.1 },
+    );
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [hasMoreLibrarySearchResults, loadMoreLibrarySearchResults, visibleLibrarySearchResults.length]);
 
   const loadCacheStatus = useCallback(async () => {
     setIsCacheStatusLoading(true);
@@ -7699,8 +7734,18 @@ export default function App() {
                 </div>
                 {librarySearchAnswer ? <div className="library-search-answer">{librarySearchAnswer}</div> : null}
                 {librarySearchResults.length ? (
-                  <div className="home-compact-list library-search-results">
-                    {librarySearchResults.map(renderLibraryFolderResult)}
+                  <div className="home-compact-list library-search-results" ref={librarySearchResultsRef}>
+                    {visibleLibrarySearchResults.map(renderLibraryFolderResult)}
+                    {hasMoreLibrarySearchResults ? (
+                      <div className="library-search-load-more" ref={librarySearchLoadMoreRef}>
+                        <span>
+                          已显示 {visibleLibrarySearchResults.length} / {librarySearchResults.length}
+                        </span>
+                        <button type="button" onClick={loadMoreLibrarySearchResults}>
+                          加载更多
+                        </button>
+                      </div>
+                    ) : null}
                   </div>
                 ) : librarySearchMode === "empty" ? (
                   <div className="empty-list compact">没有找到匹配文件夹</div>
