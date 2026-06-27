@@ -19,12 +19,7 @@ test("danmaku url parser recognizes supported providers", () => {
     value: "98765",
     url: "cid:98765",
   });
-  assert.deepEqual(danmaku.parseDanmakuUrl("https://ani.gamer.com.tw/animeVideo.php?sn=24680"), {
-    provider: "aniGamer",
-    kind: "sn",
-    value: "24680",
-    url: "https://ani.gamer.com.tw/animeVideo.php?sn=24680",
-  });
+  assert.equal(danmaku.parseDanmakuUrl("https://ani.gamer.com.tw/animeVideo.php?sn=24680"), null);
 });
 
 test("danmaku comments normalize text, language and duplicates", () => {
@@ -34,19 +29,6 @@ test("danmaku comments normalize text, language and duplicates", () => {
   assert.equal(first.sourceLanguage, "zh-Hant");
   assert.notEqual(first.simplifiedText, first.text);
   assert.equal(danmaku.dedupeDanmakuComments([first, second]).length, 1);
-});
-
-test("danmaku translation items only include semantic translation candidates", () => {
-  const comments = [
-    danmaku.createDanmakuComment({ time: 1, text: "繁體彈幕" }),
-    danmaku.createDanmakuComment({ time: 2, text: "かわいい" }),
-    danmaku.createDanmakuComment({ time: 3, text: "very cute" }),
-    danmaku.createDanmakuComment({ time: 4, text: "かわいい" }),
-  ].filter(Boolean);
-
-  const items = danmaku.createDanmakuTranslationItems(comments);
-  assert.equal(items.length, 2);
-  assert.equal(danmaku.chunkDanmakuTranslationItems(items, 10).length, 2);
 });
 
 test("episode inference handles common anime filename forms", () => {

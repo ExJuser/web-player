@@ -29,11 +29,8 @@ import {
   upsertMediaRoot as upsertMediaRootInConfig,
 } from "./server/mediaRoots.mjs";
 import {
-  applyDanmakuTranslations,
-  chunkDanmakuTranslationItems,
   createDanmakuComment,
   createDanmakuSourceId,
-  createDanmakuTranslationItems,
   dedupeDanmakuComments,
   inferEpisodeNumber,
   parseDanmakuUrl,
@@ -48,7 +45,6 @@ const embeddedSubtitlesRoot = path.join(dataRoot, "subtitles");
 const compatibleMediaRoot = path.join(dataRoot, "compatible-media");
 const danmakuRoot = path.join(dataRoot, "danmaku");
 const danmakuSourcesRoot = path.join(danmakuRoot, "sources");
-const danmakuTranslationsRoot = path.join(danmakuRoot, "translations");
 const aiRoot = path.join(dataRoot, "ai");
 const bangumiRoot = path.join(dataRoot, "bangumi");
 const bangumiMatchesRoot = path.join(bangumiRoot, "matches");
@@ -215,7 +211,6 @@ async function createCacheStatus() {
     { id: "subtitles", label: "内封字幕", path: embeddedSubtitlesRoot },
     { id: "compatible-media", label: "兼容播放缓存", path: compatibleMediaRoot },
     { id: "danmaku-sources", label: "弹幕源", path: danmakuSourcesRoot },
-    { id: "danmaku-translations", label: "弹幕翻译", path: danmakuTranslationsRoot },
     { id: "ai-summaries", label: "AI 字幕总结", path: path.join(aiRoot, "summaries") },
     { id: "ai-qa", label: "AI 字幕问答", path: path.join(aiRoot, "qa") },
     { id: "ai-recaps", label: "AI 进度回顾", path: path.join(aiRoot, "recaps") },
@@ -272,7 +267,6 @@ async function clearCacheItems(payload) {
   const cacheKindsByStatusId = {
     thumbnails: ["thumbnail"],
     "danmaku-sources": ["danmaku-source"],
-    "danmaku-translations": ["danmaku-translation"],
     "ai-summaries": ["ai-summary"],
     "ai-qa": ["ai-qa"],
     "ai-recaps": ["ai-recap"],
@@ -709,23 +703,6 @@ function parseBilibiliXmlDanmaku(xmlText) {
   return dedupeDanmakuComments(comments);
 }
 
-function parseAniGamerDanmakuPayload(payload) {
-  const sourceItems = Array.isArray(payload) ? payload : Array.isArray(payload?.data) ? payload.data : [];
-  const comments = sourceItems.flatMap((item, index) => {
-    const time = Number(item?.time ?? item?.stime ?? item?.start ?? item?.position ?? 0);
-    const text = String(item?.text ?? item?.msg ?? item?.message ?? item?.comment ?? "");
-    const comment = createDanmakuComment({
-      id: `aniGamer:${item?.id ?? index}`,
-      time,
-      text,
-      mode: item?.mode,
-      color: item?.color,
-    });
-    return comment ? [comment] : [];
-  });
-  return dedupeDanmakuComments(comments);
-}
-
 async function resolveBilibiliCid(parsed) {
   if (parsed.kind === "cid") return { cid: parsed.value, title: `Bilibili CID ${parsed.value}` };
   if (parsed.kind === "ep") {
@@ -783,24 +760,6 @@ async function fetchBilibiliDanmaku(parsed) {
   };
 }
 
-async function fetchAniGamerDanmaku(parsed) {
-  try {
-    const payload = await requestExternalJson(`https://ani.gamer.com.tw/ajax/danmuGet.php?sn=${encodeURIComponent(parsed.value)}`, {
-      referer: parsed.url,
-      headers: { "X-Requested-With": "XMLHttpRequest" },
-    });
-    return {
-      provider: "aniGamer",
-      title: `动画疯 SN ${parsed.value}`,
-      sourceUrl: parsed.url,
-      comments: parseAniGamerDanmakuPayload(payload),
-    };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "动画疯弹幕拉取失败。";
-    throw new Error(`动画疯公开弹幕接口不可用，可能需要登录、地区权限或验证。${message}`);
-  }
-}
-
 async function writeDanmakuSource(record) {
   await mkdir(danmakuSourcesRoot, { recursive: true });
   const language = record.comments.reduce((selected, comment) => {
@@ -835,14 +794,12 @@ async function readDanmakuSource(sourceId) {
 async function fetchDanmakuSource(payload) {
   const manualUrl = typeof payload?.url === "string" ? payload.url.trim() : "";
   const parsed = parseDanmakuUrl(manualUrl);
-  if (!parsed) throw new Error("请输入支持的 Bilibili 或动画疯弹幕链接。");
+  if (!parsed) throw new Error("请输入支持的 Bilibili 弹幕链接。");
 
   const record =
     parsed.provider === "bilibili"
       ? await fetchBilibiliDanmaku(parsed)
-      : parsed.provider === "aniGamer"
-        ? await fetchAniGamerDanmaku(parsed)
-        : null;
+      : null;
   if (!record) throw new Error("Unsupported danmaku provider.");
   if (!record.comments.length) throw new Error("没有解析到弹幕。");
   return writeDanmakuSource(record);
@@ -893,74 +850,6 @@ async function searchDanmakuSources(payload) {
   }
 
   return { candidates };
-}
-
-async function translateDanmakuSource(env, payload) {
-  const sourcePayload = await readDanmakuSource(payload?.sourceId);
-  const comments = sourcePayload.comments.map((comment) => createDanmakuComment(comment)).filter(Boolean);
-  const translationItems = createDanmakuTranslationItems(comments);
-  const translations = {};
-  await mkdir(danmakuTranslationsRoot, { recursive: true });
-
-  const pending = [];
-  for (const item of translationItems) {
-    const cachePath = path.join(danmakuTranslationsRoot, `${item.hash}.json`);
-    const cached = await readJsonFile(cachePath, null);
-    if (cached?.simplifiedText) {
-      translations[item.hash] = cached.simplifiedText;
-    } else {
-      pending.push(item);
-    }
-  }
-
-  if (pending.length && !env.DEEPSEEK_API_KEY) {
-    throw new Error("未配置 DEEPSEEK_API_KEY，无法翻译日文、英文或混合弹幕。");
-  }
-
-  for (const chunk of chunkDanmakuTranslationItems(pending)) {
-    const raw = await callDeepSeek(
-      env,
-      [
-        {
-          role: "system",
-          content:
-            "你是动画弹幕翻译助手。把每条弹幕翻译成自然简体中文，保留口语和梗的简短风格，不解释。只返回严格 JSON：{\"items\":[{\"id\":\"原 id\",\"simplifiedText\":\"简体中文\"}]}。",
-        },
-        {
-          role: "user",
-          content: JSON.stringify({ items: chunk.map((item) => ({ id: item.id, text: item.text })) }),
-        },
-      ],
-      { responseFormat: { type: "json_object" } },
-    );
-    const parsed = parseAiJsonObject(raw) ?? {};
-    const items = Array.isArray(parsed?.items) ? parsed.items : [];
-    for (const item of items) {
-      if (typeof item?.id !== "string" || typeof item?.simplifiedText !== "string") continue;
-      const text = item.simplifiedText.trim();
-      if (!text) continue;
-      translations[item.id] = text;
-      await writeJsonFile(path.join(danmakuTranslationsRoot, `${item.id}.json`), {
-        hash: item.id,
-        simplifiedText: text,
-        model: env.DEEPSEEK_MODEL || "deepseek-chat",
-        updatedAt: Date.now(),
-      });
-    }
-  }
-
-  const translatedComments = applyDanmakuTranslations(comments, translations);
-  const nextPayload = await writeDanmakuSource({
-    provider: sourcePayload.source.provider,
-    title: sourcePayload.source.title,
-    sourceUrl: sourcePayload.source.sourceUrl,
-    comments: translatedComments,
-  });
-  return {
-    ...nextPayload,
-    reused: translationItems.length - pending.length,
-    requested: pending.length,
-  };
 }
 
 async function summarizeSubtitle(env, payload) {
@@ -1861,12 +1750,6 @@ function playerDataApiPlugin(env) {
       if (url.pathname === "/api/danmaku/source" && request.method === "POST") {
         const payload = JSON.parse((await readBody(request)).toString("utf8"));
         sendJson(response, 200, await readDanmakuSource(payload?.sourceId));
-        return;
-      }
-
-      if (url.pathname === "/api/ai/danmaku/translate" && request.method === "POST") {
-        const payload = JSON.parse((await readBody(request)).toString("utf8"));
-        sendJson(response, 200, await translateDanmakuSource(env, payload));
         return;
       }
 

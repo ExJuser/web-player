@@ -6747,7 +6747,7 @@ export default function App() {
         }),
       });
       setDanmakuCandidates(response.candidates);
-      setDanmakuMessage(response.candidates.length ? `找到 ${response.candidates.length} 个候选弹幕源。` : "没有找到公开候选，可粘贴 Bilibili/动画疯链接。");
+      setDanmakuMessage(response.candidates.length ? `找到 ${response.candidates.length} 个候选弹幕源。` : "没有找到公开候选，可粘贴 Bilibili 链接。");
     } catch (error) {
       setDanmakuMessage(error instanceof Error ? error.message : "弹幕源匹配失败。");
     } finally {
@@ -6777,33 +6777,6 @@ export default function App() {
     },
     [applyDanmakuSourcePayload, currentVideo],
   );
-
-  const translateCurrentDanmaku = useCallback(async () => {
-    if (!currentDanmakuSource) {
-      setDanmakuMessage("请先加载弹幕源。");
-      return;
-    }
-    if (!localConfig?.ai.configured) {
-      setDanmakuMessage("未配置 DEEPSEEK_API_KEY，只能使用本地繁简转换。");
-      return;
-    }
-    setIsDanmakuLoading(true);
-    setDanmakuMessage("正在去重并批量翻译弹幕...");
-    try {
-      const payload = await fetchJson<DanmakuSourcePayload>("/api/ai/danmaku/translate", {
-        method: "POST",
-        body: JSON.stringify({ sourceId: currentDanmakuSource.id }),
-      });
-      applyDanmakuSourcePayload(payload, {
-        persist: true,
-        message: `翻译完成：复用 ${payload.reused ?? 0} 条，请求 ${payload.requested ?? 0} 条。`,
-      });
-    } catch (error) {
-      setDanmakuMessage(error instanceof Error ? error.message : "弹幕翻译失败。");
-    } finally {
-      setIsDanmakuLoading(false);
-    }
-  }, [applyDanmakuSourcePayload, currentDanmakuSource, localConfig?.ai.configured]);
 
   const replaceDanmakuPreferences = useCallback(
     (nextPreferences: DanmakuPreferences) => {
@@ -10325,28 +10298,6 @@ export default function App() {
                   <strong>{currentDanmakuSource ? currentDanmakuSource.title : "未加载弹幕"}</strong>
                   <span>{currentDanmakuSource ? `${currentDanmakuSource.commentCount} 条` : currentVideo?.name ?? "未选择视频"}</span>
                 </div>
-                <div className="danmaku-actions">
-                  <button className="primary-button" type="button" onClick={searchDanmakuSources} disabled={!isDanmakuAvailable || isDanmakuLoading}>
-                    <Search size={16} />
-                    自动匹配
-                  </button>
-                  <button className="secondary-button" type="button" onClick={translateCurrentDanmaku} disabled={!currentDanmakuSource || isDanmakuLoading}>
-                    <RefreshCw size={16} />
-                    翻译/转换
-                  </button>
-                </div>
-                <label className="danmaku-field">
-                  <span>Bilibili / 动画疯链接</span>
-                  <input
-                    value={danmakuManualUrl}
-                    onChange={(event) => setDanmakuManualUrl(event.target.value)}
-                    placeholder="https://www.bilibili.com/video/BV... 或动画疯 sn 链接"
-                    disabled={isDanmakuLoading}
-                  />
-                </label>
-                <button className="secondary-button" type="button" onClick={() => fetchDanmakuFromUrl(danmakuManualUrl)} disabled={!danmakuManualUrl.trim() || isDanmakuLoading}>
-                  拉取链接弹幕
-                </button>
                 {danmakuCandidates.length ? (
                   <div className="danmaku-candidate-list">
                     {danmakuCandidates.map((candidate) => (
@@ -10358,11 +10309,31 @@ export default function App() {
                         disabled={isDanmakuLoading}
                       >
                         <strong>{candidate.title}</strong>
-                        <span>{candidate.provider === "bilibili" ? "Bilibili" : candidate.provider === "aniGamer" ? "动画疯" : "手动"} · {candidate.reason}</span>
+                        <span>{candidate.provider === "bilibili" ? "Bilibili" : "手动"} · {candidate.reason}</span>
                       </button>
                     ))}
                   </div>
                 ) : null}
+                <div className="danmaku-manual-source">
+                  <label className="danmaku-field">
+                    <span>Bilibili 链接</span>
+                    <input
+                      value={danmakuManualUrl}
+                      onChange={(event) => setDanmakuManualUrl(event.target.value)}
+                      placeholder="https://www.bilibili.com/video/BV... 或 bangumi ep 链接"
+                      disabled={isDanmakuLoading}
+                    />
+                  </label>
+                  <div className="danmaku-bottom-actions">
+                    <button className="primary-button" type="button" onClick={searchDanmakuSources} disabled={!isDanmakuAvailable || isDanmakuLoading}>
+                      <Search size={16} />
+                      自动匹配
+                    </button>
+                    <button className="secondary-button" type="button" onClick={() => fetchDanmakuFromUrl(danmakuManualUrl)} disabled={!danmakuManualUrl.trim() || isDanmakuLoading}>
+                      拉取链接弹幕
+                    </button>
+                  </div>
+                </div>
               </section>
 
               <section className="danmaku-panel">
@@ -10444,7 +10415,7 @@ export default function App() {
               </section>
             </div>
 
-            <span className={isDanmakuLoading ? "ai-loading" : "ai-empty-state"}>{danmakuMessage || "弹幕数量较多时会先去重再翻译，减少请求次数和 token 消耗。"}</span>
+            <span className={isDanmakuLoading ? "ai-loading" : "ai-empty-state"}>{danmakuMessage || "匹配或拉取 Bilibili 弹幕后显示在视频上方。"}</span>
           </section>
         </div>
       ) : null}

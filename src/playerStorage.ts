@@ -199,7 +199,7 @@ export function parseDanmakuSelectionStore(source: unknown): DanmakuSelectionSto
       typeof selection.sourceId === "string" &&
       selection.sourceId &&
       typeof selection.sourceName === "string" &&
-      (selection.provider === "bilibili" || selection.provider === "aniGamer" || selection.provider === "manual") &&
+      (selection.provider === "bilibili" || selection.provider === "manual") &&
       typeof selection.updatedAt === "number" &&
       Number.isFinite(selection.updatedAt)
     ) {

@@ -92,7 +92,7 @@ export type PersistedEmbeddedSubtitle = {
   embeddedTrack: EmbeddedSubtitleTrack;
 };
 
-export type DanmakuProvider = "bilibili" | "aniGamer" | "manual";
+export type DanmakuProvider = "bilibili" | "manual";
 
 export type DanmakuCommentMode = "scroll" | "top" | "bottom";
 

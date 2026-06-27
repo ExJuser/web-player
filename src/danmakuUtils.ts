@@ -8,14 +8,7 @@ export type ParsedDanmakuUrl =
   | { provider: "bilibili"; kind: "bvid"; value: string; url: string }
   | { provider: "bilibili"; kind: "aid"; value: string; url: string }
   | { provider: "bilibili"; kind: "cid"; value: string; url: string }
-  | { provider: "bilibili"; kind: "ep"; value: string; url: string }
-  | { provider: "aniGamer"; kind: "sn"; value: string; url: string };
-
-export type TranslationBatchItem = {
-  id: string;
-  text: string;
-  hash: string;
-};
+  | { provider: "bilibili"; kind: "ep"; value: string; url: string };
 
 export function stableHash(value: string) {
   let hash = 2166136261;
@@ -48,11 +41,6 @@ export function inferDanmakuLanguage(value: string): DanmakuComment["sourceLangu
   if (/[\u4e00-\u9fff]/u.test(text)) return "zh-Hans";
   if (/[A-Za-z]/u.test(text)) return "mixed";
   return "unknown";
-}
-
-export function needsLlmDanmakuTranslation(value: string) {
-  const language = inferDanmakuLanguage(value);
-  return language === "ja" || language === "en" || language === "mixed";
 }
 
 export function normalizeDanmakuMode(value: unknown): DanmakuCommentMode {
@@ -110,53 +98,6 @@ export function dedupeDanmakuComments(comments: DanmakuComment[]) {
     .sort((a, b) => a.time - b.time || a.id.localeCompare(b.id));
 }
 
-export function createDanmakuTranslationItems(comments: DanmakuComment[]): TranslationBatchItem[] {
-  const byHash = new Map<string, TranslationBatchItem>();
-  comments.forEach((comment) => {
-    if (!needsLlmDanmakuTranslation(comment.text)) return;
-    if (comment.simplifiedText) return;
-    if (!byHash.has(comment.hash)) {
-      byHash.set(comment.hash, {
-        id: comment.hash,
-        text: comment.text,
-        hash: comment.hash,
-      });
-    }
-  });
-  return Array.from(byHash.values());
-}
-
-export function chunkDanmakuTranslationItems(items: TranslationBatchItem[], maxCharacters = 5000) {
-  const chunks: TranslationBatchItem[][] = [];
-  let pending: TranslationBatchItem[] = [];
-  let pendingCharacters = 0;
-
-  items.forEach((item) => {
-    const nextCharacters = item.text.length + 24;
-    if (pending.length && pendingCharacters + nextCharacters > maxCharacters) {
-      chunks.push(pending);
-      pending = [];
-      pendingCharacters = 0;
-    }
-    pending.push(item);
-    pendingCharacters += nextCharacters;
-  });
-
-  if (pending.length) chunks.push(pending);
-  return chunks;
-}
-
-export function applyDanmakuTranslations(comments: DanmakuComment[], translations: Record<string, string>) {
-  return comments.map((comment) => {
-    const translated = translations[comment.hash];
-    if (!translated) return comment;
-    return {
-      ...comment,
-      simplifiedText: normalizeDanmakuText(translated),
-    };
-  });
-}
-
 export function parseDanmakuUrl(rawUrl: string): ParsedDanmakuUrl | null {
   const value = rawUrl.trim();
   if (!value) return null;
@@ -182,11 +123,6 @@ export function parseDanmakuUrl(rawUrl: string): ParsedDanmakuUrl | null {
     if (ep) return { provider: "bilibili", kind: "ep", value: ep, url: value };
     const cid = url.searchParams.get("cid");
     if (cid && /^\d+$/.test(cid)) return { provider: "bilibili", kind: "cid", value: cid, url: value };
-  }
-
-  if (host.includes("ani.gamer.com.tw")) {
-    const sn = url.searchParams.get("sn") || /\/animeVideo\.php\/?(\d+)?/i.exec(url.pathname)?.[1];
-    if (sn && /^\d+$/.test(sn)) return { provider: "aniGamer", kind: "sn", value: sn, url: value };
   }
 
   return null;
