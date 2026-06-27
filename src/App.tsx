@@ -101,6 +101,9 @@ import {
   loadPhotoAlbumStore,
   photoAlbumScanCacheVersion,
   saveCachedPhotoAlbumScan,
+  savePhotoAlbumFavorite,
+  savePhotoAlbumPreferences,
+  savePhotoAlbumProgress,
   savePhotoAlbumStore
 } from "./photoAlbumStorage";
 import {
@@ -385,6 +388,7 @@ import {
   createDefaultPlayerDataStore,
   createProgress,
   deleteLegacyPlayerDataStore,
+  deletePlayerProgress,
   hasDirectoryWritePermission,
   loadLegacyPlayerDataStore,
   loadGlobalPlayerDataStore,
@@ -392,7 +396,16 @@ import {
   migrateLegacyCachedThumbnailsToLocalData,
   readPhotoAlbumFolderHandle,
   readCachedThumbnail,
+  saveDanmakuPreferences,
+  saveDanmakuSelection,
   saveGlobalPlayerDataStore,
+  savePlayerFavorite,
+  savePlayerPreference,
+  savePlayerProgress,
+  savePlayerSetting,
+  saveTagMergeDecisions,
+  savePlayerVideoStats,
+  savePlayerVideoTags,
   writeCachedThumbnail,
   writePhotoAlbumFolderHandle,
   writeRecentFolderHandle
@@ -509,15 +522,6 @@ function readStoredVolume() {
     return Number.isFinite(parsedVolume) ? clamp(parsedVolume, 0, 1) : defaultPlayerSettings.volume;
   } catch {
     return defaultPlayerSettings.volume;
-  }
-}
-
-function writeStoredVolume(volume: number) {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(playerVolumeStorageKey, String(clamp(volume, 0, 1)));
-  } catch {
-    // localStorage can be unavailable in private or restricted contexts.
   }
 }
 
@@ -2507,6 +2511,9 @@ export default function App() {
     setSelectedSeriesKey(nextDataStore.preferences.selectedSeriesKey);
     setIsCinemaMode(nextDataStore.preferences.isCinemaMode);
     setVolume(nextDataStore.settings.volume);
+    if (nextDataStore.settings.theme === "dark" || nextDataStore.settings.theme === "light") {
+      setTheme(nextDataStore.settings.theme);
+    }
     setSkipFolderAccessPrompt(nextDataStore.settings.skipFolderAccessPrompt);
     setFavoriteVideoIds(new Set(nextDataStore.favorites));
     setVideoTags(nextDataStore.videoTags);
@@ -3297,9 +3304,7 @@ export default function App() {
       videoStatsRef.current = nextStore;
       setVideoStatsRevision((revision) => revision + 1);
 
-      saveCurrentPlayerDataStore({
-        videoStats: nextStore,
-      })
+      savePlayerVideoStats(statsKey, nextStats)
         .then(() => {
           if (options?.saveMessage) setMessage(options.saveMessage);
         })
@@ -3307,7 +3312,7 @@ export default function App() {
           setMessage("无法写入项目数据目录，请确认通过 npm run dev 或 npm run preview 启动。");
         });
     },
-    [saveCurrentPlayerDataStore],
+    [],
   );
 
   const recordPlaybackStartForStats = useCallback(
@@ -3890,71 +3895,74 @@ export default function App() {
       progressStoreRef.current = nextStore;
       setProgressStore(nextStore);
 
-      saveCurrentPlayerDataStore({
-        progress: nextStore,
-      }).catch(() => {
+      savePlayerProgress(video.id, progress).catch(() => {
         setMessage("无法写入项目数据目录，请确认通过 npm run dev 或 npm run preview 启动。");
       });
     },
-    [saveCurrentPlayerDataStore],
+    [],
   );
 
   const replaceProgressStore = useCallback((nextStore: ProgressStore, successMessage?: string) => {
+    const previousStore = progressStoreRef.current;
     progressStoreRef.current = nextStore;
     setProgressStore(nextStore);
 
-    saveCurrentPlayerDataStore({
-      progress: nextStore,
-    })
+    Promise.all(
+      Array.from(new Set([...Object.keys(previousStore), ...Object.keys(nextStore)])).map((videoId) =>
+        nextStore[videoId] ? savePlayerProgress(videoId, nextStore[videoId]) : deletePlayerProgress(videoId),
+      ),
+    )
       .then(() => {
         if (successMessage) setMessage(successMessage);
       })
       .catch(() => {
         setMessage("无法写入项目数据目录，请确认通过 npm run dev 或 npm run preview 启动。");
       });
-  }, [saveCurrentPlayerDataStore]);
+  }, []);
 
   const replaceFavorites = useCallback((nextFavorites: Set<string>, successMessage?: string) => {
+    const previousFavorites = favoriteVideoIdsRef.current;
     favoriteVideoIdsRef.current = nextFavorites;
     setFavoriteVideoIds(new Set(nextFavorites));
 
-    saveCurrentPlayerDataStore({
-      favorites: Array.from(nextFavorites),
-    })
+    Promise.all(
+      Array.from(new Set([...previousFavorites, ...nextFavorites])).map((videoId) =>
+        savePlayerFavorite(videoId, nextFavorites.has(videoId)),
+      ),
+    )
       .then(() => {
         if (successMessage) setMessage(successMessage);
       })
       .catch(() => {
         setMessage("无法写入项目数据目录，请确认通过 npm run dev 或 npm run preview 启动。");
       });
-  }, [saveCurrentPlayerDataStore]);
+  }, []);
 
   const replaceVideoTags = useCallback((nextVideoTags: VideoTagStore, successMessage?: string) => {
+    const previousVideoTags = videoTagsRef.current;
     videoTagsRef.current = nextVideoTags;
     setVideoTags(nextVideoTags);
 
-    saveCurrentPlayerDataStore({
-      videoTags: nextVideoTags,
-      tagMergeDecisions: tagMergeDecisionsRef.current,
-    })
+    Promise.all(
+      Array.from(new Set([...Object.keys(previousVideoTags), ...Object.keys(nextVideoTags)])).map((videoId) =>
+        savePlayerVideoTags(videoId, nextVideoTags[videoId] ?? []),
+      ),
+    )
       .then(() => {
         if (successMessage) setTagMessage(successMessage);
       })
       .catch(() => {
         setTagMessage("无法写入项目数据目录，请确认通过 npm run dev 或 npm run preview 启动。");
       });
-  }, [saveCurrentPlayerDataStore]);
+  }, []);
 
   const replaceTagMergeDecisions = useCallback((nextDecisions: TagMergeDecisionStore) => {
     tagMergeDecisionsRef.current = nextDecisions;
     setTagMergeDecisions(nextDecisions);
-    saveCurrentPlayerDataStore({
-      videoTags: videoTagsRef.current,
-      tagMergeDecisions: nextDecisions,
-    }).catch(() => {
+    saveTagMergeDecisions(nextDecisions).catch(() => {
       setTagMessage("无法保存标签合并选择。");
     });
-  }, [saveCurrentPlayerDataStore]);
+  }, []);
 
   const getAllLibraryTags = useCallback(() => {
     const seen = new Set<string>();
@@ -4065,11 +4073,8 @@ export default function App() {
       normalizeTagKey(tag) === normalizeTagKey(suggestion.newTag) ? suggestion.existingTag : tag,
     );
     void addTagsToCurrentVideo(mergedTags, { skipPrompt: true });
-    saveCurrentPlayerDataStore({
-      videoTags: videoTagsRef.current,
-      tagMergeDecisions: nextDecisions,
-    }).catch(() => setTagMessage("无法保存标签合并选择。"));
-  }, [addTagsToCurrentVideo, currentVideo, saveCurrentPlayerDataStore, tagMergePrompt]);
+    saveTagMergeDecisions(nextDecisions).catch(() => setTagMessage("无法保存标签合并选择。"));
+  }, [addTagsToCurrentVideo, currentVideo, tagMergePrompt]);
 
   const keepTagMergeSuggestion = useCallback(() => {
     if (!tagMergePrompt) return;
@@ -4181,12 +4186,14 @@ export default function App() {
     setSelectedSeriesKey(nextPreferences.selectedSeriesKey);
     setIsCinemaMode(nextPreferences.isCinemaMode);
 
-    saveCurrentPlayerDataStore({
-      preferences: nextPreferences,
-    }).catch(() => {
+    Promise.all(
+      (Object.keys(nextPreferences) as Array<keyof PlayerPreferences>).map((key) =>
+        savePlayerPreference(key, nextPreferences[key]),
+      ),
+    ).catch(() => {
       setMessage("无法写入项目数据目录，请确认通过 npm run dev 或 npm run preview 启动。");
     });
-  }, [saveCurrentPlayerDataStore]);
+  }, []);
 
   const updatePlaylistSortMode = useCallback(
     (nextMode: PlaylistSortMode) => {
@@ -4409,7 +4416,11 @@ export default function App() {
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
-    window.localStorage.setItem(appThemeStorageKey, theme);
+    playerSettingsRef.current = {
+      ...playerSettingsRef.current,
+      theme,
+    };
+    savePlayerSetting("theme", theme).catch(() => undefined);
   }, [theme]);
 
   useEffect(() => {
@@ -4576,18 +4587,18 @@ export default function App() {
           setIsPlaying(false);
         }
 
-        await saveCurrentPlayerDataStore({
-          progress: nextProgressStore,
-          favorites: Array.from(nextFavoriteVideoIds),
-          videoTags: nextVideoTags,
-        });
+        await Promise.all([
+          deletePlayerProgress(video.id),
+          savePlayerFavorite(video.id, false),
+          savePlayerVideoTags(video.id, nextVideoTags[video.id] ?? []),
+        ]);
 
         setMessage(`已删除本地文件《${video.name}》`);
       } catch {
         setMessage("删除本地文件失败，请确认浏览器仍有文件夹写入权限。");
       }
     },
-    [currentVideoId, saveCurrentPlayerDataStore, updateSelectedSubtitleId],
+    [currentVideoId, updateSelectedSubtitleId],
   );
 
   const confirmDeleteLocalVideo = useCallback(async () => {
@@ -4790,11 +4801,11 @@ export default function App() {
       };
       photoAlbumProgressRef.current = nextProgress;
       setPhotoAlbumProgress(nextProgress);
-      void saveCurrentPhotoAlbumStore({ progress: nextProgress }).catch(() => {
+      void savePhotoAlbumProgress(album.id, nextProgress[album.id]).catch(() => {
         setPhotoAlbumMessage("写真集进度保存失败。");
       });
     },
-    [saveCurrentPhotoAlbumStore],
+    [],
   );
 
   const openPhotoAlbum = useCallback(
@@ -4837,11 +4848,11 @@ export default function App() {
       }
       favoritePhotoAlbumIdsRef.current = nextFavorites;
       setFavoritePhotoAlbumIds(nextFavorites);
-      void saveCurrentPhotoAlbumStore({ favorites: Array.from(nextFavorites) }).catch(() => {
+      void savePhotoAlbumFavorite(album.id, nextFavorites.has(album.id)).catch(() => {
         setPhotoAlbumMessage("写真集收藏保存失败。");
       });
     },
-    [saveCurrentPhotoAlbumStore],
+    [],
   );
 
   const markSelectedPhotoAlbumCompleted = useCallback(() => {
@@ -5216,11 +5227,11 @@ export default function App() {
       photoAlbumPreferencesRef.current = nextPreferences;
       setPhotoAlbumSortMode(nextSortMode);
       setPhotoAlbumPage(1);
-      void saveCurrentPhotoAlbumStore({ preferences: nextPreferences }).catch(() => {
+      void savePhotoAlbumPreferences(nextPreferences).catch(() => {
         setPhotoAlbumMessage("写真集偏好保存失败。");
       });
     },
-    [saveCurrentPhotoAlbumStore],
+    [],
   );
 
   const updatePhotoAlbumFilter = useCallback(
@@ -5232,11 +5243,11 @@ export default function App() {
       photoAlbumPreferencesRef.current = nextPreferences;
       setPhotoAlbumFilter(nextFilter);
       setPhotoAlbumPage(1);
-      void saveCurrentPhotoAlbumStore({ preferences: nextPreferences }).catch(() => {
+      void savePhotoAlbumPreferences(nextPreferences).catch(() => {
         setPhotoAlbumMessage("写真集偏好保存失败。");
       });
     },
-    [saveCurrentPhotoAlbumStore],
+    [],
   );
 
   const togglePhotoFullscreen = useCallback(async () => {
@@ -5765,7 +5776,7 @@ export default function App() {
       ...playerSettingsRef.current,
       skipFolderAccessPrompt: checked,
     };
-    saveCurrentPlayerDataStore({ settings: playerSettingsRef.current }).catch(() => {
+    savePlayerSetting("skipFolderAccessPrompt", checked).catch(() => {
       setMessage("无法写入项目数据目录，请确认通过 npm run dev 或 npm run preview 启动。");
     });
   };
@@ -6040,14 +6051,13 @@ export default function App() {
   }, [currentVideo, isMuted, volume]);
 
   useEffect(() => {
-    writeStoredVolume(volume);
     playerSettingsRef.current = {
       ...playerSettingsRef.current,
       volume,
     };
     if (!hasLoadedPlayerDataStoreRef.current) return;
-    saveCurrentPlayerDataStore({ settings: playerSettingsRef.current }).catch(() => undefined);
-  }, [saveCurrentPlayerDataStore, volume]);
+    savePlayerSetting("volume", volume).catch(() => undefined);
+  }, [volume]);
 
   useEffect(() => {
     const element = videoRef.current;
@@ -6562,10 +6572,10 @@ export default function App() {
         };
         danmakuSelectionsRef.current = nextSelections;
         setDanmakuSelections(nextSelections);
-        void saveCurrentPlayerDataStore({ danmakuSelections: nextSelections }).catch(() => undefined);
+        void saveDanmakuSelection(currentVideo.id, nextSelections[currentVideo.id]).catch(() => undefined);
       }
     },
-    [currentVideo, saveCurrentPlayerDataStore],
+    [currentVideo],
   );
 
   const loadDanmakuSource = useCallback(
@@ -6708,9 +6718,9 @@ export default function App() {
     (nextPreferences: DanmakuPreferences) => {
       danmakuPreferencesRef.current = nextPreferences;
       setDanmakuPreferences(nextPreferences);
-      void saveCurrentPlayerDataStore({ danmakuPreferences: nextPreferences }).catch(() => undefined);
+      void saveDanmakuPreferences(nextPreferences).catch(() => undefined);
     },
-    [saveCurrentPlayerDataStore],
+    [],
   );
 
   const extractEmbeddedSubtitle = useCallback(

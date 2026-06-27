@@ -168,6 +168,7 @@ export type TagMergeDecisionStore = Record<string, TagMergeDecision>;
 export type PlayerPersistentSettings = {
   volume: number;
   skipFolderAccessPrompt: boolean;
+  theme?: "dark" | "light";
 };
 
 export type PlayerLibraryMetadata = {

@@ -1,6 +1,4 @@
 import type { CachedPhotoAlbumScan, PhotoAlbum, PhotoAlbumImage, PhotoAlbumPreferences, PhotoAlbumProgress, PhotoAlbumStore } from "./playerTypes";
-
-const photoAlbumScanCacheStorageKey = "local-web-player:photo-album-scan-cache";
 export const photoAlbumScanCacheVersion = 1;
 
 export const defaultPhotoAlbumPreferences: PhotoAlbumPreferences = {
@@ -232,22 +230,66 @@ export async function savePhotoAlbumStore(store: PhotoAlbumStore) {
 }
 
 export async function loadCachedPhotoAlbumScan(): Promise<CachedPhotoAlbumScan | null> {
-  if (!("localStorage" in window)) return null;
-  const raw = window.localStorage.getItem(photoAlbumScanCacheStorageKey);
-  if (!raw) return null;
   try {
-    return parseCachedPhotoAlbumScan(raw);
+    const response = await fetch("/api/photo-albums/scan-cache", {
+      headers: { Accept: "application/json" },
+    });
+    if (response.status === 404) return null;
+    if (!response.ok) throw new Error(await readApiError(response));
+    return parseCachedPhotoAlbumScan(JSON.stringify(await response.json()));
   } catch {
     return null;
   }
 }
 
 export async function saveCachedPhotoAlbumScan(scan: CachedPhotoAlbumScan) {
-  if (!("localStorage" in window)) return;
-  window.localStorage.setItem(photoAlbumScanCacheStorageKey, JSON.stringify(serializeCachedPhotoAlbumScan(scan)));
+  const response = await fetch("/api/photo-albums/scan-cache", {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify(serializeCachedPhotoAlbumScan(scan)),
+  });
+  if (!response.ok) throw new Error(await readApiError(response));
 }
 
 export async function clearCachedPhotoAlbumScan() {
-  if (!("localStorage" in window)) return;
-  window.localStorage.removeItem(photoAlbumScanCacheStorageKey);
+  const response = await fetch("/api/photo-albums/scan-cache", {
+    method: "DELETE",
+    headers: { Accept: "application/json" },
+  });
+  if (!response.ok) throw new Error(await readApiError(response));
+}
+
+export async function savePhotoAlbumProgress(albumId: string, progress: PhotoAlbumProgress) {
+  const response = await fetch(`/api/photo-albums/progress/${encodeURIComponent(albumId)}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify(progress),
+  });
+  if (!response.ok) throw new Error(await readApiError(response));
+}
+
+export async function savePhotoAlbumFavorite(albumId: string, isFavorite: boolean) {
+  const response = await fetch(`/api/photo-albums/favorites/${encodeURIComponent(albumId)}`, {
+    method: isFavorite ? "PUT" : "DELETE",
+    headers: { Accept: "application/json" },
+  });
+  if (!response.ok) throw new Error(await readApiError(response));
+}
+
+export async function savePhotoAlbumPreferences(preferences: PhotoAlbumPreferences) {
+  const response = await fetch("/api/photo-albums/preferences", {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify(preferences),
+  });
+  if (!response.ok) throw new Error(await readApiError(response));
 }

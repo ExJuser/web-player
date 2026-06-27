@@ -38,6 +38,7 @@ import {
   inferEpisodeNumber,
   parseDanmakuUrl,
 } from "./src/danmakuUtils";
+import { LocalDataSqliteStore } from "./server/sqliteStorage.mjs";
 
 const dataRoot = path.resolve(__dirname, ".local-web-player-data");
 const librariesRoot = path.join(dataRoot, "libraries");
@@ -54,6 +55,7 @@ const bangumiMatchesRoot = path.join(bangumiRoot, "matches");
 const indexPath = path.join(dataRoot, "index.json");
 const globalDataPath = path.join(dataRoot, "global.json");
 const appConfigPath = path.resolve(__dirname, "config", "app.json");
+const localDataStore = new LocalDataSqliteStore({ dataRoot, librariesRoot, photoAlbumsRoot, indexPath, globalDataPath });
 const videoExtensions = new Set([".mp4", ".webm", ".ogg", ".mov", ".m4v", ".mkv"]);
 const imageSubtitleCodecs = new Set(["hdmv_pgs_subtitle", "pgs", "dvd_subtitle", "dvb_subtitle", "xsub"]);
 
@@ -227,6 +229,8 @@ async function createCacheStatus() {
     })),
   );
   const visibleItems = items.filter((item) => item.bytes > 0 || item.files > 0 || item.updatedAt || item.error);
+  const databaseItem = await localDataStore.createDatabaseStatusItem();
+  if (databaseItem) visibleItems.push(databaseItem);
   const totalBytes = visibleItems.reduce((sum, item) => sum + item.bytes, 0);
   const totalFiles = visibleItems.reduce((sum, item) => sum + item.files, 0);
   const updatedAt = visibleItems.reduce((latest, item) => Math.max(latest, item.updatedAt ?? 0), 0) || null;
@@ -264,6 +268,19 @@ async function clearCacheItems(payload) {
     assertCachePathIsSafe(item.path);
     await rm(item.path, { recursive: true, force: true });
   }
+
+  const cacheKindsByStatusId = {
+    thumbnails: ["thumbnail"],
+    "danmaku-sources": ["danmaku-source"],
+    "danmaku-translations": ["danmaku-translation"],
+    "ai-summaries": ["ai-summary"],
+    "ai-qa": ["ai-qa"],
+    "ai-recaps": ["ai-recap"],
+    "bangumi-matches": ["bangumi-match"],
+    "compatible-media": ["compatible-media"],
+    subtitles: ["embedded-subtitle"],
+  };
+  localDataStore.clearCacheEntriesByKinds(uniqueIds.flatMap((id) => cacheKindsByStatusId[id] ?? []));
 
   return {
     cleared: uniqueIds,
@@ -1730,6 +1747,12 @@ function playerDataApiPlugin(env) {
   let toolsPromise = null;
   let mediaRootsScanPromise = null;
   let photoAlbumsScanPromise = null;
+  let localDataStoreReadyPromise = null;
+  const getLocalDataStore = async () => {
+    localDataStoreReadyPromise ??= localDataStore.initialize();
+    await localDataStoreReadyPromise;
+    return localDataStore;
+  };
   const getTools = () => {
     toolsPromise ??= detectTools();
     return toolsPromise;
@@ -1762,10 +1785,32 @@ function playerDataApiPlugin(env) {
     const thumbnailMatch = url.pathname.match(/^\/api\/player-data\/thumbnails\/([^/]+)$/);
     const mediaMatch = url.pathname.match(/^\/api\/media\/([^/]+)\/(.+)$/);
     const compatibleMediaMatch = url.pathname.match(/^\/api\/media-compatible\/([a-f0-9]{64})\.mp4$/);
+    const progressMatch = url.pathname.match(/^\/api\/player-data\/progress\/(.+)$/);
+    const favoriteMatch = url.pathname.match(/^\/api\/player-data\/favorites\/(.+)$/);
+    const tagsMatch = url.pathname.match(/^\/api\/player-data\/tags\/(.+)$/);
+    const statsMatch = url.pathname.match(/^\/api\/player-data\/stats\/(.+)$/);
+    const preferenceMatch = url.pathname.match(/^\/api\/player-data\/preferences\/([^/]+)$/);
+    const settingMatch = url.pathname.match(/^\/api\/player-data\/settings\/([^/]+)$/);
+    const danmakuSelectionMatch = url.pathname.match(/^\/api\/player-data\/danmaku-selection\/(.+)$/);
+    const photoAlbumProgressMatch = url.pathname.match(/^\/api\/photo-albums\/progress\/(.+)$/);
+    const photoAlbumFavoriteMatch = url.pathname.match(/^\/api\/photo-albums\/favorites\/(.+)$/);
 
     try {
+      const store = await getLocalDataStore();
+
       if (url.pathname === "/api/local-config" && request.method === "GET") {
         sendJson(response, 200, publicLocalConfig(await loadAppConfig(), await getTools(), env));
+        return;
+      }
+
+      if (url.pathname === "/api/bootstrap" && request.method === "GET") {
+        const playerData = store.loadPlayerDataStore("global");
+        sendJson(response, 200, {
+          theme: playerData?.settings?.theme === "light" ? "light" : "dark",
+          settings: playerData?.settings ?? {},
+          preferences: playerData?.preferences ?? {},
+          metadata: playerData?.metadata ?? null,
+        });
         return;
       }
 
@@ -1910,7 +1955,7 @@ function playerDataApiPlugin(env) {
 
       if (url.pathname === "/api/player-data/global") {
         if (request.method === "GET") {
-          const payload = await readJsonFile(globalDataPath, null);
+          const payload = store.loadPlayerDataStore("global");
           sendJson(response, payload ? 200 : 404, payload ?? { error: "Global data not found." });
           return;
         }
@@ -1918,17 +1963,15 @@ function playerDataApiPlugin(env) {
         if (request.method === "PUT") {
           const rawBody = await readBody(request);
           const payload = JSON.parse(rawBody.toString("utf8"));
-          await mkdir(dataRoot, { recursive: true });
-          await writeFile(globalDataPath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+          store.savePlayerDataStore("global", payload);
           sendJson(response, 200, { ok: true });
           return;
         }
       }
 
       if (url.pathname === "/api/photo-albums/global") {
-        const filePath = path.join(photoAlbumsRoot, "global.json");
         if (request.method === "GET") {
-          const payload = await readJsonFile(filePath, null);
+          const payload = store.loadPhotoAlbumStore();
           sendJson(response, payload ? 200 : 404, payload ?? { error: "Photo album data not found." });
           return;
         }
@@ -1936,8 +1979,135 @@ function playerDataApiPlugin(env) {
         if (request.method === "PUT") {
           const rawBody = await readBody(request);
           const payload = JSON.parse(rawBody.toString("utf8"));
-          await mkdir(photoAlbumsRoot, { recursive: true });
-          await writeFile(filePath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+          store.savePhotoAlbumStore(payload);
+          sendJson(response, 200, { ok: true });
+          return;
+        }
+      }
+
+      if (progressMatch) {
+        const videoId = decodeURIComponent(progressMatch[1]);
+        if (request.method === "PUT") {
+          const payload = JSON.parse((await readBody(request)).toString("utf8"));
+          store.upsertProgress("global", videoId, payload);
+          sendJson(response, 200, { ok: true });
+          return;
+        }
+        if (request.method === "DELETE") {
+          store.upsertProgress("global", videoId, null);
+          sendJson(response, 200, { ok: true });
+          return;
+        }
+      }
+
+      if (favoriteMatch) {
+        const videoId = decodeURIComponent(favoriteMatch[1]);
+        if (request.method === "PUT" || request.method === "DELETE") {
+          store.setFavorite("global", videoId, request.method === "PUT");
+          sendJson(response, 200, { ok: true });
+          return;
+        }
+      }
+
+      if (tagsMatch && request.method === "PUT") {
+        const videoId = decodeURIComponent(tagsMatch[1]);
+        const payload = JSON.parse((await readBody(request)).toString("utf8"));
+        store.replaceVideoTags("global", videoId, payload?.tags ?? payload);
+        sendJson(response, 200, { ok: true });
+        return;
+      }
+
+      if (url.pathname === "/api/player-data/tag-merge-decisions" && request.method === "PUT") {
+        const payload = JSON.parse((await readBody(request)).toString("utf8"));
+        store.replaceTagMergeDecisions("global", payload);
+        sendJson(response, 200, { ok: true });
+        return;
+      }
+
+      if (statsMatch && request.method === "PUT") {
+        const videoId = decodeURIComponent(statsMatch[1]);
+        const payload = JSON.parse((await readBody(request)).toString("utf8"));
+        store.upsertVideoStats("global", videoId, payload);
+        sendJson(response, 200, { ok: true });
+        return;
+      }
+
+      if (preferenceMatch && request.method === "PUT") {
+        const key = decodeURIComponent(preferenceMatch[1]);
+        const payload = JSON.parse((await readBody(request)).toString("utf8"));
+        store.setPreferenceValue("global", key, payload?.value ?? payload);
+        sendJson(response, 200, { ok: true });
+        return;
+      }
+
+      if (settingMatch && request.method === "PUT") {
+        const key = decodeURIComponent(settingMatch[1]);
+        const payload = JSON.parse((await readBody(request)).toString("utf8"));
+        store.setSettingValue("global", key, payload?.value ?? payload);
+        sendJson(response, 200, { ok: true });
+        return;
+      }
+
+      if (danmakuSelectionMatch) {
+        const videoId = decodeURIComponent(danmakuSelectionMatch[1]);
+        if (request.method === "PUT") {
+          const payload = JSON.parse((await readBody(request)).toString("utf8"));
+          store.upsertDanmakuSelection("global", videoId, payload);
+          sendJson(response, 200, { ok: true });
+          return;
+        }
+        if (request.method === "DELETE") {
+          store.upsertDanmakuSelection("global", videoId, null);
+          sendJson(response, 200, { ok: true });
+          return;
+        }
+      }
+
+      if (url.pathname === "/api/player-data/danmaku-preferences" && request.method === "PUT") {
+        const payload = JSON.parse((await readBody(request)).toString("utf8"));
+        store.replaceDanmakuPreferences("global", payload);
+        sendJson(response, 200, { ok: true });
+        return;
+      }
+
+      if (photoAlbumProgressMatch && request.method === "PUT") {
+        const albumId = decodeURIComponent(photoAlbumProgressMatch[1]);
+        const payload = JSON.parse((await readBody(request)).toString("utf8"));
+        store.replacePhotoAlbumProgress(albumId, payload);
+        sendJson(response, 200, { ok: true });
+        return;
+      }
+
+      if (photoAlbumFavoriteMatch) {
+        const albumId = decodeURIComponent(photoAlbumFavoriteMatch[1]);
+        if (request.method === "PUT" || request.method === "DELETE") {
+          store.setPhotoAlbumFavorite(albumId, request.method === "PUT");
+          sendJson(response, 200, { ok: true });
+          return;
+        }
+      }
+
+      if (url.pathname === "/api/photo-albums/preferences" && request.method === "PUT") {
+        const payload = JSON.parse((await readBody(request)).toString("utf8"));
+        store.replacePhotoAlbumPreferences(payload);
+        sendJson(response, 200, { ok: true });
+        return;
+      }
+
+      if (url.pathname === "/api/photo-albums/scan-cache") {
+        if (request.method === "GET") {
+          const payload = store.loadLatestPhotoAlbumScanCache();
+          sendJson(response, payload ? 200 : 404, payload ?? { error: "Photo album scan cache not found." });
+          return;
+        }
+        if (request.method === "PUT") {
+          const payload = JSON.parse((await readBody(request)).toString("utf8"));
+          store.savePhotoAlbumScanCache(payload);
+          sendJson(response, 200, { ok: true });
+          return;
+        }
+        if (request.method === "DELETE") {
+          store.clearPhotoAlbumScanCache();
           sendJson(response, 200, { ok: true });
           return;
         }
@@ -1964,7 +2134,7 @@ function playerDataApiPlugin(env) {
 
         const filePath = path.join(librariesRoot, `${libraryId}.json`);
         if (request.method === "GET") {
-          const payload = await readJsonFile(filePath, null);
+          const payload = store.loadPlayerDataStore(libraryId);
           sendJson(response, payload ? 200 : 404, payload ?? { error: "Library data not found." });
           return;
         }
@@ -1972,9 +2142,8 @@ function playerDataApiPlugin(env) {
         if (request.method === "PUT") {
           const rawBody = await readBody(request);
           const payload = JSON.parse(rawBody.toString("utf8"));
-          await mkdir(librariesRoot, { recursive: true });
-          await writeFile(filePath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
-          await updateIndex(libraryId, payload.metadata);
+          store.savePlayerDataStore(libraryId, payload);
+          store.updateIndex(libraryId, payload.metadata);
           sendJson(response, 200, { ok: true });
           return;
         }
@@ -2002,6 +2171,7 @@ function playerDataApiPlugin(env) {
           const rawBody = await readBody(request);
           await mkdir(thumbnailsRoot, { recursive: true });
           await writeFile(filePath, rawBody);
+          store.recordCacheEntry("thumbnail", thumbnailId, filePath, request.headers["content-type"] ?? null, rawBody.length);
           sendJson(response, 200, { ok: true });
           return;
         }

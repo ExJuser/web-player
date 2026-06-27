@@ -287,6 +287,7 @@ export function parsePlayerSettings(source: unknown): PlayerPersistentSettings {
       typeof settings.skipFolderAccessPrompt === "boolean"
         ? settings.skipFolderAccessPrompt
         : defaultPlayerSettings.skipFolderAccessPrompt,
+    theme: settings.theme === "light" || settings.theme === "dark" ? settings.theme : undefined,
   };
 }
 
@@ -541,6 +542,118 @@ export async function writeCachedThumbnail(libraryId: string | null, videoId: st
     method: "PUT",
     headers: { "Content-Type": thumbnail.type || "application/octet-stream" },
     body: thumbnail,
+  });
+  if (!response.ok) throw new Error(await readApiError(response));
+}
+
+export async function savePlayerProgress(videoId: string, progress: PlaybackProgress) {
+  const response = await fetch(createApiUrl(`progress/${encodeURIComponent(videoId)}`), {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify(progress),
+  });
+  if (!response.ok) throw new Error(await readApiError(response));
+}
+
+export async function deletePlayerProgress(videoId: string) {
+  const response = await fetch(createApiUrl(`progress/${encodeURIComponent(videoId)}`), {
+    method: "DELETE",
+    headers: { Accept: "application/json" },
+  });
+  if (!response.ok) throw new Error(await readApiError(response));
+}
+
+export async function savePlayerFavorite(videoId: string, isFavorite: boolean) {
+  const response = await fetch(createApiUrl(`favorites/${encodeURIComponent(videoId)}`), {
+    method: isFavorite ? "PUT" : "DELETE",
+    headers: { Accept: "application/json" },
+  });
+  if (!response.ok) throw new Error(await readApiError(response));
+}
+
+export async function savePlayerVideoTags(videoId: string, tags: string[]) {
+  const response = await fetch(createApiUrl(`tags/${encodeURIComponent(videoId)}`), {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify({ tags }),
+  });
+  if (!response.ok) throw new Error(await readApiError(response));
+}
+
+export async function saveTagMergeDecisions(decisions: TagMergeDecisionStore) {
+  const response = await fetch(createApiUrl("tag-merge-decisions"), {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify(decisions),
+  });
+  if (!response.ok) throw new Error(await readApiError(response));
+}
+
+export async function savePlayerVideoStats(videoId: string, stats: VideoStatsStore[string]) {
+  const response = await fetch(createApiUrl(`stats/${encodeURIComponent(videoId)}`), {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify(stats),
+  });
+  if (!response.ok) throw new Error(await readApiError(response));
+}
+
+export async function savePlayerPreference<K extends keyof PlayerPreferences>(key: K, value: PlayerPreferences[K]) {
+  const response = await fetch(createApiUrl(`preferences/${encodeURIComponent(key)}`), {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify({ value }),
+  });
+  if (!response.ok) throw new Error(await readApiError(response));
+}
+
+export async function savePlayerSetting<K extends keyof PlayerPersistentSettings>(key: K, value: PlayerPersistentSettings[K]) {
+  const response = await fetch(createApiUrl(`settings/${encodeURIComponent(key)}`), {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify({ value }),
+  });
+  if (!response.ok) throw new Error(await readApiError(response));
+}
+
+export async function saveDanmakuSelection(videoId: string, selection: DanmakuSelectionStore[string] | null) {
+  const response = await fetch(createApiUrl(`danmaku-selection/${encodeURIComponent(videoId)}`), {
+    method: selection ? "PUT" : "DELETE",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    ...(selection ? { body: JSON.stringify(selection) } : {}),
+  });
+  if (!response.ok) throw new Error(await readApiError(response));
+}
+
+export async function saveDanmakuPreferences(preferences: DanmakuPreferences) {
+  const response = await fetch(createApiUrl("danmaku-preferences"), {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify(preferences),
   });
   if (!response.ok) throw new Error(await readApiError(response));
 }
