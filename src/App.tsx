@@ -37,6 +37,13 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
+import {
+  createAiLibrarySearchResults,
+  getVisibleLibrarySearchResults,
+  librarySearchResultPageSize,
+  searchLibraryEntries,
+  type LibrarySearchEntry,
+} from "./librarySearchUtils";
 import type {
   ActiveView,
   AutoNextPrompt,
@@ -318,7 +325,6 @@ import {
 import {
   createTagPairKey,
   findTagMergeSuggestion,
-  getTagSearchScore,
   mergeTags,
   normalizeTagKey,
   parseTagInput,
@@ -1062,21 +1068,7 @@ type ClearCacheResponse = {
 
 type LibrarySearchMode = "idle" | "local" | "ai" | "empty";
 
-type LibraryFolderResultVideo = {
-  video: VideoItem;
-  progress?: PlaybackProgress;
-};
-
-type LibrarySearchResult = {
-  key: string;
-  title: string;
-  path: string;
-  mediaRootLabel?: string;
-  videos: LibraryFolderResultVideo[];
-  representativeVideo: VideoItem;
-  score: number;
-  reason: string;
-};
+type LibrarySearchResult = LibrarySearchEntry<VideoItem, PlaybackProgress>;
 
 type LibrarySearchCandidate = {
   id: string;
@@ -2059,6 +2051,8 @@ export default function App() {
   const photoAlbumsRef = useRef<PhotoAlbum[]>([]);
   const photoObjectUrlsRef = useRef<Record<string, string>>({});
   const photoImageFilePromisesRef = useRef<Record<string, Promise<File | null>>>({});
+  const librarySearchResultsRef = useRef<HTMLDivElement | null>(null);
+  const librarySearchLoadMoreRef = useRef<HTMLDivElement | null>(null);
   const [videos, setVideos] = useState<VideoItem[]>([]);
   const [subtitles, setSubtitles] = useState<SubtitleItem[]>([]);
   const [localConfig, setLocalConfig] = useState<LocalConfig | null>(null);
@@ -2086,6 +2080,7 @@ export default function App() {
   const [isHomeProgressRecapLoading, setIsHomeProgressRecapLoading] = useState(false);
   const [librarySearchQuery, setLibrarySearchQuery] = useState("");
   const [librarySearchResults, setLibrarySearchResults] = useState<LibrarySearchResult[]>([]);
+  const [librarySearchVisibleCount, setLibrarySearchVisibleCount] = useState(librarySearchResultPageSize);
   const [librarySearchAnswer, setLibrarySearchAnswer] = useState("");
   const [librarySearchMessage, setLibrarySearchMessage] = useState("");
   const [librarySearchMode, setLibrarySearchMode] = useState<LibrarySearchMode>("idle");
@@ -2621,37 +2616,16 @@ export default function App() {
     },
     [localConfig, progressStore, seriesTitleByVideoId, videoTags],
   );
-  const videosByLibraryFolderKey = useMemo(() => {
-    const grouped = new Map<string, VideoItem[]>();
-    modeFilteredVideos.forEach((video) => {
-      const key = libraryFolderKeyForVideo(video);
-      const existing = grouped.get(key);
-      if (existing) {
-        existing.push(video);
-      } else {
-        grouped.set(key, [video]);
-      }
-    });
-    return grouped;
-  }, [modeFilteredVideos]);
-  const createLibraryFolderResult = useCallback(
-    (folderVideos: VideoItem[], representativeVideo: VideoItem, score: number, reason: string): LibrarySearchResult => {
-      const sortedVideos = [...folderVideos].sort((a, b) => compareNaturalRelativePath(a.relativePath, b.relativePath));
-      const mediaRoot = representativeVideo.mediaRootId
-        ? localConfig?.mediaRoots.find((root) => root.id === representativeVideo.mediaRootId)
-        : null;
-      return {
-        key: libraryFolderKeyForVideo(representativeVideo),
-        title: libraryFolderTitleForVideo(representativeVideo),
-        path: libraryFolderPathForVideo(representativeVideo),
-        mediaRootLabel: mediaRoot?.label ?? (representativeVideo.mediaRootId ? fallbackMediaRootLabelForVideo(representativeVideo) : undefined),
-        videos: sortedVideos.map((video) => ({ video, progress: progressStore[video.id] })),
-        representativeVideo,
-        score,
-        reason,
-      };
-    },
-    [localConfig, progressStore],
+  const librarySearchContext = useMemo(
+    () => ({
+      mode: homeMediaMode,
+      mediaRootLabelsById: Object.fromEntries((localConfig?.mediaRoots ?? []).map((root) => [root.id, root.label])),
+      progressByVideoId: progressStore,
+      favoriteVideoIds,
+      isResumableProgress,
+      videoTags,
+    }),
+    [favoriteVideoIds, homeMediaMode, localConfig, progressStore, videoTags],
   );
   const resumableHomeCards = useMemo(
     () =>
@@ -2898,132 +2872,10 @@ export default function App() {
   );
   const canUseHomeRecapSubtitle = Boolean(homeRecapSubtitle || canUseHomeEmbeddedSubtitles);
   const searchLibraryLocally = useCallback(
-    (query: string, limit = 8): LibrarySearchResult[] => {
-      const normalizedQuery = normalizeLibrarySearchText(query);
-      const tokens = tokenizeLibrarySearchQuery(query);
-      const queryVariants = createLibrarySearchTextVariants(query);
-      const alternateQueryVariants = queryVariants.filter((variant) => variant !== normalizedQuery);
-      const tokenVariants = createLibrarySearchTokenVariants(query);
-      if (!normalizedQuery) return [];
-
-      const folderResults = new Map<string, LibrarySearchResult>();
-      modeFilteredVideos.forEach((video) => {
-        const folderTitle = libraryFolderTitleForVideo(video);
-        const folderPath = libraryFolderPathForVideo(video);
-        const mediaRoot = video.mediaRootId ? localConfig?.mediaRoots.find((root) => root.id === video.mediaRootId) : null;
-        const mediaRootLabel = mediaRoot?.label ?? (video.mediaRootId ? fallbackMediaRootLabelForVideo(video) : "");
-        const directoryParts = directoryPartsOf(video.relativePath);
-        const parentDirectory = directoryParts.at(-1) ?? "";
-        const directoryPath = directoryParts.join(" ");
-        const searchable = [
-          folderTitle,
-          folderPath,
-          parentDirectory,
-          directoryPath,
-          video.name,
-          video.relativePath,
-          baseNameWithoutExtension(video.name),
-          mediaRootLabel,
-        ].map(normalizeLibrarySearchText);
-        const tags = videoTags[video.id] ?? [];
-        let score = 0;
-        const reasons: string[] = [];
-
-        if (includesAnyLibrarySearchVariant([searchable[0]], queryVariants)) {
-          score += 40;
-          reasons.push("文件夹匹配");
-        }
-        if (includesAnyLibrarySearchVariant([searchable[1]], queryVariants)) {
-          score += 32;
-          reasons.push("目录匹配");
-        }
-        if (includesAnyLibrarySearchVariant([searchable[2]], queryVariants)) {
-          score += 24;
-          reasons.push("文件夹匹配");
-        }
-        if (includesAnyLibrarySearchVariant([searchable[3]], queryVariants)) {
-          score += 18;
-          reasons.push("目录匹配");
-        }
-        if (includesAnyLibrarySearchVariant([searchable[4]], queryVariants)) {
-          score += 10;
-          reasons.push("文件名匹配");
-        }
-        if (includesAnyLibrarySearchVariant([searchable[5]], queryVariants)) {
-          score += 6;
-          reasons.push("路径匹配");
-        }
-        if (includesAnyLibrarySearchVariant([searchable[7]], queryVariants)) {
-          score += 12;
-          reasons.push("媒体库匹配");
-        }
-        if (alternateQueryVariants.length && includesAnyLibrarySearchVariant(searchable, alternateQueryVariants)) {
-          score += 8;
-          reasons.push("中日字形匹配");
-        }
-        const tagScore = getTagSearchScore(query, tags);
-        if (tagScore > 0) {
-          score += tagScore;
-          reasons.push("标签匹配");
-        }
-
-        tokens.forEach((token) => {
-          if (searchable[0].includes(token)) score += 10;
-          if (searchable[1].includes(token)) score += 8;
-          if (searchable[2].includes(token)) score += 6;
-          if (searchable[3].includes(token)) score += 5;
-          if (searchable[4].includes(token)) score += 2;
-          if (searchable[5].includes(token)) score += 1;
-          if (searchable[7].includes(token)) score += 4;
-          score += Math.floor(getTagSearchScore(token, tags) / 4);
-        });
-        tokenVariants
-          .filter((token) => !tokens.includes(token))
-          .forEach((token) => {
-            if (searchable[0].includes(token)) score += 8;
-            if (searchable[1].includes(token)) score += 6;
-            if (searchable[2].includes(token)) score += 5;
-            if (searchable[3].includes(token)) score += 4;
-            if (searchable[4].includes(token)) score += 2;
-            if (searchable[5].includes(token)) score += 1;
-            if (searchable[7].includes(token)) score += 3;
-          });
-
-        const progress = progressStore[video.id];
-        if (score <= 0) return;
-        if (favoriteVideoIds.has(video.id)) score += 1;
-        if (isResumableProgress(progress)) score += 1;
-
-        const key = libraryFolderKeyForVideo(video);
-        const existing = folderResults.get(key);
-        if (existing) {
-          if (
-            score > existing.score ||
-            (score === existing.score &&
-              compareNaturalRelativePath(video.relativePath, existing.representativeVideo.relativePath) < 0)
-          ) {
-            existing.score = score;
-            existing.reason = reasons[0] ?? "关键词匹配";
-            existing.representativeVideo = video;
-          }
-          return;
-        }
-
-        folderResults.set(
-          key,
-          createLibraryFolderResult(
-            videosByLibraryFolderKey.get(key) ?? [video],
-            video,
-            score,
-            reasons[0] ?? "关键词匹配",
-          ),
-        );
-      });
-      return Array.from(folderResults.values())
-        .sort((a, b) => b.score - a.score || collator.compare(a.title, b.title))
-        .slice(0, limit);
+    (query: string, limit?: number): LibrarySearchResult[] => {
+      return searchLibraryEntries(query, modeFilteredVideos, librarySearchContext, limit);
     },
-    [createLibraryFolderResult, favoriteVideoIds, localConfig, modeFilteredVideos, progressStore, videoTags, videosByLibraryFolderKey],
+    [librarySearchContext, modeFilteredVideos],
   );
   const createLibrarySearchCandidates = useCallback(
     (localResults: LibrarySearchResult[]): LibrarySearchCandidate[] => {
@@ -4527,6 +4379,10 @@ export default function App() {
   const openLibraryFolderFromSearch = useCallback(
     (result: LibrarySearchResult) => {
       const targetVideo = result.videos[0]?.video ?? result.representativeVideo;
+      if (result.kind === "video") {
+        selectVideo(targetVideo.id);
+        return;
+      }
       setIsSeriesMenuOpen(false);
       setPlaylistFilter("all");
       replacePlayerPreferences({
@@ -6421,11 +6277,13 @@ export default function App() {
       setLibrarySearchMode("idle");
       setLibrarySearchMessage("输入片名、关键词或想看的内容。");
       setLibrarySearchResults([]);
+      setLibrarySearchVisibleCount(librarySearchResultPageSize);
       setLibrarySearchSubmittedQuery("");
       return;
     }
 
     setLibrarySearchSubmittedQuery(query);
+    setLibrarySearchVisibleCount(librarySearchResultPageSize);
     const localResults = searchLibraryLocally(query);
     setLibrarySearchResults(localResults);
     const needsAi = Boolean(localConfig?.ai.configured) && shouldUseAiLibrarySearch(query, localResults);
@@ -6451,40 +6309,26 @@ export default function App() {
         method: "POST",
         body: JSON.stringify({ query, candidates }),
       });
-      const candidateById = new Map(candidates.map((candidate) => [candidate.id, candidate]));
-      const aiResultsByKey = new Map<string, LibrarySearchResult>();
-      response.matchIds
-        .map((id) => candidateById.get(id))
-        .filter((candidate): candidate is LibrarySearchCandidate => Boolean(candidate))
-        .forEach((candidate, index) => {
-          const video = modeFilteredVideos.find((item) => item.id === candidate.id);
-          if (!video) return;
-          const key = libraryFolderKeyForVideo(video);
-          if (aiResultsByKey.has(key)) return;
-          aiResultsByKey.set(
-            key,
-            createLibraryFolderResult(videosByLibraryFolderKey.get(key) ?? [video], video, 100 - index, "AI 推荐"),
-          );
-        });
-      const aiResults = Array.from(aiResultsByKey.values());
+      const aiResults = createAiLibrarySearchResults(response.matchIds, modeFilteredVideos, librarySearchContext);
       setLibrarySearchResults(aiResults.length ? aiResults : localResults);
+      setLibrarySearchVisibleCount(librarySearchResultPageSize);
       setLibrarySearchAnswer(response.answer);
       setLibrarySearchMessage(aiResults.length ? "AI 已从本地候选中挑选结果。" : "AI 未返回明确条目，保留本地结果。");
     } catch (error) {
       setLibrarySearchMode(localResults.length ? "local" : "empty");
       setLibrarySearchResults(localResults);
+      setLibrarySearchVisibleCount(librarySearchResultPageSize);
       setLibrarySearchMessage(error instanceof Error ? error.message : "AI 搜索失败，已保留本地结果。");
     } finally {
       setIsLibrarySearchLoading(false);
     }
   }, [
-    createLibraryFolderResult,
     createLibrarySearchCandidates,
     librarySearchQuery,
+    librarySearchContext,
     localConfig,
     modeFilteredVideos,
     searchLibraryLocally,
-    videosByLibraryFolderKey,
   ]);
 
   const librarySearchPreviewResults = useMemo(() => {
@@ -6493,6 +6337,28 @@ export default function App() {
     return searchLibraryLocally(query, 3);
   }, [librarySearchQuery, librarySearchSubmittedQuery, searchLibraryLocally]);
   const shouldShowLibrarySearchPreview = Boolean(librarySearchQuery.trim() && librarySearchQuery.trim() !== librarySearchSubmittedQuery);
+  const { visibleResults: visibleLibrarySearchResults, hasMoreResults: hasMoreLibrarySearchResults } = useMemo(
+    () => getVisibleLibrarySearchResults(librarySearchResults, librarySearchVisibleCount),
+    [librarySearchResults, librarySearchVisibleCount],
+  );
+  const loadMoreLibrarySearchResults = useCallback(() => {
+    setLibrarySearchVisibleCount((count) => Math.min(count + librarySearchResultPageSize, librarySearchResults.length));
+  }, [librarySearchResults.length]);
+
+  useEffect(() => {
+    if (!hasMoreLibrarySearchResults || !librarySearchResultsRef.current || !librarySearchLoadMoreRef.current) return;
+    if (typeof IntersectionObserver === "undefined") return;
+    const root = librarySearchResultsRef.current;
+    const target = librarySearchLoadMoreRef.current;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) loadMoreLibrarySearchResults();
+      },
+      { root, rootMargin: "40px 0px 80px", threshold: 0.1 },
+    );
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [hasMoreLibrarySearchResults, loadMoreLibrarySearchResults, visibleLibrarySearchResults.length]);
 
   const loadCacheStatus = useCallback(async () => {
     setIsCacheStatusLoading(true);
@@ -7245,7 +7111,35 @@ export default function App() {
       </span>
     </button>
   );
-  const renderLibraryFolderResult = (result: LibrarySearchResult) => {
+  const renderLibrarySearchResult = (result: LibrarySearchResult) => {
+    if (result.kind === "video") {
+      const video = result.representativeVideo;
+      const card = createHomeVideoCard(video);
+      const directoryLabel = directoryPartsOf(video.relativePath).join(" / ");
+      const progressLabel = formatLibrarySearchProgressLabel(card);
+      return (
+        <button
+          key={result.key}
+          className="library-folder-result"
+          type="button"
+          onClick={() => openLibraryFolderFromSearch(result)}
+          title={video.relativePath || video.name}
+        >
+          <span className="library-folder-icon" aria-hidden="true">
+            <Play size={20} />
+          </span>
+          <span className="library-folder-copy">
+            <strong>{video.name}</strong>
+            <small>{progressLabel} · {result.reason}</small>
+            {directoryLabel || result.mediaRootLabel ? (
+              <small>{[result.mediaRootLabel, directoryLabel].filter(Boolean).join(" · ")}</small>
+            ) : null}
+            {renderTagChips(videoTags[video.id] ?? [], { limit: 3, compact: true })}
+          </span>
+        </button>
+      );
+    }
+
     const unfinishedCount = result.videos.filter(({ progress }) => !progress?.completed).length;
     const resumableCount = result.videos.filter(({ progress }) => isResumableProgress(progress)).length;
     const statusLabel = resumableCount
@@ -7687,7 +7581,7 @@ export default function App() {
                     </div>
                     {librarySearchPreviewResults.length ? (
                       <div className="home-compact-list library-search-preview-results">
-                        {librarySearchPreviewResults.map(renderLibraryFolderResult)}
+                        {librarySearchPreviewResults.map(renderLibrarySearchResult)}
                       </div>
                     ) : (
                       <div className="empty-list compact">本地预览暂无命中</div>
@@ -7699,11 +7593,21 @@ export default function App() {
                 </div>
                 {librarySearchAnswer ? <div className="library-search-answer">{librarySearchAnswer}</div> : null}
                 {librarySearchResults.length ? (
-                  <div className="home-compact-list library-search-results">
-                    {librarySearchResults.map(renderLibraryFolderResult)}
+                  <div className="home-compact-list library-search-results" ref={librarySearchResultsRef}>
+                    {visibleLibrarySearchResults.map(renderLibrarySearchResult)}
+                    {hasMoreLibrarySearchResults ? (
+                      <div className="library-search-load-more" ref={librarySearchLoadMoreRef}>
+                        <span>
+                          已显示 {visibleLibrarySearchResults.length} / {librarySearchResults.length}
+                        </span>
+                        <button type="button" onClick={loadMoreLibrarySearchResults}>
+                          加载更多
+                        </button>
+                      </div>
+                    ) : null}
                   </div>
                 ) : librarySearchMode === "empty" ? (
-                  <div className="empty-list compact">没有找到匹配文件夹</div>
+                  <div className="empty-list compact">没有找到匹配{homeMediaMode === "special" ? "视频" : "文件夹"}</div>
                 ) : null}
               </section>
 

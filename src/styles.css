@@ -1905,6 +1905,41 @@ button {
   padding-right: 2px;
 }
 
+.library-search-load-more {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 10px 6px 2px;
+  color: #8e97a5;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.library-search-load-more span {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+
+.library-search-load-more button {
+  min-width: 112px;
+  min-height: 32px;
+  border: 1px solid rgba(0, 161, 214, 0.34);
+  border-radius: 6px;
+  padding: 0 12px;
+  background: rgba(0, 161, 214, 0.12);
+  color: #dff7ff;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.library-search-load-more button:hover,
+.library-search-load-more button:focus-visible {
+  border-color: rgba(0, 161, 214, 0.68);
+  background: rgba(0, 161, 214, 0.2);
+}
+
 .library-folder-result {
   display: grid;
   grid-template-columns: 42px minmax(0, 1fr);
@@ -4515,6 +4550,22 @@ button {
 
 .app-shell.theme-light .library-search-results {
   scrollbar-color: rgba(100, 116, 139, 0.52) rgba(226, 232, 240, 0.72);
+}
+
+.app-shell.theme-light .library-search-load-more {
+  color: #667085;
+}
+
+.app-shell.theme-light .library-search-load-more button {
+  border-color: rgba(0, 161, 214, 0.3);
+  background: #e1f5fd;
+  color: #0077a8;
+}
+
+.app-shell.theme-light .library-search-load-more button:hover,
+.app-shell.theme-light .library-search-load-more button:focus-visible {
+  border-color: rgba(0, 161, 214, 0.48);
+  background: #c9effc;
 }
 
 .app-shell.theme-light .home-list-card:hover,

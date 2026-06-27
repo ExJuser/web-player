@@ -1,6 +1,7 @@
 node_modules/
 dist/
 coverage/
+.worktrees/
 .npm-cache/
 .cache/
 .local-web-player-data/
@@ -9,6 +10,7 @@ AGENTS.md
 
 .agents/
 .codex/
+.worktrees/
 
 .env
 .env.local
