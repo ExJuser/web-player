@@ -366,6 +366,7 @@ import {
   resolveRestoredEmbeddedSubtitleSelection,
   resolveSubtitleSelection,
   shouldShowHomeRecapCard,
+  shouldShowNextEpisodeCard,
   type HomeMediaMode,
 } from "./playerUiState";
 import {
@@ -2863,6 +2864,7 @@ export default function App() {
     [createHomeVideoCard, favoriteVideoIds, modeFilteredVideos],
   );
   const nextEpisodeCard = useMemo(() => {
+    if (!shouldShowNextEpisodeCard(homeMediaMode)) return null;
     const sourceVideo = primaryResumeCard?.video ?? recentHomeCards[0]?.video ?? currentVideo;
     if (!sourceVideo) return null;
     const sourceSeriesKey = scopedSeriesKeyForVideo(sourceVideo, seriesTitleByVideoId.get(sourceVideo.id) ?? inferSeriesTitle(sourceVideo));
@@ -2873,7 +2875,7 @@ export default function App() {
     const sourceIndex = seriesVideos.findIndex((video) => video.id === sourceVideo.id);
     if (sourceIndex < 0 || sourceIndex >= seriesVideos.length - 1) return null;
     return createHomeVideoCard(seriesVideos[sourceIndex + 1]);
-  }, [createHomeVideoCard, currentVideo, playlistVideos, primaryResumeCard, recentHomeCards, seriesTitleByVideoId]);
+  }, [createHomeVideoCard, currentVideo, homeMediaMode, playlistVideos, primaryResumeCard, recentHomeCards, seriesTitleByVideoId]);
   const isHomeViewVisible = activeView === "home" && !isPrivacyMode && !isCinemaMode && !isFullscreen;
   const isPhotoAlbumViewVisible =
     (activeView === "photos" || activeView === "photoViewer") && !isPrivacyMode && !isCinemaMode && !isFullscreen;

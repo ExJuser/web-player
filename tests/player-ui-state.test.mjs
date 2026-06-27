@@ -138,6 +138,12 @@ test("home recap card entry is shown only in anime mode", () => {
   assert.equal(uiState.shouldShowHomeRecapCard("special"), false);
 });
 
+test("next episode card is hidden in special mode", () => {
+  assert.equal(uiState.shouldShowNextEpisodeCard("all"), true);
+  assert.equal(uiState.shouldShowNextEpisodeCard("anime"), true);
+  assert.equal(uiState.shouldShowNextEpisodeCard("special"), false);
+});
+
 test("anime player entry enables series mode for the current folder series", () => {
   assert.deepEqual(uiState.resolvePlayerEntrySeriesMode("anime", "root-1::show-a"), {
     isSeriesMode: true,

@@ -103,6 +103,10 @@ export function shouldShowHomeRecapCard(mode: HomeMediaMode) {
   return mode === "anime";
 }
 
+export function shouldShowNextEpisodeCard(mode: HomeMediaMode) {
+  return mode !== "special";
+}
+
 export function resolvePlayerEntrySeriesMode(mode: HomeMediaMode, seriesKey: string | null | undefined) {
   if (mode === "anime") {
     return {
