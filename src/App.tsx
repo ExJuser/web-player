@@ -3688,6 +3688,16 @@ export default function App() {
     });
   }, []);
 
+  const revokeReplacedMediaRootVideoUrls = useCallback((replacedVideos: VideoItem[], nextVideos: VideoItem[]) => {
+    const retainedVideoIds = new Set(nextVideos.map((video) => video.id));
+    replacedVideos.forEach((video) => {
+      if (isObjectUrl(video.url)) URL.revokeObjectURL(video.url);
+      if (!retainedVideoIds.has(video.id) && video.thumbnailUrl && isObjectUrl(video.thumbnailUrl)) {
+        URL.revokeObjectURL(video.thumbnailUrl);
+      }
+    });
+  }, []);
+
   const clearLoadedMedia = useCallback(() => {
     cancelAutoNextPrompt();
     videoRef.current?.pause();
@@ -5632,7 +5642,7 @@ export default function App() {
 
         const existingVideosOutsideRoot = videosRef.current.filter((video) => video.mediaRootId !== nextMediaRootId);
         const replacedVideos = videosRef.current.filter((video) => video.mediaRootId === nextMediaRootId);
-        revokeVideoUrls(replacedVideos);
+        revokeReplacedMediaRootVideoUrls(replacedVideos, media.videos);
         const mergedVideos = getSortedVideos(
           [...existingVideosOutsideRoot, ...mergeVideoRuntimeState(media.videos, replacedVideos)],
           playerPreferencesRef.current.playlistSortMode,
@@ -5721,6 +5731,7 @@ export default function App() {
       importLegacyStoreForScannedRoot,
       mediaRootStatuses,
       resolveMediaRootId,
+      revokeReplacedMediaRootVideoUrls,
       revokeVideoUrls,
     ],
   );
