@@ -656,6 +656,10 @@ async function requestExternalText(url, options = {}) {
   }
 }
 
+function formatRemoteFetchError(error) {
+  return error instanceof Error ? error.message : String(error || "远端请求失败。");
+}
+
 async function requestExternalJson(url, options = {}) {
   const text = await requestExternalText(url, { ...options, accept: "application/json,text/plain,*/*" });
   try {
@@ -768,15 +772,38 @@ async function resolveBilibiliCid(parsed) {
 
 async function fetchBilibiliDanmaku(parsed) {
   const { cid, title } = await resolveBilibiliCid(parsed);
-  const xml = await requestExternalText(`https://comment.bilibili.com/${encodeURIComponent(cid)}.xml`, {
+  const requestOptions = {
     accept: "application/xml,text/xml,text/plain,*/*",
     referer: parsed.url,
-  });
+    userAgent: "Mozilla/5.0 local-web-player/0.1",
+  };
+  const endpoints = [
+    `https://comment.bilibili.com/${encodeURIComponent(cid)}.xml`,
+    `https://api.bilibili.com/x/v1/dm/list.so?oid=${encodeURIComponent(cid)}`,
+  ];
+  const errors = [];
+  let xml = "";
+  for (const endpoint of endpoints) {
+    try {
+      xml = await requestExternalText(endpoint, requestOptions);
+      if (xml.trim()) break;
+      errors.push(`${endpoint}: 空响应`);
+    } catch (error) {
+      errors.push(`${endpoint}: ${formatRemoteFetchError(error)}`);
+    }
+  }
+  if (!xml.trim()) {
+    throw new Error(`Bilibili 弹幕接口未返回内容，可能是该集弹幕暂不可公开访问或网络被拦截。${errors.join("；")}`);
+  }
+  const comments = parseBilibiliXmlDanmaku(xml);
+  if (!comments.length) {
+    throw new Error("Bilibili 弹幕接口已响应，但没有解析到可用弹幕。");
+  }
   return {
     provider: "bilibili",
     title,
     sourceUrl: parsed.url,
-    comments: parseBilibiliXmlDanmaku(xml),
+    comments,
   };
 }
 
