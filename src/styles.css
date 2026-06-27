@@ -908,7 +908,7 @@ button {
 
 .home-resume-card {
   display: grid;
-  grid-template-columns: minmax(240px, 38%) minmax(0, 1fr);
+  grid-template-columns: minmax(240px, min(38%, 462px)) minmax(0, 1fr);
   gap: 18px;
   min-height: 260px;
   padding: 16px;
