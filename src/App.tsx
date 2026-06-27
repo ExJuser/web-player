@@ -7636,27 +7636,29 @@ export default function App() {
           </div>
           <span>{album.mediaRootLabel} · {album.relativePath || "根目录"}</span>
           <span>{formatPhotoAlbumProgress(album)} · {formatFileSize(album.totalSize)} · {formatRelativeTime(album.updatedAt)}</span>
-          <div className="home-progress" aria-label={formatPhotoAlbumProgress(album)}>
-            <span style={{ width: `${progressPercent}%` }} />
-          </div>
-          <div className="photo-album-actions">
-            <button className="secondary-button" type="button" onClick={() => openPhotoAlbum(album)}>
-              打开
-            </button>
-            {progress ? (
-              <button className="secondary-button" type="button" onClick={() => openPhotoAlbum(album, { fromBeginning: true })}>
-                从头
+          <div className="photo-album-footer">
+            <div className="home-progress" aria-label={formatPhotoAlbumProgress(album)}>
+              <span style={{ width: `${progressPercent}%` }} />
+            </div>
+            <div className="photo-album-actions">
+              <button className="secondary-button" type="button" onClick={() => openPhotoAlbum(album)}>
+                打开
               </button>
-            ) : null}
-            <button
-              className="danger-button photo-album-delete-button"
-              type="button"
-              onClick={() => requestDeletePhotoAlbum(album)}
-              title="删除整本写真集"
-            >
-              <Trash2 size={16} />
-              删除
-            </button>
+              {progress ? (
+                <button className="secondary-button" type="button" onClick={() => openPhotoAlbum(album, { fromBeginning: true })}>
+                  从头
+                </button>
+              ) : null}
+              <button
+                className="danger-button photo-album-delete-button"
+                type="button"
+                onClick={() => requestDeletePhotoAlbum(album)}
+                title="删除整本写真集"
+              >
+                <Trash2 size={16} />
+                删除
+              </button>
+            </div>
           </div>
         </div>
       </article>
