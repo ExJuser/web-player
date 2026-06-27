@@ -159,12 +159,40 @@ const PHOTO_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif", ".av
 const photoAlbumPageSize = 20;
 const cacheStatusPageSize = 10;
 const photoThumbnailWindowSize = 24;
+const photoViewerWarmRadius = 4;
+const photoViewerDecodeRadius = 2;
+const photoObjectUrlCacheLimit = 48;
 const photoAlbumScanCacheStaleMs = 24 * 60 * 60 * 1000;
 const photoAlbumSortOptions: Array<{ value: PhotoAlbumSortMode; label: string }> = [
   { value: "updated", label: "最近更新" },
   { value: "name", label: "名称" },
   { value: "count", label: "图片数" },
 ];
+
+function prunePhotoObjectUrlCache(
+  urls: Record<string, string>,
+  accessTimes: Record<string, number>,
+  protectedIds: Set<string>,
+  decodedImageIds?: Set<string>,
+) {
+  if (Object.keys(urls).length <= photoObjectUrlCacheLimit) return urls;
+
+  const nextUrls = { ...urls };
+  const evictableEntries = Object.keys(nextUrls)
+    .filter((id) => !protectedIds.has(id))
+    .sort((a, b) => (accessTimes[a] ?? 0) - (accessTimes[b] ?? 0));
+
+  while (Object.keys(nextUrls).length > photoObjectUrlCacheLimit && evictableEntries.length) {
+    const id = evictableEntries.shift();
+    if (!id) break;
+    URL.revokeObjectURL(nextUrls[id]);
+    delete nextUrls[id];
+    delete accessTimes[id];
+    decodedImageIds?.delete(id);
+  }
+
+  return nextUrls;
+}
 
 function isPhotoFile(name: string) {
   return hasExtension(name, PHOTO_EXTENSIONS);
@@ -2112,6 +2140,8 @@ export default function App() {
   const playbackStatsSessionRef = useRef<{ key: string; lastTime: number | null; hasCountedPlay: boolean } | null>(null);
   const photoAlbumsRef = useRef<PhotoAlbum[]>([]);
   const photoObjectUrlsRef = useRef<Record<string, string>>({});
+  const photoObjectUrlAccessRef = useRef<Record<string, number>>({});
+  const decodedPhotoImageIdsRef = useRef(new Set<string>());
   const photoImageFilePromisesRef = useRef<Record<string, Promise<File | null>>>({});
   const librarySearchResultsRef = useRef<HTMLDivElement | null>(null);
   const librarySearchLoadMoreRef = useRef<HTMLDivElement | null>(null);
@@ -2409,6 +2439,8 @@ export default function App() {
         });
         Object.values(photoObjectUrlsRef.current).forEach((url) => URL.revokeObjectURL(url));
         photoObjectUrlsRef.current = {};
+        photoObjectUrlAccessRef.current = {};
+        decodedPhotoImageIdsRef.current.clear();
         setPhotoObjectUrls({});
         const cachedScan = createCachedPhotoAlbumScan(scan);
         setPhotoAlbums(scan.albums);
@@ -2847,76 +2879,122 @@ export default function App() {
   useEffect(() => {
     const neededImages = new Map<string, PhotoAlbumImage>();
     const directory = photoAlbumDirectoryRef.current;
+    const rememberNeededImage = (image?: PhotoAlbumImage | null) => {
+      if (image && !image.url && (image.file || directory)) neededImages.set(image.id, image);
+    };
+
     if (activeView === "photos") {
       pagedPhotoAlbums.forEach((album) => {
-        const coverImage = album.images[0];
-        if (coverImage && !coverImage.url && (coverImage.file || directory)) neededImages.set(coverImage.id, coverImage);
+        rememberNeededImage(album.images[0]);
       });
     } else if (activeView === "photoViewer" && selectedPhotoAlbum) {
-      const currentImage = selectedPhotoAlbum.images[currentPhotoIndex];
-      if (currentImage && !currentImage.url && (currentImage.file || directory)) neededImages.set(currentImage.id, currentImage);
-      visiblePhotoThumbnails.forEach((image) => {
-        if (!image.url && (image.file || directory)) neededImages.set(image.id, image);
-      });
+      const warmStart = Math.max(currentPhotoIndex - photoViewerWarmRadius, 0);
+      const warmEnd = Math.min(currentPhotoIndex + photoViewerWarmRadius, selectedPhotoAlbum.images.length - 1);
+      rememberNeededImage(selectedPhotoAlbum.images[currentPhotoIndex]);
+      for (let index = warmStart; index <= warmEnd; index += 1) {
+        rememberNeededImage(selectedPhotoAlbum.images[index]);
+      }
     }
 
     const nextUrls = { ...photoObjectUrlsRef.current };
     let didChange = false;
     const missingImages: PhotoAlbumImage[] = [];
 
-    Object.entries(photoObjectUrlsRef.current).forEach(([id, url]) => {
-      if (!neededImages.has(id)) {
-        URL.revokeObjectURL(url);
-        delete nextUrls[id];
-        didChange = true;
-      }
-    });
-
     neededImages.forEach((image, id) => {
-      if (!nextUrls[id] && image.file) {
+      if (nextUrls[id]) {
+        photoObjectUrlAccessRef.current[id] = Date.now();
+        return;
+      }
+      if (image.file) {
         nextUrls[id] = URL.createObjectURL(image.file);
+        photoObjectUrlAccessRef.current[id] = Date.now();
         didChange = true;
-      } else if (!nextUrls[id] && directory) {
+      } else if (directory) {
         missingImages.push(image);
       }
     });
 
+    const prunedUrls = prunePhotoObjectUrlCache(
+      nextUrls,
+      photoObjectUrlAccessRef.current,
+      new Set(neededImages.keys()),
+      decodedPhotoImageIdsRef.current,
+    );
+    if (prunedUrls !== nextUrls) didChange = true;
+
     if (didChange) {
-      photoObjectUrlsRef.current = nextUrls;
-      setPhotoObjectUrls(nextUrls);
+      photoObjectUrlsRef.current = prunedUrls;
+      setPhotoObjectUrls(prunedUrls);
     }
 
     if (!directory || !missingImages.length) return;
 
     let isCancelled = false;
-    missingImages.forEach((image) => {
-      if (!photoImageFilePromisesRef.current[image.id]) {
-        photoImageFilePromisesRef.current[image.id] = getPhotoImageFileFromDirectory(directory, image.relativePath).catch(() => null);
-      }
-      void photoImageFilePromisesRef.current[image.id].then((file) => {
-        delete photoImageFilePromisesRef.current[image.id];
-        if (isCancelled || !file || photoObjectUrlsRef.current[image.id]) return;
-        const url = URL.createObjectURL(file);
-        if (isCancelled) {
-          URL.revokeObjectURL(url);
-          return;
+    missingImages
+      .sort((a, b) => Math.abs(a.index - currentPhotoIndex) - Math.abs(b.index - currentPhotoIndex))
+      .forEach((image) => {
+        if (!photoImageFilePromisesRef.current[image.id]) {
+          photoImageFilePromisesRef.current[image.id] = getPhotoImageFileFromDirectory(directory, image.relativePath).catch(() => null);
         }
-        photoObjectUrlsRef.current = {
-          ...photoObjectUrlsRef.current,
-          [image.id]: url,
-        };
-        setPhotoObjectUrls(photoObjectUrlsRef.current);
+        void photoImageFilePromisesRef.current[image.id].then((file) => {
+          delete photoImageFilePromisesRef.current[image.id];
+          if (isCancelled || !file || photoObjectUrlsRef.current[image.id]) return;
+          const url = URL.createObjectURL(file);
+          if (isCancelled) {
+            URL.revokeObjectURL(url);
+            return;
+          }
+          photoObjectUrlAccessRef.current[image.id] = Date.now();
+          const cachedUrls = prunePhotoObjectUrlCache(
+            {
+              ...photoObjectUrlsRef.current,
+              [image.id]: url,
+            },
+            photoObjectUrlAccessRef.current,
+            new Set(neededImages.keys()),
+            decodedPhotoImageIdsRef.current,
+          );
+          photoObjectUrlsRef.current = cachedUrls;
+          setPhotoObjectUrls(cachedUrls);
+        });
       });
-    });
 
     return () => {
       isCancelled = true;
     };
-  }, [activeView, currentPhotoIndex, pagedPhotoAlbums, selectedPhotoAlbum, visiblePhotoThumbnails]);
+  }, [activeView, currentPhotoIndex, pagedPhotoAlbums, selectedPhotoAlbum]);
+  useEffect(() => {
+    if (activeView !== "photoViewer" || !selectedPhotoAlbum) return;
+
+    const decodeStart = Math.max(currentPhotoIndex - photoViewerDecodeRadius, 0);
+    const decodeEnd = Math.min(currentPhotoIndex + photoViewerDecodeRadius, selectedPhotoAlbum.images.length - 1);
+    for (let index = decodeStart; index <= decodeEnd; index += 1) {
+      const image = selectedPhotoAlbum.images[index];
+      const url = image?.url || photoObjectUrls[image?.id ?? ""];
+      if (!image || !url || decodedPhotoImageIdsRef.current.has(image.id)) continue;
+
+      const preloadImage = new Image();
+      preloadImage.decoding = "async";
+      preloadImage.src = url;
+      if (preloadImage.decode) {
+        void preloadImage.decode()
+          .then(() => {
+            decodedPhotoImageIdsRef.current.add(image.id);
+          })
+          .catch(() => undefined);
+      } else {
+        preloadImage.onload = () => {
+          decodedPhotoImageIdsRef.current.add(image.id);
+        };
+      }
+    }
+  }, [activeView, currentPhotoIndex, photoObjectUrls, selectedPhotoAlbum]);
   useEffect(() => {
     return () => {
       Object.values(photoObjectUrlsRef.current).forEach((url) => URL.revokeObjectURL(url));
       photoObjectUrlsRef.current = {};
+      photoObjectUrlAccessRef.current = {};
+      decodedPhotoImageIdsRef.current.clear();
     };
   }, []);
   useEffect(() => {
@@ -4682,6 +4760,8 @@ export default function App() {
     photoAlbumDirectoryRef.current = null;
     photoAlbumsRef.current = [];
     photoObjectUrlsRef.current = {};
+    photoObjectUrlAccessRef.current = {};
+    decodedPhotoImageIdsRef.current.clear();
     setPhotoAlbums([]);
     setPhotoRootStatuses([]);
     setPhotoObjectUrls({});
@@ -4804,6 +4884,9 @@ export default function App() {
       if (isObjectUrl(photo.url)) URL.revokeObjectURL(photo.url);
       const nextPhotoObjectUrls = { ...photoObjectUrlsRef.current };
       delete nextPhotoObjectUrls[photo.id];
+      delete photoObjectUrlAccessRef.current[photo.id];
+      delete photoImageFilePromisesRef.current[photo.id];
+      decodedPhotoImageIdsRef.current.delete(photo.id);
       photoObjectUrlsRef.current = nextPhotoObjectUrls;
 
       photoAlbumsRef.current = nextAlbums;
@@ -4945,7 +5028,9 @@ export default function App() {
         if (objectUrl) URL.revokeObjectURL(objectUrl);
         if (isObjectUrl(image.url)) URL.revokeObjectURL(image.url);
         delete nextPhotoObjectUrls[image.id];
+        delete photoObjectUrlAccessRef.current[image.id];
         delete photoImageFilePromisesRef.current[image.id];
+        decodedPhotoImageIdsRef.current.delete(image.id);
       });
 
       photoAlbumsRef.current = nextAlbums;
@@ -8372,7 +8457,7 @@ export default function App() {
                 <ChevronLeft size={34} />
               </button>
               {currentPhoto && currentPhotoUrl ? (
-                <img key={currentPhoto.id} src={currentPhotoUrl} alt={currentPhoto.name} draggable={false} />
+                <img key={currentPhoto.id} src={currentPhotoUrl} alt={currentPhoto.name} decoding="async" loading="eager" draggable={false} />
               ) : (
                 <div className="photo-empty-state">没有可显示的图片</div>
               )}
@@ -8405,7 +8490,7 @@ export default function App() {
                       }}
                       title={image.name}
                     >
-                      {thumbnailUrl ? <img src={thumbnailUrl} alt="" loading="lazy" draggable={false} /> : null}
+                      {thumbnailUrl ? <img src={thumbnailUrl} alt="" decoding="async" loading="lazy" draggable={false} /> : null}
                     </button>
                   );
                 })}
