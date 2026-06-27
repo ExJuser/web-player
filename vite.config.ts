@@ -34,6 +34,7 @@ import {
   dedupeDanmakuComments,
   parseDanmakuUrl,
 } from "./src/danmakuUtils";
+import { createBilibiliDanmakuService } from "./server/bilibiliDanmaku.mjs";
 import { clearLocalCacheItems, createCacheStatus as createLocalCacheStatus, createDanmakuSourcesStats } from "./server/cacheStatus.mjs";
 import { readJsonFile, writeJsonFile } from "./server/jsonFiles.mjs";
 import { formatRemoteFetchError, requestExternalJson, requestExternalText } from "./server/remoteFetch.mjs";
@@ -56,6 +57,13 @@ const appConfigPath = path.resolve(__dirname, "config", "app.json");
 const localDataStore = new LocalDataSqliteStore({ dataRoot, librariesRoot, photoAlbumsRoot, indexPath, globalDataPath });
 const videoExtensions = new Set([".mp4", ".webm", ".ogg", ".mov", ".m4v", ".mkv"]);
 const imageSubtitleCodecs = new Set(["hdmv_pgs_subtitle", "pgs", "dvd_subtitle", "dvb_subtitle", "xsub"]);
+const bilibiliDanmaku = createBilibiliDanmakuService({
+  createDanmakuComment,
+  dedupeDanmakuComments,
+  formatRemoteFetchError,
+  requestExternalJson,
+  requestExternalText,
+});
 
 function sendJson(response, status, payload) {
   response.statusCode = status;
@@ -529,91 +537,6 @@ async function streamDeepSeek(env, messages, onDelta) {
   return output.trim();
 }
 
-function decodeHtmlEntities(value) {
-  return String(value || "")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&apos;/g, "'")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&amp;/g, "&");
-}
-
-function parseBilibiliXmlDanmaku(xmlText) {
-  const comments = [];
-  const pattern = /<d\s+[^>]*p="([^"]*)"[^>]*>([\s\S]*?)<\/d>/g;
-  let match;
-  while ((match = pattern.exec(xmlText))) {
-    const parts = match[1].split(",");
-    const comment = createDanmakuComment({
-      id: parts[7] ? `bilibili:${parts[7]}` : undefined,
-      time: Number(parts[0]),
-      mode: parts[1],
-      color: parts[3],
-      text: decodeHtmlEntities(match[2]),
-    });
-    if (comment) comments.push(comment);
-  }
-  return dedupeDanmakuComments(comments);
-}
-
-async function resolveBilibiliCid(parsed) {
-  if (parsed.kind === "cid") return { cid: parsed.value, title: `Bilibili CID ${parsed.value}` };
-  if (parsed.kind === "ep") {
-    const payload = await requestExternalJson(`https://api.bilibili.com/pgc/view/web/season?ep_id=${encodeURIComponent(parsed.value)}`, {
-      referer: parsed.url,
-    });
-    const episode = (payload?.result?.episodes || []).find((item) => String(item?.id) === parsed.value) || payload?.result?.episodes?.[0];
-    if (!episode?.cid) throw new Error("Bilibili 番剧条目没有可用弹幕 cid。");
-    return { cid: String(episode.cid), title: episode.long_title || episode.title || payload?.result?.title || `Bilibili EP ${parsed.value}` };
-  }
-
-  const queryKey = parsed.kind === "aid" ? "aid" : "bvid";
-  const payload = await requestExternalJson(`https://api.bilibili.com/x/player/pagelist?${queryKey}=${encodeURIComponent(parsed.value)}`, {
-    referer: parsed.url,
-  });
-  const page = Array.isArray(payload?.data) ? payload.data[0] : null;
-  if (!page?.cid) throw new Error("Bilibili 视频没有可用弹幕 cid。");
-  return { cid: String(page.cid), title: page.part || `Bilibili ${parsed.value}` };
-}
-
-async function fetchBilibiliDanmaku(parsed) {
-  const { cid, title } = await resolveBilibiliCid(parsed);
-  const requestOptions = {
-    accept: "application/xml,text/xml,text/plain,*/*",
-    referer: parsed.url,
-    userAgent: "Mozilla/5.0 local-web-player/0.1",
-  };
-  const endpoints = [
-    `https://comment.bilibili.com/${encodeURIComponent(cid)}.xml`,
-    `https://api.bilibili.com/x/v1/dm/list.so?oid=${encodeURIComponent(cid)}`,
-  ];
-  const errors = [];
-  let xml = "";
-  for (const endpoint of endpoints) {
-    try {
-      xml = await requestExternalText(endpoint, requestOptions);
-      if (xml.trim()) break;
-      errors.push(`${endpoint}: 空响应`);
-    } catch (error) {
-      errors.push(`${endpoint}: ${formatRemoteFetchError(error)}`);
-    }
-  }
-  if (!xml.trim()) {
-    throw new Error(`Bilibili 弹幕接口未返回内容，可能是该集弹幕暂不可公开访问或网络被拦截。${errors.join("；")}`);
-  }
-  const comments = parseBilibiliXmlDanmaku(xml);
-  if (!comments.length) {
-    throw new Error("Bilibili 弹幕接口已响应，但没有解析到可用弹幕。");
-  }
-  return {
-    provider: "bilibili",
-    title,
-    sourceUrl: parsed.url,
-    comments,
-  };
-}
-
 async function writeDanmakuSource(record) {
   await mkdir(danmakuSourcesRoot, { recursive: true });
   const language = record.comments.reduce((selected, comment) => {
@@ -654,7 +577,7 @@ async function fetchDanmakuSource(payload) {
 
   const record =
     parsed.provider === "bilibili"
-      ? await fetchBilibiliDanmaku(parsed)
+      ? await bilibiliDanmaku.fetchBilibiliDanmaku(parsed)
       : null;
   if (!record) throw new Error("Unsupported danmaku provider.");
   if (!record.comments.length) throw new Error("没有解析到弹幕。");
