@@ -1553,6 +1553,15 @@ function getDanmakuLane(comment: DanmakuComment, laneCount: number) {
   return Number.parseInt(hash.slice(0, 8), 16) % laneCount;
 }
 
+const DANMAKU_LANE_LINE_HEIGHT = 1.12;
+
+function getDanmakuLaneCount(displayArea: number, fontSize: number, layerHeight: number) {
+  const boundedDisplayArea = Math.min(1, Math.max(0.25, displayArea));
+  const laneStep = Math.max(14, fontSize * DANMAKU_LANE_LINE_HEIGHT);
+  const effectiveHeight = Math.max(180, layerHeight || 0);
+  return Math.max(4, Math.floor((effectiveHeight * boundedDisplayArea) / laneStep));
+}
+
 function formatDanmakuLaneTop(lane: number, laneCount: number, displayArea: number) {
   if (laneCount <= 1) return "0%";
   const percent = (lane / laneCount) * Math.min(1, Math.max(0.25, displayArea)) * 100;
@@ -2206,6 +2215,7 @@ export default function App() {
   const playerColumnRef = useRef<HTMLElement | null>(null);
   const topBarRef = useRef<HTMLElement | null>(null);
   const playerRef = useRef<HTMLDivElement | null>(null);
+  const danmakuLayerRef = useRef<HTMLDivElement | null>(null);
   const controlBarRef = useRef<HTMLDivElement | null>(null);
   const playlistRef = useRef<HTMLDivElement | null>(null);
   const currentVideoIdRef = useRef<string | null>(null);
@@ -2296,6 +2306,7 @@ export default function App() {
   const [currentDanmakuSource, setCurrentDanmakuSource] = useState<DanmakuSource | null>(null);
   const [danmakuManualUrl, setDanmakuManualUrl] = useState("");
   const [danmakuMessage, setDanmakuMessage] = useState("");
+  const [danmakuLayerHeight, setDanmakuLayerHeight] = useState(0);
   const [isDanmakuDialogOpen, setIsDanmakuDialogOpen] = useState(false);
   const [isDanmakuLoading, setIsDanmakuLoading] = useState(false);
   const [localConfig, setLocalConfig] = useState<LocalConfig | null>(null);
@@ -3299,7 +3310,7 @@ export default function App() {
       .filter((comment) => comment.time <= currentTime && currentTime - comment.time <= durationSeconds)
       .slice(-displayLimit);
   }, [currentTime, currentVideo, danmakuComments, danmakuPreferences.density, danmakuPreferences.enabled, danmakuPreferences.speed, isPrivacyMode]);
-  const danmakuLaneCount = Math.max(3, Math.round(10 * danmakuPreferences.displayArea));
+  const danmakuLaneCount = getDanmakuLaneCount(danmakuPreferences.displayArea, danmakuPreferences.fontSize, danmakuLayerHeight);
   const currentMediaLibraryRoot = useMemo(() => {
     const roots = localConfig?.mediaRoots ?? [];
     if (currentMediaRootId) {
@@ -5407,6 +5418,29 @@ export default function App() {
       window.removeEventListener("resize", updateAdaptiveColumns);
     };
   }, [activeView, isFullscreen, videoAspectRatio]);
+
+  useLayoutEffect(() => {
+    const layer = danmakuLayerRef.current;
+    if (!layer) {
+      setDanmakuLayerHeight(0);
+      return undefined;
+    }
+
+    const updateDanmakuLayerHeight = () => {
+      const nextHeight = Math.round(layer.getBoundingClientRect().height);
+      setDanmakuLayerHeight((previousHeight) => (Math.abs(previousHeight - nextHeight) < 2 ? previousHeight : nextHeight));
+    };
+
+    updateDanmakuLayerHeight();
+    const resizeObserver = new ResizeObserver(updateDanmakuLayerHeight);
+    resizeObserver.observe(layer);
+    window.addEventListener("resize", updateDanmakuLayerHeight);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", updateDanmakuLayerHeight);
+    };
+  }, [activeDanmakuComments.length, isDanmakuAvailable]);
 
   const getNextVideoId = useCallback(
     (mode: PlaybackMode) => {
@@ -8913,6 +8947,7 @@ export default function App() {
 
             {isDanmakuAvailable && activeDanmakuComments.length ? (
               <div
+                ref={danmakuLayerRef}
                 className="danmaku-layer"
                 aria-hidden="true"
                 style={
@@ -8937,7 +8972,7 @@ export default function App() {
                           "--danmaku-lane": lane,
                           "--danmaku-lanes": danmakuLaneCount,
                           "--danmaku-lane-top": formatDanmakuLaneTop(lane, danmakuLaneCount, danmakuPreferences.displayArea),
-                          "--danmaku-lane-offset": `${Math.round(lane * danmakuPreferences.fontSize * 1.35)}px`,
+                          "--danmaku-lane-offset": `${Math.round(lane * danmakuPreferences.fontSize * DANMAKU_LANE_LINE_HEIGHT)}px`,
                           "--danmaku-delay": `-${elapsed}s`,
                           color: comment.color,
                         } as React.CSSProperties
