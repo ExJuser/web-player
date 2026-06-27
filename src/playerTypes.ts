@@ -20,7 +20,7 @@ export type DataTransferItemWithHandle = DataTransferItem & {
   getAsFileSystemHandle?: () => Promise<FileSystemDirectoryHandle | FileSystemFileHandle | null>;
 };
 
-export type LocalWritableFileStream = {
+type LocalWritableFileStream = {
   write(data: string): Promise<void>;
   close(): Promise<void>;
 };
@@ -47,7 +47,7 @@ export type VideoItem = {
 
 export type VideoMetadata = Pick<VideoItem, "duration" | "width" | "height">;
 
-export type VideoPlayabilityStatus = "direct" | "remuxRecommended" | "unsupported" | "unknown" | "needsLocalPath";
+type VideoPlayabilityStatus = "direct" | "remuxRecommended" | "unsupported" | "unknown" | "needsLocalPath";
 
 export type VideoPlayability = {
   status: VideoPlayabilityStatus;
@@ -130,7 +130,7 @@ export type DanmakuPreferences = {
   showSimplified: boolean;
 };
 
-export type DanmakuSelection = {
+type DanmakuSelection = {
   sourceId: string;
   sourceName: string;
   provider: DanmakuProvider;
@@ -157,7 +157,7 @@ export type VideoStats = {
   updatedAt: number;
 };
 export type VideoStatsStore = Record<string, VideoStats>;
-export type TagMergeDecision = {
+type TagMergeDecision = {
   from: string;
   to: string;
   decision: "merge" | "keep";
@@ -335,33 +335,6 @@ export type CachedPhotoAlbumScan = {
   albums: PhotoAlbum[];
   scannedFiles: number;
   updatedAt: number;
-};
-
-export type PhotoAlbumRootStatus = PlayerMediaRootStatus;
-
-export type PhotoAlbumScanResponse = {
-  roots: Array<{
-    root: {
-      id: string;
-      label: string;
-      basename: string;
-      path: string;
-      source?: "browser" | "local";
-      localPath?: string;
-    };
-    status: PhotoAlbumRootStatus;
-    albums: PhotoAlbum[];
-  }>;
-  albums: PhotoAlbum[];
-  scannedFiles: number;
-  metadata: {
-    id: "photo-albums";
-    name: string;
-    albumCount: number;
-    scannedFiles: number;
-    updatedAt: number;
-    mediaRoots: PhotoAlbumRootStatus[];
-  };
 };
 
 declare global {

@@ -4,7 +4,7 @@ import path from "node:path";
 
 const videoExtensions = new Set([".mp4", ".webm", ".ogg", ".mov", ".m4v", ".mkv"]);
 const subtitleExtensions = new Set([".srt", ".vtt"]);
-export const photoExtensions = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif", ".bmp"]);
+const photoExtensions = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif", ".bmp"]);
 const smallVideoFileThresholdBytes = 50 * 1024 * 1024;
 const ignoredVideoBasenames = new Set(["theme_video", "trailer"]);
 
@@ -205,7 +205,7 @@ export function createGlobalVideoId(rootId, relativePath, size, lastModified) {
   return createGlobalMediaId(rootId, relativePath, size, lastModified);
 }
 
-export function createLegacyVideoId(relativePath, size, lastModified) {
+function createLegacyVideoId(relativePath, size, lastModified) {
   return `${relativePath}|${size}|${lastModified}`;
 }
 
@@ -334,7 +334,7 @@ export async function scanConfiguredMediaRoots(config, options = {}) {
   };
 }
 
-export async function scanPhotoAlbumsRoot(root) {
+async function scanPhotoAlbumsRoot(root) {
   const rootPath = serverPathForRoot(root);
   if (!rootPath || !path.isAbsolute(rootPath)) {
     return {

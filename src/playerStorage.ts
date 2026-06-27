@@ -374,8 +374,11 @@ async function readApiError(response: Response) {
   }
 }
 
-export async function loadGlobalPlayerDataStore(metadata?: PlayerGlobalMetadata): Promise<PlayerDataStore> {
-  const response = await fetch(createApiUrl("global"), {
+async function loadPlayerDataStoreFromApi(
+  path: string,
+  metadata?: PlayerDataStore["metadata"],
+): Promise<PlayerDataStore> {
+  const response = await fetch(createApiUrl(path), {
     headers: { Accept: "application/json" },
   });
   if (response.status === 404) return createDefaultPlayerDataStore(metadata);
@@ -388,18 +391,12 @@ export async function loadGlobalPlayerDataStore(metadata?: PlayerGlobalMetadata)
   };
 }
 
+export async function loadGlobalPlayerDataStore(metadata?: PlayerGlobalMetadata): Promise<PlayerDataStore> {
+  return loadPlayerDataStoreFromApi("global", metadata);
+}
+
 export async function loadPlayerDataStore(libraryId: string, metadata?: PlayerLibraryMetadata): Promise<PlayerDataStore> {
-  const response = await fetch(createApiUrl(`libraries/${encodeURIComponent(libraryId)}`), {
-    headers: { Accept: "application/json" },
-  });
-  if (response.status === 404) return createDefaultPlayerDataStore(metadata);
-  if (!response.ok) throw new Error(await readApiError(response));
-  const raw = JSON.stringify(await response.json());
-  const parsed = parsePlayerDataStore(raw);
-  return {
-    ...parsed,
-    metadata: parsed.metadata ?? metadata,
-  };
+  return loadPlayerDataStoreFromApi(`libraries/${encodeURIComponent(libraryId)}`, metadata);
 }
 
 export async function loadLegacyPlayerDataStore(directory: FileSystemDirectoryHandle): Promise<PlayerDataStore | null> {
@@ -417,54 +414,41 @@ export async function deleteLegacyPlayerDataStore(directory: FileSystemDirectory
   await directory.removeEntry(PROGRESS_FILE_NAME);
 }
 
-export async function saveGlobalPlayerDataStore(store: PlayerDataStore) {
-  const response = await fetch(createApiUrl("global"), {
+function createPersistedPlayerDataPayload(store: PlayerDataStore) {
+  return {
+    version: 5,
+    items: store.progress,
+    favorites: store.favorites,
+    videoTags: parseVideoTags(store.videoTags),
+    videoStats: parseVideoStats(store.videoStats),
+    tagMergeDecisions: parseTagMergeDecisions(store.tagMergeDecisions),
+    embeddedSubtitles: parsePersistedEmbeddedSubtitles(store.embeddedSubtitles),
+    danmakuSelections: parseDanmakuSelectionStore(store.danmakuSelections),
+    danmakuPreferences: parseDanmakuPreferences(store.danmakuPreferences),
+    preferences: getPersistedPlayerPreferences(store.preferences),
+    settings: parsePlayerSettings(store.settings),
+    metadata: store.metadata,
+  };
+}
+
+async function savePlayerDataStoreToApi(path: string, store: PlayerDataStore) {
+  const response = await fetch(createApiUrl(path), {
     method: "PUT",
     headers: {
       "Content-Type": "application/json",
       Accept: "application/json",
     },
-    body: JSON.stringify({
-      version: 5,
-      items: store.progress,
-      favorites: store.favorites,
-      videoTags: parseVideoTags(store.videoTags),
-      videoStats: parseVideoStats(store.videoStats),
-      tagMergeDecisions: parseTagMergeDecisions(store.tagMergeDecisions),
-      embeddedSubtitles: parsePersistedEmbeddedSubtitles(store.embeddedSubtitles),
-      danmakuSelections: parseDanmakuSelectionStore(store.danmakuSelections),
-      danmakuPreferences: parseDanmakuPreferences(store.danmakuPreferences),
-      preferences: getPersistedPlayerPreferences(store.preferences),
-      settings: parsePlayerSettings(store.settings),
-      metadata: store.metadata,
-    }),
+    body: JSON.stringify(createPersistedPlayerDataPayload(store)),
   });
   if (!response.ok) throw new Error(await readApiError(response));
 }
 
+export async function saveGlobalPlayerDataStore(store: PlayerDataStore) {
+  await savePlayerDataStoreToApi("global", store);
+}
+
 export async function savePlayerDataStore(libraryId: string, store: PlayerDataStore) {
-  const response = await fetch(createApiUrl(`libraries/${encodeURIComponent(libraryId)}`), {
-    method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    },
-    body: JSON.stringify({
-      version: 5,
-      items: store.progress,
-      favorites: store.favorites,
-      videoTags: parseVideoTags(store.videoTags),
-      videoStats: parseVideoStats(store.videoStats),
-      tagMergeDecisions: parseTagMergeDecisions(store.tagMergeDecisions),
-      embeddedSubtitles: parsePersistedEmbeddedSubtitles(store.embeddedSubtitles),
-      danmakuSelections: parseDanmakuSelectionStore(store.danmakuSelections),
-      danmakuPreferences: parseDanmakuPreferences(store.danmakuPreferences),
-      preferences: getPersistedPlayerPreferences(store.preferences),
-      settings: parsePlayerSettings(store.settings),
-      metadata: store.metadata,
-    }),
-  });
-  if (!response.ok) throw new Error(await readApiError(response));
+  await savePlayerDataStoreToApi(`libraries/${encodeURIComponent(libraryId)}`, store);
 }
 
 export function openRecentFolderDatabase() {

@@ -218,11 +218,6 @@ function hasExtension(name: string, extensions: Set<string>) {
   return extensions.has(name.slice(dotIndex).toLowerCase());
 }
 
-function extensionOf(name: string) {
-  const dotIndex = name.lastIndexOf(".");
-  return dotIndex >= 0 ? name.slice(dotIndex).toLowerCase() : "";
-}
-
 function basePathOf(path: string) {
   const dotIndex = path.lastIndexOf(".");
   return dotIndex >= 0 ? path.slice(0, dotIndex).toLowerCase() : path.toLowerCase();
@@ -236,18 +231,6 @@ function baseNameWithoutExtension(name: string) {
 
 function directoryPartsOf(path: string) {
   return path.replace(/\\/g, "/").split("/").filter(Boolean).slice(0, -1);
-}
-
-function libraryFolderTitleForVideo(video: VideoItem) {
-  return directoryPartsOf(video.relativePath)[0] ?? inferSeriesTitle(video);
-}
-
-function libraryFolderKeyForVideo(video: VideoItem) {
-  return scopedSeriesKeyForVideo(video, libraryFolderTitleForVideo(video));
-}
-
-function libraryFolderPathForVideo(video: VideoItem) {
-  return directoryPartsOf(video.relativePath)[0] ?? "";
 }
 
 function fallbackMediaRootLabelForVideo(video: VideoItem) {
@@ -1203,230 +1186,6 @@ type DanmakuSourcePayload = {
   requested?: number;
 };
 
-const japaneseSimplifiedCharacterPairs: Array<[string, string]> = [
-  ["亜", "亚"],
-  ["悪", "恶"],
-  ["圧", "压"],
-  ["囲", "围"],
-  ["為", "为"],
-  ["隠", "隐"],
-  ["栄", "荣"],
-  ["駅", "驿"],
-  ["円", "圆"],
-  ["応", "应"],
-  ["桜", "樱"],
-  ["穏", "稳"],
-  ["仮", "假"],
-  ["価", "价"],
-  ["画", "画"],
-  ["会", "会"],
-  ["絵", "绘"],
-  ["開", "开"],
-  ["階", "阶"],
-  ["楽", "乐"],
-  ["覚", "觉"],
-  ["学", "学"],
-  ["関", "关"],
-  ["観", "观"],
-  ["気", "气"],
-  ["帰", "归"],
-  ["亀", "龟"],
-  ["旧", "旧"],
-  ["拠", "据"],
-  ["挙", "举"],
-  ["峡", "峡"],
-  ["狭", "狭"],
-  ["郷", "乡"],
-  ["暁", "晓"],
-  ["区", "区"],
-  ["経", "经"],
-  ["恵", "惠"],
-  ["軽", "轻"],
-  ["継", "继"],
-  ["撃", "击"],
-  ["県", "县"],
-  ["倹", "俭"],
-  ["険", "险"],
-  ["広", "广"],
-  ["鉱", "矿"],
-  ["号", "号"],
-  ["黒", "黑"],
-  ["済", "济"],
-  ["斎", "斋"],
-  ["剤", "剂"],
-  ["雑", "杂"],
-  ["参", "参"],
-  ["桟", "栈"],
-  ["蚕", "蚕"],
-  ["姉", "姊"],
-  ["糸", "丝"],
-  ["児", "儿"],
-  ["実", "实"],
-  ["写", "写"],
-  ["社", "社"],
-  ["者", "者"],
-  ["寿", "寿"],
-  ["収", "收"],
-  ["従", "从"],
-  ["渋", "涩"],
-  ["獣", "兽"],
-  ["縦", "纵"],
-  ["粛", "肃"],
-  ["処", "处"],
-  ["緒", "绪"],
-  ["勝", "胜"],
-  ["将", "将"],
-  ["小", "小"],
-  ["焼", "烧"],
-  ["祥", "祥"],
-  ["称", "称"],
-  ["乗", "乘"],
-  ["嬢", "娘"],
-  ["条", "条"],
-  ["浄", "净"],
-  ["剰", "剩"],
-  ["畳", "叠"],
-  ["穣", "穰"],
-  ["譲", "让"],
-  ["醸", "酿"],
-  ["触", "触"],
-  ["嘱", "嘱"],
-  ["真", "真"],
-  ["寝", "寝"],
-  ["慎", "慎"],
-  ["図", "图"],
-  ["粋", "粹"],
-  ["酔", "醉"],
-  ["随", "随"],
-  ["髄", "髓"],
-  ["瀬", "濑"],
-  ["声", "声"],
-  ["斉", "齐"],
-  ["静", "静"],
-  ["摂", "摄"],
-  ["専", "专"],
-  ["戦", "战"],
-  ["浅", "浅"],
-  ["潜", "潜"],
-  ["繊", "纤"],
-  ["践", "践"],
-  ["銭", "钱"],
-  ["禅", "禅"],
-  ["双", "双"],
-  ["壮", "壮"],
-  ["争", "争"],
-  ["荘", "庄"],
-  ["捜", "搜"],
-  ["挿", "插"],
-  ["巣", "巢"],
-  ["総", "总"],
-  ["聡", "聪"],
-  ["蔵", "藏"],
-  ["属", "属"],
-  ["続", "续"],
-  ["堕", "堕"],
-  ["体", "体"],
-  ["対", "对"],
-  ["帯", "带"],
-  ["滝", "泷"],
-  ["択", "择"],
-  ["沢", "泽"],
-  ["単", "单"],
-  ["団", "团"],
-  ["弾", "弹"],
-  ["遅", "迟"],
-  ["昼", "昼"],
-  ["鋳", "铸"],
-  ["著", "著"],
-  ["庁", "厅"],
-  ["徴", "征"],
-  ["聴", "听"],
-  ["懲", "惩"],
-  ["鎮", "镇"],
-  ["塚", "冢"],
-  ["逓", "递"],
-  ["鉄", "铁"],
-  ["転", "转"],
-  ["伝", "传"],
-  ["都", "都"],
-  ["灯", "灯"],
-  ["当", "当"],
-  ["党", "党"],
-  ["島", "岛"],
-  ["働", "动"],
-  ["徳", "德"],
-  ["独", "独"],
-  ["読", "读"],
-  ["届", "届"],
-  ["縄", "绳"],
-  ["難", "难"],
-  ["弐", "贰"],
-  ["悩", "恼"],
-  ["脳", "脑"],
-  ["覇", "霸"],
-  ["拝", "拜"],
-  ["売", "卖"],
-  ["麦", "麦"],
-  ["発", "发"],
-  ["髪", "发"],
-  ["抜", "拔"],
-  ["浜", "滨"],
-  ["払", "拂"],
-  ["仏", "佛"],
-  ["辺", "边"],
-  ["変", "变"],
-  ["歩", "步"],
-  ["宝", "宝"],
-  ["豊", "丰"],
-  ["没", "没"],
-  ["翻", "翻"],
-  ["満", "满"],
-  ["黙", "默"],
-  ["薬", "药"],
-  ["訳", "译"],
-  ["予", "予"],
-  ["余", "余"],
-  ["誉", "誉"],
-  ["揺", "摇"],
-  ["様", "样"],
-  ["謡", "谣"],
-  ["来", "来"],
-  ["乱", "乱"],
-  ["覧", "览"],
-  ["竜", "龙"],
-  ["隆", "隆"],
-  ["両", "两"],
-  ["猟", "猎"],
-  ["緑", "绿"],
-  ["涙", "泪"],
-  ["塁", "垒"],
-  ["礼", "礼"],
-  ["戻", "戻"],
-  ["鈴", "铃"],
-  ["霊", "灵"],
-  ["齢", "龄"],
-  ["暦", "历"],
-  ["歴", "历"],
-  ["恋", "恋"],
-  ["練", "练"],
-  ["錬", "炼"],
-  ["炉", "炉"],
-  ["労", "劳"],
-  ["郎", "郎"],
-  ["楼", "楼"],
-  ["湾", "湾"],
-];
-
-const librarySearchCharacterAlternatives = japaneseSimplifiedCharacterPairs.reduce((map, [japanese, simplified]) => {
-  const japaneseAlternatives = map.get(japanese) ?? new Set<string>();
-  japaneseAlternatives.add(simplified);
-  map.set(japanese, japaneseAlternatives);
-  const simplifiedAlternatives = map.get(simplified) ?? new Set<string>();
-  simplifiedAlternatives.add(japanese);
-  map.set(simplified, simplifiedAlternatives);
-  return map;
-}, new Map<string, Set<string>>());
-
 type AiTagMergeSuggestionResponse = {
   existingTag?: string;
   newTag?: string;
@@ -1836,42 +1595,12 @@ function normalizeLibrarySearchText(value: string) {
     .trim();
 }
 
-function createLibrarySearchTextVariants(value: string, limit = 24) {
-  const normalized = normalizeLibrarySearchText(value);
-  if (!normalized) return [];
-
-  const variants = [""];
-  for (const character of normalized) {
-    const alternatives = [character, ...(librarySearchCharacterAlternatives.get(character) ?? [])];
-    const uniqueAlternatives = Array.from(new Set(alternatives));
-    const nextVariants: string[] = [];
-    for (const variant of variants) {
-      for (const alternative of uniqueAlternatives) {
-        nextVariants.push(`${variant}${alternative}`);
-        if (nextVariants.length >= limit) break;
-      }
-      if (nextVariants.length >= limit) break;
-    }
-    variants.splice(0, variants.length, ...nextVariants);
-  }
-
-  return Array.from(new Set(variants.map(normalizeLibrarySearchText))).filter(Boolean);
-}
-
 function tokenizeLibrarySearchQuery(query: string) {
   return normalizeLibrarySearchText(query).split(/\s+/).filter((token) => token.length >= 2);
 }
 
 function createLibrarySearchSignature(query: string) {
   return query.trim();
-}
-
-function createLibrarySearchTokenVariants(query: string) {
-  return tokenizeLibrarySearchQuery(query).flatMap((token) => createLibrarySearchTextVariants(token, 8));
-}
-
-function includesAnyLibrarySearchVariant(searchable: string[], variants: string[]) {
-  return variants.some((variant) => searchable.some((value) => value.includes(variant)));
 }
 
 function hasAiLibrarySearchIntent(query: string) {
@@ -2058,30 +1787,6 @@ function getVideoDisplaySize(width?: number, height?: number) {
 
 function getPlayerFrameAspectRatio() {
   return widescreenAspectRatio;
-}
-
-async function loadVideoMetadata(video: VideoItem) {
-  const element = document.createElement("video");
-  const cleanup = () => {
-    element.removeAttribute("src");
-    element.load();
-  };
-
-  try {
-    element.preload = "metadata";
-    element.src = playableUrlForVideo(video);
-
-    if (element.readyState < HTMLMediaElement.HAVE_METADATA) {
-      await waitForMediaEvent(element, "loadedmetadata");
-    }
-
-    const metadata = await getVideoElementMetadata(element, video);
-    cleanup();
-    return metadata;
-  } catch (error) {
-    cleanup();
-    throw error;
-  }
 }
 
 function isCanvasNearlyBlack(context: CanvasRenderingContext2D, width: number, height: number) {
@@ -2383,7 +2088,7 @@ export default function App() {
   const [progressStore, setProgressStore] = useState<ProgressStore>({});
   const [favoriteVideoIds, setFavoriteVideoIds] = useState<Set<string>>(() => new Set());
   const [videoTags, setVideoTags] = useState<VideoTagStore>({});
-  const [tagMergeDecisions, setTagMergeDecisions] = useState<TagMergeDecisionStore>({});
+  const [, setTagMergeDecisions] = useState<TagMergeDecisionStore>({});
   const [isTagDialogOpen, setIsTagDialogOpen] = useState(false);
   const [tagInput, setTagInput] = useState("");
   const [tagMessage, setTagMessage] = useState("");
@@ -5624,7 +5329,6 @@ export default function App() {
           nextDataStore = await importLegacyStoreForScannedRoot(root, media.videos, nextDataStore);
         }
 
-        const metadata = createLibraryMetadata(directory, media);
         const legacyDataStore = await loadLegacyPlayerDataStore(directory);
         if (legacyDataStore) {
           const legacyToGlobalId = new Map(media.videos.map((video) => [createLegacyVideoId(video.relativePath, video), video.id]));
@@ -10611,3 +10315,4 @@ export default function App() {
     </>
   );
 }
+

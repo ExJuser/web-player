@@ -63,7 +63,7 @@ function normalizeStream(stream) {
   };
 }
 
-export function normalizeMediaProbe(rawProbe) {
+function normalizeMediaProbe(rawProbe) {
   const streams = Array.isArray(rawProbe?.streams) ? rawProbe.streams.map(normalizeStream) : [];
   const formatNames = splitFormatNames(rawProbe?.format?.format_name);
   return {
@@ -184,7 +184,7 @@ export function createNeedsLocalPathPlayability() {
   };
 }
 
-export function createUnknownPlayability(reason = "尚未探测媒体兼容性。") {
+function createUnknownPlayability(reason = "尚未探测媒体兼容性。") {
   return {
     status: "unknown",
     reason,
@@ -215,7 +215,7 @@ export async function getCachedCompatibleMedia(rootPath, rootId, video) {
   }
 }
 
-export async function createVideoPlayability({ root, video, filePath, compatibleMediaRoot, runProcess }) {
+async function createVideoPlayability({ root, video, filePath, compatibleMediaRoot, runProcess }) {
   if (root?.source === "browser" && !root.localPath) {
     return createNeedsLocalPathPlayability();
   }

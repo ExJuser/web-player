@@ -329,26 +329,6 @@ function normalizeMediaRoots(config) {
   return normalizeMediaRootsFromConfig(config);
 }
 
-function createMediaRootId(rootPath, existingRoots) {
-  const slug =
-    String((path.isAbsolute(rootPath) ? path.basename(rootPath) : rootPath) || "media")
-      .trim()
-      .normalize("NFKD")
-      .replace(/[^\w.-]+/g, "-")
-      .replace(/^-+|-+$/g, "")
-      .slice(0, 42)
-      .toLowerCase() || "media";
-  const suffix = hashValue(rootPath).slice(0, 10);
-  let id = `${slug}-${suffix}`;
-  let index = 2;
-  const existingIds = new Set(existingRoots.map((root) => root.id));
-  while (existingIds.has(id)) {
-    id = `${slug}-${suffix}-${index}`;
-    index += 1;
-  }
-  return id;
-}
-
 async function upsertMediaRoot(payload) {
   return upsertMediaRootInConfig(appConfigPath, payload);
 }
@@ -850,35 +830,6 @@ async function fetchDanmakuSource(payload) {
   return writeDanmakuSource(record);
 }
 
-async function summarizeSubtitle(env, payload) {
-  const subtitleText = typeof payload?.subtitleText === "string" ? payload.subtitleText.trim() : "";
-  if (!subtitleText) throw new Error("Subtitle text is required.");
-  const cacheId = hashValue(`summary|${payload?.videoName || ""}|${subtitleText}`);
-  const cachePath = path.join(aiRoot, "summaries", `${cacheId}.json`);
-  const cached = await readJsonFile(cachePath, null);
-  if (cached?.summary) return cached;
-
-  const parts = [];
-  for (const chunk of chunkText(subtitleText)) {
-    parts.push(
-      await callDeepSeek(env, [
-        { role: "system", content: "你是一个视频字幕分析助手。请只根据用户提供的字幕内容总结，不要编造。" },
-        { role: "user", content: `视频：${payload?.videoName || "未命名"}\n\n请总结这段字幕的剧情要点、人物/关系、情绪基调和关键词：\n\n${chunk}` },
-      ]),
-    );
-  }
-  const summary =
-    parts.length === 1
-      ? parts[0]
-      : await callDeepSeek(env, [
-          { role: "system", content: "你是一个视频字幕分析助手。请合并分段摘要，避免重复，不要加入字幕外信息。" },
-          { role: "user", content: `视频：${payload?.videoName || "未命名"}\n\n请合并以下分段摘要，输出本集概要、关键事件、人物关系、情绪基调、关键词：\n\n${parts.join("\n\n---\n\n")}` },
-        ]);
-  const result = { summary, updatedAt: Date.now() };
-  await writeJsonFile(cachePath, result);
-  return result;
-}
-
 async function streamSubtitleSummary(env, payload, response) {
   sendNdjson(response, 200);
   try {
@@ -932,27 +883,6 @@ async function streamSubtitleSummary(env, payload, response) {
   } finally {
     response.end();
   }
-}
-
-async function askSubtitleQuestion(env, payload) {
-  const question = typeof payload?.question === "string" ? payload.question.trim() : "";
-  const chunks = Array.isArray(payload?.chunks) ? payload.chunks : [];
-  if (!question) throw new Error("Question is required.");
-  if (!chunks.length) throw new Error("Relevant subtitle chunks are required.");
-  const context = chunks
-    .map((chunk) => `[${chunk.start || "?"} - ${chunk.end || "?"}]\n${chunk.text || ""}`)
-    .join("\n\n");
-  const cacheId = hashValue(`qa|${payload?.videoName || ""}|${question}|${context}`);
-  const cachePath = path.join(aiRoot, "qa", `${cacheId}.json`);
-  const cached = await readJsonFile(cachePath, null);
-  if (cached?.answer) return cached;
-  const answer = await callDeepSeek(env, [
-    { role: "system", content: "你是一个视频字幕问答助手。只能根据给定字幕片段回答；如果片段不足以回答，请明确说明。回答中尽量引用时间范围。" },
-    { role: "user", content: `视频：${payload?.videoName || "未命名"}\n问题：${question}\n\n相关字幕片段：\n${context}` },
-  ]);
-  const result = { answer, updatedAt: Date.now() };
-  await writeJsonFile(cachePath, result);
-  return result;
 }
 
 async function streamSubtitleAnswer(env, payload, response) {
