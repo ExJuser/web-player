@@ -8043,7 +8043,7 @@ export default function App() {
                   </div>
                 ) : null}
               </>
-            ) : (
+            ) : isHomeViewVisible ? null : (
               <p className="current-video-title">
                 {isPrivacyMode
                   ? "正在播放：推荐视频"
