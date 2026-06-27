@@ -2058,6 +2058,7 @@ export default function App() {
   const photoImageFilePromisesRef = useRef<Record<string, Promise<File | null>>>({});
   const librarySearchResultsRef = useRef<HTMLDivElement | null>(null);
   const librarySearchLoadMoreRef = useRef<HTMLDivElement | null>(null);
+  const librarySearchRunIdRef = useRef(0);
   const [videos, setVideos] = useState<VideoItem[]>([]);
   const [subtitles, setSubtitles] = useState<SubtitleItem[]>([]);
   const [localConfig, setLocalConfig] = useState<LocalConfig | null>(null);
@@ -2889,6 +2890,19 @@ export default function App() {
     },
     [librarySearchContext, modeFilteredVideos],
   );
+
+  useEffect(() => {
+    librarySearchRunIdRef.current += 1;
+    setLibrarySearchQuery("");
+    setIsLibrarySearchLoading(false);
+    setLibrarySearchMode("idle");
+    setLibrarySearchMessage("");
+    setLibrarySearchResults([]);
+    setLibrarySearchVisibleCount(librarySearchResultPageSize);
+    setLibrarySearchAnswer("");
+    setLibrarySearchSubmittedSignature("");
+  }, [homeMediaMode]);
+
   const createLibrarySearchCandidates = useCallback(
     (localResults: LibrarySearchResult[]): LibrarySearchCandidate[] => {
       const candidates: LibrarySearchCandidate[] = [];
@@ -6285,6 +6299,7 @@ export default function App() {
   ]);
 
   const runLibrarySearch = useCallback(async () => {
+    const searchRunId = (librarySearchRunIdRef.current += 1);
     const query = librarySearchQuery.trim();
     const isSpecialSearch = homeMediaMode === "special";
     setLibrarySearchAnswer("");
@@ -6331,18 +6346,22 @@ export default function App() {
         method: "POST",
         body: JSON.stringify({ query, candidates }),
       });
+      if (librarySearchRunIdRef.current !== searchRunId) return;
       const aiResults = createAiLibrarySearchResults(response.matchIds, modeFilteredVideos, librarySearchContext);
       setLibrarySearchResults(aiResults.length ? aiResults : localResults);
       setLibrarySearchVisibleCount(librarySearchResultPageSize);
       setLibrarySearchAnswer(response.answer);
       setLibrarySearchMessage(aiResults.length ? "AI 已从本地候选中挑选结果。" : "AI 未返回明确条目，保留本地结果。");
     } catch (error) {
+      if (librarySearchRunIdRef.current !== searchRunId) return;
       setLibrarySearchMode(localResults.length ? "local" : "empty");
       setLibrarySearchResults(localResults);
       setLibrarySearchVisibleCount(librarySearchResultPageSize);
       setLibrarySearchMessage(error instanceof Error ? error.message : "AI 搜索失败，已保留本地结果。");
     } finally {
-      setIsLibrarySearchLoading(false);
+      if (librarySearchRunIdRef.current === searchRunId) {
+        setIsLibrarySearchLoading(false);
+      }
     }
   }, [
     createLibrarySearchCandidates,
