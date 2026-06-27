@@ -36,6 +36,7 @@ import {
 } from "./src/danmakuUtils";
 import { clearLocalCacheItems, createCacheStatus as createLocalCacheStatus, createDanmakuSourcesStats } from "./server/cacheStatus.mjs";
 import { readJsonFile, writeJsonFile } from "./server/jsonFiles.mjs";
+import { formatRemoteFetchError, requestExternalJson, requestExternalText } from "./server/remoteFetch.mjs";
 import { LocalDataSqliteStore } from "./server/sqliteStorage.mjs";
 
 const dataRoot = path.resolve(__dirname, ".local-web-player-data");
@@ -536,41 +537,6 @@ function decodeHtmlEntities(value) {
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&amp;/g, "&");
-}
-
-async function requestExternalText(url, options = {}) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), options.timeoutMs ?? 12000);
-  try {
-    const response = await fetch(url, {
-      method: options.method || "GET",
-      headers: {
-        Accept: options.accept || "text/plain,*/*",
-        "User-Agent": options.userAgent || "local-web-player/0.1",
-        Referer: options.referer || undefined,
-        ...(options.headers || {}),
-      },
-      signal: controller.signal,
-    });
-    const text = await response.text();
-    if (!response.ok) throw new Error(`${response.status}: ${text.slice(0, 240) || response.statusText}`);
-    return text;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-function formatRemoteFetchError(error) {
-  return error instanceof Error ? error.message : String(error || "远端请求失败。");
-}
-
-async function requestExternalJson(url, options = {}) {
-  const text = await requestExternalText(url, { ...options, accept: "application/json,text/plain,*/*" });
-  try {
-    return JSON.parse(text || "{}");
-  } catch {
-    throw new Error("Remote API returned invalid JSON.");
-  }
 }
 
 function parseBilibiliXmlDanmaku(xmlText) {
