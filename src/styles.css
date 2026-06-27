@@ -949,10 +949,12 @@ button {
 
 .home-card-thumbnail {
   display: flex;
+  align-self: center;
   align-items: center;
   justify-content: center;
   width: 100%;
   min-width: 0;
+  min-height: 0;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 8px;
@@ -1600,7 +1602,9 @@ button {
 }
 
 .home-list-copy {
+  display: grid;
   min-width: 0;
+  gap: 3px;
 }
 
 .home-stats {
