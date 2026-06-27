@@ -32,7 +32,6 @@ import {
   createDanmakuComment,
   createDanmakuSourceId,
   dedupeDanmakuComments,
-  inferEpisodeNumber,
   parseDanmakuUrl,
 } from "./src/danmakuUtils";
 import { LocalDataSqliteStore } from "./server/sqliteStorage.mjs";
@@ -803,53 +802,6 @@ async function fetchDanmakuSource(payload) {
   if (!record) throw new Error("Unsupported danmaku provider.");
   if (!record.comments.length) throw new Error("没有解析到弹幕。");
   return writeDanmakuSource(record);
-}
-
-async function searchDanmakuSources(payload) {
-  const title = typeof payload?.title === "string" ? payload.title.trim().slice(0, 120) : "";
-  const videoName = typeof payload?.videoName === "string" ? payload.videoName.trim().slice(0, 160) : "";
-  const manualUrl = typeof payload?.url === "string" ? payload.url.trim() : "";
-  const candidates = [];
-  const parsedManualUrl = parseDanmakuUrl(manualUrl);
-  if (parsedManualUrl) {
-    candidates.push({
-      provider: parsedManualUrl.provider,
-      title: manualUrl,
-      sourceUrl: manualUrl,
-      confidence: "high",
-      reason: "手动链接可直接拉取",
-    });
-  }
-
-  if (!title) return { candidates };
-
-  try {
-    const episodeNumber = inferEpisodeNumber(videoName);
-    const query = encodeURIComponent(title);
-    const payload = await requestExternalJson(`https://api.bilibili.com/x/web-interface/search/type?search_type=media_bangumi&keyword=${query}`, {
-      referer: "https://www.bilibili.com/",
-    });
-    const items = Array.isArray(payload?.data?.result) ? payload.data.result : [];
-    for (const item of items.slice(0, 3)) {
-      const episodes = Array.isArray(item?.eps) ? item.eps : [];
-      const episode =
-        episodes.find((ep) => episodeNumber && Number(ep?.index) === episodeNumber) ||
-        episodes.find((ep) => episodeNumber && String(ep?.title || "").includes(String(episodeNumber))) ||
-        episodes[0];
-      if (!episode?.id) continue;
-      candidates.push({
-        provider: "bilibili",
-        title: `${item.title || title}${episodeNumber ? ` 第 ${episodeNumber} 集` : ""}`.replace(/<[^>]+>/g, ""),
-        sourceUrl: `https://www.bilibili.com/bangumi/play/ep${episode.id}`,
-        confidence: episodeNumber ? "medium" : "low",
-        reason: episodeNumber ? "根据追番标题和集数匹配" : "根据追番标题匹配",
-      });
-    }
-  } catch {
-    // Search is best-effort. Manual URL remains available.
-  }
-
-  return { candidates };
 }
 
 async function summarizeSubtitle(env, payload) {
@@ -1732,12 +1684,6 @@ function playerDataApiPlugin(env) {
       if (url.pathname === "/api/subtitles/embedded/cached" && request.method === "POST") {
         const payload = JSON.parse((await readBody(request)).toString("utf8"));
         sendJson(response, 200, await readCachedEmbeddedSubtitle(await loadAppConfig(), payload));
-        return;
-      }
-
-      if (url.pathname === "/api/danmaku/search" && request.method === "POST") {
-        const payload = JSON.parse((await readBody(request)).toString("utf8"));
-        sendJson(response, 200, await searchDanmakuSources(payload));
         return;
       }
 

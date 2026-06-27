@@ -4186,13 +4186,11 @@ button {
   scrollbar-color: rgba(142, 151, 165, 0.55) transparent;
 }
 
-.danmaku-dialog::-webkit-scrollbar,
-.danmaku-candidate-list::-webkit-scrollbar {
+.danmaku-dialog::-webkit-scrollbar {
   width: 8px;
 }
 
-.danmaku-dialog::-webkit-scrollbar-thumb,
-.danmaku-candidate-list::-webkit-scrollbar-thumb {
+.danmaku-dialog::-webkit-scrollbar-thumb {
   border-radius: 999px;
   background: rgba(142, 151, 165, 0.45);
 }
@@ -4234,14 +4232,12 @@ button {
   min-width: 0;
 }
 
-.danmaku-panel-header strong,
-.danmaku-candidate strong {
+.danmaku-panel-header strong {
   min-width: 0;
   overflow-wrap: anywhere;
 }
 
-.danmaku-panel-header span,
-.danmaku-candidate span {
+.danmaku-panel-header span {
   color: #8e97a5;
   font-size: 12px;
   line-height: 1.4;
@@ -4318,9 +4314,7 @@ button {
 }
 
 .danmaku-bottom-actions {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  display: flex;
   min-width: 0;
 }
 
@@ -4359,33 +4353,6 @@ button {
 .danmaku-field input[type="range"],
 .toggle-row input {
   accent-color: #00a1d6;
-}
-
-.danmaku-candidate-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  max-height: 210px;
-  overflow: auto;
-}
-
-.danmaku-candidate {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 4px;
-  min-width: 0;
-  padding: 10px;
-  border: 1px solid rgba(142, 151, 165, 0.22);
-  border-radius: 8px;
-  background: rgba(19, 26, 38, 0.78);
-  color: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.danmaku-candidate:hover {
-  border-color: rgba(0, 161, 214, 0.55);
 }
 
 .toggle-row {
@@ -6058,12 +6025,10 @@ button {
 
 .app-shell.theme-light .danmaku-field input,
 .app-shell.theme-light .danmaku-field textarea,
-.app-shell.theme-light .danmaku-candidate,
 .app-shell.theme-light .danmaku-source-card,
 .app-shell.theme-light .danmaku-source-empty,
 :root[data-theme="light"] .danmaku-field input,
 :root[data-theme="light"] .danmaku-field textarea,
-:root[data-theme="light"] .danmaku-candidate,
 :root[data-theme="light"] .danmaku-source-card,
 :root[data-theme="light"] .danmaku-source-empty {
   border-color: #cfd8e3;
@@ -6072,11 +6037,9 @@ button {
 }
 
 .app-shell.theme-light .danmaku-panel-header span,
-.app-shell.theme-light .danmaku-candidate span,
 .app-shell.theme-light .danmaku-source-card span,
 .app-shell.theme-light .danmaku-source-empty span,
 :root[data-theme="light"] .danmaku-panel-header span,
-:root[data-theme="light"] .danmaku-candidate span,
 :root[data-theme="light"] .danmaku-source-card span,
 :root[data-theme="light"] .danmaku-source-empty span {
   color: #667085;

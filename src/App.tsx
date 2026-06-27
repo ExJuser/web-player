@@ -1199,18 +1199,6 @@ type DanmakuSourcePayload = {
   requested?: number;
 };
 
-type DanmakuSearchCandidate = {
-  provider: DanmakuSource["provider"];
-  title: string;
-  sourceUrl: string;
-  confidence: "high" | "medium" | "low";
-  reason: string;
-};
-
-type DanmakuSearchResponse = {
-  candidates: DanmakuSearchCandidate[];
-};
-
 const japaneseSimplifiedCharacterPairs: Array<[string, string]> = [
   ["亜", "亚"],
   ["悪", "恶"],
@@ -2303,7 +2291,6 @@ export default function App() {
   const [danmakuPreferences, setDanmakuPreferences] = useState<DanmakuPreferences>(defaultDanmakuPreferences);
   const [danmakuComments, setDanmakuComments] = useState<DanmakuComment[]>([]);
   const [currentDanmakuSource, setCurrentDanmakuSource] = useState<DanmakuSource | null>(null);
-  const [danmakuCandidates, setDanmakuCandidates] = useState<DanmakuSearchCandidate[]>([]);
   const [danmakuManualUrl, setDanmakuManualUrl] = useState("");
   const [danmakuMessage, setDanmakuMessage] = useState("");
   const [isDanmakuDialogOpen, setIsDanmakuDialogOpen] = useState(false);
@@ -6731,29 +6718,6 @@ export default function App() {
     void loadDanmakuSource(selection.sourceId, { silent: true });
   }, [currentVideo, loadDanmakuSource]);
 
-  const searchDanmakuSources = useCallback(async () => {
-    if (!currentVideo) return;
-    setIsDanmakuDialogOpen(true);
-    setIsDanmakuLoading(true);
-    setDanmakuMessage("正在匹配弹幕源...");
-    try {
-      const response = await fetchJson<DanmakuSearchResponse>("/api/danmaku/search", {
-        method: "POST",
-        body: JSON.stringify({
-          title: activeBangumiSeries?.title || seriesTitleByVideoId.get(currentVideo.id) || inferSeriesTitle(currentVideo),
-          videoName: currentVideo.name,
-          url: danmakuManualUrl,
-        }),
-      });
-      setDanmakuCandidates(response.candidates);
-      setDanmakuMessage(response.candidates.length ? `找到 ${response.candidates.length} 个候选弹幕源。` : "没有找到公开候选，可粘贴 Bilibili 链接。");
-    } catch (error) {
-      setDanmakuMessage(error instanceof Error ? error.message : "弹幕源匹配失败。");
-    } finally {
-      setIsDanmakuLoading(false);
-    }
-  }, [activeBangumiSeries, currentVideo, danmakuManualUrl, seriesTitleByVideoId]);
-
   const fetchDanmakuFromUrl = useCallback(
     async (url: string) => {
       if (!currentVideo || !url.trim()) {
@@ -10332,22 +10296,6 @@ export default function App() {
                     </div>
                   )}
                 </div>
-                {danmakuCandidates.length ? (
-                  <div className="danmaku-candidate-list">
-                    {danmakuCandidates.map((candidate) => (
-                      <button
-                        key={`${candidate.provider}:${candidate.sourceUrl}`}
-                        className="danmaku-candidate"
-                        type="button"
-                        onClick={() => fetchDanmakuFromUrl(candidate.sourceUrl)}
-                        disabled={isDanmakuLoading}
-                      >
-                        <strong>{candidate.title}</strong>
-                        <span>{candidate.provider === "bilibili" ? "Bilibili" : "手动"} · {candidate.reason}</span>
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
                 <div className="danmaku-manual-source">
                   <label className="danmaku-field">
                     <span>Bilibili 链接</span>
@@ -10359,11 +10307,7 @@ export default function App() {
                     />
                   </label>
                   <div className="danmaku-bottom-actions">
-                    <button className="primary-button" type="button" onClick={searchDanmakuSources} disabled={!isDanmakuAvailable || isDanmakuLoading}>
-                      <Search size={16} />
-                      自动匹配
-                    </button>
-                    <button className="secondary-button" type="button" onClick={() => fetchDanmakuFromUrl(danmakuManualUrl)} disabled={!danmakuManualUrl.trim() || isDanmakuLoading}>
+                    <button className="primary-button" type="button" onClick={() => fetchDanmakuFromUrl(danmakuManualUrl)} disabled={!danmakuManualUrl.trim() || isDanmakuLoading}>
                       拉取链接弹幕
                     </button>
                   </div>
