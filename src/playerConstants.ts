@@ -1,4 +1,4 @@
-import type { PlaybackMode, PlayerPreferences, PlaylistSortMode, ShortcutAction, ShortcutMap } from "./playerTypes";
+import type { DanmakuPreferences, PlaybackMode, PlayerPreferences, PlaylistSortMode, ShortcutAction, ShortcutMap } from "./playerTypes";
 
 export const VIDEO_EXTENSIONS = new Set([".mp4", ".webm", ".ogg", ".mov", ".m4v", ".mkv"]);
 export const SUBTITLE_EXTENSIONS = new Set([".srt", ".vtt"]);
@@ -75,6 +75,15 @@ export const defaultPlayerPreferences: PlayerPreferences = {
 export const defaultPlayerSettings = {
   volume: 0.85,
   skipFolderAccessPrompt: false,
+};
+
+export const defaultDanmakuPreferences: DanmakuPreferences = {
+  enabled: true,
+  opacity: 0.9,
+  speed: 8,
+  density: 0.7,
+  displayArea: 0.55,
+  showSimplified: true,
 };
 
 export const shortcutGroups: Array<{ title: string; items: Array<{ action: ShortcutAction; label: string }> }> = [

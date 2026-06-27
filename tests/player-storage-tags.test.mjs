@@ -15,6 +15,8 @@ test("old player data stores load with empty video tags and merge decisions", ()
   assert.deepEqual(parsed.videoTags, {});
   assert.deepEqual(parsed.videoStats, {});
   assert.deepEqual(parsed.tagMergeDecisions, {});
+  assert.deepEqual(parsed.danmakuSelections, {});
+  assert.equal(parsed.danmakuPreferences.enabled, true);
 });
 
 test("player data stores parse valid tags, stats, and merge decisions", () => {
@@ -69,6 +71,51 @@ test("player data stores parse valid tags, stats, and merge decisions", () => {
   });
 });
 
+test("player data stores parse danmaku selections and bounded preferences", () => {
+  const parsed = storage.parsePlayerDataStore(JSON.stringify({
+    version: 5,
+    items: {},
+    favorites: [],
+    danmakuSelections: {
+      "video-1": {
+        sourceId: "bilibili:abc",
+        sourceName: "第一集弹幕",
+        provider: "bilibili",
+        updatedAt: 123,
+      },
+      "video-2": {
+        sourceId: "bad",
+        sourceName: "bad",
+        provider: "unknown",
+        updatedAt: 123,
+      },
+    },
+    danmakuPreferences: {
+      enabled: false,
+      opacity: 2,
+      speed: 1,
+      density: 0.05,
+      displayArea: 2,
+      showSimplified: false,
+    },
+  }));
+
+  assert.deepEqual(parsed.danmakuSelections, {
+    "video-1": {
+      sourceId: "bilibili:abc",
+      sourceName: "第一集弹幕",
+      provider: "bilibili",
+      updatedAt: 123,
+    },
+  });
+  assert.equal(parsed.danmakuPreferences.enabled, false);
+  assert.equal(parsed.danmakuPreferences.opacity, 1);
+  assert.equal(parsed.danmakuPreferences.speed, 4);
+  assert.equal(parsed.danmakuPreferences.density, 0.2);
+  assert.equal(parsed.danmakuPreferences.displayArea, 1);
+  assert.equal(parsed.danmakuPreferences.showSimplified, false);
+});
+
 test("player preferences remember the home media mode", () => {
   const parsed = storage.parsePlayerDataStore(JSON.stringify({
     version: 5,
@@ -111,5 +158,7 @@ test("default player data store contains tag containers", () => {
   assert.deepEqual(store.videoTags, {});
   assert.deepEqual(store.videoStats, {});
   assert.deepEqual(store.tagMergeDecisions, {});
+  assert.deepEqual(store.danmakuSelections, {});
+  assert.equal(store.danmakuPreferences.showSimplified, true);
   assert.equal(store.preferences.homeMediaMode, "all");
 });

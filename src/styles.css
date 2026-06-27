@@ -500,6 +500,71 @@ button {
   aspect-ratio: var(--landscape-source-aspect-ratio, 1.7778);
 }
 
+.danmaku-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+  overflow: hidden;
+  opacity: var(--danmaku-opacity, 0.9);
+}
+
+.danmaku-item {
+  position: absolute;
+  top: calc((var(--danmaku-lane, 0) / max(var(--danmaku-lanes, 1), 1)) * 55%);
+  left: 100%;
+  max-width: min(70%, 720px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #f8fafc;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.25;
+  text-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.95),
+    0 0 4px rgba(0, 0, 0, 0.9),
+    0 0 9px rgba(0, 0, 0, 0.72);
+  animation: danmaku-scroll var(--danmaku-speed, 8s) linear both;
+  animation-delay: var(--danmaku-delay, 0s);
+  will-change: transform;
+}
+
+.danmaku-item.mode-top,
+.danmaku-item.mode-bottom {
+  left: 50%;
+  max-width: min(80%, 820px);
+  transform: translateX(-50%);
+  text-align: center;
+  animation: danmaku-fixed var(--danmaku-speed, 8s) linear both;
+  animation-delay: var(--danmaku-delay, 0s);
+}
+
+.danmaku-item.mode-bottom {
+  top: auto;
+  bottom: calc(18% + (var(--danmaku-lane, 0) * 28px));
+}
+
+@keyframes danmaku-scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(calc(-100vw - 100%));
+  }
+}
+
+@keyframes danmaku-fixed {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  10%,
+  90% {
+    opacity: 1;
+  }
+}
+
 .empty-player {
   display: flex;
   align-items: center;
@@ -4041,6 +4106,168 @@ button {
   padding: 24px;
 }
 
+.danmaku-dialog {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: min(920px, calc(100vw - 32px));
+  max-height: min(820px, calc(100vh - 32px));
+  overflow: auto;
+  padding: 20px;
+  border: 1px solid #2d3440;
+  border-radius: 16px;
+  background: #151922;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.45);
+  color: #f5f7fb;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(142, 151, 165, 0.55) transparent;
+}
+
+.danmaku-dialog::-webkit-scrollbar,
+.danmaku-candidate-list::-webkit-scrollbar,
+.danmaku-import textarea::-webkit-scrollbar {
+  width: 8px;
+}
+
+.danmaku-dialog::-webkit-scrollbar-thumb,
+.danmaku-candidate-list::-webkit-scrollbar-thumb,
+.danmaku-import textarea::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(142, 151, 165, 0.45);
+}
+
+.danmaku-dialog-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(260px, 0.8fr);
+  gap: 14px;
+}
+
+.danmaku-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid rgba(142, 151, 165, 0.2);
+  border-radius: 10px;
+  background: rgba(9, 12, 18, 0.42);
+}
+
+.danmaku-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.danmaku-panel-header strong,
+.danmaku-candidate strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.danmaku-panel-header span,
+.danmaku-candidate span {
+  color: #8e97a5;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.danmaku-actions,
+.danmaku-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.danmaku-footer span {
+  flex: 1;
+  min-width: 0;
+}
+
+.danmaku-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  color: #c9d1dc;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.danmaku-field input,
+.danmaku-field textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #2d3440;
+  border-radius: 8px;
+  background: #111722;
+  color: #f5f7fb;
+}
+
+.danmaku-field input:not([type="range"]) {
+  height: 38px;
+  padding: 0 10px;
+}
+
+.danmaku-field input[type="range"],
+.toggle-row input {
+  accent-color: #00a1d6;
+}
+
+.danmaku-import textarea {
+  min-height: 112px;
+  max-height: 180px;
+  padding: 10px;
+  resize: vertical;
+  line-height: 1.45;
+}
+
+.danmaku-candidate-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 210px;
+  overflow: auto;
+}
+
+.danmaku-candidate {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid rgba(142, 151, 165, 0.22);
+  border-radius: 8px;
+  background: rgba(19, 26, 38, 0.78);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.danmaku-candidate:hover {
+  border-color: rgba(0, 161, 214, 0.55);
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  color: #f5f7fb;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.toggle-row input {
+  width: 16px;
+  height: 16px;
+}
+
 .tag-dialog {
   position: relative;
   display: grid;
@@ -5644,4 +5871,55 @@ button {
     flex-wrap: wrap;
     padding-right: 40px;
   }
+
+  .danmaku-dialog {
+    padding: 16px;
+  }
+
+  .danmaku-dialog-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .danmaku-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+
+.app-shell.theme-light .danmaku-dialog,
+:root[data-theme="light"] .danmaku-dialog {
+  border-color: #d7e0ea;
+  background: #ffffff;
+  color: #172033;
+}
+
+.app-shell.theme-light .danmaku-panel,
+:root[data-theme="light"] .danmaku-panel {
+  border-color: #d7e0ea;
+  background: #f8fafc;
+}
+
+.app-shell.theme-light .danmaku-field,
+.app-shell.theme-light .toggle-row,
+:root[data-theme="light"] .danmaku-field,
+:root[data-theme="light"] .toggle-row {
+  color: #243044;
+}
+
+.app-shell.theme-light .danmaku-field input,
+.app-shell.theme-light .danmaku-field textarea,
+.app-shell.theme-light .danmaku-candidate,
+:root[data-theme="light"] .danmaku-field input,
+:root[data-theme="light"] .danmaku-field textarea,
+:root[data-theme="light"] .danmaku-candidate {
+  border-color: #cfd8e3;
+  background: #ffffff;
+  color: #172033;
+}
+
+.app-shell.theme-light .danmaku-panel-header span,
+.app-shell.theme-light .danmaku-candidate span,
+:root[data-theme="light"] .danmaku-panel-header span,
+:root[data-theme="light"] .danmaku-candidate span {
+  color: #667085;
 }

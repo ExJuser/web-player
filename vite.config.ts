@@ -28,6 +28,16 @@ import {
   updateMediaRootLocalPath as updateMediaRootLocalPathInConfig,
   upsertMediaRoot as upsertMediaRootInConfig,
 } from "./server/mediaRoots.mjs";
+import {
+  applyDanmakuTranslations,
+  chunkDanmakuTranslationItems,
+  createDanmakuComment,
+  createDanmakuSourceId,
+  createDanmakuTranslationItems,
+  dedupeDanmakuComments,
+  inferEpisodeNumber,
+  parseDanmakuUrl,
+} from "./src/danmakuUtils";
 
 const dataRoot = path.resolve(__dirname, ".local-web-player-data");
 const librariesRoot = path.join(dataRoot, "libraries");
@@ -35,6 +45,9 @@ const thumbnailsRoot = path.join(dataRoot, "thumbnails");
 const photoAlbumsRoot = path.join(dataRoot, "photo-albums");
 const embeddedSubtitlesRoot = path.join(dataRoot, "subtitles");
 const compatibleMediaRoot = path.join(dataRoot, "compatible-media");
+const danmakuRoot = path.join(dataRoot, "danmaku");
+const danmakuSourcesRoot = path.join(danmakuRoot, "sources");
+const danmakuTranslationsRoot = path.join(danmakuRoot, "translations");
 const aiRoot = path.join(dataRoot, "ai");
 const bangumiRoot = path.join(dataRoot, "bangumi");
 const bangumiMatchesRoot = path.join(bangumiRoot, "matches");
@@ -199,6 +212,8 @@ async function createCacheStatus() {
     { id: "photo-albums", label: "写真集数据", path: photoAlbumsRoot },
     { id: "subtitles", label: "内封字幕", path: embeddedSubtitlesRoot },
     { id: "compatible-media", label: "兼容播放缓存", path: compatibleMediaRoot },
+    { id: "danmaku-sources", label: "弹幕源", path: danmakuSourcesRoot },
+    { id: "danmaku-translations", label: "弹幕翻译", path: danmakuTranslationsRoot },
     { id: "ai-summaries", label: "AI 字幕总结", path: path.join(aiRoot, "summaries") },
     { id: "ai-qa", label: "AI 字幕问答", path: path.join(aiRoot, "qa") },
     { id: "ai-recaps", label: "AI 进度回顾", path: path.join(aiRoot, "recaps") },
@@ -607,6 +622,354 @@ async function streamDeepSeek(env, messages, onDelta) {
   buffer += decoder.decode();
   if (buffer.trim()) handleBlock(buffer);
   return output.trim();
+}
+
+function decodeHtmlEntities(value) {
+  return String(value || "")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&");
+}
+
+async function requestExternalText(url, options = {}) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), options.timeoutMs ?? 12000);
+  try {
+    const response = await fetch(url, {
+      method: options.method || "GET",
+      headers: {
+        Accept: options.accept || "text/plain,*/*",
+        "User-Agent": options.userAgent || "local-web-player/0.1",
+        Referer: options.referer || undefined,
+        ...(options.headers || {}),
+      },
+      signal: controller.signal,
+    });
+    const text = await response.text();
+    if (!response.ok) throw new Error(`${response.status}: ${text.slice(0, 240) || response.statusText}`);
+    return text;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function requestExternalJson(url, options = {}) {
+  const text = await requestExternalText(url, { ...options, accept: "application/json,text/plain,*/*" });
+  try {
+    return JSON.parse(text || "{}");
+  } catch {
+    throw new Error("Remote API returned invalid JSON.");
+  }
+}
+
+function parseBilibiliXmlDanmaku(xmlText) {
+  const comments = [];
+  const pattern = /<d\s+[^>]*p="([^"]*)"[^>]*>([\s\S]*?)<\/d>/g;
+  let match;
+  while ((match = pattern.exec(xmlText))) {
+    const parts = match[1].split(",");
+    const comment = createDanmakuComment({
+      id: parts[7] ? `bilibili:${parts[7]}` : undefined,
+      time: Number(parts[0]),
+      mode: parts[1],
+      color: parts[3],
+      text: decodeHtmlEntities(match[2]),
+    });
+    if (comment) comments.push(comment);
+  }
+  return dedupeDanmakuComments(comments);
+}
+
+function parseAniGamerDanmakuPayload(payload) {
+  const sourceItems = Array.isArray(payload) ? payload : Array.isArray(payload?.data) ? payload.data : [];
+  const comments = sourceItems.flatMap((item, index) => {
+    const time = Number(item?.time ?? item?.stime ?? item?.start ?? item?.position ?? 0);
+    const text = String(item?.text ?? item?.msg ?? item?.message ?? item?.comment ?? "");
+    const comment = createDanmakuComment({
+      id: `aniGamer:${item?.id ?? index}`,
+      time,
+      text,
+      mode: item?.mode,
+      color: item?.color,
+    });
+    return comment ? [comment] : [];
+  });
+  return dedupeDanmakuComments(comments);
+}
+
+function parseAssTime(value) {
+  const match = /^(\d+):(\d{2}):(\d{2})(?:\.(\d{1,2}))?$/.exec(String(value || "").trim());
+  if (!match) return 0;
+  return Number(match[1]) * 3600 + Number(match[2]) * 60 + Number(match[3]) + Number(match[4] || 0) / 100;
+}
+
+function parseImportedDanmakuText(text) {
+  const trimmed = String(text || "").trim();
+  if (!trimmed) return [];
+
+  if (trimmed.startsWith("<")) return parseBilibiliXmlDanmaku(trimmed);
+
+  try {
+    const parsed = JSON.parse(trimmed);
+    const items = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.comments) ? parsed.comments : Array.isArray(parsed?.data) ? parsed.data : [];
+    const comments = items.flatMap((item, index) => {
+      const comment = createDanmakuComment({
+        id: item?.id ? `manual:${item.id}` : `manual:${index}`,
+        time: Number(item?.time ?? item?.start ?? item?.stime ?? 0),
+        text: String(item?.text ?? item?.message ?? item?.comment ?? ""),
+        mode: item?.mode,
+        color: item?.color,
+        simplifiedText: item?.simplifiedText,
+      });
+      return comment ? [comment] : [];
+    });
+    return dedupeDanmakuComments(comments);
+  } catch {
+    // Continue with ASS parsing.
+  }
+
+  const comments = trimmed.split(/\r?\n/).flatMap((line, index) => {
+    if (!line.startsWith("Dialogue:")) return [];
+    const parts = line.slice("Dialogue:".length).split(",");
+    if (parts.length < 10) return [];
+    const textValue = parts.slice(9).join(",").replace(/\{[^}]*}/g, "").replace(/\\N/g, " ");
+    const comment = createDanmakuComment({
+      id: `manual:${index}`,
+      time: parseAssTime(parts[1]),
+      text: textValue,
+    });
+    return comment ? [comment] : [];
+  });
+  return dedupeDanmakuComments(comments);
+}
+
+async function resolveBilibiliCid(parsed) {
+  if (parsed.kind === "cid") return { cid: parsed.value, title: `Bilibili CID ${parsed.value}` };
+  if (parsed.kind === "ep") {
+    const payload = await requestExternalJson(`https://api.bilibili.com/pgc/view/web/season?ep_id=${encodeURIComponent(parsed.value)}`, {
+      referer: parsed.url,
+    });
+    const episode = (payload?.result?.episodes || []).find((item) => String(item?.id) === parsed.value) || payload?.result?.episodes?.[0];
+    if (!episode?.cid) throw new Error("Bilibili 番剧条目没有可用弹幕 cid。");
+    return { cid: String(episode.cid), title: episode.long_title || episode.title || payload?.result?.title || `Bilibili EP ${parsed.value}` };
+  }
+
+  const queryKey = parsed.kind === "aid" ? "aid" : "bvid";
+  const payload = await requestExternalJson(`https://api.bilibili.com/x/player/pagelist?${queryKey}=${encodeURIComponent(parsed.value)}`, {
+    referer: parsed.url,
+  });
+  const page = Array.isArray(payload?.data) ? payload.data[0] : null;
+  if (!page?.cid) throw new Error("Bilibili 视频没有可用弹幕 cid。");
+  return { cid: String(page.cid), title: page.part || `Bilibili ${parsed.value}` };
+}
+
+async function fetchBilibiliDanmaku(parsed) {
+  const { cid, title } = await resolveBilibiliCid(parsed);
+  const xml = await requestExternalText(`https://comment.bilibili.com/${encodeURIComponent(cid)}.xml`, {
+    accept: "application/xml,text/xml,text/plain,*/*",
+    referer: parsed.url,
+  });
+  return {
+    provider: "bilibili",
+    title,
+    sourceUrl: parsed.url,
+    comments: parseBilibiliXmlDanmaku(xml),
+  };
+}
+
+async function fetchAniGamerDanmaku(parsed) {
+  try {
+    const payload = await requestExternalJson(`https://ani.gamer.com.tw/ajax/danmuGet.php?sn=${encodeURIComponent(parsed.value)}`, {
+      referer: parsed.url,
+      headers: { "X-Requested-With": "XMLHttpRequest" },
+    });
+    return {
+      provider: "aniGamer",
+      title: `动画疯 SN ${parsed.value}`,
+      sourceUrl: parsed.url,
+      comments: parseAniGamerDanmakuPayload(payload),
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "动画疯弹幕拉取失败。";
+    throw new Error(`动画疯公开弹幕接口不可用，可能需要登录、地区权限或验证。${message}`);
+  }
+}
+
+async function writeDanmakuSource(record) {
+  await mkdir(danmakuSourcesRoot, { recursive: true });
+  const language = record.comments.reduce((selected, comment) => {
+    if (selected === "mixed") return selected;
+    if (comment.sourceLanguage && comment.sourceLanguage !== selected) return selected === "unknown" ? comment.sourceLanguage : "mixed";
+    return selected;
+  }, "unknown");
+  const translatedCount = record.comments.filter((comment) => comment.simplifiedText && comment.simplifiedText !== comment.text).length;
+  const source = {
+    id: createDanmakuSourceId(record.provider, `${record.sourceUrl}|${record.title}|${record.comments.length}`),
+    provider: record.provider,
+    title: record.title,
+    sourceUrl: record.sourceUrl,
+    language,
+    commentCount: record.comments.length,
+    translatedCount,
+    updatedAt: Date.now(),
+  };
+  const payload = { source, comments: record.comments };
+  await writeJsonFile(path.join(danmakuSourcesRoot, `${source.id}.json`), payload);
+  return payload;
+}
+
+async function readDanmakuSource(sourceId) {
+  const id = typeof sourceId === "string" ? sourceId : "";
+  if (!/^[A-Za-z0-9:_-]{1,120}$/.test(id)) throw new Error("Invalid danmaku source id.");
+  const payload = await readJsonFile(path.join(danmakuSourcesRoot, `${id}.json`), null);
+  if (!payload?.source || !Array.isArray(payload?.comments)) throw new Error("弹幕源缓存不存在。");
+  return payload;
+}
+
+async function fetchDanmakuSource(payload) {
+  const manualUrl = typeof payload?.url === "string" ? payload.url.trim() : "";
+  const parsed = parseDanmakuUrl(manualUrl);
+  if (!parsed) throw new Error("请输入支持的 Bilibili 或动画疯弹幕链接。");
+
+  const record =
+    parsed.provider === "bilibili"
+      ? await fetchBilibiliDanmaku(parsed)
+      : parsed.provider === "aniGamer"
+        ? await fetchAniGamerDanmaku(parsed)
+        : null;
+  if (!record) throw new Error("Unsupported danmaku provider.");
+  if (!record.comments.length) throw new Error("没有解析到弹幕。");
+  return writeDanmakuSource(record);
+}
+
+async function importDanmakuSource(payload) {
+  const text = typeof payload?.text === "string" ? payload.text : "";
+  const comments = parseImportedDanmakuText(text);
+  if (!comments.length) throw new Error("没有解析到可用弹幕。");
+  return writeDanmakuSource({
+    provider: "manual",
+    title: typeof payload?.title === "string" && payload.title.trim() ? payload.title.trim().slice(0, 160) : "手动导入弹幕",
+    sourceUrl: "manual:import",
+    comments,
+  });
+}
+
+async function searchDanmakuSources(payload) {
+  const title = typeof payload?.title === "string" ? payload.title.trim().slice(0, 120) : "";
+  const videoName = typeof payload?.videoName === "string" ? payload.videoName.trim().slice(0, 160) : "";
+  const manualUrl = typeof payload?.url === "string" ? payload.url.trim() : "";
+  const candidates = [];
+  const parsedManualUrl = parseDanmakuUrl(manualUrl);
+  if (parsedManualUrl) {
+    candidates.push({
+      provider: parsedManualUrl.provider,
+      title: manualUrl,
+      sourceUrl: manualUrl,
+      confidence: "high",
+      reason: "手动链接可直接拉取",
+    });
+  }
+
+  if (!title) return { candidates };
+
+  try {
+    const episodeNumber = inferEpisodeNumber(videoName);
+    const query = encodeURIComponent(title);
+    const payload = await requestExternalJson(`https://api.bilibili.com/x/web-interface/search/type?search_type=media_bangumi&keyword=${query}`, {
+      referer: "https://www.bilibili.com/",
+    });
+    const items = Array.isArray(payload?.data?.result) ? payload.data.result : [];
+    for (const item of items.slice(0, 3)) {
+      const episodes = Array.isArray(item?.eps) ? item.eps : [];
+      const episode =
+        episodes.find((ep) => episodeNumber && Number(ep?.index) === episodeNumber) ||
+        episodes.find((ep) => episodeNumber && String(ep?.title || "").includes(String(episodeNumber))) ||
+        episodes[0];
+      if (!episode?.id) continue;
+      candidates.push({
+        provider: "bilibili",
+        title: `${item.title || title}${episodeNumber ? ` 第 ${episodeNumber} 集` : ""}`.replace(/<[^>]+>/g, ""),
+        sourceUrl: `https://www.bilibili.com/bangumi/play/ep${episode.id}`,
+        confidence: episodeNumber ? "medium" : "low",
+        reason: episodeNumber ? "根据追番标题和集数匹配" : "根据追番标题匹配",
+      });
+    }
+  } catch {
+    // Search is best-effort. Manual URL remains available.
+  }
+
+  return { candidates };
+}
+
+async function translateDanmakuSource(env, payload) {
+  const sourcePayload = await readDanmakuSource(payload?.sourceId);
+  const comments = sourcePayload.comments.map((comment) => createDanmakuComment(comment)).filter(Boolean);
+  const translationItems = createDanmakuTranslationItems(comments);
+  const translations = {};
+  await mkdir(danmakuTranslationsRoot, { recursive: true });
+
+  const pending = [];
+  for (const item of translationItems) {
+    const cachePath = path.join(danmakuTranslationsRoot, `${item.hash}.json`);
+    const cached = await readJsonFile(cachePath, null);
+    if (cached?.simplifiedText) {
+      translations[item.hash] = cached.simplifiedText;
+    } else {
+      pending.push(item);
+    }
+  }
+
+  if (pending.length && !env.DEEPSEEK_API_KEY) {
+    throw new Error("未配置 DEEPSEEK_API_KEY，无法翻译日文、英文或混合弹幕。");
+  }
+
+  for (const chunk of chunkDanmakuTranslationItems(pending)) {
+    const raw = await callDeepSeek(
+      env,
+      [
+        {
+          role: "system",
+          content:
+            "你是动画弹幕翻译助手。把每条弹幕翻译成自然简体中文，保留口语和梗的简短风格，不解释。只返回严格 JSON：{\"items\":[{\"id\":\"原 id\",\"simplifiedText\":\"简体中文\"}]}。",
+        },
+        {
+          role: "user",
+          content: JSON.stringify({ items: chunk.map((item) => ({ id: item.id, text: item.text })) }),
+        },
+      ],
+      { responseFormat: { type: "json_object" } },
+    );
+    const parsed = parseAiJsonObject(raw) ?? {};
+    const items = Array.isArray(parsed?.items) ? parsed.items : [];
+    for (const item of items) {
+      if (typeof item?.id !== "string" || typeof item?.simplifiedText !== "string") continue;
+      const text = item.simplifiedText.trim();
+      if (!text) continue;
+      translations[item.id] = text;
+      await writeJsonFile(path.join(danmakuTranslationsRoot, `${item.id}.json`), {
+        hash: item.id,
+        simplifiedText: text,
+        model: env.DEEPSEEK_MODEL || "deepseek-chat",
+        updatedAt: Date.now(),
+      });
+    }
+  }
+
+  const translatedComments = applyDanmakuTranslations(comments, translations);
+  const nextPayload = await writeDanmakuSource({
+    provider: sourcePayload.source.provider,
+    title: sourcePayload.source.title,
+    sourceUrl: sourcePayload.source.sourceUrl,
+    comments: translatedComments,
+  });
+  return {
+    ...nextPayload,
+    reused: translationItems.length - pending.length,
+    requested: pending.length,
+  };
 }
 
 async function summarizeSubtitle(env, payload) {
@@ -1461,6 +1824,36 @@ function playerDataApiPlugin(env) {
       if (url.pathname === "/api/subtitles/embedded/cached" && request.method === "POST") {
         const payload = JSON.parse((await readBody(request)).toString("utf8"));
         sendJson(response, 200, await readCachedEmbeddedSubtitle(await loadAppConfig(), payload));
+        return;
+      }
+
+      if (url.pathname === "/api/danmaku/search" && request.method === "POST") {
+        const payload = JSON.parse((await readBody(request)).toString("utf8"));
+        sendJson(response, 200, await searchDanmakuSources(payload));
+        return;
+      }
+
+      if (url.pathname === "/api/danmaku/fetch" && request.method === "POST") {
+        const payload = JSON.parse((await readBody(request)).toString("utf8"));
+        sendJson(response, 200, await fetchDanmakuSource(payload));
+        return;
+      }
+
+      if (url.pathname === "/api/danmaku/import" && request.method === "POST") {
+        const payload = JSON.parse((await readBody(request)).toString("utf8"));
+        sendJson(response, 200, await importDanmakuSource(payload));
+        return;
+      }
+
+      if (url.pathname === "/api/danmaku/source" && request.method === "POST") {
+        const payload = JSON.parse((await readBody(request)).toString("utf8"));
+        sendJson(response, 200, await readDanmakuSource(payload?.sourceId));
+        return;
+      }
+
+      if (url.pathname === "/api/ai/danmaku/translate" && request.method === "POST") {
+        const payload = JSON.parse((await readBody(request)).toString("utf8"));
+        sendJson(response, 200, await translateDanmakuSource(env, payload));
         return;
       }
 

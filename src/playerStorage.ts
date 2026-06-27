@@ -1,5 +1,7 @@
 import type {
   FileSystemDirectoryHandle,
+  DanmakuPreferences,
+  DanmakuSelectionStore,
   PlaybackProgress,
   TagMergeDecisionStore,
   PlayerDataStore,
@@ -21,6 +23,7 @@ import {
   RECENT_FOLDER_STORE_NAME,
   PHOTO_ALBUM_FOLDER_KEY,
   thumbnailCacheVersion,
+  defaultDanmakuPreferences,
   defaultPlayerSettings,
   defaultPlayerPreferences,
   defaultShortcuts
@@ -181,6 +184,52 @@ export function parsePersistedEmbeddedSubtitles(source: unknown): PersistedEmbed
   });
 }
 
+export function parseDanmakuSelectionStore(source: unknown): DanmakuSelectionStore {
+  if (!source || typeof source !== "object" || Array.isArray(source)) return {};
+
+  const store: DanmakuSelectionStore = {};
+  for (const [videoId, value] of Object.entries(source)) {
+    if (!videoId || !value || typeof value !== "object" || Array.isArray(value)) continue;
+    const selection = value as Partial<DanmakuSelectionStore[string]>;
+    if (
+      typeof selection.sourceId === "string" &&
+      selection.sourceId &&
+      typeof selection.sourceName === "string" &&
+      (selection.provider === "bilibili" || selection.provider === "aniGamer" || selection.provider === "manual") &&
+      typeof selection.updatedAt === "number" &&
+      Number.isFinite(selection.updatedAt)
+    ) {
+      store[videoId] = {
+        sourceId: selection.sourceId,
+        sourceName: selection.sourceName,
+        provider: selection.provider,
+        updatedAt: selection.updatedAt,
+      };
+    }
+  }
+  return store;
+}
+
+function boundedNumber(value: unknown, fallback: number, min: number, max: number) {
+  return typeof value === "number" && Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback;
+}
+
+export function parseDanmakuPreferences(source: unknown): DanmakuPreferences {
+  if (!source || typeof source !== "object" || Array.isArray(source)) return defaultDanmakuPreferences;
+  const preferences = source as Partial<DanmakuPreferences>;
+  return {
+    enabled: typeof preferences.enabled === "boolean" ? preferences.enabled : defaultDanmakuPreferences.enabled,
+    opacity: boundedNumber(preferences.opacity, defaultDanmakuPreferences.opacity, 0.2, 1),
+    speed: boundedNumber(preferences.speed, defaultDanmakuPreferences.speed, 4, 14),
+    density: boundedNumber(preferences.density, defaultDanmakuPreferences.density, 0.2, 1),
+    displayArea: boundedNumber(preferences.displayArea, defaultDanmakuPreferences.displayArea, 0.25, 1),
+    showSimplified:
+      typeof preferences.showSimplified === "boolean"
+        ? preferences.showSimplified
+        : defaultDanmakuPreferences.showSimplified,
+  };
+}
+
 export function parseShortcuts(source: unknown): ShortcutMap {
   if (!source || typeof source !== "object" || Array.isArray(source)) return defaultShortcuts;
   const shortcuts = source as Partial<ShortcutMap>;
@@ -258,6 +307,8 @@ export function parsePlayerDataStore(raw: string): PlayerDataStore {
     videoStats?: unknown;
     tagMergeDecisions?: unknown;
     embeddedSubtitles?: unknown;
+    danmakuSelections?: unknown;
+    danmakuPreferences?: unknown;
     metadata?: unknown;
   };
   const progressSource = parsed && typeof parsed === "object" && parsed.items ? parsed.items : parsed;
@@ -274,6 +325,8 @@ export function parsePlayerDataStore(raw: string): PlayerDataStore {
     videoStats: parseVideoStats(parsed?.videoStats),
     tagMergeDecisions: parseTagMergeDecisions(parsed?.tagMergeDecisions),
     embeddedSubtitles: parsePersistedEmbeddedSubtitles(parsed?.embeddedSubtitles),
+    danmakuSelections: parseDanmakuSelectionStore(parsed?.danmakuSelections),
+    danmakuPreferences: parseDanmakuPreferences(parsed?.danmakuPreferences),
     preferences: parsePlayerPreferences(parsed?.preferences),
     settings: parsePlayerSettings(parsed?.settings),
     metadata:
@@ -292,6 +345,8 @@ export function createDefaultPlayerDataStore(metadata?: PlayerDataStore["metadat
     videoStats: {},
     tagMergeDecisions: {},
     embeddedSubtitles: [],
+    danmakuSelections: {},
+    danmakuPreferences: defaultDanmakuPreferences,
     preferences: defaultPlayerPreferences,
     settings: defaultPlayerSettings,
     metadata,
@@ -369,6 +424,8 @@ export async function saveGlobalPlayerDataStore(store: PlayerDataStore) {
       videoStats: parseVideoStats(store.videoStats),
       tagMergeDecisions: parseTagMergeDecisions(store.tagMergeDecisions),
       embeddedSubtitles: parsePersistedEmbeddedSubtitles(store.embeddedSubtitles),
+      danmakuSelections: parseDanmakuSelectionStore(store.danmakuSelections),
+      danmakuPreferences: parseDanmakuPreferences(store.danmakuPreferences),
       preferences: getPersistedPlayerPreferences(store.preferences),
       settings: parsePlayerSettings(store.settings),
       metadata: store.metadata,
@@ -392,6 +449,8 @@ export async function savePlayerDataStore(libraryId: string, store: PlayerDataSt
       videoStats: parseVideoStats(store.videoStats),
       tagMergeDecisions: parseTagMergeDecisions(store.tagMergeDecisions),
       embeddedSubtitles: parsePersistedEmbeddedSubtitles(store.embeddedSubtitles),
+      danmakuSelections: parseDanmakuSelectionStore(store.danmakuSelections),
+      danmakuPreferences: parseDanmakuPreferences(store.danmakuPreferences),
       preferences: getPersistedPlayerPreferences(store.preferences),
       settings: parsePlayerSettings(store.settings),
       metadata: store.metadata,
