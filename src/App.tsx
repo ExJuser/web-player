@@ -6778,6 +6778,18 @@ export default function App() {
     [applyDanmakuSourcePayload, currentVideo],
   );
 
+  const removeDanmakuMatch = useCallback(() => {
+    if (!currentVideo) return;
+    const nextSelections = { ...danmakuSelectionsRef.current };
+    delete nextSelections[currentVideo.id];
+    danmakuSelectionsRef.current = nextSelections;
+    setDanmakuSelections(nextSelections);
+    setCurrentDanmakuSource(null);
+    setDanmakuComments([]);
+    setDanmakuMessage("已删除弹幕匹配。");
+    void saveDanmakuSelection(currentVideo.id, null).catch(() => undefined);
+  }, [currentVideo]);
+
   const replaceDanmakuPreferences = useCallback(
     (nextPreferences: DanmakuPreferences) => {
       danmakuPreferencesRef.current = nextPreferences;
@@ -9223,7 +9235,7 @@ export default function App() {
                   type="button"
                   onClick={() => {
                     setIsDanmakuDialogOpen(true);
-                    setDanmakuMessage(currentDanmakuSource ? `当前弹幕源：${currentDanmakuSource.title}` : "匹配或拉取弹幕后显示在视频上方。");
+                    setDanmakuMessage((message) => message || "匹配或拉取弹幕后显示在视频上方。");
                   }}
                   disabled={!currentVideo || !isSeriesMode}
                   title={isSeriesMode ? "弹幕源和弹幕设置" : "弹幕只在追番模式的剧集播放中可用"}
@@ -10294,9 +10306,32 @@ export default function App() {
 
             <div className="danmaku-dialog-grid">
               <section className="danmaku-panel">
-                <div className="danmaku-panel-header">
-                  <strong>{currentDanmakuSource ? currentDanmakuSource.title : "未加载弹幕"}</strong>
-                  <span>{currentDanmakuSource ? `${currentDanmakuSource.commentCount} 条` : currentVideo?.name ?? "未选择视频"}</span>
+                <div className="danmaku-source-card-list">
+                  {currentDanmakuSource ? (
+                    <article className="danmaku-source-card">
+                      <div className="danmaku-source-card-main">
+                        <strong>{currentDanmakuSource.title}</strong>
+                        <span>
+                          {currentDanmakuSource.provider === "bilibili" ? "Bilibili" : "手动"} · {currentDanmakuSource.commentCount} 条
+                        </span>
+                      </div>
+                      <button
+                        className="icon-button danmaku-source-delete"
+                        type="button"
+                        onClick={removeDanmakuMatch}
+                        disabled={isDanmakuLoading}
+                        aria-label={`删除弹幕匹配：${currentDanmakuSource.title}`}
+                        title="删除弹幕匹配"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </article>
+                  ) : (
+                    <div className="danmaku-source-empty">
+                      <strong>未加载弹幕</strong>
+                      <span>{currentVideo?.name ?? "未选择视频"}</span>
+                    </div>
+                  )}
                 </div>
                 {danmakuCandidates.length ? (
                   <div className="danmaku-candidate-list">

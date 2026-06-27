@@ -4247,6 +4247,68 @@ button {
   line-height: 1.4;
 }
 
+.danmaku-source-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.danmaku-source-card,
+.danmaku-source-empty {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  min-height: 52px;
+  padding: 10px;
+  border: 1px solid rgba(0, 161, 214, 0.38);
+  border-radius: 8px;
+  background: rgba(15, 24, 38, 0.92);
+}
+
+.danmaku-source-empty {
+  align-items: flex-start;
+  flex-direction: column;
+  border-color: rgba(142, 151, 165, 0.22);
+  background: rgba(19, 26, 38, 0.62);
+}
+
+.danmaku-source-card-main {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.danmaku-source-card strong,
+.danmaku-source-empty strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.danmaku-source-card span,
+.danmaku-source-empty span {
+  color: #8e97a5;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.danmaku-source-delete {
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  color: #f87171;
+}
+
+.danmaku-source-delete:hover {
+  border-color: rgba(248, 113, 113, 0.55);
+  background: rgba(248, 113, 113, 0.12);
+  color: #fecaca;
+}
+
 .danmaku-manual-source {
   display: flex;
   flex-direction: column;
@@ -5983,9 +6045,13 @@ button {
 .app-shell.theme-light .danmaku-field input,
 .app-shell.theme-light .danmaku-field textarea,
 .app-shell.theme-light .danmaku-candidate,
+.app-shell.theme-light .danmaku-source-card,
+.app-shell.theme-light .danmaku-source-empty,
 :root[data-theme="light"] .danmaku-field input,
 :root[data-theme="light"] .danmaku-field textarea,
-:root[data-theme="light"] .danmaku-candidate {
+:root[data-theme="light"] .danmaku-candidate,
+:root[data-theme="light"] .danmaku-source-card,
+:root[data-theme="light"] .danmaku-source-empty {
   border-color: #cfd8e3;
   background: #ffffff;
   color: #172033;
@@ -5993,7 +6059,11 @@ button {
 
 .app-shell.theme-light .danmaku-panel-header span,
 .app-shell.theme-light .danmaku-candidate span,
+.app-shell.theme-light .danmaku-source-card span,
+.app-shell.theme-light .danmaku-source-empty span,
 :root[data-theme="light"] .danmaku-panel-header span,
-:root[data-theme="light"] .danmaku-candidate span {
+:root[data-theme="light"] .danmaku-candidate span,
+:root[data-theme="light"] .danmaku-source-card span,
+:root[data-theme="light"] .danmaku-source-empty span {
   color: #667085;
 }
