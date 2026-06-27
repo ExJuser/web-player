@@ -7815,7 +7815,7 @@ export default function App() {
     </span>
   );
   const renderTagChips = (tags: string[], options?: { limit?: number; compact?: boolean }) => {
-    const visibleTags = tags.slice(0, options?.limit ?? 3);
+    const visibleTags = tags.slice(0, options?.limit ?? 10);
     if (!visibleTags.length) return null;
     return (
       <span className={`tag-chip-row ${options?.compact ? "compact" : ""}`}>
@@ -7863,7 +7863,7 @@ export default function App() {
       <span className="special-insight-row-copy">
         <strong>{insight.video.name}</strong>
         <small>{formatSpecialInsightVideoMetric(insight)}</small>
-        {renderTagChips(insight.tags, { limit: 2, compact: true })}
+        {renderTagChips(insight.tags, { limit: 10, compact: true })}
       </span>
     </button>
   );
@@ -7902,7 +7902,7 @@ export default function App() {
       <span className="home-list-copy">
         <strong>{card.video.name}</strong>
         <small>{formatHomeMeta(card)}</small>
-        {renderTagChips(card.tags ?? [], { limit: 3, compact: true })}
+        {renderTagChips(card.tags ?? [], { limit: 10, compact: true })}
       </span>
     </button>
   );
