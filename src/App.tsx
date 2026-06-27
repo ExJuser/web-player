@@ -156,7 +156,7 @@ function isSubtitleFile(name: string) {
 }
 
 const PHOTO_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif", ".bmp"]);
-const photoAlbumPageSize = 24;
+const photoAlbumPageSize = 20;
 const cacheStatusPageSize = 10;
 const photoThumbnailWindowSize = 24;
 const photoAlbumScanCacheStaleMs = 24 * 60 * 60 * 1000;
