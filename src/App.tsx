@@ -2958,6 +2958,7 @@ export default function App() {
     const start = (photoAlbumPage - 1) * photoAlbumPageSize;
     return visiblePhotoAlbums.slice(start, start + photoAlbumPageSize);
   }, [photoAlbumPage, visiblePhotoAlbums]);
+  const isPhotoAlbumGridCompact = pagedPhotoAlbums.length <= 5;
   const photoAlbumPageStart = visiblePhotoAlbums.length ? (photoAlbumPage - 1) * photoAlbumPageSize + 1 : 0;
   const photoAlbumPageEnd = Math.min(photoAlbumPage * photoAlbumPageSize, visiblePhotoAlbums.length);
   const photoAlbumStats = useMemo(() => {
@@ -8668,7 +8669,9 @@ export default function App() {
 
             {visiblePhotoAlbums.length ? (
               <>
-                <section className="photo-album-grid">{pagedPhotoAlbums.map(renderPhotoAlbumCard)}</section>
+                <section className={`photo-album-grid ${isPhotoAlbumGridCompact ? "photo-album-grid-compact" : ""}`.trim()}>
+                  {pagedPhotoAlbums.map(renderPhotoAlbumCard)}
+                </section>
                 {photoAlbumPageCount > 1 ? (
                   <nav className="photo-pagination" aria-label="写真集分页">
                     <span>
