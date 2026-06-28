@@ -7,8 +7,18 @@ import {
   createProgressRecapCache,
   createSubtitleAnswerCache,
   createSubtitleSummaryCache,
+  writeCachedAiStreamResult,
 } from "../server/aiStreamCache.mjs";
 import { hashValue } from "../server/hashUtils.mjs";
+
+function createMockResponse() {
+  return {
+    chunks: [],
+    write(value) {
+      this.chunks.push(value);
+    },
+  };
+}
 
 test("createAiStreamCachePath maps stream cache types to stable directories", () => {
   assert.equal(createAiStreamCachePath("D:\\data\\ai", "summary", "abc"), path.join("D:\\data\\ai", "summaries", "abc.json"));
@@ -44,4 +54,18 @@ test("createProgressRecapCache preserves the existing cache key format", () => {
     cacheId: expectedId,
     cachePath: path.join("D:\\data\\ai", "recaps", `${expectedId}.json`),
   });
+});
+
+test("writeCachedAiStreamResult emits cached result and done events", () => {
+  const response = createMockResponse();
+
+  assert.equal(writeCachedAiStreamResult(response, { summary: "cached text" }, "summary"), true);
+  assert.deepEqual(response.chunks, ['{"type":"result","text":"cached text"}\n', '{"type":"done"}\n']);
+});
+
+test("writeCachedAiStreamResult ignores missing cache fields", () => {
+  const response = createMockResponse();
+
+  assert.equal(writeCachedAiStreamResult(response, { answer: "" }, "answer"), false);
+  assert.deepEqual(response.chunks, []);
 });

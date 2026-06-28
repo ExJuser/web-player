@@ -32,6 +32,7 @@ import {
   createProgressRecapCache,
   createSubtitleAnswerCache,
   createSubtitleSummaryCache,
+  writeCachedAiStreamResult,
 } from "./server/aiStreamCache.mjs";
 import { searchLibraryWithAi, suggestTagMergeWithAi } from "./server/aiLibraryService.mjs";
 import {
@@ -282,11 +283,7 @@ async function streamSubtitleSummary(env, payload, response) {
     if (!subtitleText) throw new Error("Subtitle text is required.");
     const { cachePath } = createSubtitleSummaryCache(aiRoot, payload?.videoName, subtitleText);
     const cached = await readJsonFile(cachePath, null);
-    if (cached?.summary) {
-      writeStreamEvent(response, { type: "result", text: cached.summary });
-      writeStreamEvent(response, { type: "done" });
-      return;
-    }
+    if (writeCachedAiStreamResult(response, cached, "summary")) return;
 
     const chunks = chunkText(subtitleText);
     const parts = [];
@@ -341,11 +338,7 @@ async function streamSubtitleAnswer(env, payload, response) {
       .join("\n\n");
     const { cachePath } = createSubtitleAnswerCache(aiRoot, payload?.videoName, question, context);
     const cached = await readJsonFile(cachePath, null);
-    if (cached?.answer) {
-      writeStreamEvent(response, { type: "result", text: cached.answer });
-      writeStreamEvent(response, { type: "done" });
-      return;
-    }
+    if (writeCachedAiStreamResult(response, cached, "answer")) return;
 
     const answer = await streamDeepSeek(
       env,
@@ -383,11 +376,7 @@ async function streamProgressRecap(env, payload, response) {
     const recapEndSeconds = Math.floor(currentTime);
     const { cachePath } = createProgressRecapCache(aiRoot, payload?.videoName, subtitleId, recapEndSeconds, viewedText);
     const cached = await readJsonFile(cachePath, null);
-    if (cached?.recap) {
-      writeStreamEvent(response, { type: "result", text: cached.recap });
-      writeStreamEvent(response, { type: "done" });
-      return;
-    }
+    if (writeCachedAiStreamResult(response, cached, "recap")) return;
 
     writeStreamEvent(response, { type: "message", text: "正在生成无剧透进度回顾..." });
     const recap = await streamDeepSeek(
