@@ -223,7 +223,8 @@ export type PersistedDuplicateVideoPair = {
 };
 
 export type PersistedDuplicateDetectionResult = {
-  scopeKey: string;
+  mode: HomeMediaMode;
+  scopeKey?: string;
   pairs: PersistedDuplicateVideoPair[];
   updatedAt: number;
   message?: string;
@@ -243,6 +244,7 @@ export type PlayerDataStore = {
   preferences: PlayerPreferences;
   settings: PlayerPersistentSettings;
   duplicateDetection?: PersistedDuplicateDetectionResult | null;
+  duplicateDetections?: Partial<Record<HomeMediaMode, PersistedDuplicateDetectionResult>>;
   metadata?: PlayerLibraryMetadata | PlayerGlobalMetadata;
 };
 

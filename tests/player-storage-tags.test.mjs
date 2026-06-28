@@ -193,9 +193,10 @@ test("default player data store contains tag containers", () => {
   assert.equal(store.danmakuPreferences.showSimplified, true);
   assert.equal(store.preferences.homeMediaMode, "all");
   assert.equal(store.duplicateDetection, null);
+  assert.deepEqual(store.duplicateDetections, {});
 });
 
-test("player data stores persist bounded duplicate detection pairs", () => {
+test("player data stores migrate legacy duplicate detection into its media mode", () => {
   const parsed = storage.parsePlayerDataStore(JSON.stringify({
     version: 5,
     items: {},
@@ -224,6 +225,7 @@ test("player data stores persist bounded duplicate detection pairs", () => {
   }));
 
   assert.deepEqual(parsed.duplicateDetection, {
+    mode: "special",
     scopeKey: "special\nvideo-a",
     updatedAt: 100,
     message: "检测完成",
@@ -236,6 +238,57 @@ test("player data stores persist bounded duplicate detection pairs", () => {
       reasons: ["内容指纹一致"],
     }],
   });
+  assert.deepEqual(parsed.duplicateDetections, {
+    special: parsed.duplicateDetection,
+  });
+});
+
+test("player data stores persist duplicate detection results per media mode", () => {
+  const parsed = storage.parsePlayerDataStore(JSON.stringify({
+    version: 5,
+    items: {},
+    duplicateDetections: {
+      special: {
+        mode: "special",
+        updatedAt: 100,
+        pairs: [{
+          key: "a\u0000b",
+          aId: "a",
+          bId: "b",
+          score: 145,
+          severity: "duplicate",
+          reasons: ["内容指纹一致"],
+        }],
+      },
+      anime: {
+        mode: "anime",
+        updatedAt: 200,
+        pairs: [{
+          key: "c\u0000d",
+          aId: "c",
+          bId: "d",
+          score: 90,
+          severity: "suspicious",
+          reasons: ["名称规范化一致"],
+        }],
+      },
+      all: {
+        mode: "special",
+        pairs: [{
+          key: "x\u0000y",
+          aId: "x",
+          bId: "y",
+          score: 120,
+          severity: "duplicate",
+          reasons: ["内容指纹一致"],
+        }],
+      },
+    },
+  }));
+
+  assert.equal(parsed.duplicateDetections.special.mode, "special");
+  assert.equal(parsed.duplicateDetections.anime.mode, "anime");
+  assert.equal(parsed.duplicateDetections.all, undefined);
 });
 
 test("player data stores parse valid high energy highlight segments", () => {

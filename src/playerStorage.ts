@@ -2,6 +2,7 @@ import type {
   FileSystemDirectoryHandle,
   DanmakuPreferences,
   DanmakuSelectionStore,
+  HomeMediaMode,
   PlaybackProgress,
   TagMergeDecisionStore,
   PlayerDataStore,
@@ -188,15 +189,31 @@ export function parseTagMergeDecisions(source: unknown): TagMergeDecisionStore {
   return decisions;
 }
 
-export function parseDuplicateDetectionResult(source: unknown): PlayerDataStore["duplicateDetection"] {
+function parseHomeMediaMode(value: unknown): HomeMediaMode | null {
+  return value === "all" || value === "anime" || value === "special" ? value : null;
+}
+
+function inferDuplicateDetectionMode(result: { mode?: unknown; scopeKey?: unknown }, fallbackMode?: HomeMediaMode): HomeMediaMode | null {
+  const explicitMode = parseHomeMediaMode(result.mode);
+  if (explicitMode) return explicitMode;
+  if (fallbackMode) return fallbackMode;
+  if (typeof result.scopeKey === "string") {
+    return parseHomeMediaMode(result.scopeKey.split("\n")[0]);
+  }
+  return null;
+}
+
+export function parseDuplicateDetectionResult(source: unknown, fallbackMode?: HomeMediaMode): PlayerDataStore["duplicateDetection"] {
   if (!source || typeof source !== "object" || Array.isArray(source)) return null;
   const result = source as {
+    mode?: unknown;
     scopeKey?: unknown;
     pairs?: unknown;
     updatedAt?: unknown;
     message?: unknown;
   };
-  if (typeof result.scopeKey !== "string" || !result.scopeKey.trim() || !Array.isArray(result.pairs)) return null;
+  const mode = inferDuplicateDetectionMode(result, fallbackMode);
+  if (!mode || !Array.isArray(result.pairs)) return null;
 
   const pairs: PersistedDuplicateVideoPair[] = result.pairs.flatMap((item) => {
     if (!item || typeof item !== "object" || Array.isArray(item)) return [];
@@ -235,11 +252,28 @@ export function parseDuplicateDetectionResult(source: unknown): PlayerDataStore[
 
   if (!pairs.length) return null;
   return {
-    scopeKey: result.scopeKey,
+    mode,
+    scopeKey: typeof result.scopeKey === "string" && result.scopeKey.trim() ? result.scopeKey : mode,
     pairs,
     updatedAt: typeof result.updatedAt === "number" && Number.isFinite(result.updatedAt) ? Math.max(0, Math.round(result.updatedAt)) : Date.now(),
     message: typeof result.message === "string" && result.message.trim() ? result.message.trim().slice(0, 200) : undefined,
   };
+}
+
+export function parseDuplicateDetectionResults(source: unknown, legacySource?: unknown): PlayerDataStore["duplicateDetections"] {
+  const results: PlayerDataStore["duplicateDetections"] = {};
+  if (source && typeof source === "object" && !Array.isArray(source)) {
+    (["all", "anime", "special"] as const).forEach((mode) => {
+      const parsed = parseDuplicateDetectionResult((source as Record<string, unknown>)[mode], mode);
+      if (parsed && parsed.mode === mode) results[mode] = parsed;
+    });
+  }
+
+  const legacy = parseDuplicateDetectionResult(legacySource);
+  if (legacy && !results[legacy.mode]) {
+    results[legacy.mode] = legacy;
+  }
+  return results;
 }
 
 export function parsePersistedEmbeddedSubtitles(source: unknown): PersistedEmbeddedSubtitle[] {
@@ -414,6 +448,7 @@ export function parsePlayerDataStore(raw: string): PlayerDataStore {
     danmakuSelections?: unknown;
     danmakuPreferences?: unknown;
     duplicateDetection?: unknown;
+    duplicateDetections?: unknown;
     metadata?: unknown;
   };
   const progressSource = parsed && typeof parsed === "object" && parsed.items ? parsed.items : parsed;
@@ -436,6 +471,7 @@ export function parsePlayerDataStore(raw: string): PlayerDataStore {
     preferences: parsePlayerPreferences(parsed?.preferences),
     settings: parsePlayerSettings(parsed?.settings),
     duplicateDetection: parseDuplicateDetectionResult(parsed?.duplicateDetection),
+    duplicateDetections: parseDuplicateDetectionResults(parsed?.duplicateDetections, parsed?.duplicateDetection),
     metadata:
       parsed?.metadata && typeof parsed.metadata === "object" && !Array.isArray(parsed.metadata)
         ? (parsed.metadata as PlayerLibraryMetadata)
@@ -458,6 +494,7 @@ export function createDefaultPlayerDataStore(metadata?: PlayerDataStore["metadat
     preferences: defaultPlayerPreferences,
     settings: defaultPlayerSettings,
     duplicateDetection: null,
+    duplicateDetections: {},
     metadata,
   };
 }
@@ -530,6 +567,7 @@ function createPersistedPlayerDataPayload(store: PlayerDataStore) {
     preferences: getPersistedPlayerPreferences(store.preferences),
     settings: parsePlayerSettings(store.settings),
     duplicateDetection: parseDuplicateDetectionResult(store.duplicateDetection),
+    duplicateDetections: parseDuplicateDetectionResults(store.duplicateDetections, store.duplicateDetection),
     metadata: store.metadata,
   };
 }
