@@ -296,6 +296,7 @@ export type ShortcutMap = Record<ShortcutAction, string>;
 export type PlayerPreferences = {
   playlistSortMode: PlaylistSortMode;
   isPlaylistSortReversed: boolean;
+  playlistPageSize: number;
   shortcuts: ShortcutMap;
   homeMediaMode: HomeMediaMode;
   isSeriesMode: boolean;

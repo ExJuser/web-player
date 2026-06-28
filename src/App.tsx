@@ -153,13 +153,12 @@ import {
   holdRates,
   playbackModeOptions,
   playlistSortOptions,
+  playlistPageSizeOptions,
   volumeStep,
   controlsAutoHideDelay,
   autoNextPromptSeconds,
   rightKeyHoldDelay,
   doubleClickFeedbackDelay,
-  playlistItemHeight,
-  playlistVirtualOverscan,
   playlistActiveThumbnailRadius,
   thumbnailWidth,
   thumbnailHeight,
@@ -1682,6 +1681,8 @@ export default function App() {
   const [isPlaylistSortReversed, setIsPlaylistSortReversed] = useState(
     defaultPlayerPreferences.isPlaylistSortReversed,
   );
+  const [playlistPageSize, setPlaylistPageSize] = useState(defaultPlayerPreferences.playlistPageSize);
+  const [playlistPage, setPlaylistPage] = useState(1);
   const [shortcuts, setShortcuts] = useState<ShortcutMap>(defaultPlayerPreferences.shortcuts);
   const [homeMediaMode, setHomeMediaMode] = useState<HomeMediaMode>(defaultPlayerPreferences.homeMediaMode);
   const [isSeriesMode, setIsSeriesMode] = useState(defaultPlayerPreferences.isSeriesMode);
@@ -1813,6 +1814,7 @@ export default function App() {
       setDuplicateVideoGroups([]);
       setDuplicateDetectionResultScopeKey(mode);
       setDuplicateDetectionProgress(null);
+      setPlaylistPage(1);
       setIsDuplicatePlaylistActive(false);
       setDuplicateDetectionMessage("尚未检测重复视频。");
       return;
@@ -1836,6 +1838,7 @@ export default function App() {
       setDuplicateVideoGroups([]);
       setDuplicateDetectionResultScopeKey(mode);
       setDuplicateDetectionProgress(null);
+      setPlaylistPage(1);
       setIsDuplicatePlaylistActive(false);
       setDuplicateDetectionMessage("尚未检测重复视频。");
       return;
@@ -1853,6 +1856,7 @@ export default function App() {
     setDuplicateVideoGroups(restoredGroups);
     setDuplicateDetectionResultScopeKey(mode);
     setDuplicateDetectionProgress(null);
+    setPlaylistPage(1);
     setIsDuplicatePlaylistActive(false);
     setDuplicateDetectionMessage(message);
   }, [getVideosForHomeMode]);
@@ -1950,6 +1954,8 @@ export default function App() {
     setProgressStore(nextDataStore.progress);
     setPlaylistSortMode(nextDataStore.preferences.playlistSortMode);
     setIsPlaylistSortReversed(nextDataStore.preferences.isPlaylistSortReversed);
+    setPlaylistPageSize(nextDataStore.preferences.playlistPageSize);
+    setPlaylistPage(1);
     setShortcuts(nextDataStore.preferences.shortcuts);
     setHomeMediaMode(nextDataStore.preferences.homeMediaMode);
     setIsSeriesMode(nextDataStore.preferences.isSeriesMode);
@@ -2286,7 +2292,6 @@ export default function App() {
     [duplicatePlaylistVideos, favoritePlaylistVideos, isDuplicatePlaylistActive, playlistFilter, seriesFilteredVideos],
   );
   const isPlaylistSeriesMode = isSeriesMode && !isDuplicatePlaylistActive;
-  const visibleVideoIdsKey = useMemo(() => visibleVideos.map((video) => video.id).join("\n"), [visibleVideos]);
   const isAnimePlaylistSearchScope = homeMediaMode === "anime" && isPlaylistSeriesMode;
   const homeLibrarySearchVideos = modeFilteredVideos;
   const playerLibrarySearchVideos = isDuplicatePlaylistActive || isAnimePlaylistSearchScope ? visibleVideos : modeFilteredVideos;
@@ -2327,18 +2332,23 @@ export default function App() {
     visibleVideos.forEach((video, index) => indexes.set(video.id, index));
     return indexes;
   }, [visibleVideos]);
-  const virtualPlaylist = useMemo(() => {
-    const viewportHeight = playlistViewport.height || 0;
-    const startIndex = Math.max(0, Math.floor(playlistViewport.scrollTop / playlistItemHeight) - playlistVirtualOverscan);
-    const visibleCount = viewportHeight > 0 ? Math.ceil(viewportHeight / playlistItemHeight) : 12;
-    const endIndex = Math.min(visibleVideos.length, startIndex + visibleCount + playlistVirtualOverscan * 2);
-    return {
-      items: visibleVideos.slice(startIndex, endIndex),
-      startIndex,
-      topSpacerHeight: startIndex * playlistItemHeight,
-      bottomSpacerHeight: Math.max(0, (visibleVideos.length - endIndex) * playlistItemHeight),
-    };
-  }, [playlistViewport.height, playlistViewport.scrollTop, visibleVideos]);
+  const playlistPageCount = Math.max(1, Math.ceil(visibleVideos.length / playlistPageSize));
+  const visiblePlaylistPage = Math.min(Math.max(playlistPage, 1), playlistPageCount);
+  const pagedPlaylistStartIndex = visibleVideos.length ? (visiblePlaylistPage - 1) * playlistPageSize : 0;
+  const pagedPlaylistVideos = useMemo(
+    () => visibleVideos.slice(pagedPlaylistStartIndex, pagedPlaylistStartIndex + playlistPageSize),
+    [pagedPlaylistStartIndex, playlistPageSize, visibleVideos],
+  );
+  const playlistPageStartLabel = visibleVideos.length ? pagedPlaylistStartIndex + 1 : 0;
+  const playlistPageEndLabel = Math.min(pagedPlaylistStartIndex + pagedPlaylistVideos.length, visibleVideos.length);
+  const playlistVisibleCountLabel =
+    visibleVideos.length > playlistPageSize
+      ? `${playlistPageStartLabel}-${playlistPageEndLabel} / ${visibleVideos.length}`
+      : `${visibleVideos.length}`;
+  const playlistPageSizeSelectOptions = useMemo(
+    () => playlistPageSizeOptions.map((size) => ({ value: size, label: `${size}/页` })),
+    [],
+  );
   const playlistThumbnailVideos = useMemo(() => {
     const queuedVideos: VideoItem[] = [];
     const seenIds = new Set<string>();
@@ -2358,13 +2368,20 @@ export default function App() {
       }
     }
 
-    addVideoRange(virtualPlaylist.startIndex, virtualPlaylist.startIndex + virtualPlaylist.items.length);
+    pagedPlaylistVideos.forEach((video) => {
+      if (seenIds.has(video.id)) return;
+      seenIds.add(video.id);
+      queuedVideos.push(video);
+    });
     return queuedVideos;
-  }, [currentVideoId, visibleVideoIndexById, virtualPlaylist.items.length, virtualPlaylist.startIndex, visibleVideos]);
+  }, [currentVideoId, pagedPlaylistVideos, visibleVideoIndexById, visibleVideos]);
   const isCurrentVideoVisible = useMemo(
     () => !!currentVideoId && visibleVideos.some((video) => video.id === currentVideoId),
     [currentVideoId, visibleVideos],
   );
+  useEffect(() => {
+    setPlaylistPage((page) => Math.min(Math.max(page, 1), playlistPageCount));
+  }, [playlistPageCount]);
   useEffect(() => {
     if (isDuplicatePlaylistActive && !duplicatePlaylistVideos.length) {
       setIsDuplicatePlaylistActive(false);
@@ -2651,6 +2668,7 @@ export default function App() {
       duplicateDetectionMessageRef.current = nextMessage;
       setDuplicateVideoGroups(groups);
       setDuplicateDetectionResultScopeKey(targetMode);
+      setPlaylistPage(1);
       setIsDuplicatePlaylistActive(false);
       setDuplicateDetectionMessage(nextMessage);
       void saveCurrentPlayerDataStore({
@@ -4244,6 +4262,7 @@ export default function App() {
     playerPreferencesRef.current = nextPreferences;
     setPlaylistSortMode(nextPreferences.playlistSortMode);
     setIsPlaylistSortReversed(nextPreferences.isPlaylistSortReversed);
+    setPlaylistPageSize(nextPreferences.playlistPageSize);
     setShortcuts(nextPreferences.shortcuts);
     setHomeMediaMode(nextPreferences.homeMediaMode);
     setIsSeriesMode(nextPreferences.isSeriesMode);
@@ -4261,6 +4280,7 @@ export default function App() {
 
   const updatePlaylistSortMode = useCallback(
     (nextMode: PlaylistSortMode) => {
+      setPlaylistPage(1);
       replacePlayerPreferences({
         ...playerPreferencesRef.current,
         playlistSortMode: nextMode,
@@ -4270,14 +4290,27 @@ export default function App() {
   );
 
   const togglePlaylistSortDirection = useCallback(() => {
+    setPlaylistPage(1);
     replacePlayerPreferences({
       ...playerPreferencesRef.current,
       isPlaylistSortReversed: !playerPreferencesRef.current.isPlaylistSortReversed,
     });
   }, [replacePlayerPreferences]);
 
+  const updatePlaylistPageSize = useCallback(
+    (nextPageSize: number) => {
+      setPlaylistPage(1);
+      replacePlayerPreferences({
+        ...playerPreferencesRef.current,
+        playlistPageSize: nextPageSize,
+      });
+    },
+    [replacePlayerPreferences],
+  );
+
   const updateHomeMediaMode = useCallback(
     (nextMode: HomeMediaMode) => {
+      setPlaylistPage(1);
       duplicateDetectionAbortRef.current?.abort();
       duplicateDetectionAbortRef.current = null;
       duplicateDetectionRunIdRef.current += 1;
@@ -4325,6 +4358,7 @@ export default function App() {
 
   const updateSelectedSeries = useCallback(
     (nextSeriesKey: string) => {
+      setPlaylistPage(1);
       replacePlayerPreferences({
         ...playerPreferencesRef.current,
         selectedSeriesKey: nextSeriesKey,
@@ -4611,7 +4645,10 @@ export default function App() {
       const currentPreferences = playerPreferencesRef.current;
 
       setIsSeriesMenuOpen(false);
-      if (nextSeriesMode.resetPlaylistFilter) setPlaylistFilter("all");
+      if (nextSeriesMode.resetPlaylistFilter) {
+        setPlaylistPage(1);
+        setPlaylistFilter("all");
+      }
 
       if (
         currentPreferences.isSeriesMode === nextSeriesMode.isSeriesMode &&
@@ -4635,7 +4672,10 @@ export default function App() {
       persistCurrentProgress();
       resetHoldSpeedState();
       if (options?.syncSeriesMode !== false) syncSeriesModeForPlayerEntry(videoId);
-      if (!options?.keepDuplicatePlaylist) setIsDuplicatePlaylistActive(false);
+      if (!options?.keepDuplicatePlaylist) {
+        setPlaylistPage(1);
+        setIsDuplicatePlaylistActive(false);
+      }
       setActiveView("player");
       pendingAutoPlayVideoIdRef.current = videoId;
       autoSubtitleSelectionVideoIdRef.current = videoId;
@@ -4897,6 +4937,7 @@ export default function App() {
   const openDuplicatePlaylist = useCallback(() => {
     const firstVideo = duplicatePlaylistVideos[0];
     if (!firstVideo) return;
+    setPlaylistPage(1);
     setIsDuplicatePlaylistActive(true);
     setPlaylistFilter("all");
     setIsSeriesMenuOpen(false);
@@ -4911,6 +4952,7 @@ export default function App() {
         return;
       }
       setIsSeriesMenuOpen(false);
+      setPlaylistPage(1);
       setPlaylistFilter("all");
       replacePlayerPreferences({
         ...playerPreferencesRef.current,
@@ -5733,6 +5775,7 @@ export default function App() {
         setSubtitleAnswer("");
         setAiMessage("");
         updateSelectedSubtitleId("off");
+        setPlaylistPage(1);
         setPlaylistFilter("all");
         setActiveView("home");
 
@@ -5909,6 +5952,7 @@ export default function App() {
       playerPreferencesRef.current = {
         playlistSortMode,
         isPlaylistSortReversed,
+        playlistPageSize,
         shortcuts,
         homeMediaMode,
         isSeriesMode,
@@ -5932,6 +5976,7 @@ export default function App() {
       setSubtitles(nextSubtitles);
       activateDuplicateDetectionForMode(homeMediaMode, media.videos);
       updateSelectedSubtitleId("off");
+      setPlaylistPage(1);
       setPlaylistFilter("all");
       setActiveView("home");
       setCurrentVideoId(getSortedVideos(media.videos, playlistSortMode, isPlaylistSortReversed)[0]?.id ?? null);
@@ -5947,6 +5992,7 @@ export default function App() {
       isPlaylistSortReversed,
       isSeriesMode,
       homeMediaMode,
+      playlistPageSize,
       playlistSortMode,
       revokeVideoUrls,
       selectedSeriesKey,
@@ -6107,15 +6153,34 @@ export default function App() {
     };
   }, [isMainVideoLoading, isScanning, setVideoThumbnailState, thumbnailQueueVideoIdsKey, updateVideoMetadata]);
 
+  const scrollPlaylistItemIntoView = useCallback((videoId: string, behavior: ScrollBehavior) => {
+    const playlist = playlistRef.current;
+    if (!playlist) return;
+    const target = Array.from(playlist.querySelectorAll<HTMLElement>(".playlist-item")).find(
+      (item) => item.dataset.videoId === videoId,
+    );
+    if (!target) return;
+    const playlistRect = playlist.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+    const top = Math.max(
+      0,
+      playlist.scrollTop + targetRect.top - playlistRect.top - playlist.clientHeight / 2 + targetRect.height / 2,
+    );
+    playlist.scrollTo({ top, behavior });
+    setPlaylistViewport({ scrollTop: top, height: playlist.clientHeight });
+  }, []);
+
   const scrollToCurrentPlaylistItem = useCallback((behavior: ScrollBehavior = "smooth") => {
     const playlist = playlistRef.current;
     if (!playlist || !currentVideoId) return;
     const index = visibleVideoIndexById.get(currentVideoId);
     if (index === undefined) return;
     isPlaylistAutoScrollingRef.current = true;
-    const top = Math.max(0, index * playlistItemHeight - playlist.clientHeight / 2 + playlistItemHeight / 2);
-    playlist.scrollTo({ top, behavior });
-    setPlaylistViewport((previous) => ({ ...previous, scrollTop: top }));
+    const targetPage = Math.floor(index / playlistPageSize) + 1;
+    setPlaylistPage(targetPage);
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => scrollPlaylistItemIntoView(currentVideoId, behavior));
+    });
 
     if (playlistAutoScrollTimerRef.current) {
       window.clearTimeout(playlistAutoScrollTimerRef.current);
@@ -6124,7 +6189,7 @@ export default function App() {
       isPlaylistAutoScrollingRef.current = false;
       playlistAutoScrollTimerRef.current = null;
     }, 700);
-  }, [currentVideoId, visibleVideoIndexById]);
+  }, [currentVideoId, playlistPageSize, scrollPlaylistItemIntoView, visibleVideoIndexById]);
 
   const scrollPlaylistToTop = useCallback((behavior: ScrollBehavior = "smooth") => {
     const playlist = playlistRef.current;
@@ -6145,13 +6210,13 @@ export default function App() {
   useEffect(() => {
     if (!currentVideoId || !playlistRef.current) return;
     if (isScanning) return;
-    const autoScrollKey = `${currentVideoId}\n${visibleVideoIdsKey}`;
+    const autoScrollKey = currentVideoId;
     if (lastPlaylistAutoScrollKeyRef.current === autoScrollKey) return;
     lastPlaylistAutoScrollKeyRef.current = autoScrollKey;
     if (Date.now() - lastPlaylistUserScrollAtRef.current < 800) return;
 
     scrollToCurrentPlaylistItem();
-  }, [currentVideoId, isScanning, scrollToCurrentPlaylistItem, visibleVideoIdsKey]);
+  }, [currentVideoId, isScanning, scrollToCurrentPlaylistItem]);
 
   const markPlaylistUserScroll = useCallback((event?: React.UIEvent<HTMLDivElement>) => {
     const element = event?.currentTarget ?? playlistRef.current;
@@ -10050,15 +10115,15 @@ export default function App() {
           <div className="playlist-title-row">
             <span>
               {isDuplicatePlaylistActive
-                ? `重复列表 · ${visibleVideos.length} 个视频 · ${activeDuplicateVideoGroups.length} 组`
+                ? `重复列表 · ${playlistVisibleCountLabel} 个视频 · ${activeDuplicateVideoGroups.length} 组`
                 : modeFilteredVideos.length
                 ? playlistFilter === "favorites"
-                  ? `${visibleVideos.length} / ${modeFilteredVideos.length} 个收藏`
+                  ? `${playlistVisibleCountLabel} / ${modeFilteredVideos.length} 个收藏`
                   : isPlaylistSeriesMode
-                    ? `${visibleVideos.length} / ${modeFilteredVideos.length} 个视频`
+                    ? `${playlistVisibleCountLabel} / ${modeFilteredVideos.length} 个视频`
                     : homeMediaMode === "all"
-                      ? `${modeFilteredVideos.length} 个视频`
-                      : `${homeMediaModeLabel} · ${modeFilteredVideos.length} 个视频`
+                      ? `${playlistVisibleCountLabel} 个视频`
+                      : `${homeMediaModeLabel} · ${playlistVisibleCountLabel} 个视频`
                 : videos.length
                   ? `当前${homeMediaModeLabel}没有视频`
                   : "等待新增媒体库"}
@@ -10174,7 +10239,10 @@ export default function App() {
               <button
                 className="playlist-clear-button"
                 type="button"
-                onClick={() => setIsDuplicatePlaylistActive(false)}
+                onClick={() => {
+                  setPlaylistPage(1);
+                  setIsDuplicatePlaylistActive(false);
+                }}
                 title="退出重复列表"
               >
                 退出
@@ -10184,7 +10252,10 @@ export default function App() {
                 <button
                   className={playlistFilter === "all" ? "active" : ""}
                   type="button"
-                  onClick={() => setPlaylistFilter("all")}
+                  onClick={() => {
+                    setPlaylistPage(1);
+                    setPlaylistFilter("all");
+                  }}
                   disabled={!modeFilteredVideos.length}
                 >
                   全部
@@ -10192,7 +10263,10 @@ export default function App() {
                 <button
                   className={playlistFilter === "favorites" ? "active" : ""}
                   type="button"
-                  onClick={() => setPlaylistFilter("favorites")}
+                  onClick={() => {
+                    setPlaylistPage(1);
+                    setPlaylistFilter("favorites");
+                  }}
                   disabled={!modeFilteredVideos.length}
                 >
                   <Star size={14} />
@@ -10271,10 +10345,7 @@ export default function App() {
           ref={playlistRef}
           onScroll={markPlaylistUserScroll}
         >
-          {virtualPlaylist.topSpacerHeight ? (
-            <div className="playlist-virtual-spacer" style={{ height: virtualPlaylist.topSpacerHeight }} />
-          ) : null}
-          {virtualPlaylist.items.map((video) => {
+          {pagedPlaylistVideos.map((video) => {
             const isActive = video.id === currentVideoId;
             const progress = progressStore[video.id];
             const isCompleted = Boolean(progress?.completed);
@@ -10287,6 +10358,7 @@ export default function App() {
               <div
                 key={video.id}
                 className={`playlist-item ${isActive ? "active" : ""}`}
+                data-video-id={video.id}
                 title={createVideoMetadataTitle(video)}
               >
                 <button
@@ -10362,15 +10434,53 @@ export default function App() {
               </div>
             );
           })}
-          {virtualPlaylist.bottomSpacerHeight ? (
-            <div className="playlist-virtual-spacer" style={{ height: virtualPlaylist.bottomSpacerHeight }} />
-          ) : null}
-
           {!videos.length ? <div className="empty-list">{message}</div> : null}
           {videos.length && isDuplicatePlaylistActive && !visibleVideos.length ? <div className="empty-list">重复列表已清空</div> : null}
           {videos.length && !isDuplicatePlaylistActive && !modeFilteredVideos.length ? <div className="empty-list">当前{homeMediaModeLabel}没有视频</div> : null}
           {modeFilteredVideos.length && !isDuplicatePlaylistActive && !visibleVideos.length ? <div className="empty-list">还没有收藏的视频</div> : null}
         </div>
+        {visibleVideos.length ? (
+          <div className="playlist-pagination" aria-label="播放列表分页">
+            <button
+              className="playlist-page-button"
+              type="button"
+              onClick={() => {
+                setPlaylistPage((page) => Math.max(1, page - 1));
+                scrollPlaylistToTop("auto");
+              }}
+              disabled={visiblePlaylistPage <= 1}
+              title="上一页"
+              aria-label="上一页"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <span className="playlist-page-status">
+              {playlistPageStartLabel}-{playlistPageEndLabel} / {visibleVideos.length}
+              <small>第 {visiblePlaylistPage} / {playlistPageCount} 页</small>
+            </span>
+            <button
+              className="playlist-page-button"
+              type="button"
+              onClick={() => {
+                setPlaylistPage((page) => Math.min(playlistPageCount, page + 1));
+                scrollPlaylistToTop("auto");
+              }}
+              disabled={visiblePlaylistPage >= playlistPageCount}
+              title="下一页"
+              aria-label="下一页"
+            >
+              <ChevronRight size={16} />
+            </button>
+            <ControlSelect
+              label="每页"
+              ariaLabel="播放列表每页数量"
+              value={playlistPageSize}
+              options={playlistPageSizeSelectOptions}
+              onChange={updatePlaylistPageSize}
+              className="playlist-page-size-control"
+            />
+          </div>
+        ) : null}
       </aside>
       ) : null}
     </main>

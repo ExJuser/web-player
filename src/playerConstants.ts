@@ -31,6 +31,7 @@ export const playlistSortOptions: Array<{ value: PlaylistSortMode; label: string
   { value: "playCount", label: "播放次数" },
   { value: "emissionCount", label: "发射次数" },
 ];
+export const playlistPageSizeOptions = [30, 50, 100] as const;
 export const volumeStep = 0.05;
 export const controlsAutoHideDelay = 2500;
 export const autoNextPromptSeconds = 5;
@@ -38,8 +39,6 @@ export const rightKeyHoldDelay = 350;
 export const doubleClickFeedbackDelay = 650;
 export const mediaScanBatchSize = 150;
 export const mediaScanBatchDelay = 500;
-export const playlistItemHeight = 108;
-export const playlistVirtualOverscan = 10;
 export const playlistActiveThumbnailRadius = 15;
 export const thumbnailCacheVersion = "v2";
 export const thumbnailWidth = 960;
@@ -69,6 +68,7 @@ export const defaultShortcuts: ShortcutMap = {
 export const defaultPlayerPreferences: PlayerPreferences = {
   playlistSortMode: "name",
   isPlaylistSortReversed: false,
+  playlistPageSize: 50,
   shortcuts: defaultShortcuts,
   homeMediaMode: "all",
   isSeriesMode: false,

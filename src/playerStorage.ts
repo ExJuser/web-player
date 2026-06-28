@@ -37,6 +37,7 @@ import {
   defaultDanmakuPreferences,
   defaultPlayerSettings,
   defaultPlayerPreferences,
+  playlistPageSizeOptions,
   defaultShortcuts
 } from "./playerConstants";
 import { createWatchActivityKey, isValidWatchActivityDate } from "./watchActivityInsights";
@@ -435,6 +436,11 @@ export function parsePlayerPreferences(source: unknown): PlayerPreferences {
       typeof preferences.isPlaylistSortReversed === "boolean"
         ? preferences.isPlaylistSortReversed
         : defaultPlayerPreferences.isPlaylistSortReversed,
+    playlistPageSize:
+      typeof preferences.playlistPageSize === "number" &&
+      playlistPageSizeOptions.includes(preferences.playlistPageSize as (typeof playlistPageSizeOptions)[number])
+        ? preferences.playlistPageSize
+        : defaultPlayerPreferences.playlistPageSize,
     shortcuts: parseShortcuts(preferences.shortcuts),
     homeMediaMode:
       preferences.homeMediaMode === "anime" || preferences.homeMediaMode === "special"

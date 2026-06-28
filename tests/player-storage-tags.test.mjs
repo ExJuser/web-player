@@ -21,6 +21,14 @@ test("old player data stores load with empty video tags and merge decisions", ()
   assert.equal(parsed.danmakuPreferences.enabled, true);
 });
 
+test("player preferences parse playlist page size with defaults", () => {
+  assert.equal(storage.parsePlayerPreferences({}).playlistPageSize, 50);
+  assert.equal(storage.parsePlayerPreferences({ playlistPageSize: 30 }).playlistPageSize, 30);
+  assert.equal(storage.parsePlayerPreferences({ playlistPageSize: 100 }).playlistPageSize, 100);
+  assert.equal(storage.parsePlayerPreferences({ playlistPageSize: 40 }).playlistPageSize, 50);
+  assert.equal(storage.parsePlayerPreferences({ playlistPageSize: "50" }).playlistPageSize, 50);
+});
+
 test("media root scan cache keeps valid server entries and drops invalid records", () => {
   const parsed = storage.parseCachedMediaRootScan(JSON.stringify({
     version: storage.mediaRootScanCacheVersion,
