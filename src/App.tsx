@@ -321,6 +321,12 @@ import {
 } from "./playerUiState";
 import { parseMp4MovieDuration, readUint64, selectTrustedDuration } from "./videoMetadataUtils";
 import {
+  createThumbnailTargetTimes,
+  getPlayerFrameAspectRatio,
+  getVideoDisplaySize,
+  isCanvasNearlyBlack,
+} from "./videoThumbnailUtils";
+import {
   createTagPairKey,
   findTagMergeSuggestion,
   mergeTags,
@@ -1014,30 +1020,6 @@ async function getVideoElementMetadata(element: HTMLVideoElement, video?: VideoI
   };
 }
 
-const widescreenAspectRatio = 16 / 9;
-
-function getVideoDisplaySize(width?: number, height?: number) {
-  if (!width || !height) return null;
-  return { width, height };
-}
-
-function getPlayerFrameAspectRatio() {
-  return widescreenAspectRatio;
-}
-
-function isCanvasNearlyBlack(context: CanvasRenderingContext2D, width: number, height: number) {
-  const pixels = context.getImageData(0, 0, width, height).data;
-  let brightPixels = 0;
-
-  for (let index = 0; index < pixels.length; index += 4) {
-    if (pixels[index] + pixels[index + 1] + pixels[index + 2] > 36) {
-      brightPixels += 1;
-    }
-  }
-
-  return brightPixels / (width * height) < 0.01;
-}
-
 function encodeCanvasAsJpeg(canvas: HTMLCanvasElement) {
   return withTimeout(
     new Promise<Blob>((resolve, reject) => {
@@ -1097,12 +1079,7 @@ async function createVideoThumbnailBlob(video: VideoItem) {
     const drawLeft = (canvas.width - drawWidth) / 2;
     const drawTop = (canvas.height - drawHeight) / 2;
     const duration = Number.isFinite(element.duration) ? element.duration : 0;
-    const targetTimes =
-      duration > 0
-        ? [duration * 0.1, duration * 0.25, duration * 0.5, duration * 0.75, 2]
-            .map((time) => Math.min(Math.max(time, 0.1), Math.max(0.1, duration - 0.1)))
-            .filter((time, index, times) => times.findIndex((other) => Math.abs(other - time) < 0.05) === index)
-        : [0];
+    const targetTimes = createThumbnailTargetTimes(duration);
     let fallbackBlob: Blob | null = null;
 
     for (const targetTime of targetTimes) {
