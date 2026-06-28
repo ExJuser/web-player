@@ -75,10 +75,16 @@ test("compatible cache id changes when file identity changes", () => {
 
 test("maps media content types by extension", () => {
   assert.equal(mediaContentTypeForPath("E01.mp4"), "video/mp4");
+  assert.equal(mediaContentTypeForPath("E01.m4v"), "video/mp4");
   assert.equal(mediaContentTypeForPath("E01.webm"), "video/webm");
   assert.equal(mediaContentTypeForPath("E01.ogg"), "video/ogg");
+  assert.equal(mediaContentTypeForPath("E01.ogv"), "video/ogg");
   assert.equal(mediaContentTypeForPath("E01.mov"), "video/quicktime");
   assert.equal(mediaContentTypeForPath("E01.mkv"), "video/x-matroska");
+  assert.equal(mediaContentTypeForPath("E01.VTT"), "text/vtt; charset=utf-8");
+  assert.equal(mediaContentTypeForPath("cover.jpeg"), "image/jpeg");
+  assert.equal(mediaContentTypeForPath("cover.webp"), "image/webp");
+  assert.equal(mediaContentTypeForPath("notes.txt"), "application/octet-stream");
 });
 
 test("scanMediaRoot attaches playability from the provided inspector", async () => {

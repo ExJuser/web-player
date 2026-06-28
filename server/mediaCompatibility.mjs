@@ -7,23 +7,28 @@ const mp4FormatNames = new Set(["mov", "mp4", "m4a", "3gp", "3g2", "mj2"]);
 const directVideoCodecs = new Set(["h264", "av1", "vp8", "vp9"]);
 const directAudioCodecs = new Set(["aac", "mp3", "opus", "vorbis"]);
 const mp4AudioCodecs = new Set(["aac", "mp3"]);
+const mediaContentTypesByExtension = {
+  ".vtt": "text/vtt; charset=utf-8",
+  ".srt": "application/x-subrip; charset=utf-8",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".png": "image/png",
+  ".webp": "image/webp",
+  ".gif": "image/gif",
+  ".avif": "image/avif",
+  ".bmp": "image/bmp",
+  ".mp4": "video/mp4",
+  ".m4v": "video/mp4",
+  ".webm": "video/webm",
+  ".ogg": "video/ogg",
+  ".ogv": "video/ogg",
+  ".mov": "video/quicktime",
+  ".mkv": "video/x-matroska",
+};
 
 export function mediaContentTypeForPath(filePath) {
   const extension = path.extname(filePath).toLowerCase();
-  if (extension === ".vtt") return "text/vtt; charset=utf-8";
-  if (extension === ".srt") return "application/x-subrip; charset=utf-8";
-  if (extension === ".jpg" || extension === ".jpeg") return "image/jpeg";
-  if (extension === ".png") return "image/png";
-  if (extension === ".webp") return "image/webp";
-  if (extension === ".gif") return "image/gif";
-  if (extension === ".avif") return "image/avif";
-  if (extension === ".bmp") return "image/bmp";
-  if (extension === ".mp4" || extension === ".m4v") return "video/mp4";
-  if (extension === ".webm") return "video/webm";
-  if (extension === ".ogg" || extension === ".ogv") return "video/ogg";
-  if (extension === ".mov") return "video/quicktime";
-  if (extension === ".mkv") return "video/x-matroska";
-  return "application/octet-stream";
+  return mediaContentTypesByExtension[extension] ?? "application/octet-stream";
 }
 
 export function createCompatibleMediaCacheId(rootId, relativePath, size, lastModified) {
