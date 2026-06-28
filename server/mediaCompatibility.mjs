@@ -1,4 +1,4 @@
-import { access, mkdir, stat } from "node:fs/promises";
+import { access, mkdir, rename, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { hashValue } from "./hashUtils.mjs";
 import { isImageSubtitleCodec } from "./subtitleCodecUtils.mjs";
@@ -280,30 +280,86 @@ async function createVideoPlayability({ root, video, filePath, compatibleMediaRo
   }
 }
 
-export async function remuxCompatibleMedia({ runProcess, sourcePath, outputPath }) {
+function parseFfmpegTimestamp(value) {
+  const text = String(value || "").trim();
+  const match = /^(\d+):(\d+):(\d+(?:\.\d+)?)$/.exec(text);
+  if (!match) return null;
+  return Number(match[1]) * 3600 + Number(match[2]) * 60 + Number(match[3]);
+}
+
+function parseFfmpegProgressChunk(chunk, state, durationSeconds, onProgress) {
+  state.buffer += chunk.toString("utf8");
+  const lines = state.buffer.split(/\r?\n/);
+  state.buffer = lines.pop() ?? "";
+
+  for (const line of lines) {
+    const index = line.indexOf("=");
+    if (index <= 0) continue;
+    const key = line.slice(0, index);
+    const value = line.slice(index + 1);
+    let currentSeconds = null;
+    if (key === "out_time_us" || key === "out_time_ms") {
+      currentSeconds = Number(value) / 1_000_000;
+    } else if (key === "out_time") {
+      currentSeconds = parseFfmpegTimestamp(value);
+    } else if (key === "progress" && value === "end") {
+      onProgress?.({ percent: 100, message: "生成完成，正在写入缓存..." });
+    }
+
+    if (currentSeconds !== null && Number.isFinite(currentSeconds) && durationSeconds > 0) {
+      const percent = Math.max(1, Math.min(99, Math.round((currentSeconds / durationSeconds) * 100)));
+      if (percent !== state.lastPercent) {
+        state.lastPercent = percent;
+        onProgress?.({ percent, message: `正在复制媒体流 ${percent}%` });
+      }
+    }
+  }
+}
+
+export async function remuxCompatibleMedia({ runProcess, sourcePath, outputPath, durationSeconds = 0, signal, onProgress }) {
   await mkdir(path.dirname(outputPath), { recursive: true });
-  await runProcess(
-    "ffmpeg",
-    [
-      "-v",
-      "error",
-      "-y",
-      "-i",
-      sourcePath,
-      "-map",
-      "0:v:0",
-      "-map",
-      "0:a:0?",
-      "-c",
-      "copy",
-      "-movflags",
-      "+faststart",
-      outputPath,
-    ],
-    { timeoutMs: 10 * 60 * 1000, timeoutMessage: "生成兼容 MP4 超时。" },
-  );
+  const temporaryOutputPath = `${outputPath}.tmp.mp4`;
+  await rm(temporaryOutputPath, { force: true });
+  const progressState = { buffer: "", lastPercent: 0 };
+  onProgress?.({ percent: 0, message: "正在启动 ffmpeg..." });
+  try {
+    await runProcess(
+      "ffmpeg",
+      [
+        "-v",
+        "error",
+        "-y",
+        "-i",
+        sourcePath,
+        "-map",
+        "0:v:0",
+        "-map",
+        "0:a:0?",
+        "-c",
+        "copy",
+        "-movflags",
+        "+faststart",
+        "-progress",
+        "pipe:1",
+        "-nostats",
+        temporaryOutputPath,
+      ],
+      {
+        timeoutMs: 10 * 60 * 1000,
+        timeoutMessage: "生成兼容 MP4 超时。",
+        signal,
+        abortMessage: "已取消生成兼容 MP4。",
+        onStdout: (chunk) => parseFfmpegProgressChunk(chunk, progressState, durationSeconds, onProgress),
+      },
+    );
+    await rename(temporaryOutputPath, outputPath);
+  } catch (error) {
+    await rm(temporaryOutputPath, { force: true });
+    throw error;
+  }
   const outputStat = await stat(outputPath);
   if (!outputStat.isFile() || outputStat.size <= 0) {
     throw new Error("生成兼容 MP4 失败。");
   }
+  onProgress?.({ percent: 100, message: "已生成兼容 MP4。" });
 }

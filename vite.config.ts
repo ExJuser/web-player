@@ -214,7 +214,7 @@ async function probeMedia(config, payload, store) {
   return withCompatibleMediaUrl(response, cachedCompatibleMedia);
 }
 
-async function remuxMediaToCompatibleMp4(config, payload) {
+async function remuxMediaToCompatibleMp4(config, payload, options = {}) {
   const root = findMediaRoot(config, payload?.rootId);
   if (!root) throw new Error("Unknown media root.");
   if (root.source === "browser" && !root.localPath) {
@@ -242,7 +242,12 @@ async function remuxMediaToCompatibleMp4(config, payload) {
       runProcess,
       sourcePath: videoPath,
       outputPath: cached.cachePath,
+      durationSeconds: Number(result.probe?.format?.duration) || 0,
+      signal: options.signal,
+      onProgress: options.onProgress,
     });
+  } else {
+    options.onProgress?.({ percent: 100, message: "已存在兼容缓存，直接使用缓存文件。" });
   }
 
   return {
@@ -254,6 +259,28 @@ async function remuxMediaToCompatibleMp4(config, payload) {
       compatibleUrl: createCompatibleMediaUrl(cached.cacheId),
     },
   };
+}
+
+async function streamRemuxMediaToCompatibleMp4(config, payload, request, response) {
+  sendNdjson(response, 200);
+  const controller = new AbortController();
+  let finished = false;
+  response.on("close", () => {
+    if (!finished) controller.abort();
+  });
+  try {
+    writeStreamEvent(response, { type: "progress", percent: 0, message: "正在准备生成任务..." });
+    const result = await remuxMediaToCompatibleMp4(config, payload, {
+      signal: controller.signal,
+      onProgress: (progress) => writeStreamEvent(response, { type: "progress", ...progress }),
+    });
+    writeStreamEvent(response, { type: "done", result });
+  } catch (error) {
+    writeStreamEvent(response, { type: "error", error: error instanceof Error ? error.message : "生成兼容 MP4 失败。" });
+  } finally {
+    finished = true;
+    response.end();
+  }
 }
 
 async function writeDanmakuSource(record) {
@@ -693,7 +720,7 @@ function playerDataApiPlugin(env) {
 
       if (url.pathname === "/api/media/compatible/remux" && request.method === "POST") {
         const payload = await parseJsonBody(request);
-        sendJson(response, 200, await remuxMediaToCompatibleMp4(await loadAppConfig(), payload));
+        await streamRemuxMediaToCompatibleMp4(await loadAppConfig(), payload, request, response);
         return;
       }
 

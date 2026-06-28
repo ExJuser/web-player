@@ -51,6 +51,18 @@ test("runProcess rejects with the configured timeout message", async () => {
   );
 });
 
+test("runProcess rejects with the configured abort message", async () => {
+  const controller = new AbortController();
+  const promise = runProcess(process.execPath, ["-e", "setTimeout(() => {}, 1000)"], {
+    signal: controller.signal,
+    abortMessage: "custom abort",
+  });
+
+  controller.abort();
+
+  await assert.rejects(() => promise, /custom abort/);
+});
+
 test("detectTools reports each tool independently", async () => {
   const calls = [];
   const result = await detectTools(async (command, args, options) => {
