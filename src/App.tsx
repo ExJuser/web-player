@@ -144,7 +144,7 @@ import {
   shortcutGroups
 } from "./playerConstants";
 import { createDanmakuComment, stableHash } from "./danmakuUtils";
-import { baseNameWithoutExtension, directoryPartsOf, fallbackMediaRootLabelForVideo } from "./mediaPathUtils";
+import { directoryPartsOf, fallbackMediaRootLabelForVideo } from "./mediaPathUtils";
 import {
   basePathOf,
   createGlobalVideoId,
@@ -158,6 +158,10 @@ import {
   sanitizeLibraryName,
   shouldFilterLocalVideoFile,
 } from "./playerLibraryUtils";
+import {
+  inferSeriesTitle,
+  scopedSeriesKeyForVideo,
+} from "./playerSeriesUtils";
 import {
   clamp,
   formatShortcutKey,
@@ -226,32 +230,6 @@ function prunePhotoObjectUrlCache(
 
 function supportsServerFileAccess(root: LocalMediaRoot | null | undefined) {
   return Boolean(root && (root.source !== "browser" || root.localPath));
-}
-
-function inferSeriesTitle(video: VideoItem) {
-  const normalizedPath = video.relativePath.replace(/\\/g, "/");
-  const pathParts = normalizedPath.split("/").filter(Boolean);
-  if (pathParts.length > 1) return pathParts[0];
-
-  return (
-    baseNameWithoutExtension(video.name)
-      .replace(/\[[^\]]+\]/g, " ")
-      .replace(/【[^】]+】/g, " ")
-      .replace(/\b(?:S\d{1,2}E\d{1,3}|EP?\s*\d{1,4}|第\s*\d{1,4}\s*[集话話]|[._ -]\d{1,4})\b/gi, " ")
-      .replace(/\b(?:1080p|2160p|720p|4k|8k|x264|x265|h264|h265|hevc|avc|aac|web-dl|bdrip|bluray)\b/gi, " ")
-      .replace(/[._-]+/g, " ")
-      .replace(/\s+/g, " ")
-      .trim() || baseNameWithoutExtension(video.name)
-  );
-}
-
-function seriesKeyFromTitle(title: string) {
-  return title.trim().toLowerCase();
-}
-
-function scopedSeriesKeyForVideo(video: VideoItem, title: string) {
-  const titleKey = seriesKeyFromTitle(title);
-  return video.mediaRootId ? `${video.mediaRootId}:${titleKey}` : titleKey;
 }
 
 function createLibraryMetadata(directory: FileSystemDirectoryHandle, media: MediaCollection): PlayerLibraryMetadata {
