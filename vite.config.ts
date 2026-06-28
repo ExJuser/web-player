@@ -47,6 +47,7 @@ import { readJsonFile, writeJsonFile } from "./server/jsonFiles.mjs";
 import { createPublicLocalConfig, defaultAppConfig } from "./server/localConfig.mjs";
 import { detectTools, runProcess } from "./server/processRunner.mjs";
 import { formatRemoteFetchError, requestExternalJson, requestExternalText } from "./server/remoteFetch.mjs";
+import { readBody, sanitizeStorageId } from "./server/requestUtils.mjs";
 import { LocalDataSqliteStore } from "./server/sqliteStorage.mjs";
 
 const dataRoot = path.resolve(__dirname, ".local-web-player-data");
@@ -79,31 +80,6 @@ const embeddedSubtitles = createEmbeddedSubtitleService({
   hashValue,
   readTextFile,
 });
-
-function sanitizeStorageId(value) {
-  if (!/^[A-Za-z0-9._~-]{1,240}$/.test(value)) {
-    return null;
-  }
-  return value;
-}
-
-function readBody(request) {
-  return new Promise((resolve, reject) => {
-    const chunks = [];
-    let size = 0;
-    request.on("data", (chunk) => {
-      size += chunk.length;
-      if (size > 12 * 1024 * 1024) {
-        reject(new Error("Request body is too large."));
-        request.destroy();
-        return;
-      }
-      chunks.push(chunk);
-    });
-    request.on("end", () => resolve(Buffer.concat(chunks)));
-    request.on("error", reject);
-  });
-}
 
 async function readTextFile(filePath, fallback = null) {
   try {
