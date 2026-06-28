@@ -3034,6 +3034,29 @@ button {
 .player-library-search-results {
   max-height: min(260px, 32vh);
   scrollbar-color: rgba(142, 151, 165, 0.58) rgba(20, 22, 26, 0.35);
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  padding-right: 8px;
+}
+
+.player-library-search-results::-webkit-scrollbar {
+  width: 10px;
+}
+
+.player-library-search-results::-webkit-scrollbar-track {
+  border-radius: 999px;
+  background: rgba(20, 22, 26, 0.35);
+}
+
+.player-library-search-results::-webkit-scrollbar-thumb {
+  min-height: 48px;
+  border: 2px solid rgba(20, 22, 26, 0.35);
+  border-radius: 999px;
+  background: rgba(142, 151, 165, 0.58);
+}
+
+.player-library-search-results::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 161, 214, 0.72);
 }
 
 .player-library-search .library-folder-result {
