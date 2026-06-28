@@ -148,6 +148,7 @@ import {
   shortcutGroups
 } from "./playerConstants";
 import { createDanmakuComment, stableHash } from "./danmakuUtils";
+import { baseNameWithoutExtension, directoryPartsOf, fallbackMediaRootLabelForVideo } from "./mediaPathUtils";
 import {
   clamp,
   formatShortcutKey,
@@ -251,20 +252,6 @@ function hasExtension(name: string, extensions: Set<string>) {
 function basePathOf(path: string) {
   const dotIndex = path.lastIndexOf(".");
   return dotIndex >= 0 ? path.slice(0, dotIndex).toLowerCase() : path.toLowerCase();
-}
-
-function baseNameWithoutExtension(name: string) {
-  const fileName = name.split(/[\\/]/).pop() || name;
-  const dotIndex = fileName.lastIndexOf(".");
-  return dotIndex >= 0 ? fileName.slice(0, dotIndex) : fileName;
-}
-
-function directoryPartsOf(path: string) {
-  return path.replace(/\\/g, "/").split("/").filter(Boolean).slice(0, -1);
-}
-
-function fallbackMediaRootLabelForVideo(video: VideoItem) {
-  return video.mediaRootId ?? directoryPartsOf(video.relativePath)[0] ?? "临时媒体";
 }
 
 function supportsServerFileAccess(root: LocalMediaRoot | null | undefined) {

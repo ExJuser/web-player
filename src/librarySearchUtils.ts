@@ -1,4 +1,5 @@
 import { doTagsSatisfyAllFilters, getTagSearchScore } from "./tagUtils";
+import { baseNameWithoutExtension, directoryPartsOf, fallbackMediaRootLabelForVideo } from "./mediaPathUtils";
 
 export const librarySearchResultPageSize = 24;
 
@@ -51,16 +52,6 @@ export function getVisibleLibrarySearchResults<T>(results: T[], visibleCount: nu
   };
 }
 
-export function baseNameWithoutExtension(name: string) {
-  const fileName = name.split(/[\\/]/).pop() || name;
-  const dotIndex = fileName.lastIndexOf(".");
-  return dotIndex >= 0 ? fileName.slice(0, dotIndex) : fileName;
-}
-
-export function directoryPartsOf(path: string) {
-  return path.replace(/\\/g, "/").split("/").filter(Boolean).slice(0, -1);
-}
-
 export function libraryFolderTitleForVideo(video: LibrarySearchVideo) {
   return directoryPartsOf(video.relativePath)[0] ?? baseNameWithoutExtension(video.name);
 }
@@ -76,10 +67,6 @@ export function libraryFolderKeyForVideo(video: LibrarySearchVideo) {
 
 export function libraryFolderPathForVideo(video: LibrarySearchVideo) {
   return directoryPartsOf(video.relativePath)[0] ?? "";
-}
-
-function fallbackMediaRootLabelForVideo(video: LibrarySearchVideo) {
-  return video.mediaRootId ?? directoryPartsOf(video.relativePath)[0] ?? "临时媒体";
 }
 
 export function normalizeLibrarySearchText(value: string) {
