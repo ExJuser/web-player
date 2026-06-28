@@ -708,6 +708,7 @@ type ClearCacheResponse = {
 };
 
 type LibrarySearchMode = "idle" | "local" | "ai" | "empty";
+type LibrarySearchSurface = "home" | "player";
 
 type LibrarySearchResult = LibrarySearchEntry<VideoItem, PlaybackProgress>;
 
@@ -1335,6 +1336,7 @@ export default function App() {
   const [librarySearchMode, setLibrarySearchMode] = useState<LibrarySearchMode>("idle");
   const [isLibrarySearchLoading, setIsLibrarySearchLoading] = useState(false);
   const [librarySearchSubmittedSignature, setLibrarySearchSubmittedSignature] = useState("");
+  const [librarySearchSurface, setLibrarySearchSurface] = useState<LibrarySearchSurface | null>(null);
   const [specialInsightTab, setSpecialInsightTab] = useState<SpecialInsightTab>("played");
   const [bangumiMatchesBySeriesKey, setBangumiMatchesBySeriesKey] = useState<Record<string, BangumiSeriesMatch>>({});
   const [cacheStatus, setCacheStatus] = useState<CacheStatus | null>(null);
@@ -1853,7 +1855,18 @@ export default function App() {
       : "搜索片名，或描述想看的内容";
   const librarySearchEmptyTarget = isAnimePlaylistSearchScope ? "剧集" : homeMediaMode === "special" ? "视频" : "文件夹";
   const defaultLibrarySearchStatus = homeMediaMode === "special" ? "特殊模式仅使用本地片名、路径或标签搜索。" : "";
-  const shouldShowLibrarySearchStatus = Boolean(isLibrarySearchLoading || visibleLibrarySearchMessage || defaultLibrarySearchStatus);
+  const isHomeLibrarySearchSurface = librarySearchSurface === "home";
+  const isPlayerLibrarySearchSurface = librarySearchSurface === "player";
+  const isHomeLibrarySearchLoading = isLibrarySearchLoading && isHomeLibrarySearchSurface;
+  const isPlayerLibrarySearchLoading = isLibrarySearchLoading && isPlayerLibrarySearchSurface;
+  const homeLibrarySearchMode = isHomeLibrarySearchSurface ? effectiveLibrarySearchMode : "idle";
+  const playerLibrarySearchMode = isPlayerLibrarySearchSurface ? effectiveLibrarySearchMode : "idle";
+  const homeLibrarySearchMessage = isHomeLibrarySearchSurface ? visibleLibrarySearchMessage : "";
+  const playerLibrarySearchMessage = isPlayerLibrarySearchSurface ? visibleLibrarySearchMessage : "";
+  const homeLibrarySearchAnswer = isHomeLibrarySearchSurface ? visibleLibrarySearchAnswer : "";
+  const playerLibrarySearchAnswer = isPlayerLibrarySearchSurface ? visibleLibrarySearchAnswer : "";
+  const shouldShowHomeLibrarySearchStatus = Boolean(isHomeLibrarySearchLoading || homeLibrarySearchMessage || defaultLibrarySearchStatus);
+  const shouldShowPlayerLibrarySearchStatus = Boolean(isPlayerLibrarySearchLoading || playerLibrarySearchMessage || defaultLibrarySearchStatus);
   const playlistIndexById = useMemo(() => {
     const indexes = new Map<string, number>();
     playlistVideos.forEach((video, index) => indexes.set(video.id, index));
@@ -2227,6 +2240,7 @@ export default function App() {
     setLibrarySearchVisibleCount(librarySearchResultPageSize);
     setLibrarySearchAnswer("");
     setLibrarySearchSubmittedSignature("");
+    setLibrarySearchSurface(null);
   }, [homeMediaMode, librarySearchScopeKey]);
 
   const createLibrarySearchCandidates = useCallback(
@@ -5965,10 +5979,11 @@ export default function App() {
     shouldShowHomeRecap,
   ]);
 
-  const runLibrarySearch = useCallback(async () => {
+  const runLibrarySearch = useCallback(async (surface: LibrarySearchSurface) => {
     const searchRunId = (librarySearchRunIdRef.current += 1);
     const query = librarySearchQuery.trim();
     const isSpecialSearch = homeMediaMode === "special";
+    setLibrarySearchSurface(surface);
     setLibrarySearchAnswer("");
     if (!query) {
       setLibrarySearchMode("idle");
@@ -5976,6 +5991,7 @@ export default function App() {
       setLibrarySearchResults([]);
       setLibrarySearchVisibleCount(librarySearchResultPageSize);
       setLibrarySearchSubmittedSignature("");
+      setLibrarySearchSurface(null);
       return;
     }
 
@@ -6049,6 +6065,7 @@ export default function App() {
       setLibrarySearchQuery(query);
       setLibrarySearchAnswer("");
       setIsLibrarySearchLoading(false);
+      setLibrarySearchSurface("home");
       setLibrarySearchSubmittedSignature(createLibrarySearchSignature(query));
       setLibrarySearchVisibleCount(librarySearchResultPageSize);
       const localResults = searchLibraryLocally(query);
@@ -6061,30 +6078,39 @@ export default function App() {
 
   const librarySearchPreviewResults = useMemo(() => {
     const query = librarySearchQuery.trim();
-    if (!query || librarySearchDraftSignature === librarySearchSubmittedSignature) return [];
+    if (!query) return [];
     return searchLibraryLocally(query, 3);
   }, [
-    librarySearchDraftSignature,
     librarySearchQuery,
-    librarySearchSubmittedSignature,
     searchLibraryLocally,
   ]);
-  const shouldShowLibrarySearchPreview = Boolean(
-    librarySearchQuery.trim() && librarySearchDraftSignature !== librarySearchSubmittedSignature,
+  const hasLibrarySearchQuery = Boolean(librarySearchQuery.trim());
+  const shouldShowHomeLibrarySearchPreview = Boolean(
+    hasLibrarySearchQuery && (librarySearchDraftSignature !== librarySearchSubmittedSignature || !isHomeLibrarySearchSurface),
+  );
+  const shouldShowPlayerLibrarySearchPreview = Boolean(
+    hasLibrarySearchQuery && (librarySearchDraftSignature !== librarySearchSubmittedSignature || !isPlayerLibrarySearchSurface),
   );
   const { visibleResults: visibleLibrarySearchResults, hasMoreResults: hasMoreLibrarySearchResults } = useMemo(
     () => getVisibleLibrarySearchResults(librarySearchResults, librarySearchVisibleCount),
     [librarySearchResults, librarySearchVisibleCount],
   );
+  const homeLibrarySearchResults = isHomeLibrarySearchSurface ? librarySearchResults : [];
+  const playerLibrarySearchResults = isPlayerLibrarySearchSurface ? librarySearchResults : [];
+  const visibleHomeLibrarySearchResults = isHomeLibrarySearchSurface ? visibleLibrarySearchResults : [];
+  const visiblePlayerLibrarySearchResults = isPlayerLibrarySearchSurface ? visibleLibrarySearchResults : [];
+  const hasMoreHomeLibrarySearchResults = isHomeLibrarySearchSurface && hasMoreLibrarySearchResults;
+  const hasMorePlayerLibrarySearchResults = isPlayerLibrarySearchSurface && hasMoreLibrarySearchResults;
   const loadMoreLibrarySearchResults = useCallback(() => {
     setLibrarySearchVisibleCount((count) => Math.min(count + librarySearchResultPageSize, librarySearchResults.length));
   }, [librarySearchResults.length]);
 
   useEffect(() => {
     const shouldUsePlayerSearchContainer = !isNonPlayerViewVisible && !isPrivacyMode && !isCinemaMode;
+    const hasMoreVisibleResults = shouldUsePlayerSearchContainer ? hasMorePlayerLibrarySearchResults : hasMoreHomeLibrarySearchResults;
     const root = shouldUsePlayerSearchContainer ? playerLibrarySearchResultsRef.current : librarySearchResultsRef.current;
     const target = shouldUsePlayerSearchContainer ? playerLibrarySearchLoadMoreRef.current : librarySearchLoadMoreRef.current;
-    if (!hasMoreLibrarySearchResults || !root || !target) return;
+    if (!hasMoreVisibleResults || !root || !target) return;
     if (typeof IntersectionObserver === "undefined") return;
     const observer = new IntersectionObserver(
       (entries) => {
@@ -6095,12 +6121,14 @@ export default function App() {
     observer.observe(target);
     return () => observer.disconnect();
   }, [
-    hasMoreLibrarySearchResults,
+    hasMoreHomeLibrarySearchResults,
+    hasMorePlayerLibrarySearchResults,
     isCinemaMode,
     isNonPlayerViewVisible,
     isPrivacyMode,
     loadMoreLibrarySearchResults,
-    visibleLibrarySearchResults.length,
+    visibleHomeLibrarySearchResults.length,
+    visiblePlayerLibrarySearchResults.length,
   ]);
 
   const loadCacheStatus = useCallback(async () => {
@@ -7501,13 +7529,13 @@ export default function App() {
               <section className="home-section library-search-card">
                 <div className="home-section-header">
                   <h2>片库搜索</h2>
-                  <span>{homeMediaMode === "special" ? "本地筛选" : effectiveLibrarySearchMode === "ai" ? "AI 辅助" : "本地优先"}</span>
+                  <span>{homeMediaMode === "special" ? "本地筛选" : homeLibrarySearchMode === "ai" ? "AI 辅助" : "本地优先"}</span>
                 </div>
                 <form
                   className="library-search-form"
                   onSubmit={(event) => {
                     event.preventDefault();
-                    void runLibrarySearch();
+                    void runLibrarySearch("home");
                   }}
                 >
                   <input
@@ -7529,7 +7557,7 @@ export default function App() {
                     <Search size={17} />
                   </button>
                 </form>
-                {shouldShowLibrarySearchPreview ? (
+                {shouldShowHomeLibrarySearchPreview ? (
                   <div className="library-search-preview">
                     <div className="library-search-preview-header">
                       <span>搜索预览</span>
@@ -7544,19 +7572,19 @@ export default function App() {
                     )}
                   </div>
                 ) : null}
-                {shouldShowLibrarySearchStatus ? (
-                  <div className={`library-search-status ${effectiveLibrarySearchMode}`}>
-                    {isLibrarySearchLoading ? "搜索中..." : visibleLibrarySearchMessage || defaultLibrarySearchStatus}
+                {shouldShowHomeLibrarySearchStatus ? (
+                  <div className={`library-search-status ${homeLibrarySearchMode}`}>
+                    {isHomeLibrarySearchLoading ? "搜索中..." : homeLibrarySearchMessage || defaultLibrarySearchStatus}
                   </div>
                 ) : null}
-                {visibleLibrarySearchAnswer ? <div className="library-search-answer">{visibleLibrarySearchAnswer}</div> : null}
-                {librarySearchResults.length ? (
+                {homeLibrarySearchAnswer ? <div className="library-search-answer">{homeLibrarySearchAnswer}</div> : null}
+                {homeLibrarySearchResults.length ? (
                   <div className="home-compact-list library-search-results" ref={librarySearchResultsRef}>
-                    {visibleLibrarySearchResults.map(renderLibrarySearchResult)}
-                    {hasMoreLibrarySearchResults ? (
+                    {visibleHomeLibrarySearchResults.map(renderLibrarySearchResult)}
+                    {hasMoreHomeLibrarySearchResults ? (
                       <div className="library-search-load-more" ref={librarySearchLoadMoreRef}>
                         <span>
-                          已显示 {visibleLibrarySearchResults.length} / {librarySearchResults.length}
+                          已显示 {visibleHomeLibrarySearchResults.length} / {homeLibrarySearchResults.length}
                         </span>
                         <button type="button" onClick={loadMoreLibrarySearchResults}>
                           加载更多
@@ -7564,7 +7592,7 @@ export default function App() {
                       </div>
                     ) : null}
                   </div>
-                ) : librarySearchMode === "empty" ? (
+                ) : isHomeLibrarySearchSurface && librarySearchMode === "empty" ? (
                   <div className="empty-list compact">没有找到匹配{librarySearchEmptyTarget}</div>
                 ) : null}
               </section>
@@ -8427,7 +8455,7 @@ export default function App() {
             className="library-search-form player-library-search-form"
             onSubmit={(event) => {
               event.preventDefault();
-              void runLibrarySearch();
+              void runLibrarySearch("player");
             }}
           >
             <input
@@ -8449,7 +8477,7 @@ export default function App() {
               <Search size={17} />
             </button>
           </form>
-          {shouldShowLibrarySearchPreview ? (
+          {shouldShowPlayerLibrarySearchPreview ? (
             <div className="library-search-preview player-library-search-preview">
               <div className="library-search-preview-header">
                 <span>搜索预览</span>
@@ -8464,19 +8492,19 @@ export default function App() {
               )}
             </div>
           ) : null}
-          {shouldShowLibrarySearchStatus ? (
-            <div className={`library-search-status player-library-search-status ${effectiveLibrarySearchMode}`}>
-              {isLibrarySearchLoading ? "搜索中..." : visibleLibrarySearchMessage || defaultLibrarySearchStatus}
+          {shouldShowPlayerLibrarySearchStatus ? (
+            <div className={`library-search-status player-library-search-status ${playerLibrarySearchMode}`}>
+              {isPlayerLibrarySearchLoading ? "搜索中..." : playerLibrarySearchMessage || defaultLibrarySearchStatus}
             </div>
           ) : null}
-          {visibleLibrarySearchAnswer ? <div className="library-search-answer player-library-search-answer">{visibleLibrarySearchAnswer}</div> : null}
-          {librarySearchResults.length ? (
+          {playerLibrarySearchAnswer ? <div className="library-search-answer player-library-search-answer">{playerLibrarySearchAnswer}</div> : null}
+          {playerLibrarySearchResults.length ? (
             <div className="home-compact-list library-search-results player-library-search-results" ref={playerLibrarySearchResultsRef}>
-              {visibleLibrarySearchResults.map(renderLibrarySearchResult)}
-              {hasMoreLibrarySearchResults ? (
+              {visiblePlayerLibrarySearchResults.map(renderLibrarySearchResult)}
+              {hasMorePlayerLibrarySearchResults ? (
                 <div className="library-search-load-more" ref={playerLibrarySearchLoadMoreRef}>
                   <span>
-                    已显示 {visibleLibrarySearchResults.length} / {librarySearchResults.length}
+                    已显示 {visiblePlayerLibrarySearchResults.length} / {playerLibrarySearchResults.length}
                   </span>
                   <button type="button" onClick={loadMoreLibrarySearchResults}>
                     加载更多
@@ -8484,7 +8512,7 @@ export default function App() {
                 </div>
               ) : null}
             </div>
-          ) : librarySearchMode === "empty" ? (
+          ) : isPlayerLibrarySearchSurface && librarySearchMode === "empty" ? (
             <div className="empty-list compact">没有找到匹配{librarySearchEmptyTarget}</div>
           ) : null}
         </section>
