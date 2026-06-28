@@ -44,6 +44,7 @@ import { requestBangumiJson } from "./server/bangumiClient.mjs";
 import { createBilibiliDanmakuService } from "./server/bilibiliDanmaku.mjs";
 import { clearLocalCacheItems, createCacheStatus as createLocalCacheStatus, createDanmakuSourcesStats } from "./server/cacheStatus.mjs";
 import { callDeepSeek, chunkText, streamDeepSeek } from "./server/deepSeekClient.mjs";
+import { createEmbeddedSubtitleService } from "./server/embeddedSubtitles.mjs";
 import { readJsonFile, writeJsonFile } from "./server/jsonFiles.mjs";
 import { formatRemoteFetchError, requestExternalJson, requestExternalText } from "./server/remoteFetch.mjs";
 import { LocalDataSqliteStore } from "./server/sqliteStorage.mjs";
@@ -64,13 +65,20 @@ const globalDataPath = path.join(dataRoot, "global.json");
 const appConfigPath = path.resolve(__dirname, "config", "app.json");
 const localDataStore = new LocalDataSqliteStore({ dataRoot, librariesRoot, photoAlbumsRoot, indexPath, globalDataPath });
 const videoExtensions = new Set([".mp4", ".webm", ".ogg", ".mov", ".m4v", ".mkv"]);
-const imageSubtitleCodecs = new Set(["hdmv_pgs_subtitle", "pgs", "dvd_subtitle", "dvb_subtitle", "xsub"]);
 const bilibiliDanmaku = createBilibiliDanmakuService({
   createDanmakuComment,
   dedupeDanmakuComments,
   formatRemoteFetchError,
   requestExternalJson,
   requestExternalText,
+});
+const embeddedSubtitles = createEmbeddedSubtitleService({
+  cacheRoot: embeddedSubtitlesRoot,
+  resolveVideoPath,
+  ensureFileExists,
+  runProcess,
+  hashValue,
+  readTextFile,
 });
 
 function sendJson(response, status, payload) {
@@ -387,68 +395,6 @@ async function remuxMediaToCompatibleMp4(config, payload) {
       compatibleUrl: createCompatibleMediaUrl(cached.cacheId),
     },
   };
-}
-
-function normalizeSubtitleTrack(stream) {
-  const codec = String(stream.codec_name || "unknown");
-  const tags = stream.tags && typeof stream.tags === "object" ? stream.tags : {};
-  const extractable = !imageSubtitleCodecs.has(codec.toLowerCase());
-  return {
-    streamIndex: Number(stream.index),
-    codec,
-    language: typeof tags.language === "string" ? tags.language : undefined,
-    title: typeof tags.title === "string" ? tags.title : undefined,
-    extractable,
-    reason: extractable ? undefined : "Image subtitles need OCR and are not supported yet.",
-  };
-}
-
-async function probeEmbeddedSubtitles(config, payload) {
-  const videoPath = resolveVideoPath(config, payload?.rootId, payload?.relativePath);
-  await ensureFileExists(videoPath);
-  const raw = await runProcess("ffprobe", [
-    "-v",
-    "error",
-    "-print_format",
-    "json",
-    "-show_streams",
-    "-select_streams",
-    "s",
-    videoPath,
-  ]);
-  const parsed = JSON.parse(raw || "{}");
-  const tracks = Array.isArray(parsed.streams) ? parsed.streams.map(normalizeSubtitleTrack) : [];
-  return { tracks };
-}
-
-async function extractEmbeddedSubtitle(config, payload) {
-  const videoPath = resolveVideoPath(config, payload?.rootId, payload?.relativePath);
-  await ensureFileExists(videoPath);
-  const streamIndex = Number(payload?.streamIndex);
-  if (!Number.isInteger(streamIndex) || streamIndex < 0) throw new Error("Invalid subtitle stream.");
-  const cacheId = hashValue(`${payload.rootId}|${payload.relativePath}|${streamIndex}|vtt`);
-  const cachePath = path.join(embeddedSubtitlesRoot, `${cacheId}.vtt`);
-  const cached = await readTextFile(cachePath);
-  if (cached) return { id: cacheId, format: "vtt", text: cached };
-  const text = await runProcess(
-    "ffmpeg",
-    ["-v", "error", "-i", videoPath, "-map", `0:${streamIndex}`, "-f", "webvtt", "-"],
-    { timeoutMs: 30000, timeoutMessage: "Timed out extracting embedded subtitles." },
-  );
-  if (!text.trim()) throw new Error("No subtitle text was extracted.");
-  await mkdir(embeddedSubtitlesRoot, { recursive: true });
-  await writeFile(cachePath, text, "utf8");
-  return { id: cacheId, format: "vtt", text };
-}
-
-async function readCachedEmbeddedSubtitle(config, payload) {
-  resolveVideoPath(config, payload?.rootId, payload?.relativePath);
-  const streamIndex = Number(payload?.streamIndex);
-  if (!Number.isInteger(streamIndex) || streamIndex < 0) throw new Error("Invalid subtitle stream.");
-  const cacheId = hashValue(`${payload.rootId}|${payload.relativePath}|${streamIndex}|vtt`);
-  const cachePath = path.join(embeddedSubtitlesRoot, `${cacheId}.vtt`);
-  const text = await readTextFile(cachePath);
-  return text ? { id: cacheId, format: "vtt", text } : { id: cacheId, format: "vtt", text: "" };
 }
 
 async function writeDanmakuSource(record) {
@@ -909,19 +855,19 @@ function playerDataApiPlugin(env) {
 
       if (url.pathname === "/api/subtitles/embedded/probe" && request.method === "POST") {
         const payload = JSON.parse((await readBody(request)).toString("utf8"));
-        sendJson(response, 200, await probeEmbeddedSubtitles(await loadAppConfig(), payload));
+        sendJson(response, 200, await embeddedSubtitles.probeEmbeddedSubtitles(await loadAppConfig(), payload));
         return;
       }
 
       if (url.pathname === "/api/subtitles/embedded/extract" && request.method === "POST") {
         const payload = JSON.parse((await readBody(request)).toString("utf8"));
-        sendJson(response, 200, await extractEmbeddedSubtitle(await loadAppConfig(), payload));
+        sendJson(response, 200, await embeddedSubtitles.extractEmbeddedSubtitle(await loadAppConfig(), payload));
         return;
       }
 
       if (url.pathname === "/api/subtitles/embedded/cached" && request.method === "POST") {
         const payload = JSON.parse((await readBody(request)).toString("utf8"));
-        sendJson(response, 200, await readCachedEmbeddedSubtitle(await loadAppConfig(), payload));
+        sendJson(response, 200, await embeddedSubtitles.readCachedEmbeddedSubtitle(await loadAppConfig(), payload));
         return;
       }
 
