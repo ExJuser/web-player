@@ -231,6 +231,18 @@ export type DuplicateVideoGroup = {
   videos: VideoItem[];
 };
 
+export type DuplicateDetectionProgress = {
+  processedPairs: number;
+  totalPairs: number;
+  percent: number;
+};
+
+export type DuplicateDetectionOptions = {
+  yieldEveryPairs?: number;
+  signal?: AbortSignal;
+  onProgress?: (progress: DuplicateDetectionProgress) => void;
+};
+
 const duplicateNoisePattern =
   /\b(?:copy|copied|backup|web|web-dl|webrip|bluray|bdrip|hdrip|x264|x265|h264|h265|hevc|avc|aac|flac|opus|1080p|720p|2160p|4k|8k)\b/gi;
 
@@ -302,9 +314,10 @@ function scoreDuplicatePair(a: VideoItem, b: VideoItem) {
   return { score, reasons };
 }
 
-export function detectDuplicateVideos(videos: VideoItem[]): DuplicateVideoGroup[] {
+function createDuplicateDetectionContext(videos: VideoItem[]) {
   const parent = new Map<string, string>();
   const pairScores = new Map<string, { score: number; reasons: string[] }>();
+  const matchedIds = new Set<string>();
   const videoById = new Map(videos.map((video) => [video.id, video]));
 
   const find = (id: string): string => {
@@ -320,21 +333,19 @@ export function detectDuplicateVideos(videos: VideoItem[]): DuplicateVideoGroup[
     if (aRoot !== bRoot) parent.set(bRoot, aRoot);
   };
 
-  for (let aIndex = 0; aIndex < videos.length; aIndex += 1) {
-    for (let bIndex = aIndex + 1; bIndex < videos.length; bIndex += 1) {
-      const a = videos[aIndex];
-      const b = videos[bIndex];
-      const pair = scoreDuplicatePair(a, b);
-      if (pair.score < 70) continue;
-      pairScores.set([a.id, b.id].sort().join("\u0000"), pair);
-      union(a.id, b.id);
-    }
-  }
+  return { parent, pairScores, matchedIds, videoById, find, union };
+}
 
+function buildDuplicateVideoGroups(
+  videos: VideoItem[],
+  context: ReturnType<typeof createDuplicateDetectionContext>,
+): DuplicateVideoGroup[] {
+  const { pairScores, matchedIds, videoById, find } = context;
   const groupedIds = new Map<string, string[]>();
-  for (const video of videos) {
+  for (let aIndex = 0; aIndex < videos.length; aIndex += 1) {
+    const video = videos[aIndex];
     const root = find(video.id);
-    if (root === video.id && !Array.from(pairScores.keys()).some((key) => key.includes(video.id))) continue;
+    if (root === video.id && !matchedIds.has(video.id)) continue;
     const ids = groupedIds.get(root) ?? [];
     ids.push(video.id);
     groupedIds.set(root, ids);
@@ -366,4 +377,70 @@ export function detectDuplicateVideos(videos: VideoItem[]): DuplicateVideoGroup[
       };
     })
     .sort((a, b) => b.score - a.score || compareNaturalRelativePath(a.videos[0]?.relativePath ?? "", b.videos[0]?.relativePath ?? ""));
+}
+
+export function detectDuplicateVideos(videos: VideoItem[]): DuplicateVideoGroup[] {
+  const context = createDuplicateDetectionContext(videos);
+  for (let aIndex = 0; aIndex < videos.length; aIndex += 1) {
+    for (let bIndex = aIndex + 1; bIndex < videos.length; bIndex += 1) {
+      const a = videos[aIndex];
+      const b = videos[bIndex];
+      const pair = scoreDuplicatePair(a, b);
+      if (pair.score < 70) continue;
+      context.pairScores.set([a.id, b.id].sort().join("\u0000"), pair);
+      context.matchedIds.add(a.id);
+      context.matchedIds.add(b.id);
+      context.union(a.id, b.id);
+    }
+  }
+
+  return buildDuplicateVideoGroups(videos, context);
+}
+
+function yieldToBrowser() {
+  return new Promise<void>((resolve) => {
+    setTimeout(resolve, 0);
+  });
+}
+
+export async function detectDuplicateVideosWithProgress(
+  videos: VideoItem[],
+  options: DuplicateDetectionOptions = {},
+): Promise<DuplicateVideoGroup[]> {
+  const context = createDuplicateDetectionContext(videos);
+  const totalPairs = (videos.length * Math.max(videos.length - 1, 0)) / 2;
+  const yieldEveryPairs = Math.max(1, options.yieldEveryPairs ?? 5000);
+  let processedPairs = 0;
+
+  const reportProgress = () => {
+    options.onProgress?.({
+      processedPairs,
+      totalPairs,
+      percent: totalPairs ? Math.min(100, Math.round((processedPairs / totalPairs) * 100)) : 100,
+    });
+  };
+
+  reportProgress();
+  for (let aIndex = 0; aIndex < videos.length; aIndex += 1) {
+    for (let bIndex = aIndex + 1; bIndex < videos.length; bIndex += 1) {
+      if (options.signal?.aborted) throw new DOMException("Duplicate detection aborted.", "AbortError");
+      const a = videos[aIndex];
+      const b = videos[bIndex];
+      const pair = scoreDuplicatePair(a, b);
+      processedPairs += 1;
+      if (pair.score >= 70) {
+        context.pairScores.set([a.id, b.id].sort().join("\u0000"), pair);
+        context.matchedIds.add(a.id);
+        context.matchedIds.add(b.id);
+        context.union(a.id, b.id);
+      }
+      if (processedPairs % yieldEveryPairs === 0) {
+        reportProgress();
+        await yieldToBrowser();
+      }
+    }
+  }
+  reportProgress();
+
+  return buildDuplicateVideoGroups(videos, context);
 }

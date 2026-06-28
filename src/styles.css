@@ -1051,6 +1051,34 @@ button {
   line-height: 1.5;
 }
 
+.duplicate-video-summary span {
+  min-width: 0;
+}
+
+.duplicate-detection-progress {
+  width: 100%;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 99px;
+  background: #343b45;
+}
+
+.duplicate-detection-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #00a1d6;
+  transition: width 120ms ease;
+}
+
+.duplicate-detection-button {
+  width: 100%;
+  min-height: 36px;
+  justify-content: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
 .duplicate-video-groups {
   display: grid;
   gap: 10px;
@@ -5758,6 +5786,11 @@ button {
 }
 
 .app-shell.theme-light .home-progress {
+  background: #d7e0ea;
+}
+
+.app-shell.theme-light .duplicate-detection-progress,
+:root[data-theme="light"] .duplicate-detection-progress {
   background: #d7e0ea;
 }
 

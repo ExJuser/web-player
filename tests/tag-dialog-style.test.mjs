@@ -43,3 +43,8 @@ test("media library refresh button keeps the sidebar control compact", () => {
   assert.match(rule?.groups?.body ?? "", /width:\s*100%;/);
   assert.match(rule?.groups?.body ?? "", /white-space:\s*nowrap;/);
 });
+
+test("duplicate detection progress has light theme coverage", () => {
+  assert.match(styles, /\.app-shell\.theme-light \.duplicate-detection-progress,/);
+  assert.match(styles, /:root\[data-theme="light"\] \.duplicate-detection-progress\s*\{(?<body>[^}]+background:\s*#d7e0ea;[^}]+)\}/);
+});

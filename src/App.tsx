@@ -212,11 +212,13 @@ import {
   getLatestResumableVideo,
   getSortedVideos,
   isResumableProgress,
-  detectDuplicateVideos,
+  detectDuplicateVideosWithProgress,
   mergeMediaBatch,
   mergeVideoRuntimeState,
   shouldFlushMediaScan,
   sortMediaCollection,
+  type DuplicateDetectionProgress,
+  type DuplicateVideoGroup,
 } from "./playerMediaUtils";
 
 
@@ -1324,6 +1326,8 @@ export default function App() {
   const playerLibrarySearchResultsRef = useRef<HTMLDivElement | null>(null);
   const playerLibrarySearchLoadMoreRef = useRef<HTMLDivElement | null>(null);
   const librarySearchRunIdRef = useRef(0);
+  const duplicateDetectionRunIdRef = useRef(0);
+  const duplicateDetectionAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (hasStartedLegacyThumbnailMigration) return;
@@ -1394,6 +1398,10 @@ export default function App() {
   const [librarySearchSurface, setLibrarySearchSurface] = useState<LibrarySearchSurface | null>(null);
   const [focusedLibrarySearchSurface, setFocusedLibrarySearchSurface] = useState<LibrarySearchSurface | null>(null);
   const [specialInsightTab, setSpecialInsightTab] = useState<SpecialInsightTab>("played");
+  const [duplicateVideoGroups, setDuplicateVideoGroups] = useState<DuplicateVideoGroup[]>([]);
+  const [duplicateDetectionProgress, setDuplicateDetectionProgress] = useState<DuplicateDetectionProgress | null>(null);
+  const [duplicateDetectionMessage, setDuplicateDetectionMessage] = useState("尚未检测重复视频。");
+  const [isDuplicateDetectionRunning, setIsDuplicateDetectionRunning] = useState(false);
   const [bangumiMatchesBySeriesKey, setBangumiMatchesBySeriesKey] = useState<Record<string, BangumiSeriesMatch>>({});
   const [cacheStatus, setCacheStatus] = useState<CacheStatus | null>(null);
   const [cacheStatusMessage, setCacheStatusMessage] = useState("");
@@ -2132,10 +2140,54 @@ export default function App() {
         : null,
     [homeMediaMode, modeFilteredVideos, progressStore, videoStatsRevision, videoTags],
   );
-  const duplicateVideoGroups = useMemo(
-    () => detectDuplicateVideos(modeFilteredVideos).slice(0, 6),
-    [modeFilteredVideos],
-  );
+  const runDuplicateVideoDetection = useCallback(async () => {
+    duplicateDetectionAbortRef.current?.abort();
+    const abortController = new AbortController();
+    duplicateDetectionAbortRef.current = abortController;
+    const runId = duplicateDetectionRunIdRef.current + 1;
+    duplicateDetectionRunIdRef.current = runId;
+    const targetVideos = modeFilteredVideos;
+
+    setIsDuplicateDetectionRunning(true);
+    setDuplicateVideoGroups([]);
+    setDuplicateDetectionProgress({
+      processedPairs: 0,
+      totalPairs: (targetVideos.length * Math.max(targetVideos.length - 1, 0)) / 2,
+      percent: targetVideos.length > 1 ? 0 : 100,
+    });
+    setDuplicateDetectionMessage(
+      targetVideos.length > 1
+        ? `正在检测 ${targetVideos.length} 个视频的重复线索...`
+        : "当前模式视频不足 2 个，无需检测重复。",
+    );
+
+    try {
+      const groups = await detectDuplicateVideosWithProgress(targetVideos, {
+        signal: abortController.signal,
+        onProgress: (progress) => {
+          if (duplicateDetectionRunIdRef.current !== runId) return;
+          setDuplicateDetectionProgress(progress);
+          setDuplicateDetectionMessage(`已检查 ${progress.processedPairs} / ${progress.totalPairs} 组视频组合`);
+        },
+      });
+      if (duplicateDetectionRunIdRef.current !== runId) return;
+      const visibleGroups = groups.slice(0, 6);
+      setDuplicateVideoGroups(visibleGroups);
+      setDuplicateDetectionMessage(
+        groups.length
+          ? `检测完成，发现 ${groups.length} 组重复或疑似重复视频${groups.length > visibleGroups.length ? "，已显示前 6 组" : ""}。`
+          : "检测完成，未发现重复或疑似重复视频。",
+      );
+    } catch (error) {
+      if (abortController.signal.aborted) return;
+      setDuplicateDetectionMessage(error instanceof Error ? error.message : "重复视频检测失败。");
+    } finally {
+      if (duplicateDetectionRunIdRef.current === runId) {
+        setIsDuplicateDetectionRunning(false);
+        duplicateDetectionAbortRef.current = null;
+      }
+    }
+  }, [modeFilteredVideos]);
   const currentVideoHighlights = currentVideo ? videoHighlights[currentVideo.id] ?? [] : [];
   const selectedPhotoAlbum = useMemo(
     () => photoAlbums.find((album) => album.id === selectedPhotoAlbumId) ?? null,
@@ -5303,6 +5355,7 @@ export default function App() {
       if (playlistScrollFrameRef.current) {
         window.clearTimeout(playlistScrollFrameRef.current);
       }
+      duplicateDetectionAbortRef.current?.abort();
       thumbnailLoadRunIdRef.current += 1;
       revokeVideoUrls(videosRef.current);
       subtitlesRef.current.forEach((subtitle) => {
@@ -7605,7 +7658,7 @@ export default function App() {
       </article>
     );
   };
-  const renderDuplicateVideoGroup = (group: ReturnType<typeof detectDuplicateVideos>[number]) => (
+  const renderDuplicateVideoGroup = (group: DuplicateVideoGroup) => (
     <div className="duplicate-video-group" key={group.id}>
       <div className="duplicate-video-group-header">
         <strong>{group.severity === "duplicate" ? "高度重复" : "疑似重复"}</strong>
@@ -7621,6 +7674,7 @@ export default function App() {
       </div>
     </div>
   );
+  const duplicateDetectionPercent = duplicateDetectionProgress?.percent ?? 0;
   const currentPhoto = selectedPhotoAlbum?.images[currentPhotoIndex] ?? null;
   const currentPhotoUrl = getPhotoImageUrl(currentPhoto);
 
@@ -8144,21 +8198,36 @@ export default function App() {
                 </button>
               </section>
 
-              {duplicateVideoGroups.length ? (
-                <section className="home-section duplicate-video-card">
-                  <div className="home-section-header">
-                    <h2>重复视频</h2>
-                    <span>{duplicateVideoGroups.length} 组</span>
+              <section className="home-section duplicate-video-card">
+                <div className="home-section-header">
+                  <h2>重复视频</h2>
+                  <span>{isDuplicateDetectionRunning ? `${duplicateDetectionPercent}%` : `${duplicateVideoGroups.length} 组`}</span>
+                </div>
+                <div className="duplicate-video-summary">
+                  <Sparkles size={24} />
+                  <span>{duplicateDetectionMessage}</span>
+                </div>
+                {duplicateDetectionProgress ? (
+                  <div className="duplicate-detection-progress" aria-label={`重复视频检测进度 ${duplicateDetectionPercent}%`}>
+                    <span style={{ width: `${duplicateDetectionPercent}%` }} />
                   </div>
-                  <div className="duplicate-video-summary">
-                    <Sparkles size={24} />
-                    <span>按名称、路径、大小、时长和分辨率识别，仅提示不自动删除。</span>
-                  </div>
+                ) : null}
+                <button
+                  className="secondary-button duplicate-detection-button"
+                  type="button"
+                  onClick={() => void runDuplicateVideoDetection()}
+                  disabled={isDuplicateDetectionRunning || modeFilteredVideos.length < 2}
+                  title={modeFilteredVideos.length < 2 ? "当前模式视频不足 2 个" : "手动检测重复或疑似重复视频"}
+                >
+                  <Activity size={16} className={isDuplicateDetectionRunning ? "spin-icon" : undefined} />
+                  {isDuplicateDetectionRunning ? "检测中" : "检测重复视频"}
+                </button>
+                {duplicateVideoGroups.length ? (
                   <div className="duplicate-video-groups">
                     {duplicateVideoGroups.map(renderDuplicateVideoGroup)}
                   </div>
-                </section>
-              ) : null}
+                ) : null}
+              </section>
 
               {favoriteHomeCards.length ? (
                 <section className="home-section">

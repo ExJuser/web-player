@@ -159,3 +159,39 @@ test("detects duplicate and suspicious videos from normalized identity signals",
   assert.ok(groups[0].reasons.includes("时长接近"));
   assert.ok(groups[0].reasons.includes("分辨率一致"));
 });
+
+test("detects duplicate videos incrementally with progress updates", async () => {
+  const videos = [
+    createVideo({
+      id: "root-a|Show/E01.mkv|1000|1",
+      name: "Show - 01.mkv",
+      relativePath: "Anime/Show/Show - 01.mkv",
+      size: 1000,
+      duration: 1440,
+      width: 1920,
+      height: 1080,
+    }),
+    createVideo({
+      id: "root-b|Show/E01 copy.mkv|1002|2",
+      name: "Show 01 copy.mkv",
+      relativePath: "Backup/Show/Show 01 copy.mkv",
+      size: 1002,
+      duration: 1441,
+      width: 1920,
+      height: 1080,
+    }),
+    createVideo({ id: "other", name: "Other.mp4", relativePath: "Other.mp4", size: 2000, duration: 800 }),
+  ];
+  const updates = [];
+
+  const groups = await mediaUtils.detectDuplicateVideosWithProgress(videos, {
+    yieldEveryPairs: 1,
+    onProgress: (progress) => updates.push(progress),
+  });
+
+  assert.deepEqual(groups, mediaUtils.detectDuplicateVideos(videos));
+  assert.ok(updates.length > 1);
+  assert.equal(updates.at(-1).processedPairs, 3);
+  assert.equal(updates.at(-1).totalPairs, 3);
+  assert.equal(updates.at(-1).percent, 100);
+});
