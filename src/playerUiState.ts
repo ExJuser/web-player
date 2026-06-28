@@ -72,6 +72,14 @@ type PersistedEmbeddedSubtitleForUi = {
   embeddedTrack: NonNullable<SubtitleForUi["embeddedTrack"]>;
 };
 
+const playabilityStatusLabels: Record<NonNullable<VideoForCompatibilityUi["playability"]>["status"], string> = {
+  direct: "可直接播放",
+  remuxRecommended: "建议转封装",
+  unsupported: "需转码",
+  unknown: "兼容性未知",
+  needsLocalPath: "需本机路径",
+};
+
 export function getMediaRootLocalPathAction(root: MediaRootForUi) {
   if (root.source !== "browser") {
     return { visible: false, disabled: true, label: "" };
@@ -107,11 +115,7 @@ export function getPlayableVideoUrl(video: VideoForCompatibilityUi) {
 export function formatPlayabilityStatus(playability?: VideoForCompatibilityUi["playability"]) {
   if (!playability) return "未探测";
   if (playability.compatibleUrl) return "兼容 MP4";
-  if (playability.status === "direct") return "可直接播放";
-  if (playability.status === "remuxRecommended") return "建议转封装";
-  if (playability.status === "unsupported") return "需转码";
-  if (playability.status === "needsLocalPath") return "需本机路径";
-  return "兼容性未知";
+  return playabilityStatusLabels[playability.status];
 }
 
 export function formatCodecSummary(playability?: VideoForCompatibilityUi["playability"]) {
