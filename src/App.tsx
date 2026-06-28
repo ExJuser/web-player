@@ -209,12 +209,14 @@ import {
 import {
   compareNaturalRelativePath,
   createEmptyMediaCollection,
+  createDuplicateDetectionScopeKey,
   getLatestResumableVideo,
   getSortedVideos,
   isResumableProgress,
   detectDuplicateVideosWithProgress,
   mergeMediaBatch,
   mergeVideoRuntimeState,
+  rebuildDuplicateVideoGroups,
   shouldFlushMediaScan,
   sortMediaCollection,
   type DuplicateDetectionProgress,
@@ -244,7 +246,7 @@ type DuplicateFingerprintCacheEntry = {
 };
 
 type DuplicateNameSimilarityCacheEntry = {
-  similarity: number | null;
+  similarity: number;
 };
 
 type DuplicateNameSimilarityResponse = {
@@ -1495,6 +1497,7 @@ export default function App() {
   const [duplicateVideoGroups, setDuplicateVideoGroups] = useState<DuplicateVideoGroup[]>([]);
   const [duplicateDetectionProgress, setDuplicateDetectionProgress] = useState<DuplicateDetectionProgress | null>(null);
   const [duplicateDetectionMessage, setDuplicateDetectionMessage] = useState("尚未检测重复视频。");
+  const [duplicateDetectionResultScopeKey, setDuplicateDetectionResultScopeKey] = useState("");
   const [isDuplicateDetectionRunning, setIsDuplicateDetectionRunning] = useState(false);
   const [isDuplicatePlaylistActive, setIsDuplicatePlaylistActive] = useState(false);
   const [bangumiMatchesBySeriesKey, setBangumiMatchesBySeriesKey] = useState<Record<string, BangumiSeriesMatch>>({});
@@ -1934,6 +1937,17 @@ export default function App() {
         : videos.filter((video) => Boolean(video.mediaRootId && homeModeMediaRootIds.has(video.mediaRootId))),
     [homeMediaMode, homeModeMediaRootIds, videos],
   );
+  const currentDuplicateDetectionScopeKey = useMemo(
+    () => createDuplicateDetectionScopeKey(homeMediaMode, modeFilteredVideos),
+    [homeMediaMode, modeFilteredVideos],
+  );
+  const isDuplicateDetectionResultCurrent = Boolean(
+    duplicateDetectionResultScopeKey && duplicateDetectionResultScopeKey === currentDuplicateDetectionScopeKey,
+  );
+  const activeDuplicateVideoGroups = useMemo(
+    () => (isDuplicateDetectionResultCurrent ? duplicateVideoGroups : []),
+    [duplicateVideoGroups, isDuplicateDetectionResultCurrent],
+  );
   const modeFilteredMediaRootStatuses = useMemo(
     () =>
       homeMediaMode === "all"
@@ -2033,7 +2047,7 @@ export default function App() {
     const seenIds = new Set<string>();
     const nextVideos: VideoItem[] = [];
 
-    duplicateVideoGroups.forEach((group) => {
+    activeDuplicateVideoGroups.forEach((group) => {
       group.videos.forEach((groupVideo) => {
         if (seenIds.has(groupVideo.id)) return;
         const video = availableVideosById.get(groupVideo.id);
@@ -2044,10 +2058,10 @@ export default function App() {
     });
 
     return nextVideos;
-  }, [duplicateVideoGroups, videos]);
+  }, [activeDuplicateVideoGroups, videos]);
   const duplicatePlaylistMetaByVideoId = useMemo(() => {
     const metaById = new Map<string, DuplicatePlaylistVideoMeta>();
-    duplicateVideoGroups.forEach((group, groupIndex) => {
+    activeDuplicateVideoGroups.forEach((group, groupIndex) => {
       group.videos.forEach((video) => {
         if (metaById.has(video.id)) return;
         metaById.set(video.id, {
@@ -2059,7 +2073,7 @@ export default function App() {
       });
     });
     return metaById;
-  }, [duplicateVideoGroups]);
+  }, [activeDuplicateVideoGroups]);
   const visibleVideos = useMemo(
     () =>
       isDuplicatePlaylistActive
@@ -2287,6 +2301,21 @@ export default function App() {
         : null,
     [homeMediaMode, modeFilteredVideos, progressStore, videoStatsRevision, videoTags],
   );
+  const resetDuplicateDetectionState = useCallback((message = "尚未检测重复视频。") => {
+    duplicateDetectionAbortRef.current?.abort();
+    duplicateDetectionAbortRef.current = null;
+    duplicateDetectionRunIdRef.current += 1;
+    setIsDuplicateDetectionRunning(false);
+    setDuplicateVideoGroups([]);
+    setDuplicateDetectionResultScopeKey("");
+    setDuplicateDetectionProgress(null);
+    setIsDuplicatePlaylistActive(false);
+    setDuplicateDetectionMessage(message);
+  }, []);
+  useEffect(() => {
+    if (!duplicateDetectionResultScopeKey || duplicateDetectionResultScopeKey === currentDuplicateDetectionScopeKey) return;
+    resetDuplicateDetectionState("媒体库或媒体模式已变化，请重新检测重复视频。");
+  }, [currentDuplicateDetectionScopeKey, duplicateDetectionResultScopeKey, resetDuplicateDetectionState]);
   const getDuplicateFingerprint = useCallback(async (video: VideoItem, signal?: AbortSignal) => {
     const cacheKey = createDuplicateFingerprintCacheKey(video);
     const cached = duplicateFingerprintCacheRef.current.get(cacheKey);
@@ -2305,39 +2334,29 @@ export default function App() {
       const cacheKey = createDuplicateNameSimilarityCacheKey(pair);
       const cached = duplicateNameSimilarityCacheRef.current.get(cacheKey);
       if (cached) {
-        if (cached.similarity !== null) scores.set(pair.id, cached.similarity);
+        scores.set(pair.id, cached.similarity);
         continue;
       }
       missingPairs.push(pair);
     }
     if (!missingPairs.length) return scores;
 
-    try {
-      const response = await fetchJson<DuplicateNameSimilarityResponse>("/api/ai/duplicate/name-similarity", {
-        method: "POST",
-        body: JSON.stringify({ pairs: missingPairs }),
-        signal,
+    const response = await fetchJson<DuplicateNameSimilarityResponse>("/api/ai/duplicate/name-similarity", {
+      method: "POST",
+      body: JSON.stringify({ pairs: missingPairs }),
+      signal,
+    });
+    const missingById = new Map(missingPairs.map((pair) => [pair.id, pair]));
+    for (const item of response.scores ?? []) {
+      const id = typeof item.id === "string" ? item.id : "";
+      const pair = missingById.get(id);
+      const similarity = Number(item.similarity);
+      if (!pair || !Number.isFinite(similarity) || similarity < 0 || similarity > 100) continue;
+      const roundedSimilarity = Math.round(similarity);
+      scores.set(id, roundedSimilarity);
+      duplicateNameSimilarityCacheRef.current.set(createDuplicateNameSimilarityCacheKey(pair), {
+        similarity: roundedSimilarity,
       });
-      const missingById = new Map(missingPairs.map((pair) => [pair.id, pair]));
-      const returnedIds = new Set<string>();
-      for (const item of response.scores ?? []) {
-        const id = typeof item.id === "string" ? item.id : "";
-        const pair = missingById.get(id);
-        const similarity = Number(item.similarity);
-        if (!pair || !Number.isFinite(similarity) || similarity < 0 || similarity > 100) continue;
-        const roundedSimilarity = Math.round(similarity);
-        scores.set(id, roundedSimilarity);
-        returnedIds.add(id);
-        duplicateNameSimilarityCacheRef.current.set(createDuplicateNameSimilarityCacheKey(pair), {
-          similarity: roundedSimilarity,
-        });
-      }
-      for (const pair of missingPairs) {
-        if (returnedIds.has(pair.id)) continue;
-        duplicateNameSimilarityCacheRef.current.set(createDuplicateNameSimilarityCacheKey(pair), { similarity: null });
-      }
-    } catch {
-      return scores;
     }
 
     return scores;
@@ -2349,12 +2368,16 @@ export default function App() {
     const runId = duplicateDetectionRunIdRef.current + 1;
     duplicateDetectionRunIdRef.current = runId;
     const targetVideos = modeFilteredVideos;
+    const targetScopeKey = currentDuplicateDetectionScopeKey;
+    const isAiConfigured = Boolean(localConfigRef.current?.ai.configured);
+    let didAiEnhancementFail = false;
 
     setIsDuplicateDetectionRunning(true);
     setDuplicateVideoGroups([]);
+    setDuplicateDetectionResultScopeKey("");
     setDuplicateDetectionProgress({
       processedPairs: 0,
-      totalPairs: (targetVideos.length * Math.max(targetVideos.length - 1, 0)) / 2,
+      totalPairs: 0,
       percent: targetVideos.length > 1 ? 0 : 100,
     });
     setDuplicateDetectionMessage(
@@ -2368,6 +2391,9 @@ export default function App() {
         signal: abortController.signal,
         getContentFingerprint: getDuplicateFingerprint,
         getNameSimilarityScores: getDuplicateNameSimilarityScores,
+        onNameSimilarityError: () => {
+          didAiEnhancementFail = true;
+        },
         onProgress: (progress) => {
           if (duplicateDetectionRunIdRef.current !== runId) return;
           setDuplicateDetectionProgress(progress);
@@ -2376,17 +2402,23 @@ export default function App() {
               ? `正在比对内容指纹 ${progress.processedFingerprints ?? 0} / ${progress.totalFingerprints ?? 0} 个候选视频`
               : progress.phase === "aiName"
                 ? `正在调用 AI 比对名称 ${progress.processedNamePairs ?? 0} / ${progress.totalNamePairs ?? 0} 组候选`
-              : `已检查 ${progress.processedPairs} / ${progress.totalPairs} 组视频组合`,
+              : `已检查 ${progress.processedPairs} / ${progress.totalPairs} 组候选组合`,
           );
         },
       });
       if (duplicateDetectionRunIdRef.current !== runId) return;
       setDuplicateVideoGroups(groups);
+      setDuplicateDetectionResultScopeKey(targetScopeKey);
       setIsDuplicatePlaylistActive(false);
+      const aiStatus = didAiEnhancementFail
+        ? "；AI 名称增强失败，已使用本地结果"
+        : isAiConfigured
+          ? ""
+          : "；未配置 AI，已使用本地规则";
       setDuplicateDetectionMessage(
         groups.length
-          ? `检测完成，发现 ${groups.length} 组重复或疑似重复视频，可进入重复列表筛选删除。`
-          : "检测完成，未发现重复或疑似重复视频。",
+          ? `检测完成，发现 ${groups.length} 组重复或疑似重复视频，可进入重复列表筛选删除${aiStatus}。`
+          : `本地检测完成，未发现重复或疑似重复视频${aiStatus}。`,
       );
     } catch (error) {
       if (abortController.signal.aborted) return;
@@ -2397,7 +2429,7 @@ export default function App() {
         duplicateDetectionAbortRef.current = null;
       }
     }
-  }, [getDuplicateFingerprint, getDuplicateNameSimilarityScores, modeFilteredVideos]);
+  }, [currentDuplicateDetectionScopeKey, getDuplicateFingerprint, getDuplicateNameSimilarityScores, modeFilteredVideos]);
   const currentVideoHighlights = currentVideo ? videoHighlights[currentVideo.id] ?? [] : [];
   const selectedPhotoAlbum = useMemo(
     () => photoAlbums.find((album) => album.id === selectedPhotoAlbumId) ?? null,
@@ -3241,6 +3273,7 @@ export default function App() {
       setVideos(nextVideos);
       setSubtitles(nextSubtitles);
       applyPlayerDataStore(nextDataStore);
+      resetDuplicateDetectionState("媒体库已刷新，请重新检测重复视频。");
 
       const restoredEmbeddedSubtitles = await restoreCachedEmbeddedSubtitles(nextDataStore.embeddedSubtitles, nextVideos, null);
       if (restoredEmbeddedSubtitles.length) {
@@ -3277,7 +3310,7 @@ export default function App() {
     } finally {
       setIsScanning(false);
     }
-  }, [applyPlayerDataStore, importLegacyStoreForScannedRoot]);
+  }, [applyPlayerDataStore, importLegacyStoreForScannedRoot, resetDuplicateDetectionState]);
 
   useEffect(() => {
     if (!localConfig) return;
@@ -3742,13 +3775,13 @@ export default function App() {
 
   const updateHomeMediaMode = useCallback(
     (nextMode: HomeMediaMode) => {
-      setIsDuplicatePlaylistActive(false);
+      resetDuplicateDetectionState("媒体模式已切换，请重新检测重复视频。");
       replacePlayerPreferences({
         ...playerPreferencesRef.current,
         homeMediaMode: nextMode,
       });
     },
-    [replacePlayerPreferences],
+    [replacePlayerPreferences, resetDuplicateDetectionState],
   );
 
   const updateShortcut = useCallback(
@@ -4163,18 +4196,22 @@ export default function App() {
         delete nextChoices[video.id];
         return nextChoices;
       });
-      setDuplicateVideoGroups((groups) =>
-        groups
-          .map((group) => ({
-            ...group,
-            videos: group.videos.filter((item) => item.id !== video.id),
-          }))
-          .filter((group) => group.videos.length > 1)
-          .map((group) => ({
-            ...group,
-            id: group.videos.map((item) => item.id).join("|"),
-          })),
+      const modeRootIds = new Set(
+        (localConfigRef.current?.mediaRoots ?? [])
+          .filter((root) => isMediaRootInHomeMode(root, homeMediaMode))
+          .map((root) => root.id),
       );
+      const nextDuplicateVideos =
+        homeMediaMode === "all"
+          ? nextVideos
+          : nextVideos.filter((item) => Boolean(item.mediaRootId && modeRootIds.has(item.mediaRootId)));
+      setDuplicateVideoGroups((groups) => rebuildDuplicateVideoGroups(nextDuplicateVideos, groups));
+      setDuplicateDetectionResultScopeKey((scopeKey) =>
+        scopeKey ? createDuplicateDetectionScopeKey(homeMediaMode, nextDuplicateVideos) : scopeKey,
+      );
+      if (duplicateDetectionResultScopeKey) {
+        setDuplicateDetectionMessage("重复检测结果已根据删除操作更新。");
+      }
       setSubtitles(nextSubtitles);
       setMediaRootStatuses((statuses) =>
         statuses.map((status) =>
@@ -4202,7 +4239,7 @@ export default function App() {
         saveDanmakuSelection(video.id, null).catch(() => undefined),
       ]);
     },
-    [saveCurrentPlayerDataStore],
+    [duplicateDetectionResultScopeKey, homeMediaMode, saveCurrentPlayerDataStore],
   );
 
   const deleteBrowserVideoFile = useCallback(async (video: VideoItem) => {
@@ -5269,6 +5306,7 @@ export default function App() {
         setVideos(mergedVideos);
         setSubtitles(mergedSubtitles);
         applyPlayerDataStore(nextDataStore);
+        resetDuplicateDetectionState("媒体库已更新，请重新检测重复视频。");
         await saveGlobalPlayerDataStore({
           ...nextDataStore,
           embeddedSubtitles: createPersistedEmbeddedSubtitles(mergedSubtitles),
@@ -5303,6 +5341,7 @@ export default function App() {
       importLegacyStoreForScannedRoot,
       mediaRootStatuses,
       resolveMediaRootId,
+      resetDuplicateDetectionState,
       revokeReplacedMediaRootVideoUrls,
       revokeVideoUrls,
     ],
@@ -5347,7 +5386,7 @@ export default function App() {
       setFavoriteVideoIds(new Set());
       setVideoTags({});
       setTagMergeDecisions({});
-      setIsDuplicatePlaylistActive(false);
+      resetDuplicateDetectionState("已加载新视频，请重新检测重复视频。");
       setIsSeriesMode(playerPreferencesRef.current.isSeriesMode);
       setSelectedSeriesKey(playerPreferencesRef.current.selectedSeriesKey);
       revokeVideoUrls(videosRef.current);
@@ -5374,6 +5413,7 @@ export default function App() {
       isSeriesMode,
       homeMediaMode,
       playlistSortMode,
+      resetDuplicateDetectionState,
       revokeVideoUrls,
       selectedSeriesKey,
       shortcuts,
@@ -7942,6 +7982,10 @@ export default function App() {
     </div>
   );
   const duplicateDetectionPercent = duplicateDetectionProgress?.percent ?? 0;
+  const duplicateDetectionDisplayMessage =
+    duplicateVideoGroups.length && !isDuplicateDetectionResultCurrent && !isDuplicateDetectionRunning
+      ? "媒体库或媒体模式已变化，请重新检测重复视频。"
+      : duplicateDetectionMessage;
   const currentPhoto = selectedPhotoAlbum?.images[currentPhotoIndex] ?? null;
   const currentPhotoUrl = getPhotoImageUrl(currentPhoto);
 
@@ -8468,11 +8512,11 @@ export default function App() {
               <section className="home-section duplicate-video-card">
                 <div className="home-section-header">
                   <h2>重复视频</h2>
-                  <span>{isDuplicateDetectionRunning ? `${duplicateDetectionPercent}%` : `${duplicateVideoGroups.length} 组`}</span>
+                  <span>{isDuplicateDetectionRunning ? `${duplicateDetectionPercent}%` : `${activeDuplicateVideoGroups.length} 组`}</span>
                 </div>
                 <div className="duplicate-video-summary">
                   <Sparkles size={24} />
-                  <span>{duplicateDetectionMessage}</span>
+                  <span>{duplicateDetectionDisplayMessage}</span>
                 </div>
                 {duplicateDetectionProgress ? (
                   <div className="duplicate-detection-progress" aria-label={`重复视频检测进度 ${duplicateDetectionPercent}%`}>
@@ -8501,16 +8545,16 @@ export default function App() {
                     进入重复列表
                   </button>
                 </div>
-                {duplicateVideoGroups.length ? (
+                {activeDuplicateVideoGroups.length ? (
                   <div className="duplicate-video-groups">
-                    {duplicateVideoGroups.slice(0, 6).map(renderDuplicateVideoGroup)}
-                    {duplicateVideoGroups.length > 6 ? (
+                    {activeDuplicateVideoGroups.slice(0, 6).map(renderDuplicateVideoGroup)}
+                    {activeDuplicateVideoGroups.length > 6 ? (
                       <button
                         className="secondary-button duplicate-video-more"
                         type="button"
                         onClick={openDuplicatePlaylist}
                       >
-                        查看全部 {duplicateVideoGroups.length} 组
+                        查看全部 {activeDuplicateVideoGroups.length} 组
                       </button>
                     ) : null}
                   </div>
@@ -9299,7 +9343,7 @@ export default function App() {
           <div className="playlist-title-row">
             <span>
               {isDuplicatePlaylistActive
-                ? `重复列表 · ${visibleVideos.length} 个视频 · ${duplicateVideoGroups.length} 组`
+                ? `重复列表 · ${visibleVideos.length} 个视频 · ${activeDuplicateVideoGroups.length} 组`
                 : modeFilteredVideos.length
                 ? playlistFilter === "favorites"
                   ? `${visibleVideos.length} / ${modeFilteredVideos.length} 个收藏`

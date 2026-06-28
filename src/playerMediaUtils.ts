@@ -223,12 +223,22 @@ export function shouldFlushMediaScan(lastFlushAt: number, pendingVideos: VideoIt
 
 export type DuplicateVideoSeverity = "duplicate" | "suspicious";
 
+export type DuplicateVideoPair = {
+  key: string;
+  aId: string;
+  bId: string;
+  severity: DuplicateVideoSeverity;
+  score: number;
+  reasons: string[];
+};
+
 export type DuplicateVideoGroup = {
   id: string;
   severity: DuplicateVideoSeverity;
   score: number;
   reasons: string[];
   videos: VideoItem[];
+  pairs: DuplicateVideoPair[];
 };
 
 export type DuplicateDetectionProgress = {
@@ -267,13 +277,20 @@ export type DuplicateDetectionOptions = {
   onProgress?: (progress: DuplicateDetectionProgress) => void;
   getContentFingerprint?: (video: VideoItem, signal?: AbortSignal) => Promise<string | null>;
   getNameSimilarityScores?: (pairs: DuplicateNameSimilarityPair[], signal?: AbortSignal) => Promise<Map<string, number>>;
+  onNameSimilarityError?: (error: unknown) => void;
   maxAiNamePairs?: number;
+  aiNameBatchSize?: number;
+  maxFingerprintVideos?: number;
 };
 
-const duplicateMetadataThreshold = 100;
+const duplicateSuspiciousThreshold = 80;
 const duplicateHighConfidenceThreshold = 120;
-const duplicateAiNameCandidateThreshold = 30;
-const defaultMaxAiNamePairs = 80;
+const duplicateAiNameCandidateThreshold = 60;
+const duplicateFingerprintCandidateThreshold = 45;
+const defaultMaxAiNamePairs = 240;
+const defaultAiNameBatchSize = 80;
+const defaultMaxFingerprintVideos = 200;
+const duplicateCandidateNeighborLimit = 36;
 
 const duplicateNoisePattern =
   /\b(?:copy|copied|backup|web|web-dl|webrip|bluray|bdrip|hdrip|x264|x265|h264|h265|hevc|avc|aac|flac|opus|1080p|720p|2160p|4k|8k)\b/gi;
@@ -298,27 +315,77 @@ function getRelativeDelta(a: number | undefined, b: number | undefined) {
   return Math.abs(a - b) / Math.max(a, b);
 }
 
+function getDuplicateNameTokens(value: string) {
+  return normalizeDuplicateName(value)
+    .split(" ")
+    .map((token) => token.trim())
+    .filter(Boolean);
+}
+
+function getDuplicateNameScore(a: VideoItem, b: VideoItem) {
+  const reasons: string[] = [];
+  const aTokens = getDuplicateNameTokens(a.name || a.relativePath);
+  const bTokens = getDuplicateNameTokens(b.name || b.relativePath);
+  const aName = aTokens.join(" ");
+  const bName = bTokens.join(" ");
+  if (!aName || !bName) return { score: 0, reasons };
+
+  if (aName === bName) {
+    return { score: 60, reasons: ["名称规范化一致"] };
+  }
+
+  const aSet = new Set(aTokens);
+  const bSet = new Set(bTokens);
+  const union = new Set([...aSet, ...bSet]);
+  if (!union.size) return { score: 0, reasons };
+  let overlap = 0;
+  aSet.forEach((token) => {
+    if (bSet.has(token)) overlap += 1;
+  });
+  const similarity = overlap / union.size;
+  const aNumbers = aTokens.filter((token) => /^\d+$/.test(token));
+  const bNumbers = new Set(bTokens.filter((token) => /^\d+$/.test(token)));
+  const hasSharedNumber = aNumbers.some((token) => bNumbers.has(token));
+
+  if (similarity >= 0.85) {
+    reasons.push("名称高度相似");
+    return { score: 45, reasons };
+  }
+  if (similarity >= 0.65 || (hasSharedNumber && overlap >= 2)) {
+    reasons.push("名称相似");
+    return { score: 30, reasons };
+  }
+  return { score: 0, reasons };
+}
+
 function scoreDuplicatePair(a: VideoItem, b: VideoItem) {
   const reasons: string[] = [];
   let score = 0;
 
+  const namePair = getDuplicateNameScore(a, b);
+  score += namePair.score;
+  reasons.push(...namePair.reasons);
+
   const sizeDelta = getRelativeDelta(a.size, b.size);
   const durationDelta = getRelativeDelta(a.duration, b.duration);
-  const isSizeClose = sizeDelta !== null && sizeDelta <= 0.02;
-  const isDurationClose = durationDelta !== null && durationDelta <= 0.01;
-  if (isSizeClose && isDurationClose) {
-    score += 50;
-    reasons.push("大小和时长接近");
-  } else if (isSizeClose) {
-    score += 10;
+  if (sizeDelta !== null && sizeDelta <= 0.005) {
+    score += 35;
+    reasons.push("大小几乎一致");
+  } else if (sizeDelta !== null && sizeDelta <= 0.02) {
+    score += 25;
     reasons.push("大小接近");
-  } else if (isDurationClose) {
-    score += 10;
+  }
+
+  if (durationDelta !== null && durationDelta <= 0.003) {
+    score += 35;
+    reasons.push("时长几乎一致");
+  } else if (durationDelta !== null && durationDelta <= 0.01) {
+    score += 25;
     reasons.push("时长接近");
   }
 
   if (a.width && a.height && b.width && b.height && a.width === b.width && a.height === b.height) {
-    score += 20;
+    score += 15;
     reasons.push("分辨率一致");
   }
 
@@ -355,37 +422,107 @@ function createDuplicatePairKey(aId: string, bId: string) {
   return [aId, bId].sort().join("\u0000");
 }
 
-function mergeDuplicatePairScore(
-  context: ReturnType<typeof createDuplicateDetectionContext>,
-  a: VideoItem,
-  b: VideoItem,
-  pair: { score: number; reasons: string[] },
-) {
+function createDuplicateVideoPair(a: VideoItem, b: VideoItem, pair: { score: number; reasons: string[] }): DuplicateVideoPair {
   const key = createDuplicatePairKey(a.id, b.id);
-  const existing = context.pairScores.get(key);
-  const mergedReasons = new Set([...(existing?.reasons ?? []), ...pair.reasons]);
-  context.pairScores.set(key, {
-    score: Math.max(existing?.score ?? 0, pair.score),
-    reasons: Array.from(mergedReasons),
+  return {
+    key,
+    aId: a.id,
+    bId: b.id,
+    score: pair.score,
+    severity: pair.score >= duplicateHighConfidenceThreshold ? "duplicate" : "suspicious",
+    reasons: Array.from(new Set(pair.reasons)),
+  };
+}
+
+function mergeDuplicatePairScore(pairScores: Map<string, DuplicateVideoPair>, a: VideoItem, b: VideoItem, pair: { score: number; reasons: string[] }) {
+  if (pair.score < duplicateSuspiciousThreshold) return;
+  const key = createDuplicatePairKey(a.id, b.id);
+  const existing = pairScores.get(key);
+  if (!existing || pair.score > existing.score) {
+    pairScores.set(key, createDuplicateVideoPair(a, b, pair));
+    return;
+  }
+  if (pair.score === existing.score) {
+    pairScores.set(key, {
+      ...existing,
+      reasons: Array.from(new Set([...existing.reasons, ...pair.reasons])),
+    });
+  }
+}
+
+function createDuplicatePairCandidate(a: VideoItem, b: VideoItem) {
+  return {
+    key: createDuplicatePairKey(a.id, b.id),
+    a,
+    b,
+  };
+}
+
+function addDuplicateCandidate(candidates: Map<string, ReturnType<typeof createDuplicatePairCandidate>>, a: VideoItem, b: VideoItem) {
+  if (a.id === b.id) return;
+  const candidate = createDuplicatePairCandidate(a, b);
+  if (!candidates.has(candidate.key)) candidates.set(candidate.key, candidate);
+}
+
+function addDuplicateBucketCandidates(candidates: Map<string, ReturnType<typeof createDuplicatePairCandidate>>, bucket: VideoItem[]) {
+  const sorted = [...bucket].sort((a, b) => compareNaturalRelativePath(a.relativePath, b.relativePath));
+  for (let aIndex = 0; aIndex < sorted.length; aIndex += 1) {
+    const maxIndex = Math.min(sorted.length, aIndex + 1 + duplicateCandidateNeighborLimit);
+    for (let bIndex = aIndex + 1; bIndex < maxIndex; bIndex += 1) {
+      addDuplicateCandidate(candidates, sorted[aIndex], sorted[bIndex]);
+    }
+  }
+}
+
+function addDuplicateWindowCandidates(
+  candidates: Map<string, ReturnType<typeof createDuplicatePairCandidate>>,
+  videos: VideoItem[],
+  getValue: (video: VideoItem) => number | undefined,
+  maxDelta: number,
+) {
+  const sorted = videos
+    .map((video) => ({ video, value: getValue(video) }))
+    .filter((item): item is { video: VideoItem; value: number } => typeof item.value === "number" && Number.isFinite(item.value) && item.value > 0)
+    .sort((a, b) => a.value - b.value || compareNaturalRelativePath(a.video.relativePath, b.video.relativePath));
+
+  for (let aIndex = 0; aIndex < sorted.length; aIndex += 1) {
+    let neighbors = 0;
+    for (let bIndex = aIndex + 1; bIndex < sorted.length; bIndex += 1) {
+      const delta = getRelativeDelta(sorted[aIndex].value, sorted[bIndex].value);
+      if (delta === null || delta > maxDelta) break;
+      addDuplicateCandidate(candidates, sorted[aIndex].video, sorted[bIndex].video);
+      neighbors += 1;
+      if (neighbors >= duplicateCandidateNeighborLimit) break;
+    }
+  }
+}
+
+function createDuplicatePairCandidates(videos: VideoItem[]) {
+  const candidates = new Map<string, ReturnType<typeof createDuplicatePairCandidate>>();
+  const normalizedNameBuckets = new Map<string, VideoItem[]>();
+
+  videos.forEach((video) => {
+    const normalizedName = normalizeDuplicateName(video.name || video.relativePath);
+    if (!normalizedName) return;
+    const bucket = normalizedNameBuckets.get(normalizedName) ?? [];
+    bucket.push(video);
+    normalizedNameBuckets.set(normalizedName, bucket);
   });
-  context.matchedIds.add(a.id);
-  context.matchedIds.add(b.id);
-  context.union(a.id, b.id);
+
+  normalizedNameBuckets.forEach((bucket) => {
+    if (bucket.length > 1) addDuplicateBucketCandidates(candidates, bucket);
+  });
+  addDuplicateWindowCandidates(candidates, videos, (video) => video.size, 0.02);
+  addDuplicateWindowCandidates(candidates, videos, (video) => video.duration, 0.01);
+
+  return Array.from(candidates.values()).sort(
+    (a, b) => compareNaturalRelativePath(a.a.relativePath, b.a.relativePath) || compareNaturalRelativePath(a.b.relativePath, b.b.relativePath),
+  );
 }
 
-function addDuplicateContentCandidates(buckets: Map<number, VideoItem[]>, video: VideoItem) {
-  if (!Number.isFinite(video.size) || video.size <= 0) return;
-  const key = Math.floor(video.size);
-  const bucket = buckets.get(key) ?? [];
-  bucket.push(video);
-  buckets.set(key, bucket);
-}
-
-function createDuplicateDetectionContext(videos: VideoItem[]) {
+function createDuplicateDisjointSet(ids: string[]) {
   const parent = new Map<string, string>();
-  const pairScores = new Map<string, { score: number; reasons: string[] }>();
-  const matchedIds = new Set<string>();
-  const videoById = new Map(videos.map((video) => [video.id, video]));
+  ids.forEach((id) => parent.set(id, id));
 
   const find = (id: string): string => {
     const current = parent.get(id) ?? id;
@@ -400,55 +537,113 @@ function createDuplicateDetectionContext(videos: VideoItem[]) {
     if (aRoot !== bRoot) parent.set(bRoot, aRoot);
   };
 
-  return { parent, pairScores, matchedIds, videoById, find, union };
+  return { find, union };
 }
 
-function buildDuplicateVideoGroups(
-  videos: VideoItem[],
-  context: ReturnType<typeof createDuplicateDetectionContext>,
-): DuplicateVideoGroup[] {
-  const { pairScores, matchedIds, videoById, find } = context;
-  const groupedIds = new Map<string, string[]>();
-  for (let aIndex = 0; aIndex < videos.length; aIndex += 1) {
-    const video = videos[aIndex];
-    const root = find(video.id);
-    if (root === video.id && !matchedIds.has(video.id)) continue;
-    const ids = groupedIds.get(root) ?? [];
-    ids.push(video.id);
-    groupedIds.set(root, ids);
-  }
+function createDuplicateGroupFromPairs(
+  videoById: Map<string, VideoItem>,
+  pairs: DuplicateVideoPair[],
+  idPrefix: string,
+): DuplicateVideoGroup | null {
+  const videoIds = new Set<string>();
+  let score = 0;
+  const reasons = new Set<string>();
+  pairs.forEach((pair) => {
+    videoIds.add(pair.aId);
+    videoIds.add(pair.bId);
+    score = Math.max(score, pair.score);
+    pair.reasons.forEach((reason) => reasons.add(reason));
+  });
+  const videos = Array.from(videoIds)
+    .map((id) => videoById.get(id))
+    .filter((video): video is VideoItem => Boolean(video))
+    .sort((a, b) => compareNaturalRelativePath(a.relativePath, b.relativePath));
+  if (videos.length <= 1) return null;
+  const sortedPairs = [...pairs].sort((a, b) => b.score - a.score || a.key.localeCompare(b.key));
+  return {
+    id: `${idPrefix}:${videos.map((video) => video.id).join("|")}`,
+    severity: score >= duplicateHighConfidenceThreshold ? "duplicate" : "suspicious",
+    score,
+    reasons: Array.from(reasons),
+    videos,
+    pairs: sortedPairs,
+  };
+}
 
-  return Array.from(groupedIds.values())
-    .filter((ids) => ids.length > 1)
-    .map((ids) => {
-      let score = 0;
-      const reasons = new Set<string>();
-      for (let aIndex = 0; aIndex < ids.length; aIndex += 1) {
-        for (let bIndex = aIndex + 1; bIndex < ids.length; bIndex += 1) {
-          const pair = pairScores.get([ids[aIndex], ids[bIndex]].sort().join("\u0000"));
-          if (!pair) continue;
-          score = Math.max(score, pair.score);
-          pair.reasons.forEach((reason) => reasons.add(reason));
-        }
-      }
-      const sortedVideos = ids
-        .map((id) => videoById.get(id))
-        .filter((video): video is VideoItem => Boolean(video))
-        .sort((a, b) => compareNaturalRelativePath(a.relativePath, b.relativePath));
-      return {
-        id: sortedVideos.map((video) => video.id).join("|"),
-        severity: (score >= duplicateHighConfidenceThreshold ? "duplicate" : "suspicious") as DuplicateVideoSeverity,
-        score,
-        reasons: Array.from(reasons),
-        videos: sortedVideos,
-      };
-    })
-    .sort((a, b) => b.score - a.score || compareNaturalRelativePath(a.videos[0]?.relativePath ?? "", b.videos[0]?.relativePath ?? ""));
+function buildDuplicateVideoGroups(videos: VideoItem[], pairScores: Map<string, DuplicateVideoPair>): DuplicateVideoGroup[] {
+  const videoById = new Map(videos.map((video) => [video.id, video]));
+  const duplicatePairs = Array.from(pairScores.values()).filter((pair) => pair.severity === "duplicate");
+  const suspiciousPairs = Array.from(pairScores.values()).filter((pair) => pair.severity === "suspicious");
+  const disjointSet = createDuplicateDisjointSet(videos.map((video) => video.id));
+
+  duplicatePairs.forEach((pair) => disjointSet.union(pair.aId, pair.bId));
+
+  const duplicatePairsByRoot = new Map<string, DuplicateVideoPair[]>();
+  duplicatePairs.forEach((pair) => {
+    const root = disjointSet.find(pair.aId);
+    const pairs = duplicatePairsByRoot.get(root) ?? [];
+    pairs.push(pair);
+    duplicatePairsByRoot.set(root, pairs);
+  });
+
+  const groups: DuplicateVideoGroup[] = [];
+  const duplicateRootsWithGroups = new Set<string>();
+  duplicatePairsByRoot.forEach((pairs, root) => {
+    const group = createDuplicateGroupFromPairs(videoById, pairs, "duplicate");
+    if (!group) return;
+    groups.push(group);
+    duplicateRootsWithGroups.add(root);
+  });
+
+  suspiciousPairs.forEach((pair) => {
+    if (duplicateRootsWithGroups.has(disjointSet.find(pair.aId)) && disjointSet.find(pair.aId) === disjointSet.find(pair.bId)) return;
+    const group = createDuplicateGroupFromPairs(videoById, [pair], "suspicious");
+    if (group) groups.push(group);
+  });
+
+  return groups.sort(
+    (a, b) =>
+      (b.severity === "duplicate" ? 1 : 0) - (a.severity === "duplicate" ? 1 : 0) ||
+      b.score - a.score ||
+      compareNaturalRelativePath(a.videos[0]?.relativePath ?? "", b.videos[0]?.relativePath ?? ""),
+  );
 }
 
 export function detectDuplicateVideos(videos: VideoItem[]): DuplicateVideoGroup[] {
-  const context = createDuplicateDetectionContext(videos);
-  return buildDuplicateVideoGroups(videos, context);
+  const pairScores = new Map<string, DuplicateVideoPair>();
+  createDuplicatePairCandidates(videos).forEach((candidate) => {
+    const pair = scoreDuplicatePair(candidate.a, candidate.b);
+    mergeDuplicatePairScore(pairScores, candidate.a, candidate.b, pair);
+  });
+  return buildDuplicateVideoGroups(videos, pairScores);
+}
+
+export function rebuildDuplicateVideoGroups(videos: VideoItem[], groups: DuplicateVideoGroup[]): DuplicateVideoGroup[] {
+  const availableIds = new Set(videos.map((video) => video.id));
+  const pairScores = new Map<string, DuplicateVideoPair>();
+  groups.flatMap((group) => group.pairs).forEach((pair) => {
+    if (!availableIds.has(pair.aId) || !availableIds.has(pair.bId)) return;
+    pairScores.set(pair.key, pair);
+  });
+  return buildDuplicateVideoGroups(videos, pairScores);
+}
+
+export function createDuplicateDetectionScopeKey(mode: string, videos: VideoItem[]) {
+  return [
+    mode,
+    ...videos.map((video) =>
+      [
+        video.id,
+        video.mediaRootId ?? "",
+        video.relativePath,
+        Math.floor(video.size || 0),
+        Math.round(video.lastModified || 0),
+        Math.round(video.duration ?? 0),
+        video.width ?? 0,
+        video.height ?? 0,
+      ].join("|"),
+    ),
+  ].join("\n");
 }
 
 function yieldToBrowser() {
@@ -461,15 +656,20 @@ export async function detectDuplicateVideosWithProgress(
   videos: VideoItem[],
   options: DuplicateDetectionOptions = {},
 ): Promise<DuplicateVideoGroup[]> {
-  const context = createDuplicateDetectionContext(videos);
-  const totalPairs = (videos.length * Math.max(videos.length - 1, 0)) / 2;
+  const pairScores = new Map<string, DuplicateVideoPair>();
+  const candidates = createDuplicatePairCandidates(videos);
+  const totalPairs = candidates.length;
   const yieldEveryPairs = Math.max(1, options.yieldEveryPairs ?? 5000);
-  const contentCandidateBuckets = new Map<number, VideoItem[]>();
   const nameSimilarityCandidates: Array<{
     a: VideoItem;
     b: VideoItem;
     pair: { score: number; reasons: string[] };
     pairKey: string;
+  }> = [];
+  const fingerprintCandidatePairs: Array<{
+    a: VideoItem;
+    b: VideoItem;
+    pair: { score: number; reasons: string[] };
   }> = [];
   let processedPairs = 0;
   let processedFingerprints = 0;
@@ -478,7 +678,16 @@ export async function detectDuplicateVideosWithProgress(
   let totalNamePairs = 0;
   let phase: DuplicateDetectionProgress["phase"] = "metadata";
 
-  const reportProgress = () => {
+  const reportProgress = (explicitPercent?: number) => {
+    const phasePercent =
+      explicitPercent ??
+      (phase === "fingerprint"
+        ? 50 + (totalFingerprints ? Math.round((processedFingerprints / totalFingerprints) * 30) : 30)
+        : phase === "aiName"
+          ? 80 + (totalNamePairs ? Math.round((processedNamePairs / totalNamePairs) * 20) : 20)
+          : totalPairs
+            ? Math.round((processedPairs / totalPairs) * 50)
+            : 50);
     options.onProgress?.({
       processedPairs,
       totalPairs,
@@ -487,40 +696,41 @@ export async function detectDuplicateVideosWithProgress(
       processedNamePairs,
       totalNamePairs,
       phase,
-      percent:
-        phase === "fingerprint" && totalFingerprints
-          ? Math.min(100, Math.round((processedFingerprints / totalFingerprints) * 100))
-          : phase === "aiName" && totalNamePairs
-            ? Math.min(100, Math.round((processedNamePairs / totalNamePairs) * 100))
-          : totalPairs
-            ? Math.min(100, Math.round((processedPairs / totalPairs) * 100))
-            : 100,
+      percent: Math.min(100, Math.max(0, phasePercent)),
     });
   };
 
-  videos.forEach((video) => addDuplicateContentCandidates(contentCandidateBuckets, video));
   reportProgress();
-  for (let aIndex = 0; aIndex < videos.length; aIndex += 1) {
-    for (let bIndex = aIndex + 1; bIndex < videos.length; bIndex += 1) {
-      if (options.signal?.aborted) throw new DOMException("Duplicate detection aborted.", "AbortError");
-      const a = videos[aIndex];
-      const b = videos[bIndex];
-      const pair = scoreDuplicatePair(a, b);
-      processedPairs += 1;
-      if (pair.score >= duplicateAiNameCandidateThreshold) {
-        nameSimilarityCandidates.push({ a, b, pair, pairKey: createDuplicatePairKey(a.id, b.id) });
-      }
-      if (processedPairs % yieldEveryPairs === 0) {
-        reportProgress();
-        await yieldToBrowser();
-      }
+  for (const candidate of candidates) {
+    if (options.signal?.aborted) throw new DOMException("Duplicate detection aborted.", "AbortError");
+    const pair = scoreDuplicatePair(candidate.a, candidate.b);
+    processedPairs += 1;
+    mergeDuplicatePairScore(pairScores, candidate.a, candidate.b, pair);
+    if (pair.score >= duplicateFingerprintCandidateThreshold) {
+      fingerprintCandidatePairs.push({ a: candidate.a, b: candidate.b, pair });
+    }
+    if (pair.score >= duplicateAiNameCandidateThreshold) {
+      nameSimilarityCandidates.push({ a: candidate.a, b: candidate.b, pair, pairKey: candidate.key });
+    }
+    if (processedPairs % yieldEveryPairs === 0) {
+      reportProgress();
+      await yieldToBrowser();
     }
   }
-  reportProgress();
+  reportProgress(50);
 
   if (options.getContentFingerprint) {
-    const fingerprintCandidateBuckets = Array.from(contentCandidateBuckets.values()).filter((bucket) => bucket.length > 1);
-    const fingerprintCandidates = Array.from(new Map(fingerprintCandidateBuckets.flat().map((video) => [video.id, video])).values());
+    const maxFingerprintVideos = Math.max(0, options.maxFingerprintVideos ?? defaultMaxFingerprintVideos);
+    const fingerprintCandidatesById = new Map<string, VideoItem>();
+    [...fingerprintCandidatePairs]
+      .sort((a, b) => b.pair.score - a.pair.score || compareNaturalRelativePath(a.a.relativePath, b.a.relativePath))
+      .forEach((candidate) => {
+        if (fingerprintCandidatesById.size >= maxFingerprintVideos) return;
+        fingerprintCandidatesById.set(candidate.a.id, candidate.a);
+        if (fingerprintCandidatesById.size >= maxFingerprintVideos) return;
+        fingerprintCandidatesById.set(candidate.b.id, candidate.b);
+      });
+    const fingerprintCandidates = Array.from(fingerprintCandidatesById.values());
     if (fingerprintCandidates.length > 1) {
       const fingerprintByVideoId = new Map<string, string>();
       phase = "fingerprint";
@@ -539,27 +749,25 @@ export async function detectDuplicateVideosWithProgress(
         }
       }
 
-      for (const bucket of fingerprintCandidateBuckets) {
-        const videosByFingerprint = new Map<string, VideoItem[]>();
-        for (const video of bucket) {
-          const fingerprint = fingerprintByVideoId.get(video.id);
-          if (!fingerprint) continue;
-          const fingerprintVideos = videosByFingerprint.get(fingerprint) ?? [];
-          fingerprintVideos.push(video);
-          videosByFingerprint.set(fingerprint, fingerprintVideos);
-        }
-        for (const fingerprintVideos of videosByFingerprint.values()) {
-          if (fingerprintVideos.length <= 1) continue;
-          for (let aIndex = 0; aIndex < fingerprintVideos.length; aIndex += 1) {
-            for (let bIndex = aIndex + 1; bIndex < fingerprintVideos.length; bIndex += 1) {
-              const a = fingerprintVideos[aIndex];
-              const b = fingerprintVideos[bIndex];
-              const metadataPair = scoreDuplicatePair(a, b);
-              mergeDuplicatePairScore(context, a, b, {
-                score: Math.max(metadataPair.score, duplicateHighConfidenceThreshold),
-                reasons: ["内容指纹一致", ...metadataPair.reasons],
-              });
-            }
+      const videosByFingerprint = new Map<string, VideoItem[]>();
+      for (const video of fingerprintCandidates) {
+        const fingerprint = fingerprintByVideoId.get(video.id);
+        if (!fingerprint) continue;
+        const fingerprintVideos = videosByFingerprint.get(fingerprint) ?? [];
+        fingerprintVideos.push(video);
+        videosByFingerprint.set(fingerprint, fingerprintVideos);
+      }
+      for (const fingerprintVideos of videosByFingerprint.values()) {
+        if (fingerprintVideos.length <= 1) continue;
+        for (let aIndex = 0; aIndex < fingerprintVideos.length; aIndex += 1) {
+          for (let bIndex = aIndex + 1; bIndex < fingerprintVideos.length; bIndex += 1) {
+            const a = fingerprintVideos[aIndex];
+            const b = fingerprintVideos[bIndex];
+            const metadataPair = scoreDuplicatePair(a, b);
+            mergeDuplicatePairScore(pairScores, a, b, {
+              score: Math.max(metadataPair.score, duplicateHighConfidenceThreshold),
+              reasons: ["内容指纹一致", ...metadataPair.reasons],
+            });
           }
         }
       }
@@ -567,35 +775,48 @@ export async function detectDuplicateVideosWithProgress(
   }
 
   if (options.getNameSimilarityScores && nameSimilarityCandidates.length) {
+    const maxAiNamePairs = Math.max(0, options.maxAiNamePairs ?? defaultMaxAiNamePairs);
+    const aiNameBatchSize = Math.max(1, Math.min(defaultAiNameBatchSize, options.aiNameBatchSize ?? defaultAiNameBatchSize));
     const selectedCandidates = nameSimilarityCandidates
-      .filter((candidate) => !context.pairScores.has(candidate.pairKey))
+      .filter((candidate) => pairScores.get(candidate.pairKey)?.severity !== "duplicate")
       .sort((a, b) => b.pair.score - a.pair.score || compareNaturalRelativePath(a.a.relativePath, b.a.relativePath))
-      .slice(0, Math.max(0, options.maxAiNamePairs ?? defaultMaxAiNamePairs));
+      .slice(0, maxAiNamePairs);
     if (selectedCandidates.length) {
       phase = "aiName";
       totalNamePairs = selectedCandidates.length;
       processedNamePairs = 0;
       reportProgress();
-      const pairs = selectedCandidates.map((candidate, index) =>
-        createDuplicateNameSimilarityPair(`pair-${index + 1}`, candidate.a, candidate.b, candidate.pair.score),
-      );
-      const similarityScores = await options.getNameSimilarityScores(pairs, options.signal);
-      processedNamePairs = selectedCandidates.length;
-      reportProgress();
-      for (let index = 0; index < selectedCandidates.length; index += 1) {
-        const candidate = selectedCandidates[index];
-        const similarity = similarityScores.get(pairs[index].id);
-        if (!Number.isFinite(similarity)) continue;
-        const similarityScore = Math.max(0, Math.min(100, Math.round(similarity ?? 0)));
-        const score = candidate.pair.score + similarityScore;
-        if (score < duplicateMetadataThreshold) continue;
-        mergeDuplicatePairScore(context, candidate.a, candidate.b, {
-          score,
-          reasons: [...candidate.pair.reasons, `AI 名称相似度 ${similarityScore}%`],
-        });
+      for (let offset = 0; offset < selectedCandidates.length; offset += aiNameBatchSize) {
+        if (options.signal?.aborted) throw new DOMException("Duplicate detection aborted.", "AbortError");
+        const batchCandidates = selectedCandidates.slice(offset, offset + aiNameBatchSize);
+        const pairs = batchCandidates.map((candidate, index) =>
+          createDuplicateNameSimilarityPair(`pair-${offset + index + 1}`, candidate.a, candidate.b, candidate.pair.score),
+        );
+        let similarityScores: Map<string, number>;
+        try {
+          similarityScores = await options.getNameSimilarityScores(pairs, options.signal);
+        } catch (error) {
+          options.onNameSimilarityError?.(error);
+          break;
+        }
+        processedNamePairs += batchCandidates.length;
+        reportProgress();
+        for (let index = 0; index < batchCandidates.length; index += 1) {
+          const candidate = batchCandidates[index];
+          const similarity = similarityScores.get(pairs[index].id);
+          if (!Number.isFinite(similarity)) continue;
+          const similarityScore = Math.max(0, Math.min(100, Math.round(similarity ?? 0)));
+          const score = candidate.pair.score + similarityScore;
+          if (score < duplicateSuspiciousThreshold) continue;
+          mergeDuplicatePairScore(pairScores, candidate.a, candidate.b, {
+            score,
+            reasons: [...candidate.pair.reasons, `AI 名称相似度 ${similarityScore}%`],
+          });
+        }
       }
     }
   }
 
-  return buildDuplicateVideoGroups(videos, context);
+  reportProgress(100);
+  return buildDuplicateVideoGroups(videos, pairScores);
 }
