@@ -149,6 +149,12 @@ import {
 } from "./playerConstants";
 import { createDanmakuComment, stableHash } from "./danmakuUtils";
 import {
+  clamp,
+  formatShortcutKey,
+  getShortcutConflict,
+  shortcutCodeFromEvent,
+} from "./playerInteractionUtils";
+import {
   compareNaturalRelativePath,
   createEmptyMediaCollection,
   getLatestResumableVideo,
@@ -511,10 +517,6 @@ function videoMetadataTitle(video: VideoItem) {
     .join("\n");
 }
 
-function clamp(value: number, min: number, max: number) {
-  return Math.min(max, Math.max(min, value));
-}
-
 function readStoredVolume() {
   if (typeof window === "undefined") return defaultPlayerSettings.volume;
   try {
@@ -554,36 +556,6 @@ function blurClickedButton(target: EventTarget | null) {
       button.blur();
     }
   }, 0);
-}
-
-function formatShortcutKey(code: string) {
-  if (code === "Space") return "空格";
-  if (code === "Slash") return "?";
-  if (code.startsWith("Key")) return code.slice(3);
-  if (code.startsWith("Digit")) return code.slice(5);
-  if (code === "ArrowLeft") return "←";
-  if (code === "ArrowRight") return "→";
-  if (code === "ArrowUp") return "↑";
-  if (code === "ArrowDown") return "↓";
-  if (code.startsWith("Numpad")) return `小键盘 ${code.slice(6)}`;
-  return code.replace(/([a-z])([A-Z])/g, "$1 $2");
-}
-
-function shortcutCodeFromEvent(event: KeyboardEvent | React.KeyboardEvent) {
-  if (event.code === "Slash" && event.shiftKey) return "Slash";
-  return event.code || event.key;
-}
-
-function getShortcutConflict(shortcuts: ShortcutMap, action: ShortcutAction, nextCode: string) {
-  return (Object.keys(shortcuts) as ShortcutAction[]).find(
-    (candidate) =>
-      candidate !== action &&
-      shortcuts[candidate] === nextCode &&
-      !(
-        (action === "seekForward" && candidate === "holdSpeed") ||
-        (action === "holdSpeed" && candidate === "seekForward")
-      ),
-  );
 }
 
 async function* collectVideos(directory: FileSystemDirectoryHandle, rootId?: string | null): AsyncGenerator<MediaScanBatch> {
