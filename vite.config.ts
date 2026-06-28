@@ -282,6 +282,19 @@ async function deleteCompatibleMedia(config, payload) {
   return { deleted: Boolean(cached.compatibleUrl), cacheId: cached.cacheId };
 }
 
+async function deleteMediaVideo(config, payload) {
+  const root = findMediaRoot(config, payload?.rootId);
+  if (!root) throw new Error("Unknown media root.");
+  if (root.source === "browser" && !root.localPath) {
+    throw new Error("浏览器添加的媒体库需要重新授权目录后才能删除磁盘文件。");
+  }
+
+  const videoPath = resolveVideoPathFromConfig(config, payload?.rootId, payload?.relativePath);
+  await ensureFileExists(videoPath);
+  await rm(videoPath, { force: false });
+  return { deleted: true };
+}
+
 async function streamRemuxMediaToCompatibleMp4(config, payload, request, response) {
   sendNdjson(response, 200);
   const controller = new AbortController();
@@ -748,6 +761,12 @@ function playerDataApiPlugin(env) {
       if (url.pathname === "/api/media/compatible" && request.method === "DELETE") {
         const payload = await parseJsonBody(request);
         sendJson(response, 200, await deleteCompatibleMedia(await loadAppConfig(), payload));
+        return;
+      }
+
+      if (url.pathname === "/api/media/video" && request.method === "DELETE") {
+        const payload = await parseJsonBody(request);
+        sendJson(response, 200, await deleteMediaVideo(await loadAppConfig(), payload));
         return;
       }
 

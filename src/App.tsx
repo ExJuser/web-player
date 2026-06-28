@@ -275,6 +275,24 @@ async function hasDirectoryReadPermission(directory: FileSystemDirectoryHandle) 
   return currentPermission === undefined || currentPermission === "granted";
 }
 
+async function resolveBrowserVideoParentDirectory(rootDirectory: FileSystemDirectoryHandle, relativePath: string) {
+  const parts = relativePath.replace(/\\/g, "/").split("/").filter(Boolean);
+  let directory = rootDirectory;
+  for (const part of parts.slice(0, -1)) {
+    directory = await directory.getDirectoryHandle(part);
+  }
+  return directory;
+}
+
+async function browserVideoFileExists(parentDirectory: FileSystemDirectoryHandle, fileName: string) {
+  try {
+    await parentDirectory.getFileHandle(fileName);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 import { ControlSelect } from "./ControlSelect";
 import {
   createPersistedEmbeddedSubtitles,
@@ -1452,6 +1470,9 @@ export default function App() {
   } | null>(null);
   const [photoDeleteError, setPhotoDeleteError] = useState("");
   const [isPhotoDeletePending, setIsPhotoDeletePending] = useState(false);
+  const [videoDeleteCandidate, setVideoDeleteCandidate] = useState<VideoItem | null>(null);
+  const [videoDeleteError, setVideoDeleteError] = useState("");
+  const [isVideoDeletePending, setIsVideoDeletePending] = useState(false);
   const [mediaRootLabelPrompt, setMediaRootLabelPrompt] = useState<MediaRootLabelPrompt | null>(null);
   const [existingMediaRootPrompt, setExistingMediaRootPrompt] = useState<ExistingMediaRootPrompt | null>(null);
   const [mediaRootLocalPathDialog, setMediaRootLocalPathDialog] = useState<MediaRootLocalPathDialog | null>(null);
@@ -3706,6 +3727,11 @@ export default function App() {
     [currentVideoId, replaceProgressStore],
   );
 
+  const requestDeleteVideo = useCallback((video: VideoItem) => {
+    setVideoDeleteCandidate(video);
+    setVideoDeleteError("");
+  }, []);
+
   const clearPendingProgressSave = useCallback(() => {
     if (saveTimerRef.current) {
       window.clearTimeout(saveTimerRef.current);
@@ -3801,6 +3827,182 @@ export default function App() {
     },
     [cancelAutoNextPrompt, focusPlayer, persistCurrentProgress, resetHoldSpeedState, syncSeriesModeForPlayerEntry],
   );
+
+  const removeDeletedVideoFromState = useCallback(
+    async (video: VideoItem) => {
+      const nextVideos = videosRef.current.filter((item) => item.id !== video.id);
+      const nextProgress = { ...progressStoreRef.current };
+      const nextVideoTags = { ...videoTagsRef.current };
+      const nextVideoStats = { ...videoStatsRef.current };
+      const nextDanmakuSelections = { ...danmakuSelectionsRef.current };
+      const nextFavorites = new Set(favoriteVideoIdsRef.current);
+      const nextSubtitles = subtitlesRef.current.filter((subtitle) => subtitle.videoId !== video.id);
+
+      delete nextProgress[video.id];
+      delete nextVideoTags[video.id];
+      delete nextVideoStats[createVideoStatsKey(video)];
+      delete nextDanmakuSelections[video.id];
+      nextFavorites.delete(video.id);
+
+      if (video.thumbnailUrl) URL.revokeObjectURL(video.thumbnailUrl);
+      if (isObjectUrl(video.url)) URL.revokeObjectURL(video.url);
+
+      videosRef.current = nextVideos;
+      progressStoreRef.current = nextProgress;
+      videoTagsRef.current = nextVideoTags;
+      videoStatsRef.current = nextVideoStats;
+      danmakuSelectionsRef.current = nextDanmakuSelections;
+      favoriteVideoIdsRef.current = nextFavorites;
+      subtitlesRef.current = nextSubtitles;
+
+      setVideos(nextVideos);
+      setProgressStore(nextProgress);
+      setVideoTags(nextVideoTags);
+      setVideoStatsRevision((revision) => revision + 1);
+      setDanmakuSelections(nextDanmakuSelections);
+      setFavoriteVideoIds(nextFavorites);
+      setPlaybackSourceChoices((previous) => {
+        if (!(video.id in previous)) return previous;
+        const nextChoices = { ...previous };
+        delete nextChoices[video.id];
+        return nextChoices;
+      });
+      setSubtitles(nextSubtitles);
+      setMediaRootStatuses((statuses) =>
+        statuses.map((status) =>
+          status.id === video.mediaRootId
+            ? {
+                ...status,
+                videoCount: Math.max(status.videoCount - 1, 0),
+                scannedFiles: Math.max(status.scannedFiles - 1, 0),
+                updatedAt: Date.now(),
+              }
+            : status,
+        ),
+      );
+
+      await Promise.all([
+        saveCurrentPlayerDataStore({
+          progress: nextProgress,
+          favorites: Array.from(nextFavorites),
+          videoTags: nextVideoTags,
+          videoStats: nextVideoStats,
+          danmakuSelections: nextDanmakuSelections,
+          embeddedSubtitles: createPersistedEmbeddedSubtitles(subtitlesRef.current),
+        }),
+        saveDanmakuSelection(video.id, null).catch(() => undefined),
+      ]);
+    },
+    [saveCurrentPlayerDataStore],
+  );
+
+  const deleteBrowserVideoFile = useCallback(async (video: VideoItem) => {
+    const fileName = video.relativePath.replace(/\\/g, "/").split("/").filter(Boolean).pop() || video.name;
+    const parentDirectory =
+      video.parentDirectory ??
+      (directoryRef.current ? await resolveBrowserVideoParentDirectory(directoryRef.current, video.relativePath) : null);
+
+    if (!parentDirectory?.removeEntry) {
+      throw new Error("当前视频来源不支持直接删除，请重新选择媒体库文件夹或在文件管理器中删除。");
+    }
+    if (!(await hasDirectoryWritePermission(parentDirectory))) {
+      throw new Error("浏览器没有这个目录的写入权限，请重新选择媒体库文件夹后再删除。");
+    }
+
+    await parentDirectory.removeEntry(fileName);
+    if (await browserVideoFileExists(parentDirectory, fileName)) {
+      throw new Error("浏览器没有删除这个本地文件，请确认文件未被占用，并重新选择媒体库文件夹授予写入权限。");
+    }
+  }, []);
+
+  const confirmDeleteVideo = useCallback(async () => {
+    if (!videoDeleteCandidate || isVideoDeletePending) return;
+    const video = videoDeleteCandidate;
+    const root = video.mediaRootId ? localConfigRef.current?.mediaRoots.find((item) => item.id === video.mediaRootId) : null;
+    const shouldUseBrowserDelete = video.playbackSource === "browser" || (root?.source === "browser" && !root.localPath);
+    const currentVisibleIndex = visibleVideos.findIndex((item) => item.id === video.id);
+    const nextVideo =
+      currentVisibleIndex >= 0
+        ? visibleVideos[currentVisibleIndex + 1] ?? visibleVideos[currentVisibleIndex - 1] ?? null
+        : visibleVideos.find((item) => item.id !== video.id) ?? null;
+    const isDeletingCurrentVideo = video.id === currentVideoIdRef.current;
+
+    setVideoDeleteError("");
+    setIsVideoDeletePending(true);
+
+    try {
+      if (isDeletingCurrentVideo) {
+        clearPendingProgressSave();
+        videoRef.current?.pause();
+        if (videoRef.current) {
+          videoRef.current.removeAttribute("src");
+          videoRef.current.load();
+        }
+      }
+
+      if (shouldUseBrowserDelete) {
+        await deleteBrowserVideoFile(video);
+      } else {
+        if (!video.mediaRootId) throw new Error("当前视频缺少媒体库信息，无法定位磁盘文件。");
+        await fetchJson<{ deleted: boolean }>("/api/media/video", {
+          method: "DELETE",
+          body: JSON.stringify({
+            rootId: video.mediaRootId,
+            relativePath: video.relativePath,
+          }),
+        });
+      }
+
+      await removeDeletedVideoFromState(video);
+      setVideoDeleteCandidate(null);
+      setVideoDeleteError("");
+      setMessage(`已删除《${video.name}》`);
+
+      if (isDeletingCurrentVideo) {
+        if (nextVideo) {
+          setActiveView("player");
+          pendingAutoPlayVideoIdRef.current = nextVideo.id;
+          autoSubtitleSelectionVideoIdRef.current = nextVideo.id;
+          isMainVideoLoadingRef.current = true;
+          setIsMainVideoLoading(true);
+          setCurrentVideoId(nextVideo.id);
+          setIsPlaying(false);
+          setCurrentTime(0);
+          setDuration(0);
+          setTimelinePreview({
+            time: 0,
+            left: 0,
+            isVisible: false,
+            isDragging: false,
+            imageUrl: "",
+            isLoadingFrame: false,
+          });
+          updateSelectedSubtitleId("off");
+          setVideoAspectRatio(16 / 9);
+          focusPlayer();
+        } else {
+          setCurrentVideoId(null);
+          setCurrentTime(0);
+          setDuration(0);
+          setIsPlaying(false);
+          setActiveView("home");
+        }
+      }
+    } catch (error) {
+      setVideoDeleteError(error instanceof Error ? error.message : "删除视频失败，请确认文件未被占用且仍在媒体库中。");
+    } finally {
+      setIsVideoDeletePending(false);
+    }
+  }, [
+    clearPendingProgressSave,
+    deleteBrowserVideoFile,
+    focusPlayer,
+    isVideoDeletePending,
+    removeDeletedVideoFromState,
+    videoDeleteCandidate,
+    visibleVideos,
+    updateSelectedSubtitleId,
+  ]);
 
   const openVideoFromHome = useCallback(
     (video: VideoItem, options?: { fromBeginning?: boolean }) => {
@@ -6674,6 +6876,13 @@ export default function App() {
         return;
       }
 
+      if (event.key === "Escape" && videoDeleteCandidate && !isVideoDeletePending) {
+        event.preventDefault();
+        setVideoDeleteCandidate(null);
+        setVideoDeleteError("");
+        return;
+      }
+
       if (event.key === "Escape" && isClearCacheConfirmOpen) {
         event.preventDefault();
         setIsClearCacheConfirmOpen(false);
@@ -6889,6 +7098,8 @@ export default function App() {
     photoAlbumDeleteCandidate,
     photoDeleteCandidate,
     isPhotoDeletePending,
+    videoDeleteCandidate,
+    isVideoDeletePending,
     isCinemaMode,
     isClearCacheConfirmOpen,
     isPrivacyMode,
@@ -8822,6 +9033,16 @@ export default function App() {
                   >
                     <RotateCcw size={15} />
                   </button>
+                  <button
+                    className="episode-action-button danger"
+                    type="button"
+                    onClick={() => requestDeleteVideo(video)}
+                    disabled={isVideoDeletePending}
+                    title="删除磁盘文件"
+                    aria-label="删除磁盘文件"
+                  >
+                    <Trash2 size={15} />
+                  </button>
                 </span>
               </div>
             );
@@ -8837,6 +9058,71 @@ export default function App() {
       </aside>
       ) : null}
     </main>
+    {videoDeleteCandidate ? (
+      <div
+        className="modal-backdrop"
+        role="presentation"
+        onMouseDown={() => {
+          if (isVideoDeletePending) return;
+          setVideoDeleteCandidate(null);
+          setVideoDeleteError("");
+        }}
+      >
+        <section
+          aria-labelledby="delete-video-title"
+          aria-modal="true"
+          className="delete-dialog"
+          role="dialog"
+          onMouseDown={(event) => event.stopPropagation()}
+        >
+          <button
+            aria-label="关闭"
+            className="dialog-close"
+            type="button"
+            onClick={() => {
+              setVideoDeleteCandidate(null);
+              setVideoDeleteError("");
+            }}
+            disabled={isVideoDeletePending}
+          >
+            <X size={18} />
+          </button>
+          <div className="dialog-icon danger">
+            <Trash2 size={28} />
+          </div>
+          <div className="dialog-copy">
+            <h2 id="delete-video-title">删除视频文件？</h2>
+            <p>这个操作会直接从磁盘删除视频文件，删除后无法在播放器内恢复。</p>
+          </div>
+          <div className="delete-file-preview">
+            <strong>{videoDeleteCandidate.name}</strong>
+            <span>{videoDeleteError || videoDeleteCandidate.relativePath}</span>
+          </div>
+          <div className="dialog-actions">
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={() => {
+                setVideoDeleteCandidate(null);
+                setVideoDeleteError("");
+              }}
+              disabled={isVideoDeletePending}
+            >
+              取消
+            </button>
+            <button
+              className="danger-button"
+              type="button"
+              onClick={() => void confirmDeleteVideo()}
+              disabled={isVideoDeletePending}
+            >
+              <Trash2 size={18} />
+              {isVideoDeletePending ? "删除中..." : "删除文件"}
+            </button>
+          </div>
+        </section>
+      </div>
+    ) : null}
     {photoDeleteCandidate ? (
       <div
         className="modal-backdrop"
