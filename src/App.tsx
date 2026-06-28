@@ -4730,6 +4730,16 @@ export default function App() {
     [selectVideo],
   );
 
+  const openDuplicateVideo = useCallback(
+    (video: VideoItem, options?: { keepDuplicatePlaylist?: boolean }) => {
+      selectVideo(video.id, {
+        keepDuplicatePlaylist: options?.keepDuplicatePlaylist,
+        syncSeriesMode: false,
+      });
+    },
+    [selectVideo],
+  );
+
   const openDuplicatePlaylist = useCallback(() => {
     const firstVideo = duplicatePlaylistVideos[0];
     if (!firstVideo) return;
@@ -8343,7 +8353,7 @@ export default function App() {
       </div>
       <div className="duplicate-video-list">
         {group.videos.map((video) => (
-          <button key={video.id} type="button" onClick={() => openVideoFromHome(video)} title={video.relativePath || video.name}>
+          <button key={video.id} type="button" onClick={() => openDuplicateVideo(video)} title={video.relativePath || video.name}>
             <span>{video.name}</span>
             <small>{formatFileSize(video.size)} · {video.duration ? formatTime(video.duration) : "未知时长"} · {video.width && video.height ? `${video.width}x${video.height}` : "未知分辨率"}</small>
           </button>
@@ -9956,7 +9966,11 @@ export default function App() {
                 <button
                   className="playlist-select"
                   type="button"
-                  onClick={() => selectVideo(video.id)}
+                  onClick={() =>
+                    isDuplicatePlaylistActive
+                      ? openDuplicateVideo(video, { keepDuplicatePlaylist: true })
+                      : selectVideo(video.id)
+                  }
                 >
                   <span className={`episode-thumbnail ${video.thumbnailUrl ? "has-image" : ""}`} aria-hidden="true">
                     {video.thumbnailUrl ? (
