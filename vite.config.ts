@@ -64,7 +64,6 @@ const indexPath = path.join(dataRoot, "index.json");
 const globalDataPath = path.join(dataRoot, "global.json");
 const appConfigPath = path.resolve(__dirname, "config", "app.json");
 const localDataStore = new LocalDataSqliteStore({ dataRoot, librariesRoot, photoAlbumsRoot, indexPath, globalDataPath });
-const videoExtensions = new Set([".mp4", ".webm", ".ogg", ".mov", ".m4v", ".mkv"]);
 const bilibiliDanmaku = createBilibiliDanmakuService({
   createDanmakuComment,
   dedupeDanmakuComments,
@@ -74,7 +73,7 @@ const bilibiliDanmaku = createBilibiliDanmakuService({
 });
 const embeddedSubtitles = createEmbeddedSubtitleService({
   cacheRoot: embeddedSubtitlesRoot,
-  resolveVideoPath,
+  resolveVideoPath: resolveVideoPathFromConfig,
   ensureFileExists,
   runProcess,
   hashValue,
@@ -254,14 +253,6 @@ function publicLocalConfig(config, tools, env) {
   };
 }
 
-function resolveVideoPath(config, rootId, relativePath) {
-  return resolveVideoPathFromConfig(config, rootId, relativePath);
-}
-
-function resolveMediaPath(config, rootId, relativePath) {
-  return resolveMediaPathFromConfig(config, rootId, relativePath);
-}
-
 function findMediaRoot(config, rootId) {
   const id = typeof rootId === "string" ? rootId.trim() : "";
   return normalizeMediaRoots(config).find((root) => root.id === id) ?? null;
@@ -280,7 +271,7 @@ async function probeMedia(config, payload) {
     };
   }
 
-  const videoPath = resolveVideoPath(config, payload?.rootId, payload?.relativePath);
+  const videoPath = resolveVideoPathFromConfig(config, payload?.rootId, payload?.relativePath);
   await ensureFileExists(videoPath);
   const fileStat = await stat(videoPath);
   const video = {
@@ -314,7 +305,7 @@ async function remuxMediaToCompatibleMp4(config, payload) {
     throw new Error("浏览器添加的媒体库需要先配置本机路径，才能生成兼容 MP4。");
   }
 
-  const videoPath = resolveVideoPath(config, payload?.rootId, payload?.relativePath);
+  const videoPath = resolveVideoPathFromConfig(config, payload?.rootId, payload?.relativePath);
   await ensureFileExists(videoPath);
   const fileStat = await stat(videoPath);
   const video = {
@@ -781,7 +772,7 @@ function playerDataApiPlugin(env) {
       if (mediaMatch && request.method === "GET") {
         const rootId = decodeURIComponent(mediaMatch[1]);
         const relativePath = mediaMatch[2].split("/").map((segment) => decodeURIComponent(segment)).join("/");
-        const filePath = resolveMediaPath(await loadAppConfig(), rootId, relativePath);
+        const filePath = resolveMediaPathFromConfig(await loadAppConfig(), rootId, relativePath);
         await sendMediaFile(request, response, filePath);
         return;
       }

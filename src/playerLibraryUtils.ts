@@ -12,6 +12,8 @@ import type { MediaCollection, PlayerDataStore, PlayerLibraryMetadata } from "./
 
 type FileFingerprint = Pick<File, "size" | "lastModified">;
 type LibraryDirectory = { name: string };
+const defaultDanmakuPreferencesJson = JSON.stringify(defaultDanmakuPreferences);
+const defaultPlayerPreferencesJson = JSON.stringify(defaultPlayerPreferences);
 
 export function hasExtension(name: string, extensions: Set<string>) {
   const dotIndex = name.lastIndexOf(".");
@@ -109,7 +111,7 @@ export function hasStoredData(store: PlayerDataStore) {
       Object.keys(store.tagMergeDecisions).length ||
       store.embeddedSubtitles.length ||
       Object.keys(store.danmakuSelections).length ||
-      JSON.stringify(store.danmakuPreferences) !== JSON.stringify(defaultDanmakuPreferences) ||
-      JSON.stringify(store.preferences) !== JSON.stringify(defaultPlayerPreferences)
+      JSON.stringify(store.danmakuPreferences) !== defaultDanmakuPreferencesJson ||
+      JSON.stringify(store.preferences) !== defaultPlayerPreferencesJson
   );
 }
