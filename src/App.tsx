@@ -1328,7 +1328,8 @@ export default function App() {
   const [homeProgressRecapMessage, setHomeProgressRecapMessage] = useState("");
   const [homeProgressRecapVideoId, setHomeProgressRecapVideoId] = useState("");
   const [isHomeProgressRecapLoading, setIsHomeProgressRecapLoading] = useState(false);
-  const [librarySearchQuery, setLibrarySearchQuery] = useState("");
+  const [homeLibrarySearchQuery, setHomeLibrarySearchQuery] = useState("");
+  const [playerLibrarySearchQuery, setPlayerLibrarySearchQuery] = useState("");
   const [librarySearchResults, setLibrarySearchResults] = useState<LibrarySearchResult[]>([]);
   const [librarySearchVisibleCount, setLibrarySearchVisibleCount] = useState(librarySearchResultPageSize);
   const [librarySearchAnswer, setLibrarySearchAnswer] = useState("");
@@ -1761,9 +1762,13 @@ export default function App() {
   );
   const homeMediaModeLabel = homeMediaMode === "anime" ? "追番模式" : homeMediaMode === "special" ? "特殊模式" : "全部";
   const playerMediaModeLabel = homeMediaMode === "anime" ? "追番" : homeMediaMode === "special" ? "特殊" : "全部";
-  const librarySearchDraftSignature = useMemo(
-    () => createLibrarySearchSignature(librarySearchQuery),
-    [librarySearchQuery],
+  const homeLibrarySearchDraftSignature = useMemo(
+    () => createLibrarySearchSignature(homeLibrarySearchQuery),
+    [homeLibrarySearchQuery],
+  );
+  const playerLibrarySearchDraftSignature = useMemo(
+    () => createLibrarySearchSignature(playerLibrarySearchQuery),
+    [playerLibrarySearchQuery],
   );
   const effectiveLibrarySearchMode = homeMediaMode === "special" && librarySearchMode === "ai" ? "local" : librarySearchMode;
   const visibleLibrarySearchMessage = homeMediaMode === "special" && librarySearchMode === "ai" ? "" : librarySearchMessage;
@@ -2232,7 +2237,8 @@ export default function App() {
 
   useEffect(() => {
     librarySearchRunIdRef.current += 1;
-    setLibrarySearchQuery("");
+    setHomeLibrarySearchQuery("");
+    setPlayerLibrarySearchQuery("");
     setIsLibrarySearchLoading(false);
     setLibrarySearchMode("idle");
     setLibrarySearchMessage("");
@@ -5981,7 +5987,8 @@ export default function App() {
 
   const runLibrarySearch = useCallback(async (surface: LibrarySearchSurface) => {
     const searchRunId = (librarySearchRunIdRef.current += 1);
-    const query = librarySearchQuery.trim();
+    const query = (surface === "home" ? homeLibrarySearchQuery : playerLibrarySearchQuery).trim();
+    const draftSignature = surface === "home" ? homeLibrarySearchDraftSignature : playerLibrarySearchDraftSignature;
     const isSpecialSearch = homeMediaMode === "special";
     setLibrarySearchSurface(surface);
     setLibrarySearchAnswer("");
@@ -5995,7 +6002,7 @@ export default function App() {
       return;
     }
 
-    setLibrarySearchSubmittedSignature(librarySearchDraftSignature);
+    setLibrarySearchSubmittedSignature(draftSignature);
     setLibrarySearchVisibleCount(librarySearchResultPageSize);
     const localResults = searchLibraryLocally(query);
     setLibrarySearchResults(localResults);
@@ -6049,11 +6056,13 @@ export default function App() {
   }, [
     createLibrarySearchCandidates,
     homeMediaMode,
-    librarySearchDraftSignature,
-    librarySearchQuery,
+    homeLibrarySearchDraftSignature,
+    homeLibrarySearchQuery,
     librarySearchContext,
     localConfig,
     librarySearchVideos,
+    playerLibrarySearchDraftSignature,
+    playerLibrarySearchQuery,
     searchLibraryLocally,
   ]);
 
@@ -6062,7 +6071,7 @@ export default function App() {
       const query = tag.trim();
       if (!query) return;
       librarySearchRunIdRef.current += 1;
-      setLibrarySearchQuery(query);
+      setHomeLibrarySearchQuery(query);
       setLibrarySearchAnswer("");
       setIsLibrarySearchLoading(false);
       setLibrarySearchSurface("home");
@@ -6076,20 +6085,31 @@ export default function App() {
     [searchLibraryLocally],
   );
 
-  const librarySearchPreviewResults = useMemo(() => {
-    const query = librarySearchQuery.trim();
+  const homeLibrarySearchPreviewResults = useMemo(() => {
+    const query = homeLibrarySearchQuery.trim();
     if (!query) return [];
     return searchLibraryLocally(query, 3);
   }, [
-    librarySearchQuery,
+    homeLibrarySearchQuery,
     searchLibraryLocally,
   ]);
-  const hasLibrarySearchQuery = Boolean(librarySearchQuery.trim());
+  const playerLibrarySearchPreviewResults = useMemo(() => {
+    const query = playerLibrarySearchQuery.trim();
+    if (!query) return [];
+    return searchLibraryLocally(query, 3);
+  }, [
+    playerLibrarySearchQuery,
+    searchLibraryLocally,
+  ]);
+  const hasHomeLibrarySearchQuery = Boolean(homeLibrarySearchQuery.trim());
+  const hasPlayerLibrarySearchQuery = Boolean(playerLibrarySearchQuery.trim());
   const shouldShowHomeLibrarySearchPreview = Boolean(
-    hasLibrarySearchQuery && (librarySearchDraftSignature !== librarySearchSubmittedSignature || !isHomeLibrarySearchSurface),
+    hasHomeLibrarySearchQuery &&
+      (homeLibrarySearchDraftSignature !== librarySearchSubmittedSignature || !isHomeLibrarySearchSurface),
   );
   const shouldShowPlayerLibrarySearchPreview = Boolean(
-    hasLibrarySearchQuery && (librarySearchDraftSignature !== librarySearchSubmittedSignature || !isPlayerLibrarySearchSurface),
+    hasPlayerLibrarySearchQuery &&
+      (playerLibrarySearchDraftSignature !== librarySearchSubmittedSignature || !isPlayerLibrarySearchSurface),
   );
   const { visibleResults: visibleLibrarySearchResults, hasMoreResults: hasMoreLibrarySearchResults } = useMemo(
     () => getVisibleLibrarySearchResults(librarySearchResults, librarySearchVisibleCount),
@@ -7540,8 +7560,8 @@ export default function App() {
                 >
                   <input
                     type="search"
-                    value={librarySearchQuery}
-                    onChange={(event) => setLibrarySearchQuery(event.target.value)}
+                    value={homeLibrarySearchQuery}
+                    onChange={(event) => setHomeLibrarySearchQuery(event.target.value)}
                     placeholder={librarySearchPlaceholder}
                     aria-label="片库搜索"
                   />
@@ -7550,7 +7570,7 @@ export default function App() {
                     disabled={
                       isLibrarySearchLoading ||
                       !librarySearchVideos.length ||
-                      !librarySearchQuery.trim()
+                      !homeLibrarySearchQuery.trim()
                     }
                     title="搜索片库"
                   >
@@ -7563,9 +7583,9 @@ export default function App() {
                       <span>搜索预览</span>
                       <small>仅本地匹配，不调用 AI</small>
                     </div>
-                    {librarySearchPreviewResults.length ? (
+                    {homeLibrarySearchPreviewResults.length ? (
                       <div className="home-compact-list library-search-preview-results">
-                        {librarySearchPreviewResults.map(renderLibrarySearchResult)}
+                        {homeLibrarySearchPreviewResults.map(renderLibrarySearchResult)}
                       </div>
                     ) : (
                       <div className="empty-list compact">本地预览暂无命中</div>
@@ -8460,8 +8480,8 @@ export default function App() {
           >
             <input
               type="search"
-              value={librarySearchQuery}
-              onChange={(event) => setLibrarySearchQuery(event.target.value)}
+              value={playerLibrarySearchQuery}
+              onChange={(event) => setPlayerLibrarySearchQuery(event.target.value)}
               placeholder={librarySearchPlaceholder}
               aria-label="播放器片库搜索"
             />
@@ -8470,7 +8490,7 @@ export default function App() {
               disabled={
                 isLibrarySearchLoading ||
                 !librarySearchVideos.length ||
-                !librarySearchQuery.trim()
+                !playerLibrarySearchQuery.trim()
               }
               title="搜索片库"
             >
@@ -8483,9 +8503,9 @@ export default function App() {
                 <span>搜索预览</span>
                 <small>仅本地匹配</small>
               </div>
-              {librarySearchPreviewResults.length ? (
+              {playerLibrarySearchPreviewResults.length ? (
                 <div className="home-compact-list library-search-preview-results player-library-search-preview-results">
-                  {librarySearchPreviewResults.map(renderLibrarySearchResult)}
+                  {playerLibrarySearchPreviewResults.map(renderLibrarySearchResult)}
                 </div>
               ) : (
                 <div className="empty-list compact">本地预览暂无命中</div>
