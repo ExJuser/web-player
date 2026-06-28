@@ -31,7 +31,8 @@ import {
   dedupeDanmakuComments,
   parseDanmakuUrl,
 } from "./src/danmakuUtils";
-import { normalizeAiLibrarySearchAnswer, normalizeLibrarySearchCandidates, parseAiJsonObject } from "./server/aiResponseUtils.mjs";
+import { parseAiJsonObject } from "./server/aiResponseUtils.mjs";
+import { searchLibraryWithAi, suggestTagMergeWithAi } from "./server/aiLibraryService.mjs";
 import {
   createBangumiMatchResult,
   normalizeBangumiMatchPayload,
@@ -640,79 +641,6 @@ async function streamProgressRecap(env, payload, response) {
   } finally {
     response.end();
   }
-}
-
-async function searchLibraryWithAi(env, payload) {
-  const query = typeof payload?.query === "string" ? payload.query.trim().slice(0, 300) : "";
-  const candidates = normalizeLibrarySearchCandidates(payload?.candidates);
-  if (!query) throw new Error("Search query is required.");
-  if (!candidates.length) throw new Error("Library candidates are required.");
-
-  const catalog = candidates
-    .map(
-      (candidate, index) =>
-        `${index + 1}. id=${JSON.stringify(candidate.id)} | series=${candidate.seriesTitle || "未分组"} | name=${candidate.name} | path=${candidate.relativePath} | tags=${candidate.tags.join(", ") || "无"} | progress=${candidate.progressLabel || "未知"} | favorite=${candidate.isFavorite ? "yes" : "no"} | completed=${candidate.isCompleted ? "yes" : "no"}`,
-    )
-    .join("\n");
-
-  const raw = await callDeepSeek(
-    env,
-    [
-      {
-        role: "system",
-        content:
-          "你是本地片库搜索助手。搜索范围是用户提供的当前媒体模式候选视频，不是当前继续观看条目。只能从候选视频中选择，不能编造片名或使用候选外内容。answer 只能解释 matchIds 中已选中的条目；如果没有明确匹配，answer 写“AI 未找到明确匹配”。请返回严格 JSON：{\"answer\":\"简短中文理由\",\"matchIds\":[\"候选 id\"]}。matchIds 最多 5 个。",
-      },
-      {
-        role: "user",
-        content: `搜索需求：${query}\n\n候选片库：\n${catalog}`,
-      },
-    ],
-    { responseFormat: { type: "json_object" } },
-  );
-  const parsed = parseAiJsonObject(raw) ?? {};
-  const candidateIds = new Set(candidates.map((candidate) => candidate.id));
-  const matchIds = Array.isArray(parsed?.matchIds)
-    ? parsed.matchIds.filter((id) => typeof id === "string" && candidateIds.has(id)).slice(0, 5)
-    : [];
-  const answer = normalizeAiLibrarySearchAnswer(parsed, matchIds);
-  return { answer, matchIds };
-}
-
-async function suggestTagMergeWithAi(env, payload) {
-  const newTags = Array.isArray(payload?.newTags)
-    ? payload.newTags.filter((tag) => typeof tag === "string" && tag.trim()).map((tag) => tag.trim().slice(0, 40)).slice(0, 12)
-    : [];
-  const existingTags = Array.isArray(payload?.existingTags)
-    ? payload.existingTags.filter((tag) => typeof tag === "string" && tag.trim()).map((tag) => tag.trim().slice(0, 40)).slice(0, 80)
-    : [];
-  if (!newTags.length || !existingTags.length) return {};
-
-  const raw = await callDeepSeek(
-    env,
-    [
-      {
-        role: "system",
-        content:
-          "你是视频标签整理助手。只能判断用户给出的新标签是否和已有标签语义相同或非常接近。返回严格 JSON：{\"newTag\":\"新标签\",\"existingTag\":\"已有标签\",\"reason\":\"简短中文原因\"}。如果没有明确合并建议，返回 {}。",
-      },
-      {
-        role: "user",
-        content: `新标签：${newTags.join("、")}\n已有标签：${existingTags.join("、")}`,
-      },
-    ],
-    { responseFormat: { type: "json_object" } },
-  );
-  const parsed = parseAiJsonObject(raw) ?? {};
-  const newTag = typeof parsed?.newTag === "string" && newTags.includes(parsed.newTag) ? parsed.newTag : "";
-  const existingTag =
-    typeof parsed?.existingTag === "string" && existingTags.includes(parsed.existingTag) ? parsed.existingTag : "";
-  if (!newTag || !existingTag) return {};
-  return {
-    newTag,
-    existingTag,
-    reason: typeof parsed?.reason === "string" ? parsed.reason.slice(0, 120) : "",
-  };
 }
 
 async function searchBangumiSubjects(env, title) {
