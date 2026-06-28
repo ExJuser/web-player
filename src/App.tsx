@@ -40,7 +40,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 
-import { readLocalApiErrorMessage } from "./localApiClient";
+import { createLocalApiHeaders, readLocalApiErrorMessage } from "./localApiClient";
 import {
   createAiLibrarySearchResults,
   getVisibleLibrarySearchResults,
@@ -830,11 +830,7 @@ function normalizeLocalConfig(config: LocalConfig): LocalConfig {
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, {
     ...init,
-    headers: {
-      Accept: "application/json",
-      ...(init?.body ? { "Content-Type": "application/json" } : {}),
-      ...(init?.headers ?? {}),
-    },
+    headers: createLocalApiHeaders("application/json", init),
   });
   if (!response.ok) {
     throw new Error(await readLocalApiErrorMessage(response));
@@ -845,11 +841,7 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
 async function readAiStream(url: string, init: RequestInit, onEvent: (event: AiStreamEvent) => void) {
   const response = await fetch(url, {
     ...init,
-    headers: {
-      Accept: "application/x-ndjson",
-      ...(init.body ? { "Content-Type": "application/json" } : {}),
-      ...(init.headers ?? {}),
-    },
+    headers: createLocalApiHeaders("application/x-ndjson", init),
   });
   if (!response.ok) {
     throw new Error(await readLocalApiErrorMessage(response));

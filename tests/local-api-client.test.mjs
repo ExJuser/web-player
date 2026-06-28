@@ -5,6 +5,24 @@ import { importTsModule } from "./importTsModule.mjs";
 
 const localApiClient = await importTsModule(new URL("../src/localApiClient.ts", import.meta.url));
 
+test("createLocalApiHeaders sets accept and json content type for request bodies", () => {
+  assert.deepEqual(localApiClient.createLocalApiHeaders("application/json"), { Accept: "application/json" });
+  assert.deepEqual(localApiClient.createLocalApiHeaders("application/x-ndjson", { body: "{}" }), {
+    Accept: "application/x-ndjson",
+    "Content-Type": "application/json",
+  });
+});
+
+test("createLocalApiHeaders lets explicit headers override defaults", () => {
+  assert.deepEqual(
+    localApiClient.createLocalApiHeaders("application/json", {
+      body: "{}",
+      headers: { Accept: "text/plain", "Content-Type": "text/plain", "X-Test": "1" },
+    }),
+    { Accept: "text/plain", "Content-Type": "text/plain", "X-Test": "1" },
+  );
+});
+
 test("readLocalApiErrorMessage uses local api error payloads", async () => {
   const message = await localApiClient.readLocalApiErrorMessage({
     statusText: "Internal Server Error",

@@ -3,6 +3,16 @@ export type LocalApiErrorResponse = {
   json: () => Promise<unknown>;
 };
 
+export type LocalApiRequestOptions = Pick<RequestInit, "body" | "headers">;
+
+export function createLocalApiHeaders(accept: string, init?: LocalApiRequestOptions) {
+  return {
+    Accept: accept,
+    ...(init?.body ? { "Content-Type": "application/json" } : {}),
+    ...(init?.headers ?? {}),
+  };
+}
+
 export async function readLocalApiErrorMessage(response: LocalApiErrorResponse) {
   let message = response.statusText;
   try {
