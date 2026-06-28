@@ -4,6 +4,7 @@ import test from "node:test";
 import { importTsModule } from "./importTsModule.mjs";
 
 const libraryUtils = await importTsModule(new URL("../src/playerLibraryUtils.ts", import.meta.url));
+const playerStorage = await importTsModule(new URL("../src/playerStorage.ts", import.meta.url));
 
 test("classifies supported media files and ignored local videos", () => {
   assert.equal(libraryUtils.isVideoFile("Movie.MKV"), true);
@@ -40,4 +41,52 @@ test("hashes strings and sanitizes library names", () => {
   assert.equal(libraryUtils.sanitizeLibraryName(" My Anime Library! "), "My-Anime-Library");
   assert.equal(libraryUtils.sanitizeLibraryName("中文片库"), "library");
   assert.equal(libraryUtils.sanitizeLibraryName("a".repeat(80)), "a".repeat(48));
+});
+
+test("creates deterministic library metadata from a directory and media scan", () => {
+  const originalNow = Date.now;
+  Date.now = () => 1700000000000;
+  try {
+    const media = {
+      videos: [
+        { relativePath: "B/02.mkv", size: 200, lastModified: 2 },
+        { relativePath: "A/01.mkv", size: 100, lastModified: 1 },
+      ],
+      subtitles: [],
+      scannedFiles: 4,
+      filteredSmallVideos: 1,
+    };
+    const first = libraryUtils.createLibraryMetadata({ name: "My Anime Library!" }, media);
+    const second = libraryUtils.createLibraryMetadata({ name: "My Anime Library!" }, { ...media, videos: [...media.videos].reverse() });
+
+    assert.deepEqual(first, second);
+    assert.equal(first.name, "My Anime Library!");
+    assert.equal(first.videoCount, 2);
+    assert.equal(first.scannedFiles, 4);
+    assert.equal(first.updatedAt, 1700000000000);
+    assert.match(first.id, /^My-Anime-Library-[a-z0-9]+$/);
+  } finally {
+    Date.now = originalNow;
+  }
+});
+
+test("detects whether a player data store contains user data", () => {
+  const emptyStore = playerStorage.createDefaultPlayerDataStore();
+  assert.equal(libraryUtils.hasStoredData(emptyStore), false);
+
+  assert.equal(libraryUtils.hasStoredData({ ...emptyStore, favorites: ["video-1"] }), true);
+  assert.equal(
+    libraryUtils.hasStoredData({
+      ...emptyStore,
+      preferences: { ...emptyStore.preferences, selectedSeriesKey: "root:show" },
+    }),
+    true,
+  );
+  assert.equal(
+    libraryUtils.hasStoredData({
+      ...emptyStore,
+      danmakuPreferences: { ...emptyStore.danmakuPreferences, enabled: !emptyStore.danmakuPreferences.enabled },
+    }),
+    true,
+  );
 });

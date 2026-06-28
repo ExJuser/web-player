@@ -1,13 +1,18 @@
 import {
+  collator,
+  defaultDanmakuPreferences,
+  defaultPlayerPreferences,
   IGNORED_VIDEO_BASENAMES,
   MIN_LOCAL_VIDEO_SIZE_BYTES,
   SUBTITLE_EXTENSIONS,
   VIDEO_EXTENSIONS,
 } from "./playerConstants";
+import type { MediaCollection, PlayerDataStore, PlayerLibraryMetadata } from "./playerTypes";
 
 const PHOTO_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif", ".bmp"]);
 
 type FileFingerprint = Pick<File, "size" | "lastModified">;
+type LibraryDirectory = { name: string };
 
 export function hasExtension(name: string, extensions: Set<string>) {
   const dotIndex = name.lastIndexOf(".");
@@ -75,5 +80,37 @@ export function sanitizeLibraryName(name: string) {
       .replace(/[^A-Za-z0-9._~-]+/g, "-")
       .replace(/^-+|-+$/g, "")
       .slice(0, 48) || "library"
+  );
+}
+
+export function createLibraryMetadata(directory: LibraryDirectory, media: MediaCollection): PlayerLibraryMetadata {
+  const fingerprint = [
+    directory.name,
+    media.videos.length,
+    ...media.videos
+      .map((video) => `${video.relativePath}|${video.size}|${video.lastModified}`)
+      .sort((a, b) => collator.compare(a, b)),
+  ].join("\n");
+  const id = `${sanitizeLibraryName(directory.name)}-${hashString(fingerprint)}`;
+  return {
+    id,
+    name: directory.name,
+    videoCount: media.videos.length,
+    scannedFiles: media.scannedFiles,
+    updatedAt: Date.now(),
+  };
+}
+
+export function hasStoredData(store: PlayerDataStore) {
+  return Boolean(
+    Object.keys(store.progress).length ||
+      store.favorites.length ||
+      Object.keys(store.videoTags).length ||
+      Object.keys(store.videoStats).length ||
+      Object.keys(store.tagMergeDecisions).length ||
+      store.embeddedSubtitles.length ||
+      Object.keys(store.danmakuSelections).length ||
+      JSON.stringify(store.danmakuPreferences) !== JSON.stringify(defaultDanmakuPreferences) ||
+      JSON.stringify(store.preferences) !== JSON.stringify(defaultPlayerPreferences)
   );
 }

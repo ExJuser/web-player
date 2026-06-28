@@ -79,7 +79,6 @@ import type {
   PlaybackProgress,
   PlayerDataStore,
   PlayerGlobalMetadata,
-  PlayerLibraryMetadata,
   PlayerMediaRootStatus,
   PlayerPersistentSettings,
   PlayerPreferences,
@@ -147,10 +146,12 @@ import { createDanmakuComment, stableHash } from "./danmakuUtils";
 import { directoryPartsOf, fallbackMediaRootLabelForVideo } from "./mediaPathUtils";
 import {
   basePathOf,
+  createLibraryMetadata,
   createGlobalVideoId,
   createLegacyVideoId,
   createPhotoAlbumFolderId,
   hashString,
+  hasStoredData,
   isObjectUrl,
   isPhotoFile,
   isSubtitleFile,
@@ -230,38 +231,6 @@ function prunePhotoObjectUrlCache(
 
 function supportsServerFileAccess(root: LocalMediaRoot | null | undefined) {
   return Boolean(root && (root.source !== "browser" || root.localPath));
-}
-
-function createLibraryMetadata(directory: FileSystemDirectoryHandle, media: MediaCollection): PlayerLibraryMetadata {
-  const fingerprint = [
-    directory.name,
-    media.videos.length,
-    ...media.videos
-      .map((video) => `${video.relativePath}|${video.size}|${video.lastModified}`)
-      .sort((a, b) => collator.compare(a, b)),
-  ].join("\n");
-  const id = `${sanitizeLibraryName(directory.name)}-${hashString(fingerprint)}`;
-  return {
-    id,
-    name: directory.name,
-    videoCount: media.videos.length,
-    scannedFiles: media.scannedFiles,
-    updatedAt: Date.now(),
-  };
-}
-
-function hasStoredData(store: PlayerDataStore) {
-  return Boolean(
-    Object.keys(store.progress).length ||
-      store.favorites.length ||
-      Object.keys(store.videoTags).length ||
-      Object.keys(store.videoStats).length ||
-      Object.keys(store.tagMergeDecisions).length ||
-      store.embeddedSubtitles.length ||
-      Object.keys(store.danmakuSelections).length ||
-      JSON.stringify(store.danmakuPreferences) !== JSON.stringify(defaultDanmakuPreferences) ||
-      JSON.stringify(store.preferences) !== JSON.stringify(defaultPlayerPreferences)
-  );
 }
 
 async function ensureDirectoryReadPermission(directory: FileSystemDirectoryHandle) {
