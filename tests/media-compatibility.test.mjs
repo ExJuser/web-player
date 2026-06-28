@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   classifyMediaProbe,
   createCompatibleMediaCacheId,
+  createCompatibleRemuxArgs,
   createNeedsLocalPathPlayability,
   mediaContentTypeForPath,
 } from "../server/mediaCompatibility.mjs";
@@ -114,6 +115,20 @@ test("compatible cache id changes when file identity changes", () => {
 
   assert.match(first, /^[a-f0-9]{64}$/);
   assert.notEqual(first, second);
+});
+
+test("compatible remux regenerates a clean MP4 timeline without transcoding", () => {
+  const args = createCompatibleRemuxArgs("input.mkv", "output.tmp.mp4");
+
+  assert.deepEqual(args.slice(0, 7), ["-v", "error", "-y", "-fflags", "+genpts", "-i", "input.mkv"]);
+  assert.equal(args.at(-1), "output.tmp.mp4");
+  assert.equal(args.includes("copy"), true);
+  assert.equal(args.includes("-avoid_negative_ts"), true);
+  assert.equal(args.includes("make_zero"), true);
+  assert.equal(args.includes("-video_track_timescale"), true);
+  assert.equal(args.includes("90000"), true);
+  assert.equal(args.includes("-map_metadata"), true);
+  assert.equal(args.includes("-map_chapters"), true);
 });
 
 test("maps media content types by extension", () => {

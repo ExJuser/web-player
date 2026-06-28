@@ -25,6 +25,7 @@ const mediaContentTypesByExtension = {
   ".mov": "video/quicktime",
   ".mkv": "video/x-matroska",
 };
+const compatibleMediaCacheVersion = "mp4-remux-v2";
 
 export function mediaContentTypeForPath(filePath) {
   const extension = path.extname(filePath).toLowerCase();
@@ -32,7 +33,7 @@ export function mediaContentTypeForPath(filePath) {
 }
 
 export function createCompatibleMediaCacheId(rootId, relativePath, size, lastModified) {
-  return hashValue(`${rootId || ""}|${relativePath || ""}|${size || 0}|${lastModified || 0}|mp4-remux-v1`);
+  return hashValue(`${rootId || ""}|${relativePath || ""}|${size || 0}|${lastModified || 0}|${compatibleMediaCacheVersion}`);
 }
 
 export function createCompatibleMediaUrl(cacheId) {
@@ -262,6 +263,38 @@ export async function getCachedCompatibleMedia(rootPath, rootId, video) {
   }
 }
 
+export function createCompatibleRemuxArgs(sourcePath, outputPath) {
+  return [
+    "-v",
+    "error",
+    "-y",
+    "-fflags",
+    "+genpts",
+    "-i",
+    sourcePath,
+    "-map",
+    "0:v:0",
+    "-map",
+    "0:a:0?",
+    "-map_metadata",
+    "-1",
+    "-map_chapters",
+    "-1",
+    "-c",
+    "copy",
+    "-avoid_negative_ts",
+    "make_zero",
+    "-video_track_timescale",
+    "90000",
+    "-movflags",
+    "+faststart",
+    "-progress",
+    "pipe:1",
+    "-nostats",
+    outputPath,
+  ];
+}
+
 async function createVideoPlayability({ root, video, filePath, compatibleMediaRoot, runProcess }) {
   if (root?.source === "browser" && !root.localPath) {
     return createNeedsLocalPathPlayability();
@@ -325,25 +358,7 @@ export async function remuxCompatibleMedia({ runProcess, sourcePath, outputPath,
   try {
     await runProcess(
       "ffmpeg",
-      [
-        "-v",
-        "error",
-        "-y",
-        "-i",
-        sourcePath,
-        "-map",
-        "0:v:0",
-        "-map",
-        "0:a:0?",
-        "-c",
-        "copy",
-        "-movflags",
-        "+faststart",
-        "-progress",
-        "pipe:1",
-        "-nostats",
-        temporaryOutputPath,
-      ],
+      createCompatibleRemuxArgs(sourcePath, temporaryOutputPath),
       {
         timeoutMs: 10 * 60 * 1000,
         timeoutMessage: "生成兼容 MP4 超时。",
