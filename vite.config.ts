@@ -45,6 +45,7 @@ import { clearLocalCacheItems, createCacheStatus as createLocalCacheStatus, crea
 import { callDeepSeek, chunkText, streamDeepSeek } from "./server/deepSeekClient.mjs";
 import { createEmbeddedSubtitleService } from "./server/embeddedSubtitles.mjs";
 import { readJsonFile, writeJsonFile } from "./server/jsonFiles.mjs";
+import { createPublicLocalConfig, defaultAppConfig } from "./server/localConfig.mjs";
 import { detectTools, runProcess } from "./server/processRunner.mjs";
 import { formatRemoteFetchError, requestExternalJson, requestExternalText } from "./server/remoteFetch.mjs";
 import { LocalDataSqliteStore } from "./server/sqliteStorage.mjs";
@@ -214,10 +215,6 @@ async function clearCacheItems(payload) {
   });
 }
 
-function normalizeMediaRoots(config) {
-  return normalizeMediaRootsFromConfig(config);
-}
-
 async function upsertMediaRoot(payload) {
   return upsertMediaRootInConfig(appConfigPath, payload);
 }
@@ -227,35 +224,12 @@ async function updateMediaRootLocalPath(payload) {
 }
 
 async function loadAppConfig() {
-  return readJsonFile(appConfigPath, { server: { port: 3001 }, media: { roots: [] } });
-}
-
-function publicLocalConfig(config, tools, env) {
-  const roots = normalizeMediaRoots(config).map((root) => ({
-    id: root.id,
-    label: root.label,
-    basename: root.basename,
-    path: root.path,
-    source: root.source,
-    localPath: root.localPath,
-  }));
-  return {
-    mediaRoots: roots,
-    ffmpeg: tools,
-    ai: {
-      configured: Boolean(env.DEEPSEEK_API_KEY),
-      model: env.DEEPSEEK_MODEL || "deepseek-chat",
-    },
-    bangumi: {
-      configured: Boolean(env.BANGUMI_USER_AGENT && env.BANGUMI_ACCESS_TOKEN),
-      proxyConfigured: Boolean(env.BANGUMI_LENS_PROXY),
-    },
-  };
+  return readJsonFile(appConfigPath, defaultAppConfig);
 }
 
 function findMediaRoot(config, rootId) {
   const id = typeof rootId === "string" ? rootId.trim() : "";
-  return normalizeMediaRoots(config).find((root) => root.id === id) ?? null;
+  return normalizeMediaRootsFromConfig(config).find((root) => root.id === id) ?? null;
 }
 
 async function probeMedia(config, payload) {
@@ -713,7 +687,7 @@ function playerDataApiPlugin(env) {
       const store = await getLocalDataStore();
 
       if (url.pathname === "/api/local-config" && request.method === "GET") {
-        sendJson(response, 200, publicLocalConfig(await loadAppConfig(), await getTools(), env));
+        sendJson(response, 200, createPublicLocalConfig(await loadAppConfig(), await getTools(), env));
         return;
       }
 
@@ -742,7 +716,7 @@ function playerDataApiPlugin(env) {
         const payload = JSON.parse((await readBody(request)).toString("utf8"));
         const mediaRoot = await upsertMediaRoot(payload);
         sendJson(response, 200, {
-          ...publicLocalConfig(await loadAppConfig(), await getTools(), env),
+          ...createPublicLocalConfig(await loadAppConfig(), await getTools(), env),
           mediaRoot,
         });
         return;
@@ -752,7 +726,7 @@ function playerDataApiPlugin(env) {
         const payload = JSON.parse((await readBody(request)).toString("utf8"));
         const result = await updateMediaRootLocalPath(payload);
         sendJson(response, 200, {
-          ...publicLocalConfig(result.config, await getTools(), env),
+          ...createPublicLocalConfig(result.config, await getTools(), env),
           mediaRoot: result.mediaRoot,
         });
         return;
