@@ -2987,6 +2987,74 @@ button {
   gap: 10px;
 }
 
+.player-library-search {
+  display: grid;
+  flex: 0 0 auto;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #242a31;
+  border-radius: 8px;
+  background: rgba(26, 30, 36, 0.72);
+}
+
+.player-library-search-form {
+  grid-template-columns: minmax(0, 1fr) 32px;
+}
+
+.player-library-search-form input,
+.player-library-search-form button {
+  height: 32px;
+}
+
+.player-library-search-form button {
+  width: 32px;
+}
+
+.player-library-search-preview {
+  gap: 6px;
+  padding: 8px;
+}
+
+.player-library-search-preview-results {
+  max-height: 152px;
+}
+
+.player-library-search-status {
+  min-height: 0;
+  padding: 6px 8px;
+}
+
+.player-library-search-answer {
+  max-height: 72px;
+  padding: 8px;
+  font-size: 12px;
+}
+
+.player-library-search-results {
+  max-height: min(260px, 32vh);
+  scrollbar-color: rgba(142, 151, 165, 0.58) rgba(20, 22, 26, 0.35);
+}
+
+.player-library-search .library-folder-result {
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 8px;
+  padding: 8px;
+}
+
+.player-library-search .library-folder-icon {
+  width: 34px;
+  height: 34px;
+}
+
+.player-library-search .library-folder-copy strong {
+  font-size: 13px;
+}
+
+.player-library-search .library-folder-copy small {
+  font-size: 11px;
+}
+
 .playlist-sort-control + .playlist-order-button,
 .playlist-filter + .playlist-clear-button {
   margin-left: 2px;
@@ -3594,6 +3662,38 @@ button {
 .compatible-media-dialog-file span {
   color: #9aa4b2;
   font-size: 12px;
+}
+
+.compatible-media-progress {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.compatible-media-progress-track {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #2b323d;
+}
+
+.compatible-media-progress-track span {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: #00a1d6;
+  transition: width 180ms ease;
+}
+
+.compatible-media-progress small {
+  min-width: 44px;
+  color: #b8c2cf;
+  font-size: 12px;
+  text-align: right;
 }
 
 .dialog-close {
@@ -4715,6 +4815,7 @@ button {
 .app-shell.theme-light .shortcut-group h3,
 .app-shell.theme-light .dialog-copy p,
 .app-shell.theme-light .compatible-media-dialog-file span,
+.app-shell.theme-light .compatible-media-progress small,
 .app-shell.theme-light .current-video-meta dt,
 .app-shell.theme-light .compatible-media-status,
 .app-shell.theme-light .timeline-row > span,
@@ -5329,6 +5430,17 @@ button {
   border-left-color: #d7e0ea;
 }
 
+.app-shell.theme-light .player-library-search,
+:root[data-theme="light"] .player-library-search {
+  border-color: #d7e0ea;
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.app-shell.theme-light .player-library-search-results,
+:root[data-theme="light"] .player-library-search-results {
+  scrollbar-color: rgba(100, 116, 139, 0.52) rgba(226, 232, 240, 0.72);
+}
+
 .app-shell.theme-light .player-mode-indicator {
   border-color: #cfd8e3;
   background: #ffffff;
@@ -5562,6 +5674,7 @@ button {
 
 :root[data-theme="light"] .dialog-copy p,
 :root[data-theme="light"] .compatible-media-dialog-file span,
+:root[data-theme="light"] .compatible-media-progress small,
 :root[data-theme="light"] .shortcut-dialog-note,
 :root[data-theme="light"] .shortcut-dialog-footer span,
 :root[data-theme="light"] .shortcut-group h3,
@@ -5588,6 +5701,11 @@ button {
   border-color: #cfd8e3;
   background: #ffffff;
   color: #243044;
+}
+
+.app-shell.theme-light .compatible-media-progress-track,
+:root[data-theme="light"] .compatible-media-progress-track {
+  background: #d7e0ea;
 }
 
 :root[data-theme="light"] .secondary-button:hover,
@@ -5680,6 +5798,10 @@ button {
     border-left: 0;
     border-top: 1px solid #262c35;
     padding: 14px 0 0;
+  }
+
+  .player-library-search-results {
+    max-height: 220px;
   }
 
   .home-dashboard {
@@ -5780,6 +5902,15 @@ button {
   .playlist-tools {
     width: 100%;
     flex-wrap: wrap;
+  }
+
+  .player-library-search {
+    padding: 9px;
+  }
+
+  .player-library-search-preview-results,
+  .player-library-search-results {
+    max-height: 190px;
   }
 
   .home-dashboard {

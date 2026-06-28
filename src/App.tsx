@@ -819,6 +819,11 @@ type CompatibleRemuxResponse = {
   playability: NonNullable<VideoItem["playability"]>;
 };
 
+type CompatibleRemuxStreamEvent =
+  | { type: "progress"; percent?: number; message?: string }
+  | { type: "done"; result: CompatibleRemuxResponse }
+  | { type: "error"; error: string };
+
 type MediaProbeResponse = {
   playability: NonNullable<VideoItem["playability"]>;
   metadata?: VideoMetadata;
@@ -1198,6 +1203,7 @@ export default function App() {
   const currentVideoIdRef = useRef<string | null>(null);
   const playbackClockTimerRef = useRef<number | null>(null);
   const saveTimerRef = useRef<number | null>(null);
+  const saveTimerVideoIdRef = useRef<string | null>(null);
   const playlistAutoScrollTimerRef = useRef<number | null>(null);
   const controlsHideTimerRef = useRef<number | null>(null);
   const autoNextTimerRef = useRef<number | null>(null);
@@ -1267,6 +1273,8 @@ export default function App() {
   const photoImageFilePromisesRef = useRef<Record<string, Promise<File | null>>>({});
   const librarySearchResultsRef = useRef<HTMLDivElement | null>(null);
   const librarySearchLoadMoreRef = useRef<HTMLDivElement | null>(null);
+  const playerLibrarySearchResultsRef = useRef<HTMLDivElement | null>(null);
+  const playerLibrarySearchLoadMoreRef = useRef<HTMLDivElement | null>(null);
   const librarySearchRunIdRef = useRef(0);
 
   useEffect(() => {
@@ -1303,7 +1311,8 @@ export default function App() {
     videoId: string;
     videoName: string;
   } | null>(null);
-  const [compatibleMediaTask, setCompatibleMediaTask] = useState<{ label: string; videoName: string } | null>(null);
+  const [compatibleMediaTask, setCompatibleMediaTask] = useState<{ label: string; videoName: string; progress: number; status: string } | null>(null);
+  const compatibleMediaAbortControllerRef = useRef<AbortController | null>(null);
   const [compatibleMediaMessage, setCompatibleMediaMessage] = useState("");
   const [isAiPanelOpen, setIsAiPanelOpen] = useState(false);
   const [aiTab, setAiTab] = useState<"summary" | "qa" | "recap">("summary");
@@ -3733,13 +3742,22 @@ export default function App() {
     replaceProgressStore(nextStore, "已清空当前模式的观看记录");
   }, [activeBangumiSeries, activeSeriesProgressVideoIds, currentVideoId, isSeriesMode, modeFilteredVideos, replaceProgressStore]);
 
+  const clearPendingProgressSave = useCallback(() => {
+    if (saveTimerRef.current) {
+      window.clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+    saveTimerVideoIdRef.current = null;
+  }, []);
+
   const persistCurrentProgress = useCallback(
     (completed = false) => {
       const element = videoRef.current;
       if (!element || !currentVideo) return;
+      clearPendingProgressSave();
       updateProgress(currentVideo, element.currentTime, selectTrustedDuration([currentVideo.duration, element.duration, duration]) || 0, completed);
     },
-    [currentVideo, duration, updateProgress],
+    [clearPendingProgressSave, currentVideo, duration, updateProgress],
   );
 
   const resetHoldSpeedState = useCallback(() => {
@@ -5202,6 +5220,8 @@ export default function App() {
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [persistCurrentProgress]);
 
+  useEffect(() => clearPendingProgressSave, [clearPendingProgressSave]);
+
   const togglePlay = useCallback(() => {
     const element = videoRef.current;
     if (!element || !currentVideo) return;
@@ -5681,26 +5701,59 @@ export default function App() {
     setCompatibleMediaTask({
       label: compatibleMediaConfirm.label,
       videoName: compatibleMediaConfirm.videoName,
+      progress: 0,
+      status: "正在准备生成任务...",
     });
     setCompatibleMediaMessage(`正在${compatibleMediaConfirm.label}...`);
+    const abortController = new AbortController();
+    compatibleMediaAbortControllerRef.current = abortController;
+    let remuxResult: CompatibleRemuxResponse | null = null;
     try {
-      const payload = await fetchJson<CompatibleRemuxResponse>("/api/media/compatible/remux", {
+      await readLocalApiStream<CompatibleRemuxStreamEvent>("/api/media/compatible/remux", {
         method: "POST",
+        signal: abortController.signal,
         body: JSON.stringify({
           rootId: compatibleMediaConfirm.rootId,
           relativePath: compatibleMediaConfirm.relativePath,
         }),
+      }, (event) => {
+        if (event.type === "progress") {
+          const nextProgress = clamp(Number(event.percent) || 0, 0, 100);
+          setCompatibleMediaTask((current) => current
+            ? { ...current, progress: nextProgress, status: event.message || current.status }
+            : current);
+          if (event.message) setCompatibleMediaMessage(event.message);
+          return;
+        }
+        if (event.type === "done") {
+          remuxResult = event.result;
+        }
       });
-      updateVideoPlayability(compatibleMediaConfirm.videoId, payload.playability);
+      if (!remuxResult) throw new Error("生成兼容 MP4 未返回结果。");
+      updateVideoPlayability(compatibleMediaConfirm.videoId, remuxResult.playability);
       setCompatibleMediaMessage("已生成兼容 MP4，播放器将优先使用兼容版本。");
       setMessage("已生成兼容 MP4。");
     } catch (error) {
-      setCompatibleMediaMessage(error instanceof Error ? error.message : "生成兼容 MP4 失败。");
+      const message = abortController.signal.aborted
+        ? "已取消生成兼容 MP4。"
+        : error instanceof Error
+          ? error.message
+          : "生成兼容 MP4 失败。";
+      setCompatibleMediaMessage(message);
     } finally {
+      if (compatibleMediaAbortControllerRef.current === abortController) {
+        compatibleMediaAbortControllerRef.current = null;
+      }
       setCompatibleMediaVideoId(null);
       setCompatibleMediaTask(null);
     }
   }, [compatibleMediaConfirm, compatibleMediaVideoId, updateVideoPlayability]);
+
+  const cancelCompatibleMediaGeneration = useCallback(() => {
+    compatibleMediaAbortControllerRef.current?.abort();
+    setCompatibleMediaTask((current) => current ? { ...current, status: "正在取消生成任务..." } : current);
+    setCompatibleMediaMessage("正在取消生成兼容 MP4...");
+  }, []);
 
   const applyDanmakuSourcePayload = useCallback(
     (payload: DanmakuSourcePayload, options?: { persist?: boolean; message?: string }) => {
@@ -6178,10 +6231,11 @@ export default function App() {
   }, [librarySearchResults.length]);
 
   useEffect(() => {
-    if (!hasMoreLibrarySearchResults || !librarySearchResultsRef.current || !librarySearchLoadMoreRef.current) return;
+    const shouldUsePlayerSearchContainer = !isNonPlayerViewVisible && !isPrivacyMode && !isCinemaMode;
+    const root = shouldUsePlayerSearchContainer ? playerLibrarySearchResultsRef.current : librarySearchResultsRef.current;
+    const target = shouldUsePlayerSearchContainer ? playerLibrarySearchLoadMoreRef.current : librarySearchLoadMoreRef.current;
+    if (!hasMoreLibrarySearchResults || !root || !target) return;
     if (typeof IntersectionObserver === "undefined") return;
-    const root = librarySearchResultsRef.current;
-    const target = librarySearchLoadMoreRef.current;
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries.some((entry) => entry.isIntersecting)) loadMoreLibrarySearchResults();
@@ -6190,7 +6244,14 @@ export default function App() {
     );
     observer.observe(target);
     return () => observer.disconnect();
-  }, [hasMoreLibrarySearchResults, loadMoreLibrarySearchResults, visibleLibrarySearchResults.length]);
+  }, [
+    hasMoreLibrarySearchResults,
+    isCinemaMode,
+    isNonPlayerViewVisible,
+    isPrivacyMode,
+    loadMoreLibrarySearchResults,
+    visibleLibrarySearchResults.length,
+  ]);
 
   const loadCacheStatus = useCallback(async () => {
     setIsCacheStatusLoading(true);
@@ -6884,11 +6945,20 @@ export default function App() {
     setCurrentTime(element.currentTime);
     setDuration(nextDuration);
 
+    if (saveTimerRef.current && saveTimerVideoIdRef.current !== currentVideo.id) {
+      clearPendingProgressSave();
+    }
     if (saveTimerRef.current) return;
+    const scheduledVideo = currentVideo;
+    const scheduledElement = element;
+    saveTimerVideoIdRef.current = scheduledVideo.id;
     saveTimerRef.current = window.setTimeout(() => {
       saveTimerRef.current = null;
-      updateProgress(currentVideo, element.currentTime, nextDuration);
-      recordPlaybackProgressForStats(currentVideo, element.currentTime, nextDuration);
+      saveTimerVideoIdRef.current = null;
+      if (videoRef.current !== scheduledElement || currentVideoIdRef.current !== scheduledVideo.id) return;
+      const scheduledDuration = selectTrustedDuration([scheduledVideo.duration, scheduledElement.duration, nextDuration]) || 0;
+      updateProgress(scheduledVideo, scheduledElement.currentTime, scheduledDuration);
+      recordPlaybackProgressForStats(scheduledVideo, scheduledElement.currentTime, scheduledDuration);
     }, 1500);
   };
 
@@ -8498,6 +8568,74 @@ export default function App() {
           </div>
         </div>
 
+        <section className="player-library-search library-search-card" aria-label="播放器片库搜索">
+          <form
+            className="library-search-form player-library-search-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void runLibrarySearch();
+            }}
+          >
+            <input
+              type="search"
+              value={librarySearchQuery}
+              onChange={(event) => setLibrarySearchQuery(event.target.value)}
+              placeholder={homeMediaMode === "special" ? "搜索片名、路径或标签" : "搜索片名，或描述想看的内容"}
+              aria-label="播放器片库搜索"
+            />
+            <button
+              type="submit"
+              disabled={
+                isLibrarySearchLoading ||
+                !modeFilteredVideos.length ||
+                !librarySearchQuery.trim()
+              }
+              title="搜索片库"
+            >
+              <Search size={17} />
+            </button>
+          </form>
+          {shouldShowLibrarySearchPreview ? (
+            <div className="library-search-preview player-library-search-preview">
+              <div className="library-search-preview-header">
+                <span>搜索预览</span>
+                <small>仅本地匹配</small>
+              </div>
+              {librarySearchPreviewResults.length ? (
+                <div className="home-compact-list library-search-preview-results player-library-search-preview-results">
+                  {librarySearchPreviewResults.map(renderLibrarySearchResult)}
+                </div>
+              ) : (
+                <div className="empty-list compact">本地预览暂无命中</div>
+              )}
+            </div>
+          ) : null}
+          <div className={`library-search-status player-library-search-status ${effectiveLibrarySearchMode}`}>
+            {isLibrarySearchLoading
+              ? "搜索中..."
+              : visibleLibrarySearchMessage ||
+                (homeMediaMode === "special" ? "特殊模式仅使用本地片名、路径或标签搜索。" : "明确片名会直接本地检索，复杂描述才调用 AI。")}
+          </div>
+          {visibleLibrarySearchAnswer ? <div className="library-search-answer player-library-search-answer">{visibleLibrarySearchAnswer}</div> : null}
+          {librarySearchResults.length ? (
+            <div className="home-compact-list library-search-results player-library-search-results" ref={playerLibrarySearchResultsRef}>
+              {visibleLibrarySearchResults.map(renderLibrarySearchResult)}
+              {hasMoreLibrarySearchResults ? (
+                <div className="library-search-load-more" ref={playerLibrarySearchLoadMoreRef}>
+                  <span>
+                    已显示 {visibleLibrarySearchResults.length} / {librarySearchResults.length}
+                  </span>
+                  <button type="button" onClick={loadMoreLibrarySearchResults}>
+                    加载更多
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          ) : librarySearchMode === "empty" ? (
+            <div className="empty-list compact">没有找到匹配{homeMediaMode === "special" ? "视频" : "文件夹"}</div>
+          ) : null}
+        </section>
+
         <div
           className="playlist"
           ref={playlistRef}
@@ -9019,7 +9157,18 @@ export default function App() {
           </div>
           <div className="compatible-media-dialog-file">
             <strong>{compatibleMediaTask.videoName}</strong>
-            <span>请保持当前页面打开</span>
+            <span>{compatibleMediaTask.status}</span>
+          </div>
+          <div className="compatible-media-progress" aria-label={`生成进度 ${Math.round(compatibleMediaTask.progress)}%`}>
+            <div className="compatible-media-progress-track">
+              <span style={{ width: `${compatibleMediaTask.progress}%` }} />
+            </div>
+            <small>{Math.round(compatibleMediaTask.progress)}%</small>
+          </div>
+          <div className="dialog-actions">
+            <button className="secondary-button" type="button" onClick={cancelCompatibleMediaGeneration}>
+              取消生成
+            </button>
           </div>
         </section>
       </div>
