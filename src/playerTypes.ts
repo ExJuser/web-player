@@ -57,6 +57,11 @@ export type VideoPlayability = {
   videoCodec?: string;
   audioCodec?: string;
   pixelFormat?: string;
+  videoProfile?: string;
+  videoLevel?: number;
+  frameRate?: number;
+  bitRate?: number;
+  performanceWarning?: string;
 };
 
 export type SubtitleItem = {

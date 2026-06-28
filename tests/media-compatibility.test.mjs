@@ -11,11 +11,34 @@ import { mkdir, truncate, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-function probe({ format = "matroska,webm", video = "h264", audio = "aac", pixFmt = "yuv420p", profile = "High", subtitles = [] } = {}) {
+function probe({
+  format = "matroska,webm",
+  video = "h264",
+  audio = "aac",
+  pixFmt = "yuv420p",
+  profile = "High",
+  level,
+  width = 1920,
+  height = 1080,
+  avgFrameRate,
+  bitRate,
+  subtitles = [],
+} = {}) {
   return {
-    format: { format_name: format },
+    format: { format_name: format, bit_rate: bitRate },
     streams: [
-      { index: 0, codec_type: "video", codec_name: video, pix_fmt: pixFmt, profile, width: 1920, height: 1080 },
+      {
+        index: 0,
+        codec_type: "video",
+        codec_name: video,
+        pix_fmt: pixFmt,
+        profile,
+        level,
+        width,
+        height,
+        avg_frame_rate: avgFrameRate,
+        bit_rate: bitRate,
+      },
       ...(audio ? [{ index: 1, codec_type: "audio", codec_name: audio }] : []),
       ...subtitles.map((codec, index) => ({ index: index + 2, codec_type: "subtitle", codec_name: codec })),
     ],
@@ -39,6 +62,26 @@ test("direct MP4 media reports image subtitle limitations", () => {
 
   assert.equal(result.playability.status, "direct");
   assert.match(result.playability.reason, /图形字幕/);
+});
+
+test("direct H.264 media reports high decode load risk", () => {
+  const result = classifyMediaProbe(
+    probe({
+      format: "mov,mp4,m4a,3gp,3g2,mj2",
+      width: 3840,
+      height: 2160,
+      avgFrameRate: "60000/1001",
+      bitRate: "55000000",
+      level: 51,
+    }),
+    "Episode.mp4",
+  );
+
+  assert.equal(result.playability.status, "direct");
+  assert.equal(result.playability.videoLevel, 51);
+  assert.equal(Math.round(result.playability.frameRate), 60);
+  assert.equal(result.playability.bitRate, 55000000);
+  assert.match(result.playability.performanceWarning, /4K|60fps|高码率|Level 5\.1/);
 });
 
 test("classifies MKV with MP4-compatible streams as remux recommended", () => {

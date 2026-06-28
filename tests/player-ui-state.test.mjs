@@ -59,6 +59,19 @@ test("formats playability status labels", () => {
 test("formats codec summaries from available playability metadata", () => {
   assert.equal(uiState.formatCodecSummary(undefined), "未探测");
   assert.equal(uiState.formatCodecSummary({ status: "direct", videoCodec: "h264", audioCodec: "aac", pixelFormat: "yuv420p" }), "h264 / aac / yuv420p");
+  assert.equal(
+    uiState.formatCodecSummary({
+      status: "direct",
+      videoCodec: "h264",
+      videoProfile: "High",
+      videoLevel: 51,
+      frameRate: 59.94,
+      bitRate: 55000000,
+      audioCodec: "aac",
+      pixelFormat: "yuv420p",
+    }),
+    "h264 High L5.1 / 59.94fps / 55Mbps / aac / yuv420p",
+  );
   assert.equal(uiState.formatCodecSummary({ status: "direct", audioCodec: "aac" }), "aac");
   assert.equal(uiState.formatCodecSummary({ status: "unknown" }), "未探测");
 });
@@ -149,6 +162,17 @@ test("compatible media action is enabled only for server remux candidates", () =
       { canUseServerTools: true },
     ).visible,
     false,
+  );
+
+  assert.equal(
+    uiState.getCompatibleMediaAction(
+      {
+        playbackSource: "server",
+        playability: { status: "direct", performanceWarning: "解码压力较高" },
+      },
+      { canUseServerTools: true },
+    ).visible,
+    true,
   );
 
   assert.equal(

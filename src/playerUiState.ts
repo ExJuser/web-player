@@ -36,6 +36,11 @@ type VideoForCompatibilityUi = {
     videoCodec?: string;
     audioCodec?: string;
     pixelFormat?: string;
+    videoProfile?: string;
+    videoLevel?: number;
+    frameRate?: number;
+    bitRate?: number;
+    performanceWarning?: string;
   };
 };
 
@@ -120,7 +125,27 @@ export function formatPlayabilityStatus(playability?: VideoForCompatibilityUi["p
 
 export function formatCodecSummary(playability?: VideoForCompatibilityUi["playability"]) {
   if (!playability) return "未探测";
-  return [playability.videoCodec, playability.audioCodec, playability.pixelFormat].filter(Boolean).join(" / ") || "未探测";
+  const videoParts = [
+    playability.videoCodec,
+    playability.videoProfile,
+    playability.videoLevel ? `L${(playability.videoLevel / 10).toFixed(1)}` : undefined,
+  ].filter(Boolean);
+  const performanceParts = [
+    playability.frameRate ? `${playability.frameRate.toFixed(playability.frameRate % 1 ? 2 : 0)}fps` : undefined,
+    playability.bitRate ? formatBitRate(playability.bitRate) : undefined,
+  ].filter(Boolean);
+  return [
+    videoParts.join(" "),
+    ...performanceParts,
+    playability.audioCodec,
+    playability.pixelFormat,
+  ].filter(Boolean).join(" / ") || "未探测";
+}
+
+function formatBitRate(bitRate: number) {
+  if (!Number.isFinite(bitRate) || bitRate <= 0) return undefined;
+  if (bitRate >= 1000 * 1000) return `${(bitRate / 1000 / 1000).toFixed(bitRate >= 10 * 1000 * 1000 ? 0 : 1)}Mbps`;
+  return `${Math.round(bitRate / 1000)}Kbps`;
 }
 
 export function createVideoMetadataRows(video: VideoForCompatibilityUi) {
@@ -151,7 +176,7 @@ export function getCompatibleMediaAction(video: VideoForCompatibilityUi | null |
   const shouldExplainPlayability = Boolean(
     video?.playability &&
       !video.playability.compatibleUrl &&
-      video.playability.status !== "direct",
+      (video.playability.status !== "direct" || video.playability.performanceWarning),
   );
 
   return {

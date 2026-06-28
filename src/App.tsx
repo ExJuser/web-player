@@ -7156,7 +7156,7 @@ export default function App() {
                     <span>
                       {mediaProbeVideoId === currentVideo.id
                         ? "正在探测媒体兼容性..."
-                        : currentVideo.playability?.reason ?? "当前视频尚未探测播放兼容性。"}
+                        : currentVideo.playability?.performanceWarning ?? currentVideo.playability?.reason ?? "当前视频尚未探测播放兼容性。"}
                     </span>
                     {canCreateCompatibleMedia ? (
                       <button

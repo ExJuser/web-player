@@ -51,6 +51,21 @@ function splitFormatNames(value) {
     .filter(Boolean);
 }
 
+function parseNumber(value) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? number : undefined;
+}
+
+function parseFrameRate(value) {
+  if (typeof value !== "string" || !value || value === "0/0") return undefined;
+  const [numerator, denominator] = value.split("/").map(Number);
+  if (Number.isFinite(numerator) && Number.isFinite(denominator) && denominator > 0) {
+    const frameRate = numerator / denominator;
+    return frameRate > 0 ? frameRate : undefined;
+  }
+  return parseNumber(value);
+}
+
 function normalizeStream(stream) {
   const tags = stream?.tags && typeof stream.tags === "object" ? stream.tags : {};
   return {
@@ -58,9 +73,12 @@ function normalizeStream(stream) {
     type: String(stream?.codec_type || "unknown"),
     codec: String(stream?.codec_name || "unknown").toLowerCase(),
     profile: typeof stream?.profile === "string" ? stream.profile : undefined,
+    level: parseNumber(stream?.level),
     pixelFormat: typeof stream?.pix_fmt === "string" ? stream.pix_fmt : undefined,
     width: Number.isFinite(Number(stream?.width)) ? Number(stream.width) : undefined,
     height: Number.isFinite(Number(stream?.height)) ? Number(stream.height) : undefined,
+    frameRate: parseFrameRate(stream?.avg_frame_rate) ?? parseFrameRate(stream?.r_frame_rate),
+    bitRate: parseNumber(stream?.bit_rate),
     language: typeof tags.language === "string" ? tags.language : undefined,
     title: typeof tags.title === "string" ? tags.title : undefined,
   };
@@ -75,6 +93,7 @@ function normalizeMediaProbe(rawProbe) {
       names: formatNames,
       duration: Number(rawProbe?.format?.duration) || undefined,
       size: Number(rawProbe?.format?.size) || undefined,
+      bitRate: parseNumber(rawProbe?.format?.bit_rate),
     },
     video: streams.find((stream) => stream.type === "video") ?? null,
     audio: streams.find((stream) => stream.type === "audio") ?? null,
@@ -84,6 +103,7 @@ function normalizeMediaProbe(rawProbe) {
 }
 
 function basePlayability(status, reason, probe) {
+  const bitRate = probe?.video?.bitRate ?? probe?.format?.bitRate;
   return {
     status,
     reason,
@@ -91,7 +111,31 @@ function basePlayability(status, reason, probe) {
     videoCodec: probe?.video?.codec,
     audioCodec: probe?.audio?.codec,
     pixelFormat: probe?.video?.pixelFormat,
+    videoProfile: probe?.video?.profile,
+    videoLevel: probe?.video?.level,
+    frameRate: probe?.video?.frameRate,
+    bitRate,
+    performanceWarning: createPlaybackPerformanceWarning(probe, bitRate),
   };
+}
+
+function formatRiskBitRate(bitRate) {
+  return bitRate >= 1000 * 1000 ? `${Math.round(bitRate / 1000 / 1000)}Mbps` : `${Math.round(bitRate / 1000)}Kbps`;
+}
+
+function createPlaybackPerformanceWarning(probe, bitRate) {
+  const video = probe?.video;
+  if (!video || video.codec !== "h264" || /10/i.test(video.profile || "") || /10|12|16/.test(video.pixelFormat || "")) return undefined;
+
+  const reasons = [];
+  const pixels = (video.width || 0) * (video.height || 0);
+  if (pixels >= 3840 * 2160) reasons.push("4K 分辨率");
+  if (video.frameRate && video.frameRate > 45) reasons.push(`${Math.round(video.frameRate)}fps`);
+  if (bitRate && bitRate >= 40 * 1000 * 1000) reasons.push(`${formatRiskBitRate(bitRate)} 高码率`);
+  if (video.level && video.level > 42) reasons.push(`H.264 Level ${(video.level / 10).toFixed(1)}`);
+
+  if (!reasons.length) return undefined;
+  return `视频编码可播放，但 ${reasons.join("、")} 可能让浏览器解码掉帧；若画面卡顿，建议转码为较低码率的 H.264 MP4。`;
 }
 
 export function classifyMediaProbe(rawProbe, fileName = "") {
