@@ -1505,6 +1505,14 @@ export default function App() {
   const [favoriteVideoIds, setFavoriteVideoIds] = useState<Set<string>>(() => new Set());
   const [videoTags, setVideoTags] = useState<VideoTagStore>({});
   const [videoHighlights, setVideoHighlights] = useState<VideoHighlightStore>({});
+  const [pendingHighEnergyStart, setPendingHighEnergyStart] = useState<{ videoId: string; time: number } | null>(null);
+  const [highEnergyTagPrompt, setHighEnergyTagPrompt] = useState<{
+    videoId: string;
+    videoName: string;
+    startTime: number;
+    endTime: number;
+    tagInput: string;
+  } | null>(null);
   const [, setTagMergeDecisions] = useState<TagMergeDecisionStore>({});
   const [isTagDialogOpen, setIsTagDialogOpen] = useState(false);
   const [tagInput, setTagInput] = useState("");
@@ -2754,6 +2762,8 @@ export default function App() {
 
   useEffect(() => {
     playbackStatsSessionRef.current = null;
+    setPendingHighEnergyStart(null);
+    setHighEnergyTagPrompt(null);
   }, [currentVideoId]);
 
   useEffect(() => {
@@ -4317,25 +4327,56 @@ export default function App() {
 
   const markCurrentHighEnergySegment = useCallback(() => {
     if (!currentVideo || !duration) return;
-    const startTime = clamp(currentTime - 6, 0, duration);
-    const endTime = clamp(currentTime + 6, startTime + 1, duration);
-    const nextHighlight: VideoHighlightSegment = {
-      id: `${Math.round(startTime * 10)}-${Math.round(endTime * 10)}-${Date.now().toString(36)}`,
+    const markTime = clamp(currentTime, 0, duration);
+    if (!pendingHighEnergyStart || pendingHighEnergyStart.videoId !== currentVideo.id) {
+      setPendingHighEnergyStart({ videoId: currentVideo.id, time: markTime });
+      setMessage(`已选择高能起点 ${formatTime(markTime)}，再次点击标记终点。`);
+      return;
+    }
+
+    const startTime = Math.min(pendingHighEnergyStart.time, markTime);
+    const endTime = Math.max(pendingHighEnergyStart.time, markTime);
+    setPendingHighEnergyStart(null);
+    if (endTime - startTime < 0.2) {
+      setMessage("高能片段太短，请重新选择起点和终点。");
+      return;
+    }
+    setHighEnergyTagPrompt({
+      videoId: currentVideo.id,
+      videoName: currentVideo.name,
       startTime,
       endTime,
+      tagInput: "",
+    });
+    setMessage(`已选择高能片段 ${formatTime(startTime)} - ${formatTime(endTime)}，请填写标签。`);
+  }, [currentTime, currentVideo, duration, pendingHighEnergyStart]);
+
+  const saveHighEnergyTagPrompt = useCallback(() => {
+    if (!highEnergyTagPrompt) return;
+    const tag = highEnergyTagPrompt.tagInput.trim().slice(0, 40);
+    if (!tag) {
+      setMessage("请输入高能片段标签。");
+      return;
+    }
+    const nextHighlight: VideoHighlightSegment = {
+      id: `${Math.round(highEnergyTagPrompt.startTime * 10)}-${Math.round(highEnergyTagPrompt.endTime * 10)}-${Date.now().toString(36)}`,
+      startTime: highEnergyTagPrompt.startTime,
+      endTime: highEnergyTagPrompt.endTime,
+      tag,
       updatedAt: Date.now(),
     };
     const nextHighlights = {
       ...videoHighlightsRef.current,
-      [currentVideo.id]: [...(videoHighlightsRef.current[currentVideo.id] ?? []), nextHighlight].sort((a, b) => a.startTime - b.startTime),
+      [highEnergyTagPrompt.videoId]: [...(videoHighlightsRef.current[highEnergyTagPrompt.videoId] ?? []), nextHighlight].sort((a, b) => a.startTime - b.startTime),
     };
     videoHighlightsRef.current = nextHighlights;
     setVideoHighlights(nextHighlights);
-    setMessage(`已标记高能片段 ${formatTime(startTime)} - ${formatTime(endTime)}`);
-    void savePlayerVideoHighlights(currentVideo.id, nextHighlights[currentVideo.id]).catch(() => {
+    setHighEnergyTagPrompt(null);
+    setMessage(`已标记高能片段 ${formatTime(highEnergyTagPrompt.startTime)} - ${formatTime(highEnergyTagPrompt.endTime)}：${tag}`);
+    void savePlayerVideoHighlights(highEnergyTagPrompt.videoId, nextHighlights[highEnergyTagPrompt.videoId]).catch(() => {
       setMessage("高能标记保存失败。");
     });
-  }, [currentTime, currentVideo, duration]);
+  }, [highEnergyTagPrompt]);
 
   const removeCurrentHighEnergySegment = useCallback((highlightId: string) => {
     if (!currentVideo) return;
@@ -8795,18 +8836,18 @@ export default function App() {
               <span>{formatTime(duration)}</span>
             </div>
 
-            {currentVideo ? (
+            {currentVideo && (currentVideoHighlights.length || pendingHighEnergyStart?.videoId === currentVideo.id) ? (
               <div className="highlight-control-row">
-                <button className="secondary-button" type="button" onClick={markCurrentHighEnergySegment} disabled={!duration || isPrivacyMode}>
-                  <Sparkles size={16} />
-                  标记高能
-                </button>
+                {pendingHighEnergyStart?.videoId === currentVideo.id ? (
+                  <span className="highlight-pending-chip">起点 {formatTime(pendingHighEnergyStart.time)}</span>
+                ) : null}
                 {currentVideoHighlights.length ? (
                   <div className="highlight-chip-list" aria-label="高能片段">
                     {currentVideoHighlights.map((highlight) => (
                       <span className="highlight-chip" key={highlight.id}>
                         <button type="button" onClick={() => seekTo(highlight.startTime)}>
-                          {formatTime(highlight.startTime)} - {formatTime(highlight.endTime)}
+                          {highlight.tag ? <strong>{highlight.tag}</strong> : null}
+                          <span>{formatTime(highlight.startTime)} - {formatTime(highlight.endTime)}</span>
                         </button>
                         <button type="button" onClick={() => removeCurrentHighEnergySegment(highlight.id)} aria-label="删除高能标记">
                           <X size={13} />
@@ -8983,6 +9024,17 @@ export default function App() {
                 aria-label="管理视频标签"
               >
                 <Tags size={18} />
+              </button>
+              <button
+                className={`icon-button highlight-mark-button ${pendingHighEnergyStart?.videoId === currentVideo?.id ? "active" : ""}`}
+                type="button"
+                onClick={markCurrentHighEnergySegment}
+                disabled={!currentVideo || !duration || isPrivacyMode}
+                title={pendingHighEnergyStart?.videoId === currentVideo?.id ? "标记高能结束点" : "标记高能起点"}
+                aria-label={pendingHighEnergyStart?.videoId === currentVideo?.id ? "标记高能结束点" : "标记高能起点"}
+                aria-pressed={pendingHighEnergyStart?.videoId === currentVideo?.id}
+              >
+                <Sparkles size={18} />
               </button>
               {canRecordEmission ? (
                 <div className="special-stats-control" aria-label="特殊模式统计">
@@ -9393,6 +9445,57 @@ export default function App() {
       </aside>
       ) : null}
     </main>
+    {highEnergyTagPrompt ? (
+      <div className="modal-backdrop" role="presentation" onMouseDown={() => setHighEnergyTagPrompt(null)}>
+        <form
+          aria-labelledby="high-energy-tag-title"
+          aria-modal="true"
+          className="high-energy-tag-dialog"
+          role="dialog"
+          onSubmit={(event) => {
+            event.preventDefault();
+            saveHighEnergyTagPrompt();
+          }}
+          onMouseDown={(event) => event.stopPropagation()}
+        >
+          <button
+            aria-label="关闭"
+            className="dialog-close"
+            type="button"
+            onClick={() => setHighEnergyTagPrompt(null)}
+          >
+            <X size={18} />
+          </button>
+          <div className="dialog-icon">
+            <Sparkles size={28} />
+          </div>
+          <div className="dialog-copy">
+            <h2 id="high-energy-tag-title">高能片段标签</h2>
+            <p>
+              {formatTime(highEnergyTagPrompt.startTime)} - {formatTime(highEnergyTagPrompt.endTime)} · {highEnergyTagPrompt.videoName}
+            </p>
+          </div>
+          <label className="high-energy-tag-field">
+            <span>标签</span>
+            <input
+              autoFocus
+              maxLength={40}
+              value={highEnergyTagPrompt.tagInput}
+              onChange={(event) => setHighEnergyTagPrompt((prompt) => prompt ? { ...prompt, tagInput: event.target.value } : prompt)}
+              placeholder="例如：名场面"
+            />
+          </label>
+          <div className="dialog-actions">
+            <button className="secondary-button" type="button" onClick={() => setHighEnergyTagPrompt(null)}>
+              取消
+            </button>
+            <button className="primary-button" type="submit" disabled={!highEnergyTagPrompt.tagInput.trim()}>
+              保存
+            </button>
+          </div>
+        </form>
+      </div>
+    ) : null}
     {videoDeleteCandidate ? (
       <div
         className="modal-backdrop"

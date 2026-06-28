@@ -151,6 +151,7 @@ export function parseVideoHighlights(source: unknown): VideoHighlightStore {
         id: highlight.id,
         startTime: highlight.startTime,
         endTime: highlight.endTime,
+        ...(typeof highlight.tag === "string" && highlight.tag.trim() ? { tag: highlight.tag.trim().slice(0, 40) } : {}),
         updatedAt: highlight.updatedAt,
       }];
     });

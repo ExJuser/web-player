@@ -2924,6 +2924,19 @@ button {
   flex-wrap: wrap;
 }
 
+.highlight-pending-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 5px 10px;
+  border: 1px solid rgba(255, 194, 61, 0.42);
+  border-radius: 999px;
+  background: rgba(255, 194, 61, 0.12);
+  color: #ffd978;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
 .highlight-chip-list {
   display: flex;
   align-items: center;
@@ -2952,13 +2965,33 @@ button {
 }
 
 .highlight-chip button:first-child {
+  gap: 6px;
+  max-width: min(320px, 76vw);
   padding: 5px 6px 5px 10px;
   font-size: 0.8rem;
+}
+
+.highlight-chip strong,
+.highlight-chip span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.highlight-chip strong {
+  color: #ffd978;
+  font-weight: 700;
 }
 
 .highlight-chip button:last-child {
   padding: 5px 8px 5px 4px;
   color: #8e97a5;
+}
+
+.highlight-mark-button.active {
+  color: #181c22;
+  background: #ffc23d;
 }
 
 .icon-button {
@@ -3944,6 +3977,7 @@ button {
 .delete-dialog,
 .media-root-label-dialog,
 .media-root-local-path-dialog,
+.high-energy-tag-dialog,
 .compatible-media-dialog {
   position: relative;
   display: grid;
@@ -3959,6 +3993,35 @@ button {
 
 .compatible-media-dialog {
   width: min(560px, 100%);
+}
+
+.high-energy-tag-field {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.high-energy-tag-field span {
+  color: #dce2ec;
+  font-size: 13px;
+}
+
+.high-energy-tag-field input {
+  width: 100%;
+  height: 40px;
+  min-width: 0;
+  padding: 0 12px;
+  border: 1px solid #303743;
+  border-radius: 8px;
+  background: #20252d;
+  color: #f5f7fb;
+  outline: none;
+}
+
+.high-energy-tag-field input:focus {
+  border-color: #00a1d6;
+  box-shadow: 0 0 0 3px rgba(0, 161, 214, 0.16);
 }
 
 .compatible-media-dialog-file {
@@ -5817,9 +5880,30 @@ button {
 }
 
 .app-shell.theme-light .highlight-chip,
-:root[data-theme="light"] .highlight-chip {
+:root[data-theme="light"] .highlight-chip,
+.app-shell.theme-light .highlight-pending-chip,
+:root[data-theme="light"] .highlight-pending-chip {
   border-color: rgba(197, 131, 18, 0.38);
   background: rgba(197, 131, 18, 0.13);
+}
+
+.app-shell.theme-light .highlight-pending-chip,
+:root[data-theme="light"] .highlight-pending-chip,
+.app-shell.theme-light .highlight-chip strong,
+:root[data-theme="light"] .highlight-chip strong {
+  color: #9a6510;
+}
+
+.app-shell.theme-light .high-energy-tag-field span,
+:root[data-theme="light"] .high-energy-tag-field span {
+  color: #243044;
+}
+
+.app-shell.theme-light .high-energy-tag-field input,
+:root[data-theme="light"] .high-energy-tag-field input {
+  border-color: #cfd8e3;
+  background: #ffffff;
+  color: #243044;
 }
 
 .app-shell.theme-light .playlist-panel {

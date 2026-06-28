@@ -201,7 +201,7 @@ test("player data stores parse valid high energy highlight segments", () => {
     favorites: [],
     videoHighlights: {
       video1: [
-        { id: "h1", startTime: 10, endTime: 25, updatedAt: 100 },
+        { id: "h1", startTime: 10, endTime: 25, tag: " 名场面 ", updatedAt: 100 },
         { id: "bad-time", startTime: 30, endTime: 20, updatedAt: 101 },
         { id: "", startTime: 1, endTime: 2, updatedAt: 102 },
       ],
@@ -209,6 +209,6 @@ test("player data stores parse valid high energy highlight segments", () => {
   }));
 
   assert.deepEqual(parsed.videoHighlights, {
-    video1: [{ id: "h1", startTime: 10, endTime: 25, updatedAt: 100 }],
+    video1: [{ id: "h1", startTime: 10, endTime: 25, tag: "名场面", updatedAt: 100 }],
   });
 });
