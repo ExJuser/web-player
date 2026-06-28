@@ -277,3 +277,37 @@ test("detects content-identical videos with different names from fingerprints", 
   assert.deepEqual(groups[0].videos.map((video) => video.id), [renamed.id, first.id]);
   assert.ok(groups[0].reasons.includes("内容指纹一致"));
 });
+
+test("skips AI name scoring for pairs already matched by content fingerprints", async () => {
+  const first = createVideo({
+    id: "first",
+    name: "Alpha.mkv",
+    relativePath: "A/Alpha.mkv",
+    size: 4096,
+    duration: 1200,
+    width: 1920,
+    height: 1080,
+  });
+  const renamed = createVideo({
+    id: "renamed",
+    name: "Renamed.mp4",
+    relativePath: "B/Renamed.mp4",
+    size: 4096,
+    duration: 1200,
+    width: 1920,
+    height: 1080,
+  });
+  let aiCalls = 0;
+
+  const groups = await mediaUtils.detectDuplicateVideosWithProgress([first, renamed], {
+    getContentFingerprint: async () => "4096:same",
+    getNameSimilarityScores: async () => {
+      aiCalls += 1;
+      return new Map();
+    },
+  });
+
+  assert.equal(aiCalls, 0);
+  assert.equal(groups.length, 1);
+  assert.equal(groups[0].score, 120);
+});

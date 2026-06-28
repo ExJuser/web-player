@@ -448,16 +448,6 @@ function buildDuplicateVideoGroups(
 
 export function detectDuplicateVideos(videos: VideoItem[]): DuplicateVideoGroup[] {
   const context = createDuplicateDetectionContext(videos);
-  for (let aIndex = 0; aIndex < videos.length; aIndex += 1) {
-    for (let bIndex = aIndex + 1; bIndex < videos.length; bIndex += 1) {
-      const a = videos[aIndex];
-      const b = videos[bIndex];
-      const pair = scoreDuplicatePair(a, b);
-      if (pair.score < duplicateMetadataThreshold) continue;
-      mergeDuplicatePairScore(context, a, b, pair);
-    }
-  }
-
   return buildDuplicateVideoGroups(videos, context);
 }
 
@@ -479,6 +469,7 @@ export async function detectDuplicateVideosWithProgress(
     a: VideoItem;
     b: VideoItem;
     pair: { score: number; reasons: string[] };
+    pairKey: string;
   }> = [];
   let processedPairs = 0;
   let processedFingerprints = 0;
@@ -516,10 +507,8 @@ export async function detectDuplicateVideosWithProgress(
       const b = videos[bIndex];
       const pair = scoreDuplicatePair(a, b);
       processedPairs += 1;
-      if (pair.score >= duplicateMetadataThreshold) {
-        mergeDuplicatePairScore(context, a, b, pair);
-      } else if (pair.score >= duplicateAiNameCandidateThreshold) {
-        nameSimilarityCandidates.push({ a, b, pair });
+      if (pair.score >= duplicateAiNameCandidateThreshold) {
+        nameSimilarityCandidates.push({ a, b, pair, pairKey: createDuplicatePairKey(a.id, b.id) });
       }
       if (processedPairs % yieldEveryPairs === 0) {
         reportProgress();
@@ -528,36 +517,6 @@ export async function detectDuplicateVideosWithProgress(
     }
   }
   reportProgress();
-
-  if (options.getNameSimilarityScores && nameSimilarityCandidates.length) {
-    const selectedCandidates = nameSimilarityCandidates
-      .sort((a, b) => b.pair.score - a.pair.score || compareNaturalRelativePath(a.a.relativePath, b.a.relativePath))
-      .slice(0, Math.max(0, options.maxAiNamePairs ?? defaultMaxAiNamePairs));
-    if (selectedCandidates.length) {
-      phase = "aiName";
-      totalNamePairs = selectedCandidates.length;
-      processedNamePairs = 0;
-      reportProgress();
-      const pairs = selectedCandidates.map((candidate, index) =>
-        createDuplicateNameSimilarityPair(`pair-${index + 1}`, candidate.a, candidate.b, candidate.pair.score),
-      );
-      const similarityScores = await options.getNameSimilarityScores(pairs, options.signal);
-      processedNamePairs = selectedCandidates.length;
-      reportProgress();
-      for (let index = 0; index < selectedCandidates.length; index += 1) {
-        const candidate = selectedCandidates[index];
-        const similarity = similarityScores.get(pairs[index].id);
-        if (!Number.isFinite(similarity)) continue;
-        const similarityScore = Math.max(0, Math.min(100, Math.round(similarity ?? 0)));
-        const score = candidate.pair.score + similarityScore;
-        if (score < duplicateMetadataThreshold) continue;
-        mergeDuplicatePairScore(context, candidate.a, candidate.b, {
-          score,
-          reasons: [...candidate.pair.reasons, `AI 名称相似度 ${similarityScore}%`],
-        });
-      }
-    }
-  }
 
   if (options.getContentFingerprint) {
     const fingerprintCandidateBuckets = Array.from(contentCandidateBuckets.values()).filter((bucket) => bucket.length > 1);
@@ -603,6 +562,37 @@ export async function detectDuplicateVideosWithProgress(
             }
           }
         }
+      }
+    }
+  }
+
+  if (options.getNameSimilarityScores && nameSimilarityCandidates.length) {
+    const selectedCandidates = nameSimilarityCandidates
+      .filter((candidate) => !context.pairScores.has(candidate.pairKey))
+      .sort((a, b) => b.pair.score - a.pair.score || compareNaturalRelativePath(a.a.relativePath, b.a.relativePath))
+      .slice(0, Math.max(0, options.maxAiNamePairs ?? defaultMaxAiNamePairs));
+    if (selectedCandidates.length) {
+      phase = "aiName";
+      totalNamePairs = selectedCandidates.length;
+      processedNamePairs = 0;
+      reportProgress();
+      const pairs = selectedCandidates.map((candidate, index) =>
+        createDuplicateNameSimilarityPair(`pair-${index + 1}`, candidate.a, candidate.b, candidate.pair.score),
+      );
+      const similarityScores = await options.getNameSimilarityScores(pairs, options.signal);
+      processedNamePairs = selectedCandidates.length;
+      reportProgress();
+      for (let index = 0; index < selectedCandidates.length; index += 1) {
+        const candidate = selectedCandidates[index];
+        const similarity = similarityScores.get(pairs[index].id);
+        if (!Number.isFinite(similarity)) continue;
+        const similarityScore = Math.max(0, Math.min(100, Math.round(similarity ?? 0)));
+        const score = candidate.pair.score + similarityScore;
+        if (score < duplicateMetadataThreshold) continue;
+        mergeDuplicatePairScore(context, candidate.a, candidate.b, {
+          score,
+          reasons: [...candidate.pair.reasons, `AI 名称相似度 ${similarityScore}%`],
+        });
       }
     }
   }
