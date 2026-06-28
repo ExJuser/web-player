@@ -90,3 +90,81 @@ test("detects whether a player data store contains user data", () => {
     true,
   );
 });
+
+test("migrates video data when the same file moves to another media root", () => {
+  const oldId = "root-a|Series/E01.mkv|1024|1700000000000";
+  const newId = "root-b|Series/E01.mkv|1024|1700000000000";
+  const store = {
+    ...playerStorage.createDefaultPlayerDataStore(),
+    progress: {
+      [oldId]: { currentTime: 120, duration: 1500, completed: false, updatedAt: 1700000001000 },
+    },
+    favorites: [oldId],
+    videoTags: {
+      [oldId]: ["剧情", "AI字幕"],
+    },
+    embeddedSubtitles: [
+      {
+        id: "sub-1",
+        name: "E01 内封字幕",
+        relativePath: "Series/E01.mkv#subtitle-2",
+        format: "srt",
+        videoId: oldId,
+        embeddedTrack: {
+          streamIndex: 2,
+          codec: "subrip",
+          extractable: true,
+        },
+      },
+    ],
+    danmakuSelections: {
+      [oldId]: { sourceId: "source-1", sourceName: "弹幕", provider: "manual", updatedAt: 1700000002000 },
+    },
+  };
+
+  const migrated = libraryUtils.migrateMovedVideoData(store, [
+    {
+      id: newId,
+      name: "E01.mkv",
+      relativePath: "Series/E01.mkv",
+      size: 1024,
+      lastModified: 1700000000000,
+    },
+  ]);
+
+  assert.equal(migrated.progress[newId], store.progress[oldId]);
+  assert.equal(migrated.videoTags[newId], store.videoTags[oldId]);
+  assert.equal(migrated.danmakuSelections[newId], store.danmakuSelections[oldId]);
+  assert.deepEqual(migrated.favorites, [oldId, newId]);
+  assert.equal(migrated.embeddedSubtitles.at(-1).videoId, newId);
+});
+
+test("does not migrate moved video data when filename fingerprints are ambiguous", () => {
+  const oldId = "root-a|Old/E01.mkv|1024|1700000000000";
+  const store = {
+    ...playerStorage.createDefaultPlayerDataStore(),
+    progress: {
+      [oldId]: { currentTime: 120, duration: 1500, completed: false, updatedAt: 1700000001000 },
+    },
+  };
+
+  const migrated = libraryUtils.migrateMovedVideoData(store, [
+    {
+      id: "root-b|New/E01.mkv|1024|1700000000000",
+      name: "E01.mkv",
+      relativePath: "New/E01.mkv",
+      size: 1024,
+      lastModified: 1700000000000,
+    },
+    {
+      id: "root-c|Other/E01.mkv|1024|1700000000000",
+      name: "E01.mkv",
+      relativePath: "Other/E01.mkv",
+      size: 1024,
+      lastModified: 1700000000000,
+    },
+  ]);
+
+  assert.equal(migrated, store);
+  assert.equal(migrated.progress["root-b|New/E01.mkv|1024|1700000000000"], undefined);
+});

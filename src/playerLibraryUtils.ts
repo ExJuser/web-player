@@ -8,7 +8,7 @@ import {
   SUBTITLE_EXTENSIONS,
   VIDEO_EXTENSIONS,
 } from "./playerConstants";
-import type { MediaCollection, PlayerDataStore, PlayerLibraryMetadata } from "./playerTypes";
+import type { MediaCollection, PersistedEmbeddedSubtitle, PlayerDataStore, PlayerLibraryMetadata, VideoItem } from "./playerTypes";
 
 type FileFingerprint = Pick<File, "size" | "lastModified">;
 type LibraryDirectory = { name: string };
@@ -114,4 +114,140 @@ export function hasStoredData(store: PlayerDataStore) {
       JSON.stringify(store.danmakuPreferences) !== defaultDanmakuPreferencesJson ||
       JSON.stringify(store.preferences) !== defaultPlayerPreferencesJson
   );
+}
+
+type VideoIdentity = Pick<VideoItem, "id" | "name" | "relativePath" | "size" | "lastModified">;
+
+function normalizeFingerprintPath(path: string) {
+  return path.replace(/\\/g, "/").trim().normalize("NFKC").toLowerCase();
+}
+
+function basenameOf(path: string) {
+  return normalizeFingerprintPath(path).split("/").filter(Boolean).pop() ?? "";
+}
+
+function fingerprintKey(relativePath: string, size: number, lastModified: number) {
+  return `${normalizeFingerprintPath(relativePath)}|${Math.max(0, Math.floor(size))}|${Math.max(0, Math.round(lastModified))}`;
+}
+
+function basenameFingerprintKey(relativePath: string, size: number, lastModified: number) {
+  return `${basenameOf(relativePath)}|${Math.max(0, Math.floor(size))}|${Math.max(0, Math.round(lastModified))}`;
+}
+
+function parseGlobalVideoId(id: string) {
+  const firstSeparator = id.indexOf("|");
+  const lastSeparator = id.lastIndexOf("|");
+  const sizeSeparator = lastSeparator > firstSeparator ? id.lastIndexOf("|", lastSeparator - 1) : -1;
+  if (firstSeparator <= 0 || sizeSeparator <= firstSeparator || lastSeparator <= sizeSeparator) return null;
+
+  const relativePath = id.slice(firstSeparator + 1, sizeSeparator);
+  const size = Number(id.slice(sizeSeparator + 1, lastSeparator));
+  const lastModified = Number(id.slice(lastSeparator + 1));
+  if (!relativePath || !Number.isFinite(size) || !Number.isFinite(lastModified)) return null;
+  return { relativePath, size, lastModified };
+}
+
+function addUniqueMapping(map: Map<string, string | null>, key: string, id: string) {
+  if (!key) return;
+  map.set(key, map.has(key) ? null : id);
+}
+
+function buildUniqueVideoMapping(videos: VideoIdentity[]) {
+  const exact = new Map<string, string | null>();
+  const basename = new Map<string, string | null>();
+  videos.forEach((video) => {
+    addUniqueMapping(exact, fingerprintKey(video.relativePath, video.size, video.lastModified), video.id);
+    addUniqueMapping(basename, basenameFingerprintKey(video.relativePath || video.name, video.size, video.lastModified), video.id);
+  });
+  return { exact, basename };
+}
+
+function resolveMovedVideoId(id: string, mapping: ReturnType<typeof buildUniqueVideoMapping>) {
+  const parsed = parseGlobalVideoId(id);
+  if (!parsed) return null;
+  const exactMatch = mapping.exact.get(fingerprintKey(parsed.relativePath, parsed.size, parsed.lastModified));
+  if (exactMatch) return exactMatch === id ? null : exactMatch;
+  const basenameMatch = mapping.basename.get(basenameFingerprintKey(parsed.relativePath, parsed.size, parsed.lastModified));
+  return basenameMatch && basenameMatch !== id ? basenameMatch : null;
+}
+
+function migrateEmbeddedSubtitles(
+  subtitles: PersistedEmbeddedSubtitle[],
+  mapping: ReturnType<typeof buildUniqueVideoMapping>,
+) {
+  let didMigrate = false;
+  const existingKeys = new Set(subtitles.map((subtitle) => `${subtitle.videoId}:${subtitle.embeddedTrack.streamIndex}`));
+  const nextSubtitles = [...subtitles];
+
+  subtitles.forEach((subtitle) => {
+    const nextVideoId = resolveMovedVideoId(subtitle.videoId, mapping);
+    if (!nextVideoId) return;
+    const key = `${nextVideoId}:${subtitle.embeddedTrack.streamIndex}`;
+    if (existingKeys.has(key)) return;
+    existingKeys.add(key);
+    nextSubtitles.push({ ...subtitle, videoId: nextVideoId });
+    didMigrate = true;
+  });
+
+  return { subtitles: nextSubtitles, didMigrate };
+}
+
+export function migrateMovedVideoData(store: PlayerDataStore, targetVideos: VideoIdentity[]) {
+  if (!targetVideos.length || !hasStoredData(store)) return store;
+
+  const mapping = buildUniqueVideoMapping(targetVideos);
+  let didMigrate = false;
+
+  const nextProgress = { ...store.progress };
+  Object.entries(store.progress).forEach(([videoId, progress]) => {
+    const nextVideoId = resolveMovedVideoId(videoId, mapping);
+    if (nextVideoId && !nextProgress[nextVideoId]) {
+      nextProgress[nextVideoId] = progress;
+      didMigrate = true;
+    }
+  });
+
+  const favoriteIds = new Set(store.favorites);
+  store.favorites.forEach((videoId) => {
+    const nextVideoId = resolveMovedVideoId(videoId, mapping);
+    if (nextVideoId && !favoriteIds.has(nextVideoId)) {
+      favoriteIds.add(nextVideoId);
+      didMigrate = true;
+    }
+  });
+
+  const nextVideoTags = { ...store.videoTags };
+  Object.entries(store.videoTags).forEach(([videoId, tags]) => {
+    const nextVideoId = resolveMovedVideoId(videoId, mapping);
+    if (nextVideoId && !nextVideoTags[nextVideoId]) {
+      nextVideoTags[nextVideoId] = tags;
+      didMigrate = true;
+    }
+  });
+
+  const nextDanmakuSelections = { ...store.danmakuSelections };
+  Object.entries(store.danmakuSelections).forEach(([videoId, selection]) => {
+    const nextVideoId = resolveMovedVideoId(videoId, mapping);
+    if (nextVideoId && !nextDanmakuSelections[nextVideoId]) {
+      nextDanmakuSelections[nextVideoId] = selection;
+      didMigrate = true;
+    }
+  });
+
+  const { subtitles: nextEmbeddedSubtitles, didMigrate: didMigrateSubtitles } = migrateEmbeddedSubtitles(
+    store.embeddedSubtitles,
+    mapping,
+  );
+  didMigrate ||= didMigrateSubtitles;
+
+  return didMigrate
+    ? {
+        ...store,
+        progress: nextProgress,
+        favorites: Array.from(favoriteIds),
+        videoTags: nextVideoTags,
+        embeddedSubtitles: nextEmbeddedSubtitles,
+        danmakuSelections: nextDanmakuSelections,
+      }
+    : store;
 }

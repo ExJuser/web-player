@@ -181,6 +181,7 @@ import {
   isPhotoFile,
   isSubtitleFile,
   isVideoFile,
+  migrateMovedVideoData,
   sanitizeLibraryName,
   shouldFilterLocalVideoFile,
 } from "./playerLibraryUtils";
@@ -2910,6 +2911,7 @@ export default function App() {
       for (const rootResult of scan.roots) {
         if (rootResult.status.status !== "ready") continue;
         nextDataStore = await importLegacyStoreForScannedRoot(rootResult.root, rootResult.videos, nextDataStore);
+        nextDataStore = migrateMovedVideoData(nextDataStore, rootResult.videos);
       }
 
       const nextVideos = mergeVideoRuntimeState(scan.videos, videosRef.current);
@@ -4577,6 +4579,7 @@ export default function App() {
         if (root) {
           nextDataStore = await importLegacyStoreForScannedRoot(root, media.videos, nextDataStore);
         }
+        nextDataStore = migrateMovedVideoData(nextDataStore, media.videos);
 
         const legacyDataStore = await loadLegacyPlayerDataStore(directory);
         if (legacyDataStore) {
