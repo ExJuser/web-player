@@ -192,6 +192,50 @@ test("default player data store contains tag containers", () => {
   assert.deepEqual(store.danmakuSelections, {});
   assert.equal(store.danmakuPreferences.showSimplified, true);
   assert.equal(store.preferences.homeMediaMode, "all");
+  assert.equal(store.duplicateDetection, null);
+});
+
+test("player data stores persist bounded duplicate detection pairs", () => {
+  const parsed = storage.parsePlayerDataStore(JSON.stringify({
+    version: 5,
+    items: {},
+    duplicateDetection: {
+      scopeKey: "special\nvideo-a",
+      updatedAt: 100,
+      message: "检测完成",
+      pairs: [
+        {
+          key: "a\u0000b",
+          aId: "a",
+          bId: "b",
+          score: 145.4,
+          severity: "duplicate",
+          reasons: ["内容指纹一致", "内容指纹一致", ""],
+        },
+        {
+          key: "bad",
+          aId: "a",
+          bId: "c",
+          score: 10,
+          severity: "unknown",
+        },
+      ],
+    },
+  }));
+
+  assert.deepEqual(parsed.duplicateDetection, {
+    scopeKey: "special\nvideo-a",
+    updatedAt: 100,
+    message: "检测完成",
+    pairs: [{
+      key: "a\u0000b",
+      aId: "a",
+      bId: "b",
+      score: 145,
+      severity: "duplicate",
+      reasons: ["内容指纹一致"],
+    }],
+  });
 });
 
 test("player data stores parse valid high energy highlight segments", () => {

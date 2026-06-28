@@ -213,6 +213,22 @@ export type PlayerGlobalMetadata = {
   mediaRoots: PlayerMediaRootStatus[];
 };
 
+export type PersistedDuplicateVideoPair = {
+  key: string;
+  aId: string;
+  bId: string;
+  score: number;
+  severity: "duplicate" | "suspicious";
+  reasons: string[];
+};
+
+export type PersistedDuplicateDetectionResult = {
+  scopeKey: string;
+  pairs: PersistedDuplicateVideoPair[];
+  updatedAt: number;
+  message?: string;
+};
+
 export type PlayerDataStore = {
   version?: number;
   progress: ProgressStore;
@@ -226,6 +242,7 @@ export type PlayerDataStore = {
   danmakuPreferences: DanmakuPreferences;
   preferences: PlayerPreferences;
   settings: PlayerPersistentSettings;
+  duplicateDetection?: PersistedDuplicateDetectionResult | null;
   metadata?: PlayerLibraryMetadata | PlayerGlobalMetadata;
 };
 

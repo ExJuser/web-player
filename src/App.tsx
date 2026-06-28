@@ -263,6 +263,30 @@ type DuplicatePlaylistVideoMeta = {
   reasons: string[];
 };
 
+function createPersistedDuplicateDetectionResult(
+  scopeKey: string,
+  groups: DuplicateVideoGroup[],
+  message?: string,
+): PlayerDataStore["duplicateDetection"] {
+  const pairsByKey = new Map<string, DuplicateVideoGroup["pairs"][number]>();
+  groups.forEach((group) => {
+    group.pairs.forEach((pair) => {
+      const existing = pairsByKey.get(pair.key);
+      if (!existing || pair.score > existing.score) {
+        pairsByKey.set(pair.key, pair);
+      }
+    });
+  });
+  const pairs = Array.from(pairsByKey.values());
+  if (!scopeKey || !pairs.length) return null;
+  return {
+    scopeKey,
+    pairs,
+    updatedAt: Date.now(),
+    message: message?.trim() || undefined,
+  };
+}
+
 function createDuplicateFingerprintCacheKey(video: VideoItem) {
   return `${video.id}|${Math.floor(video.size || 0)}|${Math.round(video.lastModified || 0)}`;
 }
@@ -1424,6 +1448,10 @@ export default function App() {
   const duplicateDetectionAbortRef = useRef<AbortController | null>(null);
   const duplicateFingerprintCacheRef = useRef(new Map<string, DuplicateFingerprintCacheEntry>());
   const duplicateNameSimilarityCacheRef = useRef(new Map<string, DuplicateNameSimilarityCacheEntry>());
+  const duplicateVideoGroupsRef = useRef<DuplicateVideoGroup[]>([]);
+  const duplicateDetectionResultScopeKeyRef = useRef("");
+  const duplicateDetectionMessageRef = useRef("尚未检测重复视频。");
+  const duplicateDetectionResultStoreRef = useRef<PlayerDataStore["duplicateDetection"]>(null);
 
   useEffect(() => {
     if (hasStartedLegacyThumbnailMigration) return;
@@ -1667,6 +1695,67 @@ export default function App() {
     setSelectedSubtitleId(nextSubtitleId);
   }, []);
 
+  const getVideosForHomeMode = useCallback((items: VideoItem[], mode: HomeMediaMode) => {
+    if (mode === "all") return items;
+    const modeRootIds = new Set(
+      (localConfigRef.current?.mediaRoots ?? [])
+        .filter((root) => isMediaRootInHomeMode(root, mode))
+        .map((root) => root.id),
+    );
+    return items.filter((item) => Boolean(item.mediaRootId && modeRootIds.has(item.mediaRootId)));
+  }, []);
+
+  const restoreDuplicateDetectionFromStore = useCallback((store: PlayerDataStore, items: VideoItem[]) => {
+    const persisted = store.duplicateDetection;
+    const mode = store.preferences.homeMediaMode;
+    const modeVideos = getVideosForHomeMode(items, mode);
+    const scopeKey = createDuplicateDetectionScopeKey(mode, modeVideos);
+    if (!persisted || persisted.scopeKey !== scopeKey) {
+      duplicateVideoGroupsRef.current = [];
+      duplicateDetectionResultScopeKeyRef.current = "";
+      duplicateDetectionResultStoreRef.current = null;
+      duplicateDetectionMessageRef.current = "尚未检测重复视频。";
+      setDuplicateVideoGroups([]);
+      setDuplicateDetectionResultScopeKey("");
+      setDuplicateDetectionProgress(null);
+      setIsDuplicatePlaylistActive(false);
+      setDuplicateDetectionMessage("尚未检测重复视频。");
+      return;
+    }
+
+    const restoredGroups = rebuildDuplicateVideoGroups(modeVideos, [{
+      id: "persisted",
+      severity: "suspicious",
+      score: 0,
+      reasons: [],
+      videos: [],
+      pairs: persisted.pairs,
+    }]);
+    if (!restoredGroups.length) {
+      duplicateVideoGroupsRef.current = [];
+      duplicateDetectionResultScopeKeyRef.current = "";
+      duplicateDetectionResultStoreRef.current = null;
+      duplicateDetectionMessageRef.current = "尚未检测重复视频。";
+      setDuplicateVideoGroups([]);
+      setDuplicateDetectionResultScopeKey("");
+      setDuplicateDetectionProgress(null);
+      setIsDuplicatePlaylistActive(false);
+      setDuplicateDetectionMessage("尚未检测重复视频。");
+      return;
+    }
+
+    const message = persisted.message || `已恢复上次重复检测结果，发现 ${restoredGroups.length} 组重复或疑似重复视频。`;
+    duplicateVideoGroupsRef.current = restoredGroups;
+    duplicateDetectionResultScopeKeyRef.current = scopeKey;
+    duplicateDetectionResultStoreRef.current = createPersistedDuplicateDetectionResult(scopeKey, restoredGroups, message);
+    duplicateDetectionMessageRef.current = message;
+    setDuplicateVideoGroups(restoredGroups);
+    setDuplicateDetectionResultScopeKey(scopeKey);
+    setDuplicateDetectionProgress(null);
+    setIsDuplicatePlaylistActive(false);
+    setDuplicateDetectionMessage(message);
+  }, [getVideosForHomeMode]);
+
   const buildPlayerDataStore = useCallback(
     (overrides?: Partial<PlayerDataStore>): PlayerDataStore => ({
       version: 5,
@@ -1681,6 +1770,7 @@ export default function App() {
       danmakuPreferences: danmakuPreferencesRef.current,
       preferences: playerPreferencesRef.current,
       settings: playerSettingsRef.current,
+      duplicateDetection: duplicateDetectionResultStoreRef.current,
       metadata: libraryMetadataRef.current,
       ...overrides,
     }),
@@ -1771,7 +1861,8 @@ export default function App() {
     setTagMergeDecisions(nextDataStore.tagMergeDecisions);
     setDanmakuSelections(nextDataStore.danmakuSelections);
     setDanmakuPreferences(nextDataStore.danmakuPreferences);
-  }, []);
+    restoreDuplicateDetectionFromStore(nextDataStore, videosRef.current);
+  }, [restoreDuplicateDetectionFromStore]);
 
   const loadPhotoAlbumDirectory = useCallback(
     async (directory: FileSystemDirectoryHandle, options?: { remember?: boolean }) => {
@@ -2305,6 +2396,10 @@ export default function App() {
     duplicateDetectionAbortRef.current?.abort();
     duplicateDetectionAbortRef.current = null;
     duplicateDetectionRunIdRef.current += 1;
+    duplicateVideoGroupsRef.current = [];
+    duplicateDetectionResultScopeKeyRef.current = "";
+    duplicateDetectionResultStoreRef.current = null;
+    duplicateDetectionMessageRef.current = message;
     setIsDuplicateDetectionRunning(false);
     setDuplicateVideoGroups([]);
     setDuplicateDetectionResultScopeKey("");
@@ -2373,6 +2468,9 @@ export default function App() {
     let didAiEnhancementFail = false;
 
     setIsDuplicateDetectionRunning(true);
+    duplicateVideoGroupsRef.current = [];
+    duplicateDetectionResultScopeKeyRef.current = "";
+    duplicateDetectionResultStoreRef.current = null;
     setDuplicateVideoGroups([]);
     setDuplicateDetectionResultScopeKey("");
     setDuplicateDetectionProgress({
@@ -2407,19 +2505,25 @@ export default function App() {
         },
       });
       if (duplicateDetectionRunIdRef.current !== runId) return;
-      setDuplicateVideoGroups(groups);
-      setDuplicateDetectionResultScopeKey(targetScopeKey);
-      setIsDuplicatePlaylistActive(false);
       const aiStatus = didAiEnhancementFail
         ? "；AI 名称增强失败，已使用本地结果"
         : isAiConfigured
           ? ""
           : "；未配置 AI，已使用本地规则";
-      setDuplicateDetectionMessage(
-        groups.length
-          ? `检测完成，发现 ${groups.length} 组重复或疑似重复视频，可进入重复列表筛选删除${aiStatus}。`
-          : `本地检测完成，未发现重复或疑似重复视频${aiStatus}。`,
-      );
+      const nextMessage = groups.length
+        ? `检测完成，发现 ${groups.length} 组重复或疑似重复视频，可进入重复列表筛选删除${aiStatus}。`
+        : `本地检测完成，未发现重复或疑似重复视频${aiStatus}。`;
+      duplicateVideoGroupsRef.current = groups;
+      duplicateDetectionResultScopeKeyRef.current = targetScopeKey;
+      duplicateDetectionResultStoreRef.current = createPersistedDuplicateDetectionResult(targetScopeKey, groups, nextMessage);
+      duplicateDetectionMessageRef.current = nextMessage;
+      setDuplicateVideoGroups(groups);
+      setDuplicateDetectionResultScopeKey(targetScopeKey);
+      setIsDuplicatePlaylistActive(false);
+      setDuplicateDetectionMessage(nextMessage);
+      void saveCurrentPlayerDataStore({
+        duplicateDetection: duplicateDetectionResultStoreRef.current,
+      }).catch(() => undefined);
     } catch (error) {
       if (abortController.signal.aborted) return;
       setDuplicateDetectionMessage(error instanceof Error ? error.message : "重复视频检测失败。");
@@ -2429,7 +2533,7 @@ export default function App() {
         duplicateDetectionAbortRef.current = null;
       }
     }
-  }, [currentDuplicateDetectionScopeKey, getDuplicateFingerprint, getDuplicateNameSimilarityScores, modeFilteredVideos]);
+  }, [currentDuplicateDetectionScopeKey, getDuplicateFingerprint, getDuplicateNameSimilarityScores, modeFilteredVideos, saveCurrentPlayerDataStore]);
   const currentVideoHighlights = currentVideo ? videoHighlights[currentVideo.id] ?? [] : [];
   const selectedPhotoAlbum = useMemo(
     () => photoAlbums.find((album) => album.id === selectedPhotoAlbumId) ?? null,
@@ -3273,7 +3377,6 @@ export default function App() {
       setVideos(nextVideos);
       setSubtitles(nextSubtitles);
       applyPlayerDataStore(nextDataStore);
-      resetDuplicateDetectionState("媒体库已刷新，请重新检测重复视频。");
 
       const restoredEmbeddedSubtitles = await restoreCachedEmbeddedSubtitles(nextDataStore.embeddedSubtitles, nextVideos, null);
       if (restoredEmbeddedSubtitles.length) {
@@ -3310,7 +3413,7 @@ export default function App() {
     } finally {
       setIsScanning(false);
     }
-  }, [applyPlayerDataStore, importLegacyStoreForScannedRoot, resetDuplicateDetectionState]);
+  }, [applyPlayerDataStore, importLegacyStoreForScannedRoot]);
 
   useEffect(() => {
     if (!localConfig) return;
@@ -4205,12 +4308,17 @@ export default function App() {
         homeMediaMode === "all"
           ? nextVideos
           : nextVideos.filter((item) => Boolean(item.mediaRootId && modeRootIds.has(item.mediaRootId)));
-      setDuplicateVideoGroups((groups) => rebuildDuplicateVideoGroups(nextDuplicateVideos, groups));
-      setDuplicateDetectionResultScopeKey((scopeKey) =>
-        scopeKey ? createDuplicateDetectionScopeKey(homeMediaMode, nextDuplicateVideos) : scopeKey,
-      );
-      if (duplicateDetectionResultScopeKey) {
-        setDuplicateDetectionMessage("重复检测结果已根据删除操作更新。");
+      if (duplicateDetectionResultScopeKeyRef.current) {
+        const nextDuplicateGroups = rebuildDuplicateVideoGroups(nextDuplicateVideos, duplicateVideoGroupsRef.current);
+        const nextScopeKey = nextDuplicateGroups.length ? createDuplicateDetectionScopeKey(homeMediaMode, nextDuplicateVideos) : "";
+        const nextMessage = nextDuplicateGroups.length ? "重复检测结果已根据删除操作更新。" : "重复列表已清空。";
+        duplicateVideoGroupsRef.current = nextDuplicateGroups;
+        duplicateDetectionResultScopeKeyRef.current = nextScopeKey;
+        duplicateDetectionResultStoreRef.current = createPersistedDuplicateDetectionResult(nextScopeKey, nextDuplicateGroups, nextMessage);
+        duplicateDetectionMessageRef.current = nextMessage;
+        setDuplicateVideoGroups(nextDuplicateGroups);
+        setDuplicateDetectionResultScopeKey(nextScopeKey);
+        setDuplicateDetectionMessage(nextMessage);
       }
       setSubtitles(nextSubtitles);
       setMediaRootStatuses((statuses) =>
@@ -4235,11 +4343,12 @@ export default function App() {
           videoHighlights: nextVideoHighlights,
           danmakuSelections: nextDanmakuSelections,
           embeddedSubtitles: createPersistedEmbeddedSubtitles(subtitlesRef.current),
+          duplicateDetection: duplicateDetectionResultStoreRef.current,
         }),
         saveDanmakuSelection(video.id, null).catch(() => undefined),
       ]);
     },
-    [duplicateDetectionResultScopeKey, homeMediaMode, saveCurrentPlayerDataStore],
+    [homeMediaMode, saveCurrentPlayerDataStore],
   );
 
   const deleteBrowserVideoFile = useCallback(async (video: VideoItem) => {
@@ -5306,7 +5415,6 @@ export default function App() {
         setVideos(mergedVideos);
         setSubtitles(mergedSubtitles);
         applyPlayerDataStore(nextDataStore);
-        resetDuplicateDetectionState("媒体库已更新，请重新检测重复视频。");
         await saveGlobalPlayerDataStore({
           ...nextDataStore,
           embeddedSubtitles: createPersistedEmbeddedSubtitles(mergedSubtitles),
@@ -5341,7 +5449,6 @@ export default function App() {
       importLegacyStoreForScannedRoot,
       mediaRootStatuses,
       resolveMediaRootId,
-      resetDuplicateDetectionState,
       revokeReplacedMediaRootVideoUrls,
       revokeVideoUrls,
     ],

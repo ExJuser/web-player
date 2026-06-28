@@ -7,6 +7,7 @@ import type {
   PlayerDataStore,
   PlayerGlobalMetadata,
   PlayerLibraryMetadata,
+  PersistedDuplicateVideoPair,
   PlayerPersistentSettings,
   PlayerPreferences,
   ProgressStore,
@@ -187,6 +188,60 @@ export function parseTagMergeDecisions(source: unknown): TagMergeDecisionStore {
   return decisions;
 }
 
+export function parseDuplicateDetectionResult(source: unknown): PlayerDataStore["duplicateDetection"] {
+  if (!source || typeof source !== "object" || Array.isArray(source)) return null;
+  const result = source as {
+    scopeKey?: unknown;
+    pairs?: unknown;
+    updatedAt?: unknown;
+    message?: unknown;
+  };
+  if (typeof result.scopeKey !== "string" || !result.scopeKey.trim() || !Array.isArray(result.pairs)) return null;
+
+  const pairs: PersistedDuplicateVideoPair[] = result.pairs.flatMap((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return [];
+    const pair = item as {
+      key?: unknown;
+      aId?: unknown;
+      bId?: unknown;
+      score?: unknown;
+      severity?: unknown;
+      reasons?: unknown;
+    };
+    const severity: PersistedDuplicateVideoPair["severity"] | null =
+      pair.severity === "duplicate" || pair.severity === "suspicious" ? pair.severity : null;
+    if (
+      typeof pair.key !== "string" ||
+      typeof pair.aId !== "string" ||
+      typeof pair.bId !== "string" ||
+      typeof pair.score !== "number" ||
+      !Number.isFinite(pair.score) ||
+      !severity
+    ) {
+      return [];
+    }
+
+    return [{
+      key: pair.key,
+      aId: pair.aId,
+      bId: pair.bId,
+      score: Math.max(0, Math.round(pair.score)),
+      severity,
+      reasons: Array.isArray(pair.reasons)
+        ? Array.from(new Set(pair.reasons.filter((reason): reason is string => typeof reason === "string" && Boolean(reason.trim())).map((reason) => reason.trim())))
+        : [],
+    }];
+  });
+
+  if (!pairs.length) return null;
+  return {
+    scopeKey: result.scopeKey,
+    pairs,
+    updatedAt: typeof result.updatedAt === "number" && Number.isFinite(result.updatedAt) ? Math.max(0, Math.round(result.updatedAt)) : Date.now(),
+    message: typeof result.message === "string" && result.message.trim() ? result.message.trim().slice(0, 200) : undefined,
+  };
+}
+
 export function parsePersistedEmbeddedSubtitles(source: unknown): PersistedEmbeddedSubtitle[] {
   if (!Array.isArray(source)) return [];
 
@@ -358,6 +413,7 @@ export function parsePlayerDataStore(raw: string): PlayerDataStore {
     embeddedSubtitles?: unknown;
     danmakuSelections?: unknown;
     danmakuPreferences?: unknown;
+    duplicateDetection?: unknown;
     metadata?: unknown;
   };
   const progressSource = parsed && typeof parsed === "object" && parsed.items ? parsed.items : parsed;
@@ -379,6 +435,7 @@ export function parsePlayerDataStore(raw: string): PlayerDataStore {
     danmakuPreferences: parseDanmakuPreferences(parsed?.danmakuPreferences),
     preferences: parsePlayerPreferences(parsed?.preferences),
     settings: parsePlayerSettings(parsed?.settings),
+    duplicateDetection: parseDuplicateDetectionResult(parsed?.duplicateDetection),
     metadata:
       parsed?.metadata && typeof parsed.metadata === "object" && !Array.isArray(parsed.metadata)
         ? (parsed.metadata as PlayerLibraryMetadata)
@@ -400,6 +457,7 @@ export function createDefaultPlayerDataStore(metadata?: PlayerDataStore["metadat
     danmakuPreferences: defaultDanmakuPreferences,
     preferences: defaultPlayerPreferences,
     settings: defaultPlayerSettings,
+    duplicateDetection: null,
     metadata,
   };
 }
@@ -471,6 +529,7 @@ function createPersistedPlayerDataPayload(store: PlayerDataStore) {
     danmakuPreferences: parseDanmakuPreferences(store.danmakuPreferences),
     preferences: getPersistedPlayerPreferences(store.preferences),
     settings: parsePlayerSettings(store.settings),
+    duplicateDetection: parseDuplicateDetectionResult(store.duplicateDetection),
     metadata: store.metadata,
   };
 }

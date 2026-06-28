@@ -322,6 +322,10 @@ function getDuplicateNameTokens(value: string) {
     .filter(Boolean);
 }
 
+function isWeakDuplicateName(tokens: string[]) {
+  return tokens.length === 1 && /^\d{1,3}$/.test(tokens[0]);
+}
+
 function getDuplicateNameScore(a: VideoItem, b: VideoItem) {
   const reasons: string[] = [];
   const aTokens = getDuplicateNameTokens(a.name || a.relativePath);
@@ -331,6 +335,9 @@ function getDuplicateNameScore(a: VideoItem, b: VideoItem) {
   if (!aName || !bName) return { score: 0, reasons };
 
   if (aName === bName) {
+    if (isWeakDuplicateName(aTokens) || isWeakDuplicateName(bTokens)) {
+      return { score: 20, reasons: ["短编号名称一致"] };
+    }
     return { score: 60, reasons: ["名称规范化一致"] };
   }
 
@@ -803,7 +810,9 @@ export async function detectDuplicateVideosWithProgress(
           const similarity = similarityScores.get(pairs[index].id);
           if (!Number.isFinite(similarity)) continue;
           const similarityScore = Math.max(0, Math.min(100, Math.round(similarity ?? 0)));
-          const score = candidate.pair.score + similarityScore;
+          const score = candidate.pair.reasons.includes("短编号名称一致")
+            ? Math.min(candidate.pair.score + similarityScore, duplicateHighConfidenceThreshold - 1)
+            : candidate.pair.score + similarityScore;
           if (score < duplicateSuspiciousThreshold) continue;
           mergeDuplicatePairScore(pairScores, candidate.a, candidate.b, {
             score,

@@ -188,6 +188,62 @@ test("detects local duplicate candidates without AI", async () => {
   assert.ok(syncGroups[0].reasons.includes("名称规范化一致"));
 });
 
+test("keeps short numeric filename matches below high confidence without content fingerprint", () => {
+  const first = createVideo({
+    id: "root-a|3.mp4|1000|1",
+    name: "3.mp4",
+    relativePath: "A/3.mp4",
+    size: 1000,
+    duration: 1440,
+    width: 1920,
+    height: 1080,
+  });
+  const second = createVideo({
+    id: "root-b|003.mp4|1001|2",
+    name: "003.mp4",
+    relativePath: "B/003.mp4",
+    size: 1001,
+    duration: 1440,
+    width: 1920,
+    height: 1080,
+  });
+
+  const groups = mediaUtils.detectDuplicateVideos([first, second]);
+
+  assert.equal(groups.length, 1);
+  assert.equal(groups[0].severity, "suspicious");
+  assert.ok(groups[0].reasons.includes("短编号名称一致"));
+});
+
+test("keeps short numeric filename matches suspicious even with AI name boost", async () => {
+  const first = createVideo({
+    id: "root-a|3.mp4|1000|1",
+    name: "3.mp4",
+    relativePath: "A/3.mp4",
+    size: 1000,
+    duration: 1440,
+    width: 1920,
+    height: 1080,
+  });
+  const second = createVideo({
+    id: "root-b|003.mp4|1001|2",
+    name: "003.mp4",
+    relativePath: "B/003.mp4",
+    size: 1001,
+    duration: 1440,
+    width: 1920,
+    height: 1080,
+  });
+
+  const groups = await mediaUtils.detectDuplicateVideosWithProgress([first, second], {
+    getNameSimilarityScores: async (pairs) => new Map(pairs.map((pair) => [pair.id, 100])),
+  });
+
+  assert.equal(groups.length, 1);
+  assert.equal(groups[0].severity, "suspicious");
+  assert.equal(groups[0].score, 119);
+});
+
 test("uses normalized names when metadata is missing", () => {
   const first = createVideo({
     id: "first",
