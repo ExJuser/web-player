@@ -3547,7 +3547,7 @@ button {
   align-items: center;
   gap: 10px;
   width: 100%;
-  min-height: 66px;
+  min-height: 98px;
   padding: 10px;
   border: 1px solid #242a31;
   border-radius: 8px;
@@ -3681,26 +3681,10 @@ button {
 }
 
 .playlist-item .tag-chip-row {
-  flex-wrap: nowrap;
-  overflow-x: auto;
-  overflow-y: hidden;
-  padding-bottom: 2px;
-  scrollbar-color: rgba(121, 223, 255, 0.44) rgba(255, 255, 255, 0.06);
-  scrollbar-width: thin;
-}
-
-.playlist-item .tag-chip-row::-webkit-scrollbar {
-  height: 5px;
-}
-
-.playlist-item .tag-chip-row::-webkit-scrollbar-track {
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.playlist-item .tag-chip-row::-webkit-scrollbar-thumb {
-  border-radius: 999px;
-  background: rgba(121, 223, 255, 0.44);
+  max-height: 44px;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  overflow: hidden;
 }
 
 .episode-progress {
