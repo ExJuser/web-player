@@ -8438,18 +8438,9 @@ export default function App() {
                       onChange={(event) => setHomeLibrarySearchQuery(event.target.value)}
                       placeholder={homeLibrarySearchPlaceholder}
                       aria-label="片库搜索"
+                      disabled={isLibrarySearchLoading || !homeLibrarySearchVideos.length}
                     />
-                    <button
-                      type="submit"
-                      disabled={
-                        isLibrarySearchLoading ||
-                        !homeLibrarySearchVideos.length ||
-                        !homeLibrarySearchQuery.trim()
-                      }
-                      title="搜索片库"
-                    >
-                      <Search size={17} />
-                    </button>
+                    <Search className="library-search-input-icon" size={17} aria-hidden="true" />
                   </form>
                   {shouldShowHomeLibrarySearchPreview ? (
                     <div className="library-search-preview">
@@ -9514,18 +9505,9 @@ export default function App() {
                 onChange={(event) => setPlayerLibrarySearchQuery(event.target.value)}
                 placeholder={playerLibrarySearchPlaceholder}
                 aria-label="播放器片库搜索"
+                disabled={isLibrarySearchLoading || !playerLibrarySearchVideos.length}
               />
-              <button
-                type="submit"
-                disabled={
-                  isLibrarySearchLoading ||
-                  !playerLibrarySearchVideos.length ||
-                  !playerLibrarySearchQuery.trim()
-                }
-                title="搜索片库"
-              >
-                <Search size={17} />
-              </button>
+              <Search className="library-search-input-icon" size={17} aria-hidden="true" />
             </form>
             {shouldShowPlayerLibrarySearchPreview ? (
               <div className="library-search-preview player-library-search-preview">
