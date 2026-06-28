@@ -6,8 +6,13 @@ import { readJsonFile, writeJsonFile } from "./jsonFiles.mjs";
 const videoExtensions = new Set([".mp4", ".webm", ".ogg", ".mov", ".m4v", ".mkv"]);
 const subtitleExtensions = new Set([".srt", ".vtt"]);
 const photoExtensions = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif", ".bmp"]);
+const mediaExtensions = new Set([...videoExtensions, ...subtitleExtensions, ...photoExtensions]);
 const smallVideoFileThresholdBytes = 50 * 1024 * 1024;
 const ignoredVideoBasenames = new Set(["theme_video", "trailer"]);
+
+function compareRelativePath(a, b) {
+  return a.relativePath.localeCompare(b.relativePath, undefined, { numeric: true, sensitivity: "base" });
+}
 
 function isIgnoredVideoFile(fileName) {
   const baseName = path.basename(fileName, path.extname(fileName)).toLowerCase();
@@ -272,8 +277,8 @@ export async function scanMediaRoot(root, options = {}) {
 
   try {
     await walk(resolvedRoot, []);
-    videos.sort((a, b) => a.relativePath.localeCompare(b.relativePath, undefined, { numeric: true, sensitivity: "base" }));
-    subtitles.sort((a, b) => a.relativePath.localeCompare(b.relativePath, undefined, { numeric: true, sensitivity: "base" }));
+    videos.sort(compareRelativePath);
+    subtitles.sort(compareRelativePath);
     return {
       root,
       status: createRootStatus(root, "ready", {
@@ -370,7 +375,7 @@ async function scanPhotoAlbumsRoot(root) {
     }
 
     if (!images.length) return;
-    images.sort((a, b) => a.relativePath.localeCompare(b.relativePath, undefined, { numeric: true, sensitivity: "base" }));
+    images.sort(compareRelativePath);
     const folderPath = segments.join("/");
     const title = segments.at(-1) || root.label;
     const totalSize = images.reduce((sum, image) => sum + image.size, 0);
@@ -391,7 +396,7 @@ async function scanPhotoAlbumsRoot(root) {
 
   try {
     await walk(resolvedRoot, []);
-    albums.sort((a, b) => b.updatedAt - a.updatedAt || a.relativePath.localeCompare(b.relativePath, undefined, { numeric: true, sensitivity: "base" }));
+    albums.sort((a, b) => b.updatedAt - a.updatedAt || compareRelativePath(a, b));
     return {
       root,
       status: createRootStatus(root, "ready", {
@@ -432,7 +437,7 @@ export async function scanConfiguredPhotoAlbums(config) {
   };
 }
 
-export function resolveMediaPath(config, rootId, relativePath, allowedExtensions = new Set([...videoExtensions, ...subtitleExtensions, ...photoExtensions])) {
+export function resolveMediaPath(config, rootId, relativePath, allowedExtensions = mediaExtensions) {
   const root = normalizeMediaRoots(config).find((item) => item.id === rootId);
   if (!root) throw new Error("Unknown media root.");
   const rootPath = serverPathForRoot(root);
