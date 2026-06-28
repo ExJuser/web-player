@@ -3565,12 +3565,14 @@ button {
 
 .playlist-select {
   display: grid;
-  grid-template-columns: 80px minmax(0, 1fr);
+  grid-template-columns: 96px minmax(0, 1fr);
+  align-self: stretch;
   align-items: center;
   gap: 10px;
   width: 100%;
   min-width: 0;
   min-height: 45px;
+  margin: -10px 0 -10px -10px;
   padding: 0;
   background: transparent;
   color: inherit;
@@ -3580,14 +3582,15 @@ button {
 
 .episode-thumbnail {
   display: flex;
-  align-self: center;
+  align-self: stretch;
   align-items: center;
   justify-content: center;
-  width: 80px;
-  height: 45px;
+  width: 96px;
+  height: auto;
+  min-height: 100%;
   flex: 0 0 auto;
   overflow: hidden;
-  border-radius: 6px;
+  border-radius: 7px 0 0 7px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: #262d36;
   color: #aab1bd;
@@ -6286,13 +6289,12 @@ button {
   }
 
   .playlist-select {
-    grid-template-columns: 72px minmax(0, 1fr);
+    grid-template-columns: 82px minmax(0, 1fr);
     min-height: 40px;
   }
 
   .episode-thumbnail {
-    width: 72px;
-    height: 40px;
+    width: 82px;
   }
 
   .playlist-item > .episode-progress {
