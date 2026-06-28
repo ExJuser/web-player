@@ -7402,16 +7402,6 @@ export default function App() {
                       </div>
                     </div>
                   </div>
-                  {specialModeInsights.untaggedActiveVideos.length ? (
-                    <div className="special-insight-cleanup">
-                      <span>待整理</span>
-                      <div className="special-insight-list compact">
-                        {specialModeInsights.untaggedActiveVideos.map((insight, index) =>
-                          renderSpecialInsightVideoRow(insight, index),
-                        )}
-                      </div>
-                    </div>
-                  ) : null}
                 </section>
               ) : null}
             </div>

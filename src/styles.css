@@ -1853,8 +1853,7 @@ button {
   gap: 6px;
 }
 
-.special-tag-group > span,
-.special-insight-cleanup > span {
+.special-tag-group > span {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -1918,11 +1917,6 @@ button {
   flex: 0 0 auto;
   color: #f5f7fb;
   font-weight: 800;
-}
-
-.special-insight-cleanup {
-  display: grid;
-  gap: 6px;
 }
 
 .media-library-card {
@@ -5057,10 +5051,8 @@ button {
 
 .app-shell.theme-light .special-insight-tabs button,
 .app-shell.theme-light .special-tag-group > span,
-.app-shell.theme-light .special-insight-cleanup > span,
 :root[data-theme="light"] .special-insight-tabs button,
-:root[data-theme="light"] .special-tag-group > span,
-:root[data-theme="light"] .special-insight-cleanup > span {
+:root[data-theme="light"] .special-tag-group > span {
   color: #475467;
 }
 

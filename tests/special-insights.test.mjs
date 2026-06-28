@@ -85,7 +85,6 @@ test("builds special mode summary and video rankings from existing stats", () =>
   assert.equal(insights.videosByPlayedDuration[1].playIntensity, 2.5);
   assert.equal(insights.videosByPlayedDuration[0].playIntensity, null);
 });
-
 test("aggregates normalized tag stats by video count, played duration, and emission count", () => {
   const first = createVideo({ id: "root-a|one.mp4|100|1", name: "one.mp4", relativePath: "one.mp4" });
   const second = createVideo({ id: "root-b|two.mp4|100|2", name: "two.mp4", relativePath: "two.mp4", lastModified: 2, mediaRootId: "root-b" });
@@ -117,18 +116,4 @@ test("aggregates normalized tag stats by video count, played duration, and emiss
     insights.tagsByEmissionCount.map((tag) => [tag.key, tag.emissionCount]),
     [["ai字幕", 5], ["剧情", 4]],
   );
-});
-
-test("surfaces active untagged videos without including idle untagged videos", () => {
-  const active = createVideo({ id: "root-a|active.mp4|100|1", name: "active.mp4", relativePath: "active.mp4" });
-  const idle = createVideo({ id: "root-a|idle.mp4|100|2", name: "idle.mp4", relativePath: "idle.mp4", lastModified: 2 });
-
-  const insights = specialInsights.buildSpecialModeInsights(
-    [active, idle],
-    statsFor(active, { playCount: 1 }),
-    {},
-    {},
-  );
-
-  assert.deepEqual(insights.untaggedActiveVideos.map((insight) => insight.video.id), [active.id]);
 });

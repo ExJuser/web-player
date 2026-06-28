@@ -39,7 +39,6 @@ export type SpecialModeInsights = {
   tagsByVideoCount: SpecialModeTagInsight[];
   tagsByPlayedDuration: SpecialModeTagInsight[];
   tagsByEmissionCount: SpecialModeTagInsight[];
-  untaggedActiveVideos: SpecialModeVideoInsight[];
 };
 
 const emptyStats: VideoStats = {
@@ -169,10 +168,5 @@ export function buildSpecialModeInsights(
     tagsByVideoCount: topTags(tagInsights, (insight) => insight.videoCount, tagLimit),
     tagsByPlayedDuration: topTags(tagInsights, (insight) => insight.totalPlayedSeconds, tagLimit),
     tagsByEmissionCount: topTags(tagInsights, (insight) => insight.emissionCount, tagLimit),
-    untaggedActiveVideos: topVideos(
-      videoInsights.filter((insight) => !insight.tags.some((tag) => normalizeTagKey(tag))),
-      (insight) => insight.stats.totalPlayedSeconds + insight.stats.emissionCount + insight.stats.playCount,
-      videoLimit,
-    ),
   };
 }
