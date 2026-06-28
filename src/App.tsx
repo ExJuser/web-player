@@ -145,6 +145,7 @@ import {
   savePhotoAlbumProgress,
   savePhotoAlbumStore
 } from "./photoAlbumStorage";
+import { collectVideosFromFiles } from "./browserFileMedia";
 import { prunePhotoObjectUrlCache } from "./photoObjectUrlCache";
 import {
   PROGRESS_FILE_NAME,
@@ -470,45 +471,6 @@ async function* collectVideos(directory: FileSystemDirectoryHandle, rootId?: str
   if (pendingVideos.length || pendingSubtitles.length || scannedFiles || filteredSmallVideos) {
     yield createBatch();
   }
-}
-
-function collectVideosFromFiles(files: FileList | File[]): MediaCollection {
-  const collection = createEmptyMediaCollection();
-
-  for (const file of Array.from(files)) {
-    const browserRelativePath = (file as File & { webkitRelativePath?: string }).webkitRelativePath;
-    const relativePath = (browserRelativePath || file.name).replace(/\\/g, "/");
-    const name = relativePath.split("/").pop() || file.name;
-
-    if (isVideoFile(name)) {
-      collection.scannedFiles += 1;
-      if (shouldFilterLocalVideoFile(name, file.size)) {
-        collection.filteredSmallVideos += 1;
-        continue;
-      }
-      collection.videos.push({
-        id: createLegacyVideoId(relativePath, file),
-        name,
-        relativePath,
-        file,
-        url: URL.createObjectURL(file),
-        size: file.size,
-        lastModified: file.lastModified,
-        playbackSource: "browser",
-      });
-    } else if (isSubtitleFile(name)) {
-      collection.scannedFiles += 1;
-      collection.subtitles.push({
-        id: createLegacyVideoId(relativePath, file),
-        name,
-        relativePath,
-        file,
-        url: "",
-      });
-    }
-  }
-
-  return sortMediaCollection(collection);
 }
 
 type BrowserPhotoFile = {
