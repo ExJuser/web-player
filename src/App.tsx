@@ -1851,14 +1851,21 @@ export default function App() {
   );
   const visibleVideoIdsKey = useMemo(() => visibleVideos.map((video) => video.id).join("\n"), [visibleVideos]);
   const isAnimePlaylistSearchScope = homeMediaMode === "anime" && isSeriesMode;
-  const librarySearchVideos = isAnimePlaylistSearchScope ? visibleVideos : modeFilteredVideos;
-  const librarySearchScopeKey = useMemo(() => librarySearchVideos.map((video) => video.id).join("\n"), [librarySearchVideos]);
-  const librarySearchPlaceholder = isAnimePlaylistSearchScope
-    ? "搜索当前列表内的剧集"
-    : homeMediaMode === "special"
-      ? "搜索片名、路径或标签"
-      : "搜索片名，或描述想看的内容";
-  const librarySearchEmptyTarget = isAnimePlaylistSearchScope ? "剧集" : homeMediaMode === "special" ? "视频" : "文件夹";
+  const homeLibrarySearchVideos = modeFilteredVideos;
+  const playerLibrarySearchVideos = isAnimePlaylistSearchScope ? visibleVideos : modeFilteredVideos;
+  const librarySearchScopeKey = useMemo(
+    () =>
+      [
+        homeLibrarySearchVideos.map((video) => video.id).join("\n"),
+        playerLibrarySearchVideos.map((video) => video.id).join("\n"),
+      ].join("\n---player---\n"),
+    [homeLibrarySearchVideos, playerLibrarySearchVideos],
+  );
+  const homeLibrarySearchPlaceholder =
+    homeMediaMode === "special" ? "搜索片名、路径或标签" : "搜索片名，或描述想看的内容";
+  const playerLibrarySearchPlaceholder = isAnimePlaylistSearchScope ? "搜索当前列表内的剧集" : homeLibrarySearchPlaceholder;
+  const homeLibrarySearchEmptyTarget = homeMediaMode === "special" ? "视频" : "文件夹";
+  const playerLibrarySearchEmptyTarget = isAnimePlaylistSearchScope ? "剧集" : homeLibrarySearchEmptyTarget;
   const defaultLibrarySearchStatus = homeMediaMode === "special" ? "特殊模式仅使用本地片名、路径或标签搜索。" : "";
   const isHomeLibrarySearchSurface = librarySearchSurface === "home";
   const isPlayerLibrarySearchSurface = librarySearchSurface === "player";
@@ -1917,17 +1924,23 @@ export default function App() {
     },
     [localConfig, progressStore, seriesTitleByVideoId, videoTags],
   );
-  const librarySearchContext = useMemo(
+  const homeLibrarySearchContext = useMemo(
     () => ({
       mode: homeMediaMode,
-      resultKind: isAnimePlaylistSearchScope ? ("video" as const) : undefined,
       mediaRootLabelsById: Object.fromEntries((localConfig?.mediaRoots ?? []).map((root) => [root.id, root.label])),
       progressByVideoId: progressStore,
       favoriteVideoIds,
       isResumableProgress,
       videoTags,
     }),
-    [favoriteVideoIds, homeMediaMode, isAnimePlaylistSearchScope, localConfig, progressStore, videoTags],
+    [favoriteVideoIds, homeMediaMode, localConfig, progressStore, videoTags],
+  );
+  const playerLibrarySearchContext = useMemo(
+    () => ({
+      ...homeLibrarySearchContext,
+      resultKind: isAnimePlaylistSearchScope ? ("video" as const) : undefined,
+    }),
+    [homeLibrarySearchContext, isAnimePlaylistSearchScope],
   );
   const resumableHomeCards = useMemo(
     () =>
@@ -2229,10 +2242,12 @@ export default function App() {
   );
   const canUseHomeRecapSubtitle = Boolean(homeRecapSubtitle || canUseHomeEmbeddedSubtitles);
   const searchLibraryLocally = useCallback(
-    (query: string, limit?: number): LibrarySearchResult[] => {
-      return searchLibraryEntries(query, librarySearchVideos, librarySearchContext, limit);
+    (query: string, limit?: number, surface: LibrarySearchSurface = "home"): LibrarySearchResult[] => {
+      const videos = surface === "player" ? playerLibrarySearchVideos : homeLibrarySearchVideos;
+      const context = surface === "player" ? playerLibrarySearchContext : homeLibrarySearchContext;
+      return searchLibraryEntries(query, videos, context, limit);
     },
-    [librarySearchContext, librarySearchVideos],
+    [homeLibrarySearchContext, homeLibrarySearchVideos, playerLibrarySearchContext, playerLibrarySearchVideos],
   );
 
   useEffect(() => {
@@ -2250,9 +2265,10 @@ export default function App() {
   }, [homeMediaMode, librarySearchScopeKey]);
 
   const createLibrarySearchCandidates = useCallback(
-    (localResults: LibrarySearchResult[]): LibrarySearchCandidate[] => {
+    (localResults: LibrarySearchResult[], surface: LibrarySearchSurface): LibrarySearchCandidate[] => {
       const candidates: LibrarySearchCandidate[] = [];
       const seenIds = new Set<string>();
+      const videos = surface === "player" ? playerLibrarySearchVideos : homeLibrarySearchVideos;
       const addVideo = (video: VideoItem) => {
         if (seenIds.has(video.id) || candidates.length >= 80) return;
         seenIds.add(video.id);
@@ -2274,13 +2290,24 @@ export default function App() {
         addVideo(result.representativeVideo);
         result.videos.forEach(({ video }) => addVideo(video));
       });
-      resumableHomeCards.forEach((card) => addVideo(card.video));
-      favoriteHomeCards.forEach((card) => addVideo(card.video));
-      recentHomeCards.forEach((card) => addVideo(card.video));
-      librarySearchVideos.forEach(addVideo);
+      if (surface === "home") {
+        resumableHomeCards.forEach((card) => addVideo(card.video));
+        favoriteHomeCards.forEach((card) => addVideo(card.video));
+        recentHomeCards.forEach((card) => addVideo(card.video));
+      }
+      videos.forEach(addVideo);
       return candidates;
     },
-    [createHomeVideoCard, favoriteHomeCards, favoriteVideoIds, librarySearchVideos, recentHomeCards, resumableHomeCards, videoTags],
+    [
+      createHomeVideoCard,
+      favoriteHomeCards,
+      favoriteVideoIds,
+      homeLibrarySearchVideos,
+      playerLibrarySearchVideos,
+      recentHomeCards,
+      resumableHomeCards,
+      videoTags,
+    ],
   );
   const currentVideoSubtitles = useMemo(() => {
     if (!currentVideo) return [];
@@ -6004,7 +6031,9 @@ export default function App() {
 
     setLibrarySearchSubmittedSignature(draftSignature);
     setLibrarySearchVisibleCount(librarySearchResultPageSize);
-    const localResults = searchLibraryLocally(query);
+    const searchVideos = surface === "player" ? playerLibrarySearchVideos : homeLibrarySearchVideos;
+    const searchContext = surface === "player" ? playerLibrarySearchContext : homeLibrarySearchContext;
+    const localResults = searchLibraryLocally(query, undefined, surface);
     setLibrarySearchResults(localResults);
     const needsAi =
       !isSpecialSearch &&
@@ -6030,14 +6059,14 @@ export default function App() {
     setLibrarySearchMode("ai");
     setLibrarySearchMessage("本地匹配不足，正在调用 AI 分析候选片库...");
     try {
-      const candidates = createLibrarySearchCandidates(localResults);
+      const candidates = createLibrarySearchCandidates(localResults, surface);
       if (!candidates.length) throw new Error("当前片库没有可搜索的视频。");
       const response = await fetchJson<LibraryAiSearchResponse>("/api/ai/library/search", {
         method: "POST",
         body: JSON.stringify({ query, candidates }),
       });
       if (librarySearchRunIdRef.current !== searchRunId) return;
-      const aiResults = createAiLibrarySearchResults(response.matchIds, librarySearchVideos, librarySearchContext);
+      const aiResults = createAiLibrarySearchResults(response.matchIds, searchVideos, searchContext);
       setLibrarySearchResults(aiResults.length ? aiResults : localResults);
       setLibrarySearchVisibleCount(librarySearchResultPageSize);
       setLibrarySearchAnswer(response.answer);
@@ -6058,11 +6087,13 @@ export default function App() {
     homeMediaMode,
     homeLibrarySearchDraftSignature,
     homeLibrarySearchQuery,
-    librarySearchContext,
+    homeLibrarySearchContext,
+    homeLibrarySearchVideos,
     localConfig,
-    librarySearchVideos,
+    playerLibrarySearchContext,
     playerLibrarySearchDraftSignature,
     playerLibrarySearchQuery,
+    playerLibrarySearchVideos,
     searchLibraryLocally,
   ]);
 
@@ -6077,7 +6108,7 @@ export default function App() {
       setLibrarySearchSurface("home");
       setLibrarySearchSubmittedSignature(createLibrarySearchSignature(query));
       setLibrarySearchVisibleCount(librarySearchResultPageSize);
-      const localResults = searchLibraryLocally(query);
+      const localResults = searchLibraryLocally(query, undefined, "home");
       setLibrarySearchResults(localResults);
       setLibrarySearchMode(localResults.length ? "local" : "empty");
       setLibrarySearchMessage(localResults.length ? "已按标签筛选特殊模式视频。" : "特殊模式本地没有找到匹配结果。");
@@ -6088,7 +6119,7 @@ export default function App() {
   const homeLibrarySearchPreviewResults = useMemo(() => {
     const query = homeLibrarySearchQuery.trim();
     if (!query) return [];
-    return searchLibraryLocally(query, 3);
+    return searchLibraryLocally(query, 3, "home");
   }, [
     homeLibrarySearchQuery,
     searchLibraryLocally,
@@ -6096,7 +6127,7 @@ export default function App() {
   const playerLibrarySearchPreviewResults = useMemo(() => {
     const query = playerLibrarySearchQuery.trim();
     if (!query) return [];
-    return searchLibraryLocally(query, 3);
+    return searchLibraryLocally(query, 3, "player");
   }, [
     playerLibrarySearchQuery,
     searchLibraryLocally,
@@ -7562,14 +7593,14 @@ export default function App() {
                     type="search"
                     value={homeLibrarySearchQuery}
                     onChange={(event) => setHomeLibrarySearchQuery(event.target.value)}
-                    placeholder={librarySearchPlaceholder}
+                    placeholder={homeLibrarySearchPlaceholder}
                     aria-label="片库搜索"
                   />
                   <button
                     type="submit"
                     disabled={
                       isLibrarySearchLoading ||
-                      !librarySearchVideos.length ||
+                      !homeLibrarySearchVideos.length ||
                       !homeLibrarySearchQuery.trim()
                     }
                     title="搜索片库"
@@ -7613,7 +7644,7 @@ export default function App() {
                     ) : null}
                   </div>
                 ) : isHomeLibrarySearchSurface && librarySearchMode === "empty" ? (
-                  <div className="empty-list compact">没有找到匹配{librarySearchEmptyTarget}</div>
+                  <div className="empty-list compact">没有找到匹配{homeLibrarySearchEmptyTarget}</div>
                 ) : null}
               </section>
 
@@ -8482,14 +8513,14 @@ export default function App() {
               type="search"
               value={playerLibrarySearchQuery}
               onChange={(event) => setPlayerLibrarySearchQuery(event.target.value)}
-              placeholder={librarySearchPlaceholder}
+              placeholder={playerLibrarySearchPlaceholder}
               aria-label="播放器片库搜索"
             />
             <button
               type="submit"
               disabled={
                 isLibrarySearchLoading ||
-                !librarySearchVideos.length ||
+                !playerLibrarySearchVideos.length ||
                 !playerLibrarySearchQuery.trim()
               }
               title="搜索片库"
@@ -8533,7 +8564,7 @@ export default function App() {
               ) : null}
             </div>
           ) : isPlayerLibrarySearchSurface && librarySearchMode === "empty" ? (
-            <div className="empty-list compact">没有找到匹配{librarySearchEmptyTarget}</div>
+            <div className="empty-list compact">没有找到匹配{playerLibrarySearchEmptyTarget}</div>
           ) : null}
         </section>
 
