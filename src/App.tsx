@@ -7952,6 +7952,16 @@ export default function App() {
                   <span>{`${modeFilteredMediaRootStatuses.filter((status) => status.status === "ready").length} / ${homeModeMediaRoots.length} 可用`}</span>
                   <ChevronDown className="media-library-toggle-chevron" size={16} aria-hidden="true" />
                 </button>
+                <button
+                  className="secondary-button media-library-refresh-button"
+                  type="button"
+                  onClick={() => void loadGlobalMediaLibrary()}
+                  disabled={isScanning || !localConfig?.mediaRoots.length}
+                  title={!localConfig?.mediaRoots.length ? "还没有可扫描的媒体库" : "重新扫描全局媒体库"}
+                >
+                  <RefreshCw size={16} className={isScanning ? "spin-icon" : undefined} />
+                  {isScanning ? "扫描中" : "刷新媒体库"}
+                </button>
                 {isMediaLibraryPanelOpen ? (
                   <div id="home-media-library-panel" className="media-library-panel">
                     {homeModeMediaRoots.length ? (

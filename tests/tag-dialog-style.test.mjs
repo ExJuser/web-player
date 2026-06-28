@@ -35,3 +35,11 @@ test("special insight controls have light theme coverage in app and root theme s
   assert.match(styles, /\.app-shell\.theme-light \.special-insight-tabs button:hover,/);
   assert.match(styles, /:root\[data-theme="light"\] \.special-insight-video-row:focus-visible\s*\{/);
 });
+
+test("media library refresh button keeps the sidebar control compact", () => {
+  const rule = styles.match(/\.media-library-refresh-button\s*\{(?<body>[^}]+)\}/);
+
+  assert.match(rule?.groups?.body ?? "", /min-height:\s*36px;/);
+  assert.match(rule?.groups?.body ?? "", /width:\s*100%;/);
+  assert.match(rule?.groups?.body ?? "", /white-space:\s*nowrap;/);
+});

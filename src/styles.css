@@ -2124,6 +2124,18 @@ button {
   transform: rotate(180deg);
 }
 
+.media-library-refresh-button {
+  width: 100%;
+  min-height: 36px;
+  justify-content: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.media-library-refresh-button svg {
+  flex: 0 0 auto;
+}
+
 .media-library-panel {
   min-width: 0;
 }
