@@ -148,6 +148,41 @@ export function getDanmakuLane(comment: Pick<DanmakuComment, "id" | "hash" | "ti
   return Number.parseInt(hash.slice(0, 8), 16) % laneCount;
 }
 
+function findFirstDanmakuAfter(comments: DanmakuComment[], time: number) {
+  let low = 0;
+  let high = comments.length;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if (comments[middle].time <= time) {
+      low = middle + 1;
+    } else {
+      high = middle;
+    }
+  }
+  return low;
+}
+
+export function getActiveDanmakuComments(input: {
+  comments: DanmakuComment[];
+  currentTime: number;
+  durationSeconds: number;
+  displayLimit: number;
+}) {
+  const { comments, currentTime, durationSeconds, displayLimit } = input;
+  if (!comments.length || !Number.isFinite(currentTime) || !Number.isFinite(durationSeconds) || durationSeconds <= 0) {
+    return [];
+  }
+
+  const firstFutureIndex = findFirstDanmakuAfter(comments, currentTime);
+  const windowStart = Math.max(0, currentTime - durationSeconds);
+  let startIndex = firstFutureIndex;
+  while (startIndex > 0 && comments[startIndex - 1].time >= windowStart) {
+    startIndex -= 1;
+  }
+  const limitedStartIndex = Math.max(startIndex, firstFutureIndex - Math.max(0, displayLimit));
+  return comments.slice(limitedStartIndex, firstFutureIndex);
+}
+
 export function formatDanmakuSpeedLevel(speed: number) {
   if (speed <= 16) return "较快";
   if (speed <= 20) return "稍快";

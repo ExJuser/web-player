@@ -62,3 +62,34 @@ test("danmaku display helpers format lanes and speeds", () => {
   assert.equal(danmaku.formatDanmakuSpeedLevel(28), "稍慢");
   assert.equal(danmaku.formatDanmakuSpeedLevel(32), "较慢");
 });
+
+const createComment = (time) => ({
+  id: `comment-${time}`,
+  time,
+  text: `弹幕 ${time}`,
+  mode: "scroll",
+  hash: `hash-${time}`,
+  sourceLanguage: "zh-Hans",
+});
+
+test("selects active danmaku comments without future or expired entries", () => {
+  const comments = [1, 3, 5, 7, 9, 12].map(createComment);
+
+  assert.deepEqual(
+    danmaku
+      .getActiveDanmakuComments({ comments, currentTime: 8, durationSeconds: 4, displayLimit: 10 })
+      .map((comment) => comment.time),
+    [5, 7],
+  );
+});
+
+test("limits active danmaku comments to the latest visible entries", () => {
+  const comments = [1, 2, 3, 4, 5].map(createComment);
+
+  assert.deepEqual(
+    danmaku
+      .getActiveDanmakuComments({ comments, currentTime: 5, durationSeconds: 10, displayLimit: 3 })
+      .map((comment) => comment.time),
+    [3, 4, 5],
+  );
+});

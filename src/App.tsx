@@ -151,6 +151,7 @@ import {
   danmakuLaneLineHeight,
   formatDanmakuLaneTop,
   formatDanmakuSpeedLevel,
+  getActiveDanmakuComments,
   getDanmakuLane,
   getDanmakuLaneCount,
 } from "./danmakuUtils";
@@ -207,6 +208,7 @@ const photoViewerWarmRadius = 4;
 const photoViewerDecodeRadius = 2;
 const photoObjectUrlCacheLimit = 48;
 const photoAlbumScanCacheStaleMs = 24 * 60 * 60 * 1000;
+const danmakuPlaybackClockIntervalMs = 250;
 let hasStartedLegacyThumbnailMigration = false;
 const photoAlbumSortOptions: Array<{ value: PhotoAlbumSortMode; label: string }> = [
   { value: "updated", label: "最近更新" },
@@ -1194,7 +1196,7 @@ export default function App() {
   const controlBarRef = useRef<HTMLDivElement | null>(null);
   const playlistRef = useRef<HTMLDivElement | null>(null);
   const currentVideoIdRef = useRef<string | null>(null);
-  const playbackClockFrameRef = useRef<number | null>(null);
+  const playbackClockTimerRef = useRef<number | null>(null);
   const saveTimerRef = useRef<number | null>(null);
   const playlistAutoScrollTimerRef = useRef<number | null>(null);
   const controlsHideTimerRef = useRef<number | null>(null);
@@ -2275,15 +2277,13 @@ export default function App() {
   );
   const currentMediaRootId = currentVideo?.mediaRootId ?? mediaRootId;
   const isDanmakuAvailable = Boolean(currentVideo && homeMediaMode === "anime" && isSeriesMode);
-  const shouldUseHighFrequencyPlaybackClock =
+  const shouldUseDanmakuPlaybackClock =
     danmakuPreferences.enabled && isDanmakuAvailable && danmakuComments.length > 0 && !isPrivacyMode;
   const activeDanmakuComments = useMemo(() => {
     if (!danmakuPreferences.enabled || !currentVideo || !danmakuComments.length || isPrivacyMode) return [];
     const durationSeconds = danmakuPreferences.speed;
     const displayLimit = Math.max(12, Math.round(90 * danmakuPreferences.density));
-    return danmakuComments
-      .filter((comment) => comment.time <= currentTime && currentTime - comment.time <= durationSeconds)
-      .slice(-displayLimit);
+    return getActiveDanmakuComments({ comments: danmakuComments, currentTime, durationSeconds, displayLimit });
   }, [currentTime, currentVideo, danmakuComments, danmakuPreferences.density, danmakuPreferences.enabled, danmakuPreferences.speed, isPrivacyMode]);
   const danmakuLaneCount = getDanmakuLaneCount(danmakuPreferences.displayArea, danmakuPreferences.fontSize, danmakuLayerHeight);
   const currentMediaLibraryRoot = useMemo(() => {
@@ -5047,16 +5047,16 @@ export default function App() {
   }, [currentVideo?.id]);
 
   useEffect(() => {
-    if (playbackClockFrameRef.current) {
-      window.cancelAnimationFrame(playbackClockFrameRef.current);
-      playbackClockFrameRef.current = null;
+    if (playbackClockTimerRef.current) {
+      window.clearTimeout(playbackClockTimerRef.current);
+      playbackClockTimerRef.current = null;
     }
-    if (!isPlaying || !currentVideo || !shouldUseHighFrequencyPlaybackClock) return;
+    if (!isPlaying || !currentVideo || !shouldUseDanmakuPlaybackClock) return;
 
     const syncPlaybackClock = () => {
       const element = videoRef.current;
       if (!element || element.paused || element.ended) {
-        playbackClockFrameRef.current = null;
+        playbackClockTimerRef.current = null;
         return;
       }
 
@@ -5065,17 +5065,17 @@ export default function App() {
       setDuration((previousDuration) =>
         Math.abs(previousDuration - nextDuration) > 0.05 ? nextDuration : previousDuration,
       );
-      playbackClockFrameRef.current = window.requestAnimationFrame(syncPlaybackClock);
+      playbackClockTimerRef.current = window.setTimeout(syncPlaybackClock, danmakuPlaybackClockIntervalMs);
     };
 
-    playbackClockFrameRef.current = window.requestAnimationFrame(syncPlaybackClock);
+    playbackClockTimerRef.current = window.setTimeout(syncPlaybackClock, danmakuPlaybackClockIntervalMs);
     return () => {
-      if (playbackClockFrameRef.current) {
-        window.cancelAnimationFrame(playbackClockFrameRef.current);
-        playbackClockFrameRef.current = null;
+      if (playbackClockTimerRef.current) {
+        window.clearTimeout(playbackClockTimerRef.current);
+        playbackClockTimerRef.current = null;
       }
     };
-  }, [currentVideo?.duration, currentVideo?.id, isPlaying, shouldUseHighFrequencyPlaybackClock]);
+  }, [currentVideo?.duration, currentVideo?.id, isPlaying, shouldUseDanmakuPlaybackClock]);
 
   useEffect(() => {
     const handleFullscreenChange = () => {
