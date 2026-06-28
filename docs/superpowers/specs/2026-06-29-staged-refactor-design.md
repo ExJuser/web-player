@@ -12,7 +12,7 @@
 
 - `src/App.tsx` 约 490 KB，混合 UI、浏览器文件扫描、写真集、缩略图、AI、弹幕、播放控制和资源释放。
 - `src/styles.css` 约 155 KB，样式集中且后续 UI 调整需要浏览器检查。
-- `vite.config.ts` 承载 Vite 配置和大量本地 API 路由，并使用唯一的 `@ts-nocheck`。
+- `vite.config.ts` 承载 Vite 配置和大量本地 API 路由，并使用全文件 TypeScript 检查跳过指令。
 - `server/sqliteStorage.mjs` 约 48 KB，存储职责集中。
 - `node_modules` 存在不在 `package.json` 中的 extraneous 包，属于本地依赖目录残留，不应进入代码提交。
 
@@ -43,7 +43,7 @@
 
 将 `vite.config.ts` 中的本地 API plugin 和 helper 移入 `server/`，让 Vite 配置文件只负责配置和挂载。
 
-优点：边界清晰，风险低，能移除唯一 `@ts-nocheck`，为后续服务端测试和路由整理打基础。
+优点：边界清晰，风险低，能移除唯一的全文件 TypeScript 检查跳过指令，为后续服务端测试和路由整理打基础。
 
 缺点：对用户体感性能提升不明显。
 
@@ -68,13 +68,13 @@
 - `vite.config.ts` 只保留 Vite 配置、env 加载、插件引用和必要常量。
 - 不改变任何 `/api/` 路径、HTTP method、响应结构、错误文案或缓存目录。
 - 不引入新依赖。
-- 尝试移除 `vite.config.ts` 的 `@ts-nocheck`；若 Vite/Node 类型阻塞，则用局部 JSDoc 或极小范围的类型收窄处理，不重新放大全文件类型跳过。
+- 尝试移除 `vite.config.ts` 的全文件 TypeScript 检查跳过指令；若 Vite/Node 类型阻塞，则用局部 JSDoc 或极小范围的类型收窄处理，不重新放大全文件类型跳过。
 
 ### 验证
 
 - `npm test`
 - `npm run build`
-- `rg -n --fixed-strings "@ts-nocheck" .`
+- 固定字符串扫描全文件 TypeScript 检查跳过指令。
 - `git diff --stat` 和重点 diff 复核，确认没有行为性改动。
 
 因为第一阶段不改 UI，不需要浏览器检查。
@@ -136,7 +136,7 @@
 整体目标完成前，需要满足：
 
 - 关键大文件职责已经按阶段拆分，`App.tsx` 和 `vite.config.ts` 不再承担跨层职责。
-- 无全文件 `@ts-nocheck`。
+- 无全文件 TypeScript 检查跳过指令。
 - 冗余依赖、重复逻辑和临时实现有清单并已处理或明确保留理由。
 - 对象 URL、图片缓存、扫描和 ffmpeg/ffprobe 路径符合项目规则。
 - `npm test` 和 `npm run build` 通过。
