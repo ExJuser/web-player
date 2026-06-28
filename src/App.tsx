@@ -7245,7 +7245,7 @@ export default function App() {
     </span>
   );
   const renderTagChips = (tags: string[], options?: { limit?: number; compact?: boolean }) => {
-    const visibleTags = tags.slice(0, options?.limit ?? 10);
+    const visibleTags = typeof options?.limit === "number" ? tags.slice(0, options.limit) : tags;
     if (!visibleTags.length) return null;
     return (
       <span className={`tag-chip-row ${options?.compact ? "compact" : ""}`}>
@@ -8999,7 +8999,7 @@ export default function App() {
                     <strong>{video.name}</strong>
                     <small>{video.relativePath}</small>
                     {seriesTitle ? <small className="episode-series">{seriesTitle}</small> : null}
-                    {renderTagChips(tags, { limit: 3, compact: true })}
+                    {renderTagChips(tags, { compact: true })}
                     {isCompleted ? (
                       <span className="episode-progress compact">
                         <CheckCircle2 size={15} />

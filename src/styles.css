@@ -3677,6 +3677,29 @@ button {
   background: rgba(255, 255, 255, 0.07);
 }
 
+.playlist-item .tag-chip-row {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 2px;
+  scrollbar-color: rgba(121, 223, 255, 0.44) rgba(255, 255, 255, 0.06);
+  scrollbar-width: thin;
+}
+
+.playlist-item .tag-chip-row::-webkit-scrollbar {
+  height: 5px;
+}
+
+.playlist-item .tag-chip-row::-webkit-scrollbar-track {
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.playlist-item .tag-chip-row::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(121, 223, 255, 0.44);
+}
+
 .episode-progress {
   display: inline-flex;
   align-items: center;
