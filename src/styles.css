@@ -2936,10 +2936,12 @@ button {
   flex: 1;
 }
 
-.emission-control {
+.special-stats-control {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  gap: 6px;
   min-width: 0;
 }
 
@@ -2949,25 +2951,50 @@ button {
   color: #d6c4ff;
 }
 
-.emission-count-label {
+.special-stat-pill {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  flex: 0 1 auto;
+  gap: 4px;
   height: 30px;
-  max-width: 148px;
-  padding: 0 9px;
-  border: 1px solid #45365f;
+  min-width: 0;
+  padding: 0 7px;
+  border: 1px solid #344050;
   border-radius: 6px;
-  background: #17131f;
-  color: #d6c4ff;
+  background: #171d25;
+  color: #cbd5e1;
   font-size: 12px;
   font-weight: 700;
   line-height: 1;
   white-space: nowrap;
 }
 
-.emission-count-label svg {
+.special-stat-pill svg {
   flex: none;
+}
+
+.special-stat-pill span {
+  color: #8e97a5;
+  font-weight: 600;
+}
+
+.special-stat-pill strong {
+  min-width: 0;
+  max-width: 68px;
+  overflow: hidden;
+  color: #f5f7fb;
+  font-weight: 800;
+  text-overflow: ellipsis;
+}
+
+.emission-stat-pill {
+  border-color: #45365f;
+  background: #17131f;
+  color: #d6c4ff;
+}
+
+.emission-stat-pill strong {
+  color: #e7dcff;
 }
 
 .playlist-panel {
@@ -5028,6 +5055,30 @@ button {
   color: #98a2b3;
 }
 
+.app-shell.theme-light .special-stat-pill {
+  border-color: #d7e0ea;
+  background: #f8fafc;
+  color: #243044;
+}
+
+.app-shell.theme-light .special-stat-pill span {
+  color: #667085;
+}
+
+.app-shell.theme-light .special-stat-pill strong {
+  color: #172033;
+}
+
+.app-shell.theme-light .emission-stat-pill {
+  border-color: #d8c8ff;
+  background: #f3efff;
+  color: #6f45c7;
+}
+
+.app-shell.theme-light .emission-stat-pill strong {
+  color: #5b32ad;
+}
+
 .app-shell.theme-light .control-select-trigger:disabled:hover {
   border-color: #d8e0ea;
   background: #eef2f6;
@@ -5632,6 +5683,35 @@ button {
 .app-shell.theme-light .player-frame.fullscreen .control-select-chevron,
 .app-shell.theme-light.cinema-mode .control-select-chevron {
   color: #79dfff;
+}
+
+.app-shell.theme-light .player-frame.fullscreen .special-stat-pill,
+.app-shell.theme-light.cinema-mode .special-stat-pill {
+  border-color: #344050;
+  background: #171d25;
+  color: #cbd5e1;
+}
+
+.app-shell.theme-light .player-frame.fullscreen .special-stat-pill span,
+.app-shell.theme-light.cinema-mode .special-stat-pill span {
+  color: #8e97a5;
+}
+
+.app-shell.theme-light .player-frame.fullscreen .special-stat-pill strong,
+.app-shell.theme-light.cinema-mode .special-stat-pill strong {
+  color: #f5f7fb;
+}
+
+.app-shell.theme-light .player-frame.fullscreen .emission-stat-pill,
+.app-shell.theme-light.cinema-mode .emission-stat-pill {
+  border-color: #45365f;
+  background: #17131f;
+  color: #d6c4ff;
+}
+
+.app-shell.theme-light .player-frame.fullscreen .emission-stat-pill strong,
+.app-shell.theme-light.cinema-mode .emission-stat-pill strong {
+  color: #e7dcff;
 }
 
 .app-shell.theme-light .player-frame.fullscreen .control-select-list,

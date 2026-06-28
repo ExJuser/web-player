@@ -2338,9 +2338,25 @@ export default function App() {
     currentVideo && currentMediaLibraryRoot && isMediaRootInHomeMode(currentMediaLibraryRoot, "special"),
   );
   const canRecordEmission = Boolean(currentVideo && homeMediaMode === "special" && isCurrentVideoSpecialMedia);
-  const currentVideoEmissionCount = useMemo(() => {
-    if (!currentVideo) return 0;
-    return videoStatsRef.current[createVideoStatsKey(currentVideo)]?.emissionCount ?? 0;
+  const currentVideoSpecialStats = useMemo(() => {
+    if (!currentVideo) {
+      return {
+        emissionCount: 0,
+        playCount: 0,
+        playIntensity: null as number | null,
+        lastEmissionLabel: "暂无",
+      };
+    }
+    const stats = videoStatsRef.current[createVideoStatsKey(currentVideo)];
+    const durationSeconds = stats?.durationSeconds || currentVideo.duration || 0;
+    return {
+      emissionCount: stats?.emissionCount ?? 0,
+      playCount: stats?.playCount ?? 0,
+      playIntensity: durationSeconds > 0 && stats?.totalPlayedSeconds
+        ? stats.totalPlayedSeconds / durationSeconds
+        : null,
+      lastEmissionLabel: stats?.lastEmissionAt ? formatRelativeTime(stats.lastEmissionAt) : "暂无",
+    };
   }, [currentVideo, videoStatsRevision]);
 
   const updateSpecialVideoStats = useCallback(
@@ -8350,7 +8366,7 @@ export default function App() {
                 <Tags size={18} />
               </button>
               {canRecordEmission ? (
-                <div className="emission-control" aria-label={`发射次数 ${currentVideoEmissionCount}`}>
+                <div className="special-stats-control" aria-label="特殊模式统计">
                   <button
                     className="icon-button emission-launch-button"
                     type="button"
@@ -8361,9 +8377,36 @@ export default function App() {
                   >
                     <Rocket size={18} />
                   </button>
-                  <span className="emission-count-label">
-                    <Rocket size={15} />
-                    发射次数 {currentVideoEmissionCount}
+                  <span className="special-stat-pill" title={`上次发射距今：${currentVideoSpecialStats.lastEmissionLabel}`}>
+                    <Clock3 size={14} />
+                    <span>上次</span>
+                    <strong>{currentVideoSpecialStats.lastEmissionLabel}</strong>
+                  </span>
+                  <span
+                    className="special-stat-pill"
+                    title={`播放强度：${
+                      currentVideoSpecialStats.playIntensity === null
+                        ? "暂无"
+                        : `${currentVideoSpecialStats.playIntensity.toFixed(1)} 遍`
+                    }`}
+                  >
+                    <Activity size={14} />
+                    <span>强度</span>
+                    <strong>
+                      {currentVideoSpecialStats.playIntensity === null
+                        ? "暂无"
+                        : `${currentVideoSpecialStats.playIntensity.toFixed(1)}x`}
+                    </strong>
+                  </span>
+                  <span className="special-stat-pill" title={`播放次数：${currentVideoSpecialStats.playCount}`}>
+                    <Play size={14} />
+                    <span>播放</span>
+                    <strong>{currentVideoSpecialStats.playCount}</strong>
+                  </span>
+                  <span className="special-stat-pill emission-stat-pill" title={`发射次数：${currentVideoSpecialStats.emissionCount}`}>
+                    <Rocket size={14} />
+                    <span>发射</span>
+                    <strong>{currentVideoSpecialStats.emissionCount}</strong>
                   </span>
                 </div>
               ) : null}
