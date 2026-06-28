@@ -5,6 +5,16 @@ import { importTsModule } from "./importTsModule.mjs";
 
 const localApiClient = await importTsModule(new URL("../src/localApiClient.ts", import.meta.url));
 
+function streamFromTextChunks(chunks) {
+  const encoder = new TextEncoder();
+  return new ReadableStream({
+    start(controller) {
+      chunks.forEach((chunk) => controller.enqueue(encoder.encode(chunk)));
+      controller.close();
+    },
+  });
+}
+
 test("createLocalApiHeaders sets accept and json content type for request bodies", () => {
   assert.deepEqual(localApiClient.createLocalApiHeaders("application/json"), { Accept: "application/json" });
   assert.deepEqual(localApiClient.createLocalApiHeaders("application/x-ndjson", { body: "{}" }), {
@@ -37,6 +47,31 @@ test("handleLocalApiStreamLine converts error events to exceptions", () => {
     () => localApiClient.handleLocalApiStreamLine('{"type":"error","error":"failed"}', () => {}),
     /failed/,
   );
+});
+
+test("readLocalApiStream reads ndjson events split across chunks", async () => {
+  const originalFetch = globalThis.fetch;
+  const events = [];
+  try {
+    globalThis.fetch = async (url, init) => {
+      assert.equal(url, "/api/stream");
+      assert.equal(init.headers.Accept, "application/x-ndjson");
+      assert.equal(init.headers["Content-Type"], "application/json");
+      return {
+        ok: true,
+        body: streamFromTextChunks(['{"type":"delta","text":"a"}\n{"type":"delta"', ',"text":"b"}\n']),
+      };
+    };
+
+    await localApiClient.readLocalApiStream("/api/stream", { method: "POST", body: "{}" }, (event) => events.push(event));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  assert.deepEqual(events, [
+    { type: "delta", text: "a" },
+    { type: "delta", text: "b" },
+  ]);
 });
 
 test("readLocalApiErrorMessage uses local api error payloads", async () => {

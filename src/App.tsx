@@ -40,7 +40,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 
-import { createLocalApiHeaders, handleLocalApiStreamLine, readLocalApiErrorMessage } from "./localApiClient";
+import { createLocalApiHeaders, readLocalApiErrorMessage, readLocalApiStream } from "./localApiClient";
 import {
   createAiLibrarySearchResults,
   getVisibleLibrarySearchResults,
@@ -836,32 +836,6 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
     throw new Error(await readLocalApiErrorMessage(response));
   }
   return response.json() as Promise<T>;
-}
-
-async function readAiStream(url: string, init: RequestInit, onEvent: (event: AiStreamEvent) => void) {
-  const response = await fetch(url, {
-    ...init,
-    headers: createLocalApiHeaders("application/x-ndjson", init),
-  });
-  if (!response.ok) {
-    throw new Error(await readLocalApiErrorMessage(response));
-  }
-  if (!response.body) throw new Error("浏览器不支持流式响应。");
-
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split(/\r?\n/);
-    buffer = lines.pop() ?? "";
-    lines.forEach((line) => handleLocalApiStreamLine<AiStreamEvent>(line, onEvent));
-  }
-  buffer += decoder.decode();
-  if (buffer.trim()) handleLocalApiStreamLine<AiStreamEvent>(buffer, onEvent);
 }
 
 async function createSubtitleUrl(subtitle: SubtitleItem) {
@@ -5862,7 +5836,7 @@ export default function App() {
     try {
       const subtitleText = await readSubtitleText(selectedSubtitle);
       if (!subtitleText) throw new Error("当前字幕没有可分析的文本。");
-      await readAiStream(
+      await readLocalApiStream<AiStreamEvent>(
         "/api/ai/subtitles/summarize",
         {
           method: "POST",
@@ -5915,7 +5889,7 @@ export default function App() {
       const subtitleText = await readSubtitleText(selectedSubtitle);
       const cues = parseSubtitleCues(subtitleText);
       if (!cues.length) throw new Error("当前字幕没有可检索的文本片段。");
-      await readAiStream(
+      await readLocalApiStream<AiStreamEvent>(
         "/api/ai/subtitles/ask",
         {
           method: "POST",
@@ -5965,7 +5939,7 @@ export default function App() {
       if (!cues.length) throw new Error("当前字幕没有可回顾的文本片段。");
       const viewedText = createViewedSubtitleText(cues, currentTime);
       if (!viewedText) throw new Error("当前时间前还没有可回顾的字幕内容。");
-      await readAiStream(
+      await readLocalApiStream<AiStreamEvent>(
         "/api/ai/subtitles/recap",
         {
           method: "POST",
@@ -6040,7 +6014,7 @@ export default function App() {
       if (!cues.length) throw new Error("当前字幕没有可回顾的文本片段。");
       const viewedText = createViewedSubtitleText(cues, progress.currentTime);
       if (!viewedText) throw new Error("当前进度前还没有可回顾的字幕内容。");
-      await readAiStream(
+      await readLocalApiStream<AiStreamEvent>(
         "/api/ai/subtitles/recap",
         {
           method: "POST",

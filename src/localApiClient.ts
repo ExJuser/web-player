@@ -26,6 +26,32 @@ export function handleLocalApiStreamLine<T extends LocalApiStreamEvent>(line: st
   onEvent(event);
 }
 
+export async function readLocalApiStream<T extends LocalApiStreamEvent>(url: string, init: RequestInit, onEvent: (event: T) => void) {
+  const response = await fetch(url, {
+    ...init,
+    headers: createLocalApiHeaders("application/x-ndjson", init),
+  });
+  if (!response.ok) {
+    throw new Error(await readLocalApiErrorMessage(response));
+  }
+  if (!response.body) throw new Error("浏览器不支持流式响应。");
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split(/\r?\n/);
+    buffer = lines.pop() ?? "";
+    lines.forEach((line) => handleLocalApiStreamLine<T>(line, onEvent));
+  }
+  buffer += decoder.decode();
+  if (buffer.trim()) handleLocalApiStreamLine<T>(buffer, onEvent);
+}
+
 export async function readLocalApiErrorMessage(response: LocalApiErrorResponse) {
   let message = response.statusText;
   try {
