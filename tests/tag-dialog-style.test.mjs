@@ -38,6 +38,8 @@ test("auto tag controls have stable loading and light theme styles", () => {
 });
 
 test("special insight controls have light theme coverage in app and root theme scopes", () => {
+  assert.match(styles, /\.special-tag-group\s*\{(?<body>[^}]+align-content:\s*start;[^}]+)\}/);
+  assert.match(styles, /\.special-tag-chart\s*\{(?<body>[^}]+align-content:\s*start;[^}]+)\}/);
   assert.match(styles, /\.app-shell\.theme-light \.special-tag-insight,/);
   assert.match(styles, /\.app-shell\.theme-light \.special-tag-insight-meter,/);
   assert.match(styles, /\.special-tag-insight-meter span\s*\{(?<body>[^}]+height:\s*var\(--tag-share\);[^}]+)\}/);

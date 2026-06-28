@@ -1974,6 +1974,7 @@ button {
 
 .special-tag-group {
   display: grid;
+  align-content: start;
   min-width: 0;
   gap: 8px;
   --tag-accent: #39d6ff;
@@ -2005,6 +2006,7 @@ button {
 
 .special-tag-chart {
   display: grid;
+  align-content: start;
   min-width: 0;
   gap: 7px;
 }
