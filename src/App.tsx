@@ -145,6 +145,7 @@ import {
   savePhotoAlbumProgress,
   savePhotoAlbumStore
 } from "./photoAlbumStorage";
+import { prunePhotoObjectUrlCache } from "./photoObjectUrlCache";
 import {
   PROGRESS_FILE_NAME,
   collator,
@@ -365,33 +366,6 @@ async function createDuplicateContentFingerprint(video: VideoItem, signal?: Abor
 
   const digest = await crypto.subtle.digest("SHA-256", payload);
   return `${Math.floor(video.size)}:${Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
-}
-
-function prunePhotoObjectUrlCache(
-  urls: Record<string, string>,
-  accessTimes: Record<string, number>,
-  protectedIds: Set<string>,
-  decodedImageIds?: Set<string>,
-) {
-  let cachedUrlCount = Object.keys(urls).length;
-  if (cachedUrlCount <= photoObjectUrlCacheLimit) return urls;
-
-  const nextUrls = { ...urls };
-  const evictableEntries = Object.keys(nextUrls)
-    .filter((id) => !protectedIds.has(id))
-    .sort((a, b) => (accessTimes[a] ?? 0) - (accessTimes[b] ?? 0));
-
-  while (cachedUrlCount > photoObjectUrlCacheLimit && evictableEntries.length) {
-    const id = evictableEntries.shift();
-    if (!id) break;
-    URL.revokeObjectURL(nextUrls[id]);
-    delete nextUrls[id];
-    delete accessTimes[id];
-    decodedImageIds?.delete(id);
-    cachedUrlCount -= 1;
-  }
-
-  return nextUrls;
 }
 
 function supportsServerFileAccess(root: LocalMediaRoot | null | undefined) {
@@ -2767,12 +2741,13 @@ export default function App() {
       }
     });
 
-    const prunedUrls = prunePhotoObjectUrlCache(
-      nextUrls,
-      photoObjectUrlAccessRef.current,
-      new Set(neededImages.keys()),
-      decodedPhotoImageIdsRef.current,
-    );
+    const prunedUrls = prunePhotoObjectUrlCache({
+      urls: nextUrls,
+      accessTimes: photoObjectUrlAccessRef.current,
+      protectedIds: new Set(neededImages.keys()),
+      decodedImageIds: decodedPhotoImageIdsRef.current,
+      limit: photoObjectUrlCacheLimit,
+    });
     if (prunedUrls !== nextUrls) didChange = true;
 
     if (didChange) {
@@ -2798,15 +2773,16 @@ export default function App() {
             return;
           }
           photoObjectUrlAccessRef.current[image.id] = Date.now();
-          const cachedUrls = prunePhotoObjectUrlCache(
-            {
+          const cachedUrls = prunePhotoObjectUrlCache({
+            urls: {
               ...photoObjectUrlsRef.current,
               [image.id]: url,
             },
-            photoObjectUrlAccessRef.current,
-            new Set(neededImages.keys()),
-            decodedPhotoImageIdsRef.current,
-          );
+            accessTimes: photoObjectUrlAccessRef.current,
+            protectedIds: new Set(neededImages.keys()),
+            decodedImageIds: decodedPhotoImageIdsRef.current,
+            limit: photoObjectUrlCacheLimit,
+          });
           photoObjectUrlsRef.current = cachedUrls;
           setPhotoObjectUrls(cachedUrls);
         });
