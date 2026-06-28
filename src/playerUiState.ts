@@ -1,3 +1,9 @@
+import {
+  formatFileSize,
+  formatModifiedTime,
+  formatResolution,
+  formatTime,
+} from "./playerFormatUtils";
 import type { HomeMediaMode } from "./playerTypes";
 
 export type { HomeMediaMode };
@@ -16,6 +22,12 @@ type MediaRootStatusForUi = {
 
 type VideoForCompatibilityUi = {
   url?: string;
+  name?: string;
+  size?: number;
+  duration?: number;
+  width?: number;
+  height?: number;
+  lastModified?: number;
   playbackSource?: "browser" | "server";
   playability?: {
     status: "direct" | "remuxRecommended" | "unsupported" | "unknown" | "needsLocalPath";
@@ -105,6 +117,24 @@ export function formatPlayabilityStatus(playability?: VideoForCompatibilityUi["p
 export function formatCodecSummary(playability?: VideoForCompatibilityUi["playability"]) {
   if (!playability) return "未探测";
   return [playability.videoCodec, playability.audioCodec, playability.pixelFormat].filter(Boolean).join(" / ") || "未探测";
+}
+
+export function createVideoMetadataRows(video: VideoForCompatibilityUi) {
+  return [
+    ["文件名", video.name ?? ""],
+    ["大小", formatFileSize(video.size ?? Number.NaN)],
+    ["时长", video.duration ? formatTime(video.duration) : "读取中"],
+    ["分辨率", formatResolution(video.width, video.height)],
+    ["播放兼容", formatPlayabilityStatus(video.playability)],
+    ["编码", formatCodecSummary(video.playability)],
+    ["修改", formatModifiedTime(video.lastModified ?? 0)],
+  ] as const;
+}
+
+export function createVideoMetadataTitle(video: VideoForCompatibilityUi) {
+  return createVideoMetadataRows(video)
+    .map(([label, value]) => `${label}: ${value}`)
+    .join("\n");
 }
 
 export function getCompatibleMediaAction(video: VideoForCompatibilityUi | null | undefined, options: { canUseServerTools: boolean }) {

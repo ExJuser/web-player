@@ -63,6 +63,55 @@ test("formats codec summaries from available playability metadata", () => {
   assert.equal(uiState.formatCodecSummary({ status: "unknown" }), "未探测");
 });
 
+test("creates video metadata rows for display", () => {
+  assert.deepEqual(
+    uiState.createVideoMetadataRows({
+      name: "Episode 01.mkv",
+      size: 1536,
+      duration: 65.9,
+      width: 1920,
+      height: 1080,
+      lastModified: 0,
+      playability: {
+        status: "direct",
+        videoCodec: "h264",
+        audioCodec: "aac",
+      },
+    }),
+    [
+      ["文件名", "Episode 01.mkv"],
+      ["大小", "1.5 KB"],
+      ["时长", "01:05"],
+      ["分辨率", "1920 x 1080"],
+      ["播放兼容", "可直接播放"],
+      ["编码", "h264 / aac"],
+      ["修改", "未知时间"],
+    ],
+  );
+});
+
+test("creates video metadata titles from display rows", () => {
+  assert.equal(
+    uiState.createVideoMetadataTitle({
+      name: "Episode 02.mp4",
+      size: Number.NaN,
+      width: 0,
+      height: 0,
+      lastModified: 0,
+      playability: { status: "unknown" },
+    }),
+    [
+      "文件名: Episode 02.mp4",
+      "大小: 未知大小",
+      "时长: 读取中",
+      "分辨率: 读取中",
+      "播放兼容: 兼容性未知",
+      "编码: 未探测",
+      "修改: 未知时间",
+    ].join("\n"),
+  );
+});
+
 test("compatible media action is enabled only for server remux candidates", () => {
   assert.deepEqual(
     uiState.getCompatibleMediaAction(

@@ -181,7 +181,6 @@ import {
   formatFileSize,
   formatModifiedTime,
   formatRelativeTime,
-  formatResolution,
   formatTime,
 } from "./playerFormatUtils";
 import {
@@ -257,10 +256,10 @@ async function hasDirectoryReadPermission(directory: FileSystemDirectoryHandle) 
 import { ControlSelect } from "./ControlSelect";
 import {
   createPersistedEmbeddedSubtitles,
-  formatCodecSummary,
+  createVideoMetadataRows,
+  createVideoMetadataTitle,
   formatMediaRootStatus,
   formatPhotoRootStatus,
-  formatPlayabilityStatus,
   getCompatibleMediaAction,
   getPlayableVideoUrl,
   createSubtitleControlOptions,
@@ -312,24 +311,6 @@ import {
   writeRecentFolderHandle
 } from "./playerStorage";
 
-
-function videoMetadataRows(video: VideoItem) {
-  return [
-    ["文件名", video.name],
-    ["大小", formatFileSize(video.size)],
-    ["时长", video.duration ? formatTime(video.duration) : "读取中"],
-    ["分辨率", formatResolution(video.width, video.height)],
-    ["播放兼容", formatPlayabilityStatus(video.playability)],
-    ["编码", formatCodecSummary(video.playability)],
-    ["修改", formatModifiedTime(video.lastModified)],
-  ] as const;
-}
-
-function videoMetadataTitle(video: VideoItem) {
-  return videoMetadataRows(video)
-    .map(([label, value]) => `${label}: ${value}`)
-    .join("\n");
-}
 
 function readStoredVolume() {
   if (typeof window === "undefined") return defaultPlayerSettings.volume;
@@ -7108,7 +7089,7 @@ export default function App() {
       className="home-list-card"
       type="button"
       onClick={() => openVideoFromHome(card.video)}
-      title={videoMetadataTitle(card.video)}
+      title={createVideoMetadataTitle(card.video)}
     >
       {homeCardThumbnail(card, index)}
       <span className="home-list-copy">
@@ -7263,7 +7244,7 @@ export default function App() {
             {currentVideo && !isPrivacyMode && !isNonPlayerViewVisible ? (
               <>
                 <dl className="current-video-meta">
-                  {videoMetadataRows(currentVideo).map(([label, value]) => (
+                  {createVideoMetadataRows(currentVideo).map(([label, value]) => (
                     <div key={label} className={label === "文件名" ? "current-video-file-chip" : undefined}>
                       <dt>{label}</dt>
                       <dd>{value}</dd>
@@ -8614,7 +8595,7 @@ export default function App() {
               <div
                 key={video.id}
                 className={`playlist-item ${isActive ? "active" : ""}`}
-                title={videoMetadataTitle(video)}
+                title={createVideoMetadataTitle(video)}
               >
                 <button
                   className="playlist-select"
