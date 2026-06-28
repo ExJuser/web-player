@@ -1296,6 +1296,13 @@ export default function App() {
   const [mediaProbeVideoId, setMediaProbeVideoId] = useState<string | null>(null);
   const mediaProbeVideoIdRef = useRef<string | null>(null);
   const [compatibleMediaVideoId, setCompatibleMediaVideoId] = useState<string | null>(null);
+  const [compatibleMediaConfirm, setCompatibleMediaConfirm] = useState<{
+    label: string;
+    rootId: string;
+    relativePath: string;
+    videoId: string;
+    videoName: string;
+  } | null>(null);
   const [compatibleMediaTask, setCompatibleMediaTask] = useState<{ label: string; videoName: string } | null>(null);
   const [compatibleMediaMessage, setCompatibleMediaMessage] = useState("");
   const [isAiPanelOpen, setIsAiPanelOpen] = useState(false);
@@ -5653,25 +5660,38 @@ export default function App() {
     }
   }, [currentMediaRootId, currentVideo, localConfig, probeEmbeddedSubtitleTracksForVideo]);
 
-  const createCompatibleMedia = useCallback(async () => {
+  const openCompatibleMediaConfirm = useCallback(() => {
     if (!currentVideo || !currentMediaRootId) return;
     if (!canCreateCompatibleMedia || compatibleMediaVideoId) return;
-
-    setCompatibleMediaVideoId(currentVideo.id);
-    setCompatibleMediaTask({
+    setCompatibleMediaConfirm({
       label: compatibleMediaAction.label || "生成兼容 MP4",
+      rootId: currentMediaRootId,
+      relativePath: currentVideo.relativePath,
+      videoId: currentVideo.id,
       videoName: currentVideo.name,
     });
-    setCompatibleMediaMessage(`正在${compatibleMediaAction.label || "生成兼容 MP4"}...`);
+  }, [canCreateCompatibleMedia, compatibleMediaAction.label, compatibleMediaVideoId, currentMediaRootId, currentVideo]);
+
+  const createCompatibleMedia = useCallback(async () => {
+    if (!compatibleMediaConfirm) return;
+    if (compatibleMediaVideoId) return;
+
+    setCompatibleMediaConfirm(null);
+    setCompatibleMediaVideoId(compatibleMediaConfirm.videoId);
+    setCompatibleMediaTask({
+      label: compatibleMediaConfirm.label,
+      videoName: compatibleMediaConfirm.videoName,
+    });
+    setCompatibleMediaMessage(`正在${compatibleMediaConfirm.label}...`);
     try {
       const payload = await fetchJson<CompatibleRemuxResponse>("/api/media/compatible/remux", {
         method: "POST",
         body: JSON.stringify({
-          rootId: currentMediaRootId,
-          relativePath: currentVideo.relativePath,
+          rootId: compatibleMediaConfirm.rootId,
+          relativePath: compatibleMediaConfirm.relativePath,
         }),
       });
-      updateVideoPlayability(currentVideo.id, payload.playability);
+      updateVideoPlayability(compatibleMediaConfirm.videoId, payload.playability);
       setCompatibleMediaMessage("已生成兼容 MP4，播放器将优先使用兼容版本。");
       setMessage("已生成兼容 MP4。");
     } catch (error) {
@@ -5680,7 +5700,7 @@ export default function App() {
       setCompatibleMediaVideoId(null);
       setCompatibleMediaTask(null);
     }
-  }, [canCreateCompatibleMedia, compatibleMediaAction.label, compatibleMediaVideoId, currentMediaRootId, currentVideo, updateVideoPlayability]);
+  }, [compatibleMediaConfirm, compatibleMediaVideoId, updateVideoPlayability]);
 
   const applyDanmakuSourcePayload = useCallback(
     (payload: DanmakuSourcePayload, options?: { persist?: boolean; message?: string }) => {
@@ -6566,6 +6586,12 @@ export default function App() {
         return;
       }
 
+      if (event.key === "Escape" && compatibleMediaConfirm) {
+        event.preventDefault();
+        setCompatibleMediaConfirm(null);
+        return;
+      }
+
       if (event.key === "Escape" && isShortcutDialogOpen) {
         event.preventDefault();
         setIsShortcutDialogOpen(false);
@@ -6761,6 +6787,7 @@ export default function App() {
     autoNextPrompt,
     cancelAutoNextPrompt,
     clearRightKeyHoldTimer,
+    compatibleMediaConfirm,
     currentVideo,
     seekBy,
     seekStep,
@@ -7168,7 +7195,7 @@ export default function App() {
                       <button
                         className="secondary-button"
                         type="button"
-                        onClick={() => void createCompatibleMedia()}
+                        onClick={openCompatibleMediaConfirm}
                         disabled={compatibleMediaVideoId === currentVideo.id}
                       >
                         <RefreshCw size={15} className={compatibleMediaVideoId === currentVideo.id ? "spin-icon" : undefined} />
@@ -8937,6 +8964,38 @@ export default function App() {
             <button className="primary-button" type="button" onClick={chooseMediaLibraryDirectory}>
               <FolderOpen size={18} />
               继续添加
+            </button>
+          </div>
+        </section>
+      </div>
+    ) : null}
+    {compatibleMediaConfirm ? (
+      <div className="modal-backdrop" role="presentation" onMouseDown={() => setCompatibleMediaConfirm(null)}>
+        <section
+          aria-labelledby="compatible-media-confirm-title"
+          aria-modal="true"
+          className="compatible-media-dialog"
+          role="dialog"
+          onMouseDown={(event) => event.stopPropagation()}
+        >
+          <div className="dialog-icon">
+            <RefreshCw size={28} />
+          </div>
+          <div className="dialog-copy">
+            <h2 id="compatible-media-confirm-title">{compatibleMediaConfirm.label}？</h2>
+            <p>播放器会用 ffmpeg 复制原视频和音频流，重新写入 MP4 封装、索引和 faststart 信息，不会转码、不会降低画质，也不会覆盖原文件。</p>
+          </div>
+          <div className="compatible-media-dialog-file">
+            <strong>{compatibleMediaConfirm.videoName}</strong>
+            <span>输出会保存到项目本地缓存目录，耗时主要取决于文件大小和磁盘速度。</span>
+          </div>
+          <div className="dialog-actions">
+            <button className="secondary-button" type="button" onClick={() => setCompatibleMediaConfirm(null)}>
+              取消
+            </button>
+            <button className="primary-button" type="button" onClick={() => void createCompatibleMedia()}>
+              <RefreshCw size={18} />
+              开始生成
             </button>
           </div>
         </section>
