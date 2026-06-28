@@ -42,6 +42,12 @@ test("reports no remaining library search results when all results are visible",
   assert.equal(state.hasMoreResults, false);
 });
 
+test("normalizes and tokenizes library search text consistently", () => {
+  assert.equal(librarySearchUtils.normalizeLibrarySearchText("  Ａ/B-动画!!  "), "a b 动画");
+  assert.deepEqual(librarySearchUtils.tokenizeLibrarySearchQuery("A  b 动画 12"), ["动画", "12"]);
+  assert.deepEqual(librarySearchUtils.tokenizeLibrarySearchQuery("A  b 动画 12", 1), ["a", "b", "动画", "12"]);
+});
+
 const createVideo = (overrides) => ({
   id: "root-special|actor/test.mp4|100|1",
   name: "test.mp4",

@@ -44,7 +44,9 @@ import {
   createAiLibrarySearchResults,
   getVisibleLibrarySearchResults,
   librarySearchResultPageSize,
+  normalizeLibrarySearchText,
   searchLibraryEntries,
+  tokenizeLibrarySearchQuery,
   type LibrarySearchEntry,
 } from "./librarySearchUtils";
 import {
@@ -967,18 +969,6 @@ async function restoreCachedEmbeddedSubtitles(
   );
 
   return restored.filter((subtitle): subtitle is SubtitleItem => Boolean(subtitle));
-}
-
-function normalizeLibrarySearchText(value: string) {
-  return value
-    .normalize("NFKC")
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}]+/gu, " ")
-    .trim();
-}
-
-function tokenizeLibrarySearchQuery(query: string) {
-  return normalizeLibrarySearchText(query).split(/\s+/).filter((token) => token.length >= 2);
 }
 
 function createLibrarySearchSignature(query: string) {

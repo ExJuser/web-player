@@ -77,7 +77,7 @@ export function normalizeLibrarySearchText(value: string) {
     .trim();
 }
 
-function tokenizeLibrarySearchQuery(query: string, minLength = 2) {
+export function tokenizeLibrarySearchQuery(query: string, minLength = 2) {
   return normalizeLibrarySearchText(query)
     .split(/\s+/)
     .filter((token) => token.length >= minLength);
