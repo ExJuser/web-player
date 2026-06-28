@@ -218,6 +218,7 @@ import {
   shouldFlushMediaScan,
   sortMediaCollection,
   type DuplicateDetectionProgress,
+  type DuplicateNameSimilarityPair,
   type DuplicateVideoGroup,
 } from "./playerMediaUtils";
 
@@ -242,8 +243,25 @@ type DuplicateFingerprintCacheEntry = {
   fingerprint: string | null;
 };
 
+type DuplicateNameSimilarityCacheEntry = {
+  similarity: number | null;
+};
+
+type DuplicateNameSimilarityResponse = {
+  scores?: Array<{
+    id?: string;
+    similarity?: number;
+  }>;
+};
+
 function createDuplicateFingerprintCacheKey(video: VideoItem) {
   return `${video.id}|${Math.floor(video.size || 0)}|${Math.round(video.lastModified || 0)}`;
+}
+
+function createDuplicateNameSimilarityCacheKey(pair: DuplicateNameSimilarityPair) {
+  const aKey = `${pair.a.id}|${pair.a.name}|${pair.a.relativePath}|${Math.floor(pair.a.size || 0)}|${Math.round(pair.a.duration ?? 0)}`;
+  const bKey = `${pair.b.id}|${pair.b.name}|${pair.b.relativePath}|${Math.floor(pair.b.size || 0)}|${Math.round(pair.b.duration ?? 0)}`;
+  return [aKey, bKey].sort().join("\u0000");
 }
 
 function createDuplicateSampleRanges(size: number) {
@@ -1396,6 +1414,7 @@ export default function App() {
   const duplicateDetectionRunIdRef = useRef(0);
   const duplicateDetectionAbortRef = useRef<AbortController | null>(null);
   const duplicateFingerprintCacheRef = useRef(new Map<string, DuplicateFingerprintCacheEntry>());
+  const duplicateNameSimilarityCacheRef = useRef(new Map<string, DuplicateNameSimilarityCacheEntry>());
 
   useEffect(() => {
     if (hasStartedLegacyThumbnailMigration) return;
@@ -2225,6 +2244,52 @@ export default function App() {
     duplicateFingerprintCacheRef.current.set(cacheKey, { fingerprint });
     return fingerprint;
   }, []);
+  const getDuplicateNameSimilarityScores = useCallback(async (pairs: DuplicateNameSimilarityPair[], signal?: AbortSignal) => {
+    const scores = new Map<string, number>();
+    if (!localConfigRef.current?.ai.configured || !pairs.length) return scores;
+
+    const missingPairs: DuplicateNameSimilarityPair[] = [];
+    for (const pair of pairs) {
+      const cacheKey = createDuplicateNameSimilarityCacheKey(pair);
+      const cached = duplicateNameSimilarityCacheRef.current.get(cacheKey);
+      if (cached) {
+        if (cached.similarity !== null) scores.set(pair.id, cached.similarity);
+        continue;
+      }
+      missingPairs.push(pair);
+    }
+    if (!missingPairs.length) return scores;
+
+    try {
+      const response = await fetchJson<DuplicateNameSimilarityResponse>("/api/ai/duplicate/name-similarity", {
+        method: "POST",
+        body: JSON.stringify({ pairs: missingPairs }),
+        signal,
+      });
+      const missingById = new Map(missingPairs.map((pair) => [pair.id, pair]));
+      const returnedIds = new Set<string>();
+      for (const item of response.scores ?? []) {
+        const id = typeof item.id === "string" ? item.id : "";
+        const pair = missingById.get(id);
+        const similarity = Number(item.similarity);
+        if (!pair || !Number.isFinite(similarity) || similarity < 0 || similarity > 100) continue;
+        const roundedSimilarity = Math.round(similarity);
+        scores.set(id, roundedSimilarity);
+        returnedIds.add(id);
+        duplicateNameSimilarityCacheRef.current.set(createDuplicateNameSimilarityCacheKey(pair), {
+          similarity: roundedSimilarity,
+        });
+      }
+      for (const pair of missingPairs) {
+        if (returnedIds.has(pair.id)) continue;
+        duplicateNameSimilarityCacheRef.current.set(createDuplicateNameSimilarityCacheKey(pair), { similarity: null });
+      }
+    } catch {
+      return scores;
+    }
+
+    return scores;
+  }, []);
   const runDuplicateVideoDetection = useCallback(async () => {
     duplicateDetectionAbortRef.current?.abort();
     const abortController = new AbortController();
@@ -2250,12 +2315,15 @@ export default function App() {
       const groups = await detectDuplicateVideosWithProgress(targetVideos, {
         signal: abortController.signal,
         getContentFingerprint: getDuplicateFingerprint,
+        getNameSimilarityScores: getDuplicateNameSimilarityScores,
         onProgress: (progress) => {
           if (duplicateDetectionRunIdRef.current !== runId) return;
           setDuplicateDetectionProgress(progress);
           setDuplicateDetectionMessage(
             progress.phase === "fingerprint"
               ? `正在比对内容指纹 ${progress.processedFingerprints ?? 0} / ${progress.totalFingerprints ?? 0} 个候选视频`
+              : progress.phase === "aiName"
+                ? `正在调用 AI 比对名称 ${progress.processedNamePairs ?? 0} / ${progress.totalNamePairs ?? 0} 组候选`
               : `已检查 ${progress.processedPairs} / ${progress.totalPairs} 组视频组合`,
           );
         },
@@ -2277,7 +2345,7 @@ export default function App() {
         duplicateDetectionAbortRef.current = null;
       }
     }
-  }, [getDuplicateFingerprint, modeFilteredVideos]);
+  }, [getDuplicateFingerprint, getDuplicateNameSimilarityScores, modeFilteredVideos]);
   const currentVideoHighlights = currentVideo ? videoHighlights[currentVideo.id] ?? [] : [];
   const selectedPhotoAlbum = useMemo(
     () => photoAlbums.find((album) => album.id === selectedPhotoAlbumId) ?? null,

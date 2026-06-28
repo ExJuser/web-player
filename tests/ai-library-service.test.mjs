@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { searchLibraryWithAi, suggestTagMergeWithAi } from "../server/aiLibraryService.mjs";
+import { scoreDuplicateNameSimilarityWithAi, searchLibraryWithAi, suggestTagMergeWithAi } from "../server/aiLibraryService.mjs";
 
 test("searchLibraryWithAi rejects missing query or candidates", async () => {
   await assert.rejects(
@@ -119,4 +119,63 @@ test("suggestTagMergeWithAi discards model suggestions outside the provided tag 
   );
 
   assert.deepEqual(result, {});
+});
+
+test("scoreDuplicateNameSimilarityWithAi sends bounded pairs and keeps valid scores", async () => {
+  const calls = [];
+  const result = await scoreDuplicateNameSimilarityWithAi(
+    { DEEPSEEK_API_KEY: "secret" },
+    {
+      pairs: [
+        {
+          id: "pair-1",
+          a: { name: "Show 01.mkv", relativePath: "A/Show 01.mkv" },
+          b: { name: "Show Episode 1 copy.mp4", relativePath: "B/Show Episode 1 copy.mp4" },
+          localScore: 70,
+        },
+        {
+          id: "pair-2",
+          a: { name: "Other.mkv", relativePath: "A/Other.mkv" },
+          b: { name: "Different.mp4", relativePath: "B/Different.mp4" },
+          localScore: 30,
+        },
+      ],
+    },
+    {
+      callDeepSeekImpl: async (_env, messages, options) => {
+        calls.push({ messages, options });
+        return JSON.stringify({
+          scores: [
+            { id: "pair-1", similarity: 82.4 },
+            { id: "pair-2", similarity: 101 },
+            { id: "missing", similarity: 50 },
+          ],
+        });
+      },
+    },
+  );
+
+  assert.deepEqual(result, { scores: [{ id: "pair-1", similarity: 82 }] });
+  assert.deepEqual(calls[0].options, { responseFormat: { type: "json_object" } });
+  assert.match(calls[0].messages[1].content, /id="pair-1"/);
+  assert.match(calls[0].messages[1].content, /localScore=70/);
+});
+
+test("scoreDuplicateNameSimilarityWithAi returns no scores without candidates or AI config", async () => {
+  assert.deepEqual(await scoreDuplicateNameSimilarityWithAi({ DEEPSEEK_API_KEY: "secret" }, { pairs: [] }), { scores: [] });
+  assert.deepEqual(
+    await scoreDuplicateNameSimilarityWithAi(
+      {},
+      {
+        pairs: [
+          {
+            id: "pair-1",
+            a: { name: "A.mkv", relativePath: "A.mkv" },
+            b: { name: "B.mkv", relativePath: "B.mkv" },
+          },
+        ],
+      },
+    ),
+    { scores: [] },
+  );
 });

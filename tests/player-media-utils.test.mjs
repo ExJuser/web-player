@@ -112,52 +112,92 @@ test("flushes media scans by batch size or elapsed delay", () => {
   assert.equal(mediaUtils.shouldFlushMediaScan(Date.now(), [], []), false);
 });
 
-test("detects duplicate and suspicious videos from normalized identity signals", () => {
-  const exact = createVideo({
+test("scores metadata duplicates with combined size and duration, resolution, and stricter threshold", async () => {
+  const first = createVideo({
     id: "root-a|Show/E01.mkv|1000|1",
-    name: "[Group] Show - 01 [1080p].mkv",
-    relativePath: "Anime/Show/[Group] Show - 01 [1080p].mkv",
-    size: 1000,
-    duration: 1440.2,
-    width: 1920,
-    height: 1080,
-  });
-  const sameFileMoved = createVideo({
-    id: "root-b|Show/E01 copy.mkv|1002|2",
-    name: "Show 01 1080p copy.mkv",
-    relativePath: "Backup/Show/Show 01 1080p copy.mkv",
-    size: 1002,
-    duration: 1440.8,
-    width: 1920,
-    height: 1080,
-  });
-  const suspicious = createVideo({
-    id: "root-c|Show/E01 web.mp4|1100|3",
-    name: "Show Episode 01 WEB.mp4",
-    relativePath: "Downloads/Show/Show Episode 01 WEB.mp4",
-    size: 1100,
-    duration: 1442,
-    width: 1920,
-    height: 1080,
-  });
-  const otherEpisode = createVideo({
-    id: "root-d|Show/E02.mkv|1000|4",
-    name: "Show - 02.mkv",
-    relativePath: "Anime/Show/Show - 02.mkv",
+    name: "Show - 01.mkv",
+    relativePath: "Anime/Show/Show - 01.mkv",
     size: 1000,
     duration: 1440,
     width: 1920,
     height: 1080,
   });
+  const sameMetadataDifferentFolder = createVideo({
+    id: "root-b|Backup/Renamed.mkv|1002|2",
+    name: "Renamed.mkv",
+    relativePath: "Backup/Renamed.mkv",
+    size: 1002,
+    duration: 1441,
+    width: 1920,
+    height: 1080,
+  });
+  const sameParentOnly = createVideo({
+    id: "root-c|Anime/Show/Other.mkv|5000|3",
+    name: "Other.mkv",
+    relativePath: "Anime/Show/Other.mkv",
+    size: 5000,
+    duration: 3000,
+    width: 1280,
+    height: 720,
+  });
 
-  const groups = mediaUtils.detectDuplicateVideos([exact, sameFileMoved, suspicious, otherEpisode]);
+  assert.equal(mediaUtils.detectDuplicateVideos([first, sameMetadataDifferentFolder]).length, 0);
+  assert.equal(mediaUtils.detectDuplicateVideos([first, sameParentOnly]).length, 0);
+
+  const groups = await mediaUtils.detectDuplicateVideosWithProgress([first, sameMetadataDifferentFolder], {
+    getNameSimilarityScores: async (pairs) => new Map(pairs.map((pair) => [pair.id, 30])),
+  });
 
   assert.equal(groups.length, 1);
-  assert.deepEqual(groups[0].videos.map((video) => video.id), [exact.id, sameFileMoved.id, suspicious.id]);
-  assert.equal(groups[0].severity, "duplicate");
-  assert.ok(groups[0].reasons.includes("名称相近"));
-  assert.ok(groups[0].reasons.includes("时长接近"));
+  assert.equal(groups[0].severity, "suspicious");
+  assert.equal(groups[0].score, 100);
+  assert.ok(groups[0].reasons.includes("大小和时长接近"));
   assert.ok(groups[0].reasons.includes("分辨率一致"));
+  assert.ok(groups[0].reasons.includes("AI 名称相似度 30%"));
+});
+
+test("only asks AI to score name pairs after the local candidate threshold", async () => {
+  const source = createVideo({
+    id: "source",
+    name: "Source.mkv",
+    relativePath: "C/Source.mkv",
+    size: 1000,
+    duration: 1440,
+    width: 1920,
+    height: 1080,
+  });
+  const highCandidate = createVideo({
+    id: "candidate",
+    name: "Candidate.mkv",
+    relativePath: "A/Candidate.mkv",
+    size: 1002,
+    duration: 1441,
+    width: 1920,
+    height: 1080,
+  });
+  const lowCandidate = createVideo({
+    id: "low",
+    name: "Low.mkv",
+    relativePath: "B/Low.mkv",
+    size: 5000,
+    duration: 9000,
+    width: 1920,
+    height: 1080,
+  });
+  const calls = [];
+
+  await mediaUtils.detectDuplicateVideosWithProgress([source, highCandidate, lowCandidate], {
+    getNameSimilarityScores: async (pairs) => {
+      calls.push(pairs);
+      return new Map();
+    },
+  });
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].length, 1);
+  assert.equal(calls[0][0].a.id, source.id);
+  assert.equal(calls[0][0].b.id, highCandidate.id);
+  assert.equal(calls[0][0].localScore, 70);
 });
 
 test("detects duplicate videos incrementally with progress updates", async () => {
@@ -233,6 +273,7 @@ test("detects content-identical videos with different names from fingerprints", 
 
   assert.equal(groups.length, 1);
   assert.equal(groups[0].severity, "duplicate");
+  assert.equal(groups[0].score, 120);
   assert.deepEqual(groups[0].videos.map((video) => video.id), [renamed.id, first.id]);
   assert.ok(groups[0].reasons.includes("内容指纹一致"));
 });
