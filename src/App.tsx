@@ -38,6 +38,7 @@ import {
   X,
   VolumeX,
   Volume2,
+  Zap,
 } from "lucide-react";
 import {
   useCallback,
@@ -9613,7 +9614,7 @@ export default function App() {
                 aria-label={pendingHighEnergyStart?.videoId === currentVideo?.id ? "标记高能结束点" : "标记高能起点"}
                 aria-pressed={pendingHighEnergyStart?.videoId === currentVideo?.id}
               >
-                <Sparkles size={18} />
+                <Zap size={18} />
               </button>
               {canRecordEmission ? (
                 <div className="special-stats-control" aria-label="特殊模式统计">
@@ -10844,7 +10845,7 @@ export default function App() {
             <X size={18} />
           </button>
           <div className="tag-dialog-header auto-tag-dialog-header">
-            <div className="dialog-icon">
+            <div className={`dialog-icon${isAutoTagLoading ? " loading" : ""}`}>
               {isAutoTagLoading ? <RefreshCw size={28} /> : <Sparkles size={28} />}
             </div>
             <div className="dialog-copy">

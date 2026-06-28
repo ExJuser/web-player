@@ -286,7 +286,14 @@ export async function suggestAutoTagsWithAi(env, payload, options = {}) {
   if (!env.DEEPSEEK_API_KEY) return { tags: [], summary: "AI 未配置，无法生成自动标签。", sources: [] };
 
   const query = createDuckDuckGoAutoTagQuery(video);
-  const searchResults = query ? await searchDuckDuckGoImpl(query) : [];
+  let searchResults = [];
+  if (query) {
+    try {
+      searchResults = await searchDuckDuckGoImpl(query);
+    } catch {
+      searchResults = [];
+    }
+  }
   const sources = searchResults.map((result) => ({ title: result.title, url: result.url }));
   const searchCatalog = searchResults.length
     ? searchResults

@@ -1,6 +1,7 @@
 export async function requestExternalText(url, options = {}) {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), options.timeoutMs ?? 12000);
+  const timeoutMs = options.timeoutMs ?? 12000;
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   const fetchImpl = options.fetchImpl ?? fetch;
   try {
     const response = await fetchImpl(url, {
@@ -16,6 +17,11 @@ export async function requestExternalText(url, options = {}) {
     const text = await response.text();
     if (!response.ok) throw new Error(`${response.status}: ${text.slice(0, 240) || response.statusText}`);
     return text;
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new Error(options.timeoutMessage || `远端请求超时（${Math.max(1, Math.ceil(timeoutMs / 1000))} 秒）。`);
+    }
+    throw error;
   } finally {
     clearTimeout(timer);
   }

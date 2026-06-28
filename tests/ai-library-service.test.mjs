@@ -283,3 +283,25 @@ test("suggestAutoTagsWithAi sends metadata and search results then filters retur
     sources: [{ title: "Mystery Show - Wiki", url: "https://example.com/wiki" }],
   });
 });
+
+test("suggestAutoTagsWithAi continues with metadata when web search fails", async () => {
+  const result = await suggestAutoTagsWithAi(
+    { DEEPSEEK_API_KEY: "secret" },
+    { name: "Mystery Show.mkv", relativePath: "Anime/Mystery Show.mkv" },
+    {
+      searchDuckDuckGoImpl: async () => {
+        throw new Error("远端请求超时（10 秒）。");
+      },
+      callDeepSeekImpl: async (_env, messages) => {
+        assert.match(messages[1].content, /DuckDuckGo 没有返回可用结果。/);
+        return JSON.stringify({ tags: ["动画", "剧情", "长篇系列"], summary: "基于文件名。" });
+      },
+    },
+  );
+
+  assert.deepEqual(result, {
+    tags: ["动画", "剧情", "长篇系列"],
+    summary: "基于文件名。",
+    sources: [],
+  });
+});

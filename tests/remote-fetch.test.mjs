@@ -50,6 +50,20 @@ test("requestExternalText includes status and body excerpt for failed responses"
   );
 });
 
+test("requestExternalText reports timeout aborts with a stable message", async () => {
+  await assert.rejects(
+    () =>
+      requestExternalText("https://example.test/slow", {
+        timeoutMs: 1,
+        fetchImpl: async (_url, init) =>
+          new Promise((_resolve, reject) => {
+            init.signal.addEventListener("abort", () => reject(new Error("This operation was aborted")));
+          }),
+      }),
+    /远端请求超时（1 秒）/,
+  );
+});
+
 test("requestExternalJson parses valid JSON and rejects invalid JSON", async () => {
   const payload = await requestExternalJson("https://example.test/json", {
     fetchImpl: async () => new Response('{"ok":true}', { status: 200 }),
