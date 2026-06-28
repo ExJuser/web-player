@@ -43,10 +43,9 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import {
   createAiLibrarySearchResults,
   getVisibleLibrarySearchResults,
+  shouldUseAiLibrarySearch,
   librarySearchResultPageSize,
-  normalizeLibrarySearchText,
   searchLibraryEntries,
-  tokenizeLibrarySearchQuery,
   type LibrarySearchEntry,
 } from "./librarySearchUtils";
 import {
@@ -973,22 +972,6 @@ async function restoreCachedEmbeddedSubtitles(
 
 function createLibrarySearchSignature(query: string) {
   return query.trim();
-}
-
-function hasAiLibrarySearchIntent(query: string) {
-  return /推荐|想看|适合|类似|风格|氛围|剧情|讲什么|没看完|未看完|收藏|最近|下一集|轻松|治愈|热血|悬疑|搞笑|短一点|长一点|随机|帮我|找.*(?:片段|台词|场景|类型|感觉)/i.test(
-    query,
-  );
-}
-
-function shouldUseAiLibrarySearch(query: string, localResults: LibrarySearchResult[]) {
-  if (hasAiLibrarySearchIntent(query)) return true;
-  const normalizedQuery = normalizeLibrarySearchText(query);
-  const tokens = tokenizeLibrarySearchQuery(query);
-  const strongestLocalScore = localResults[0]?.score ?? 0;
-  if (strongestLocalScore >= 18) return false;
-  if (localResults.length > 0 && tokens.length <= 3 && normalizedQuery.length >= 2) return false;
-  return normalizedQuery.length >= 4;
 }
 
 function formatLibrarySearchProgressLabel(card: HomeVideoCard) {

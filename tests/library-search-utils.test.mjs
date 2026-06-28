@@ -48,6 +48,13 @@ test("normalizes and tokenizes library search text consistently", () => {
   assert.deepEqual(librarySearchUtils.tokenizeLibrarySearchQuery("A  b 动画 12", 1), ["a", "b", "动画", "12"]);
 });
 
+test("detects when AI library search should be used", () => {
+  assert.equal(librarySearchUtils.hasAiLibrarySearchIntent("帮我找轻松治愈的"), true);
+  assert.equal(librarySearchUtils.shouldUseAiLibrarySearch("show", [{ score: 20 }]), false);
+  assert.equal(librarySearchUtils.shouldUseAiLibrarySearch("show", [{ score: 8 }]), false);
+  assert.equal(librarySearchUtils.shouldUseAiLibrarySearch("long search", []), true);
+});
+
 const createVideo = (overrides) => ({
   id: "root-special|actor/test.mp4|100|1",
   name: "test.mp4",
