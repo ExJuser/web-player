@@ -2992,10 +2992,10 @@ button {
   flex: 0 0 auto;
   gap: 8px;
   min-width: 0;
-  padding: 10px;
-  border: 1px solid #242a31;
-  border-radius: 8px;
-  background: rgba(26, 30, 36, 0.72);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 .player-library-search-form {
@@ -5455,8 +5455,7 @@ button {
 
 .app-shell.theme-light .player-library-search,
 :root[data-theme="light"] .player-library-search {
-  border-color: #d7e0ea;
-  background: rgba(255, 255, 255, 0.78);
+  background: transparent;
 }
 
 .app-shell.theme-light .player-library-search-results,
@@ -5925,10 +5924,6 @@ button {
   .playlist-tools {
     width: 100%;
     flex-wrap: wrap;
-  }
-
-  .player-library-search {
-    padding: 9px;
   }
 
   .player-library-search-preview-results,
