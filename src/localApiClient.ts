@@ -26,6 +26,17 @@ export function handleLocalApiStreamLine<T extends LocalApiStreamEvent>(line: st
   onEvent(event);
 }
 
+export async function fetchLocalJson<T>(url: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(url, {
+    ...init,
+    headers: createLocalApiHeaders("application/json", init),
+  });
+  if (!response.ok) {
+    throw new Error(await readLocalApiErrorMessage(response));
+  }
+  return response.json() as Promise<T>;
+}
+
 export async function readLocalApiStream<T extends LocalApiStreamEvent>(url: string, init: RequestInit, onEvent: (event: T) => void) {
   const response = await fetch(url, {
     ...init,

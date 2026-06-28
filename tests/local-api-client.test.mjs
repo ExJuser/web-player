@@ -74,6 +74,44 @@ test("readLocalApiStream reads ndjson events split across chunks", async () => {
   ]);
 });
 
+test("fetchLocalJson sends json headers and returns parsed payloads", async () => {
+  const originalFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = async (url, init) => {
+      assert.equal(url, "/api/json");
+      assert.equal(init.headers.Accept, "application/json");
+      assert.equal(init.headers["Content-Type"], "application/json");
+      return {
+        ok: true,
+        async json() {
+          return { ok: true };
+        },
+      };
+    };
+
+    assert.deepEqual(await localApiClient.fetchLocalJson("/api/json", { method: "POST", body: "{}" }), { ok: true });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("fetchLocalJson throws local api error messages", async () => {
+  const originalFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = async () => ({
+      ok: false,
+      statusText: "Bad Request",
+      async json() {
+        return { error: "请求失败" };
+      },
+    });
+
+    await assert.rejects(() => localApiClient.fetchLocalJson("/api/json"), /请求失败/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("readLocalApiErrorMessage uses local api error payloads", async () => {
   const message = await localApiClient.readLocalApiErrorMessage({
     statusText: "Internal Server Error",

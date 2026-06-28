@@ -40,7 +40,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 
-import { createLocalApiHeaders, readLocalApiErrorMessage, readLocalApiStream } from "./localApiClient";
+import { fetchLocalJson as fetchJson, readLocalApiStream } from "./localApiClient";
 import {
   createAiLibrarySearchResults,
   getVisibleLibrarySearchResults,
@@ -825,17 +825,6 @@ function normalizeLocalConfig(config: LocalConfig): LocalConfig {
     ...config,
     bangumi: config.bangumi ?? { configured: false, proxyConfigured: false },
   };
-}
-
-async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, {
-    ...init,
-    headers: createLocalApiHeaders("application/json", init),
-  });
-  if (!response.ok) {
-    throw new Error(await readLocalApiErrorMessage(response));
-  }
-  return response.json() as Promise<T>;
 }
 
 async function createSubtitleUrl(subtitle: SubtitleItem) {
