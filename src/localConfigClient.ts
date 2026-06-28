@@ -11,3 +11,7 @@ export function normalizeClientLocalConfig<T extends { bangumi?: ClientBangumiCo
     bangumi: config.bangumi ?? { configured: false, proxyConfigured: false },
   };
 }
+
+export function shouldAutoScanGlobalMediaLibrary(_config: { mediaRoots?: unknown[] }) {
+  return false;
+}

@@ -25,3 +25,12 @@ test("normalizeClientLocalConfig preserves existing bangumi config", () => {
 
   assert.deepEqual(result.bangumi, { configured: true, proxyConfigured: true });
 });
+
+test("global media library does not auto-scan configured roots on page load", () => {
+  assert.equal(
+    localConfigClient.shouldAutoScanGlobalMediaLibrary({
+      mediaRoots: [{ id: "anime", path: "D:/Anime", source: "local" }],
+    }),
+    false,
+  );
+});

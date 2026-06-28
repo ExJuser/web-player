@@ -53,7 +53,7 @@ import {
 } from "react";
 
 import { fetchLocalJson as fetchJson, readLocalApiStream } from "./localApiClient";
-import { normalizeClientLocalConfig } from "./localConfigClient";
+import { normalizeClientLocalConfig, shouldAutoScanGlobalMediaLibrary } from "./localConfigClient";
 import {
   createAiLibrarySearchResults,
   createLibrarySearchSignature,
@@ -3017,6 +3017,7 @@ export default function App() {
 
   useEffect(() => {
     if (!localConfig) return;
+    if (!shouldAutoScanGlobalMediaLibrary(localConfig)) return;
     void loadGlobalMediaLibrary();
   }, [loadGlobalMediaLibrary, localConfig]);
 
