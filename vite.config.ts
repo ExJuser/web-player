@@ -1,5 +1,4 @@
 // @ts-nocheck
-import { createHash } from "node:crypto";
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { defineConfig, loadEnv } from "vite";
@@ -42,6 +41,7 @@ import { createBilibiliDanmakuService } from "./server/bilibiliDanmaku.mjs";
 import { clearLocalCacheItems, createCacheStatus as createLocalCacheStatus, createDanmakuSourcesStats } from "./server/cacheStatus.mjs";
 import { callDeepSeek, chunkText, streamDeepSeek } from "./server/deepSeekClient.mjs";
 import { createEmbeddedSubtitleService } from "./server/embeddedSubtitles.mjs";
+import { hashValue } from "./server/hashUtils.mjs";
 import { sendBlob, sendJson, sendMediaFile, sendNdjson, writeStreamEvent } from "./server/httpResponses.mjs";
 import { readJsonFile, writeJsonFile } from "./server/jsonFiles.mjs";
 import { createPublicLocalConfig, defaultAppConfig } from "./server/localConfig.mjs";
@@ -87,10 +87,6 @@ async function readTextFile(filePath, fallback = null) {
   } catch {
     return fallback;
   }
-}
-
-function hashValue(value) {
-  return createHash("sha256").update(value).digest("hex");
 }
 
 function createDanmakuSourcePath(sourceId, options = {}) {

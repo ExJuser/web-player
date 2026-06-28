@@ -1,6 +1,6 @@
-import { createHash } from "node:crypto";
 import { access, mkdir, stat } from "node:fs/promises";
 import path from "node:path";
+import { hashValue } from "./hashUtils.mjs";
 import { isImageSubtitleCodec } from "./subtitleCodecUtils.mjs";
 
 const mp4FormatNames = new Set(["mov", "mp4", "m4a", "3gp", "3g2", "mj2"]);
@@ -32,9 +32,7 @@ export function mediaContentTypeForPath(filePath) {
 }
 
 export function createCompatibleMediaCacheId(rootId, relativePath, size, lastModified) {
-  return createHash("sha256")
-    .update(`${rootId || ""}|${relativePath || ""}|${size || 0}|${lastModified || 0}|mp4-remux-v1`)
-    .digest("hex");
+  return hashValue(`${rootId || ""}|${relativePath || ""}|${size || 0}|${lastModified || 0}|mp4-remux-v1`);
 }
 
 export function createCompatibleMediaUrl(cacheId) {

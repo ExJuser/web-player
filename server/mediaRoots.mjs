@@ -1,6 +1,6 @@
-import { createHash } from "node:crypto";
 import { access, readdir, stat } from "node:fs/promises";
 import path from "node:path";
+import { hashValue } from "./hashUtils.mjs";
 import { readJsonFile, writeJsonFile } from "./jsonFiles.mjs";
 
 const videoExtensions = new Set([".mp4", ".webm", ".ogg", ".mov", ".m4v", ".mkv"]);
@@ -21,10 +21,6 @@ function isIgnoredVideoFile(fileName) {
 
 function shouldFilterVideoFile(fileName, size) {
   return size < smallVideoFileThresholdBytes || isIgnoredVideoFile(fileName);
-}
-
-function hashValue(value) {
-  return createHash("sha256").update(value).digest("hex");
 }
 
 function normalizeAbsolutePath(value) {
