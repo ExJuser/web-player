@@ -41,6 +41,7 @@ import {
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 
 import { fetchLocalJson as fetchJson, readLocalApiStream } from "./localApiClient";
+import { normalizeClientLocalConfig } from "./localConfigClient";
 import {
   createAiLibrarySearchResults,
   getVisibleLibrarySearchResults,
@@ -819,13 +820,6 @@ type MediaProbeResponse = {
   playability: NonNullable<VideoItem["playability"]>;
   metadata?: VideoMetadata;
 };
-
-function normalizeLocalConfig(config: LocalConfig): LocalConfig {
-  return {
-    ...config,
-    bangumi: config.bangumi ?? { configured: false, proxyConfigured: false },
-  };
-}
 
 async function createSubtitleUrl(subtitle: SubtitleItem) {
   if (subtitle.url && !isObjectUrl(subtitle.url)) {
@@ -2538,7 +2532,7 @@ export default function App() {
           localPath,
         }),
       });
-      const nextConfig = normalizeLocalConfig(response);
+      const nextConfig = normalizeClientLocalConfig(response);
       setLocalConfig(nextConfig);
       localConfigRef.current = nextConfig;
       setMediaRootLocalPathDialog(null);
@@ -2575,7 +2569,7 @@ export default function App() {
         method: "POST",
         body: JSON.stringify({ label, path: directory.name, source: "browser" }),
       });
-      const nextConfig = normalizeLocalConfig(response);
+      const nextConfig = normalizeClientLocalConfig(response);
       setLocalConfig(nextConfig);
       localConfigRef.current = nextConfig;
       return response.mediaRoot.id;
@@ -2618,7 +2612,7 @@ export default function App() {
     fetchJson<LocalConfig>("/api/local-config")
       .then((config) => {
         if (isCancelled) return;
-        const normalizedConfig = normalizeLocalConfig(config);
+        const normalizedConfig = normalizeClientLocalConfig(config);
         setLocalConfig(normalizedConfig);
         localConfigRef.current = normalizedConfig;
       })
