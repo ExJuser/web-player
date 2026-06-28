@@ -195,3 +195,44 @@ test("detects duplicate videos incrementally with progress updates", async () =>
   assert.equal(updates.at(-1).totalPairs, 3);
   assert.equal(updates.at(-1).percent, 100);
 });
+
+test("detects content-identical videos with different names from fingerprints", async () => {
+  const first = createVideo({
+    id: "root-a|Movies/Alpha.mkv|2048|1",
+    name: "Alpha.mkv",
+    relativePath: "Movies/Alpha.mkv",
+    size: 2048,
+    duration: 1200,
+    width: 1920,
+    height: 1080,
+  });
+  const renamed = createVideo({
+    id: "root-b|Backup/Renamed.mp4|2048|2",
+    name: "Renamed.mp4",
+    relativePath: "Backup/Renamed.mp4",
+    size: 2048,
+    duration: 1200,
+    width: 1920,
+    height: 1080,
+  });
+  const sameSizeDifferentContent = createVideo({
+    id: "root-c|Other/Other.mp4|2048|3",
+    name: "Other.mp4",
+    relativePath: "Other/Other.mp4",
+    size: 2048,
+    duration: 1200,
+    width: 1920,
+    height: 1080,
+  });
+
+  assert.equal(mediaUtils.detectDuplicateVideos([first, renamed, sameSizeDifferentContent]).length, 0);
+
+  const groups = await mediaUtils.detectDuplicateVideosWithProgress([first, renamed, sameSizeDifferentContent], {
+    getContentFingerprint: async (video) => (video.id === sameSizeDifferentContent.id ? "2048:different" : "2048:same"),
+  });
+
+  assert.equal(groups.length, 1);
+  assert.equal(groups[0].severity, "duplicate");
+  assert.deepEqual(groups[0].videos.map((video) => video.id), [renamed.id, first.id]);
+  assert.ok(groups[0].reasons.includes("内容指纹一致"));
+});

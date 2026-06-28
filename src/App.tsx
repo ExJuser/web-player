@@ -230,12 +230,79 @@ const photoViewerDecodeRadius = 2;
 const photoObjectUrlCacheLimit = 48;
 const photoAlbumScanCacheStaleMs = 24 * 60 * 60 * 1000;
 const danmakuPlaybackClockIntervalMs = 250;
+const duplicateFingerprintSampleSize = 1024 * 1024;
 let hasStartedLegacyThumbnailMigration = false;
 const photoAlbumSortOptions: Array<{ value: PhotoAlbumSortMode; label: string }> = [
   { value: "updated", label: "最近更新" },
   { value: "name", label: "名称" },
   { value: "count", label: "图片数" },
 ];
+
+type DuplicateFingerprintCacheEntry = {
+  fingerprint: string | null;
+};
+
+function createDuplicateFingerprintCacheKey(video: VideoItem) {
+  return `${video.id}|${Math.floor(video.size || 0)}|${Math.round(video.lastModified || 0)}`;
+}
+
+function createDuplicateSampleRanges(size: number) {
+  if (!Number.isFinite(size) || size <= 0) return [];
+  const sampleSize = Math.min(duplicateFingerprintSampleSize, Math.floor(size));
+  if (size <= sampleSize * 3) return [{ start: 0, end: Math.floor(size) - 1 }];
+
+  const middleStart = Math.max(0, Math.floor(size / 2 - sampleSize / 2));
+  return [
+    { start: 0, end: sampleSize - 1 },
+    { start: middleStart, end: middleStart + sampleSize - 1 },
+    { start: Math.floor(size) - sampleSize, end: Math.floor(size) - 1 },
+  ];
+}
+
+async function readDuplicateSampleRange(video: VideoItem, range: { start: number; end: number }, signal?: AbortSignal) {
+  if (video.file) {
+    return new Uint8Array(await video.file.slice(range.start, range.end + 1).arrayBuffer());
+  }
+  if (!video.url) return null;
+
+  const isWholeFile = range.start === 0 && range.end + 1 >= video.size;
+  const response = await fetch(video.url, {
+    headers: isWholeFile ? undefined : { Range: `bytes=${range.start}-${range.end}` },
+    signal,
+  });
+  if (!response.ok) return null;
+  if (!isWholeFile && response.status !== 206) {
+    await response.body?.cancel().catch(() => undefined);
+    return null;
+  }
+  return new Uint8Array(await response.arrayBuffer());
+}
+
+async function createDuplicateContentFingerprint(video: VideoItem, signal?: AbortSignal) {
+  if (!globalThis.crypto?.subtle) return null;
+  const ranges = createDuplicateSampleRanges(video.size);
+  if (!ranges.length) return null;
+
+  const chunks: Uint8Array[] = [];
+  for (const range of ranges) {
+    const chunk = await readDuplicateSampleRange(video, range, signal);
+    if (!chunk) return null;
+    chunks.push(chunk);
+  }
+
+  const header = new TextEncoder().encode(`duplicate-sample-v1|${Math.floor(video.size)}|${ranges.map((range) => `${range.start}-${range.end}`).join(",")}|`);
+  const totalLength = header.byteLength + chunks.reduce((total, chunk) => total + chunk.byteLength, 0);
+  const payload = new Uint8Array(totalLength);
+  payload.set(header, 0);
+  let offset = header.byteLength;
+  for (const chunk of chunks) {
+    payload.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+
+  const digest = await crypto.subtle.digest("SHA-256", payload);
+  return `${Math.floor(video.size)}:${Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
+}
 
 function prunePhotoObjectUrlCache(
   urls: Record<string, string>,
@@ -1328,6 +1395,7 @@ export default function App() {
   const librarySearchRunIdRef = useRef(0);
   const duplicateDetectionRunIdRef = useRef(0);
   const duplicateDetectionAbortRef = useRef<AbortController | null>(null);
+  const duplicateFingerprintCacheRef = useRef(new Map<string, DuplicateFingerprintCacheEntry>());
 
   useEffect(() => {
     if (hasStartedLegacyThumbnailMigration) return;
@@ -2140,6 +2208,15 @@ export default function App() {
         : null,
     [homeMediaMode, modeFilteredVideos, progressStore, videoStatsRevision, videoTags],
   );
+  const getDuplicateFingerprint = useCallback(async (video: VideoItem, signal?: AbortSignal) => {
+    const cacheKey = createDuplicateFingerprintCacheKey(video);
+    const cached = duplicateFingerprintCacheRef.current.get(cacheKey);
+    if (cached) return cached.fingerprint;
+
+    const fingerprint = await createDuplicateContentFingerprint(video, signal).catch(() => null);
+    duplicateFingerprintCacheRef.current.set(cacheKey, { fingerprint });
+    return fingerprint;
+  }, []);
   const runDuplicateVideoDetection = useCallback(async () => {
     duplicateDetectionAbortRef.current?.abort();
     const abortController = new AbortController();
@@ -2164,10 +2241,15 @@ export default function App() {
     try {
       const groups = await detectDuplicateVideosWithProgress(targetVideos, {
         signal: abortController.signal,
+        getContentFingerprint: getDuplicateFingerprint,
         onProgress: (progress) => {
           if (duplicateDetectionRunIdRef.current !== runId) return;
           setDuplicateDetectionProgress(progress);
-          setDuplicateDetectionMessage(`已检查 ${progress.processedPairs} / ${progress.totalPairs} 组视频组合`);
+          setDuplicateDetectionMessage(
+            progress.phase === "fingerprint"
+              ? `正在比对内容指纹 ${progress.processedFingerprints ?? 0} / ${progress.totalFingerprints ?? 0} 个候选视频`
+              : `已检查 ${progress.processedPairs} / ${progress.totalPairs} 组视频组合`,
+          );
         },
       });
       if (duplicateDetectionRunIdRef.current !== runId) return;
@@ -2187,7 +2269,7 @@ export default function App() {
         duplicateDetectionAbortRef.current = null;
       }
     }
-  }, [modeFilteredVideos]);
+  }, [getDuplicateFingerprint, modeFilteredVideos]);
   const currentVideoHighlights = currentVideo ? videoHighlights[currentVideo.id] ?? [] : [];
   const selectedPhotoAlbum = useMemo(
     () => photoAlbums.find((album) => album.id === selectedPhotoAlbumId) ?? null,

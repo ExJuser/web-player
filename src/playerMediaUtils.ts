@@ -235,12 +235,16 @@ export type DuplicateDetectionProgress = {
   processedPairs: number;
   totalPairs: number;
   percent: number;
+  processedFingerprints?: number;
+  totalFingerprints?: number;
+  phase?: "metadata" | "fingerprint";
 };
 
 export type DuplicateDetectionOptions = {
   yieldEveryPairs?: number;
   signal?: AbortSignal;
   onProgress?: (progress: DuplicateDetectionProgress) => void;
+  getContentFingerprint?: (video: VideoItem, signal?: AbortSignal) => Promise<string | null>;
 };
 
 const duplicateNoisePattern =
@@ -312,6 +316,36 @@ function scoreDuplicatePair(a: VideoItem, b: VideoItem) {
   }
 
   return { score, reasons };
+}
+
+function createDuplicatePairKey(aId: string, bId: string) {
+  return [aId, bId].sort().join("\u0000");
+}
+
+function mergeDuplicatePairScore(
+  context: ReturnType<typeof createDuplicateDetectionContext>,
+  a: VideoItem,
+  b: VideoItem,
+  pair: { score: number; reasons: string[] },
+) {
+  const key = createDuplicatePairKey(a.id, b.id);
+  const existing = context.pairScores.get(key);
+  const mergedReasons = new Set([...(existing?.reasons ?? []), ...pair.reasons]);
+  context.pairScores.set(key, {
+    score: Math.max(existing?.score ?? 0, pair.score),
+    reasons: Array.from(mergedReasons),
+  });
+  context.matchedIds.add(a.id);
+  context.matchedIds.add(b.id);
+  context.union(a.id, b.id);
+}
+
+function addDuplicateContentCandidates(buckets: Map<number, VideoItem[]>, video: VideoItem) {
+  if (!Number.isFinite(video.size) || video.size <= 0) return;
+  const key = Math.floor(video.size);
+  const bucket = buckets.get(key) ?? [];
+  bucket.push(video);
+  buckets.set(key, bucket);
 }
 
 function createDuplicateDetectionContext(videos: VideoItem[]) {
@@ -387,10 +421,7 @@ export function detectDuplicateVideos(videos: VideoItem[]): DuplicateVideoGroup[
       const b = videos[bIndex];
       const pair = scoreDuplicatePair(a, b);
       if (pair.score < 70) continue;
-      context.pairScores.set([a.id, b.id].sort().join("\u0000"), pair);
-      context.matchedIds.add(a.id);
-      context.matchedIds.add(b.id);
-      context.union(a.id, b.id);
+      mergeDuplicatePairScore(context, a, b, pair);
     }
   }
 
@@ -410,16 +441,29 @@ export async function detectDuplicateVideosWithProgress(
   const context = createDuplicateDetectionContext(videos);
   const totalPairs = (videos.length * Math.max(videos.length - 1, 0)) / 2;
   const yieldEveryPairs = Math.max(1, options.yieldEveryPairs ?? 5000);
+  const contentCandidateBuckets = new Map<number, VideoItem[]>();
   let processedPairs = 0;
+  let processedFingerprints = 0;
+  let totalFingerprints = 0;
+  let phase: DuplicateDetectionProgress["phase"] = "metadata";
 
   const reportProgress = () => {
     options.onProgress?.({
       processedPairs,
       totalPairs,
-      percent: totalPairs ? Math.min(100, Math.round((processedPairs / totalPairs) * 100)) : 100,
+      processedFingerprints,
+      totalFingerprints,
+      phase,
+      percent:
+        phase === "fingerprint" && totalFingerprints
+          ? Math.min(100, Math.round((processedFingerprints / totalFingerprints) * 100))
+          : totalPairs
+            ? Math.min(100, Math.round((processedPairs / totalPairs) * 100))
+            : 100,
     });
   };
 
+  videos.forEach((video) => addDuplicateContentCandidates(contentCandidateBuckets, video));
   reportProgress();
   for (let aIndex = 0; aIndex < videos.length; aIndex += 1) {
     for (let bIndex = aIndex + 1; bIndex < videos.length; bIndex += 1) {
@@ -429,10 +473,7 @@ export async function detectDuplicateVideosWithProgress(
       const pair = scoreDuplicatePair(a, b);
       processedPairs += 1;
       if (pair.score >= 70) {
-        context.pairScores.set([a.id, b.id].sort().join("\u0000"), pair);
-        context.matchedIds.add(a.id);
-        context.matchedIds.add(b.id);
-        context.union(a.id, b.id);
+        mergeDuplicatePairScore(context, a, b, pair);
       }
       if (processedPairs % yieldEveryPairs === 0) {
         reportProgress();
@@ -441,6 +482,54 @@ export async function detectDuplicateVideosWithProgress(
     }
   }
   reportProgress();
+
+  if (options.getContentFingerprint) {
+    const fingerprintCandidateBuckets = Array.from(contentCandidateBuckets.values()).filter((bucket) => bucket.length > 1);
+    const fingerprintCandidates = Array.from(new Map(fingerprintCandidateBuckets.flat().map((video) => [video.id, video])).values());
+    if (fingerprintCandidates.length > 1) {
+      const fingerprintByVideoId = new Map<string, string>();
+      phase = "fingerprint";
+      totalFingerprints = fingerprintCandidates.length;
+      processedFingerprints = 0;
+      reportProgress();
+
+      for (const video of fingerprintCandidates) {
+        if (options.signal?.aborted) throw new DOMException("Duplicate detection aborted.", "AbortError");
+        const fingerprint = await options.getContentFingerprint(video, options.signal);
+        processedFingerprints += 1;
+        if (fingerprint) fingerprintByVideoId.set(video.id, fingerprint);
+        reportProgress();
+        if (processedFingerprints % Math.max(1, Math.floor(yieldEveryPairs / 20)) === 0) {
+          await yieldToBrowser();
+        }
+      }
+
+      for (const bucket of fingerprintCandidateBuckets) {
+        const videosByFingerprint = new Map<string, VideoItem[]>();
+        for (const video of bucket) {
+          const fingerprint = fingerprintByVideoId.get(video.id);
+          if (!fingerprint) continue;
+          const fingerprintVideos = videosByFingerprint.get(fingerprint) ?? [];
+          fingerprintVideos.push(video);
+          videosByFingerprint.set(fingerprint, fingerprintVideos);
+        }
+        for (const fingerprintVideos of videosByFingerprint.values()) {
+          if (fingerprintVideos.length <= 1) continue;
+          for (let aIndex = 0; aIndex < fingerprintVideos.length; aIndex += 1) {
+            for (let bIndex = aIndex + 1; bIndex < fingerprintVideos.length; bIndex += 1) {
+              const a = fingerprintVideos[aIndex];
+              const b = fingerprintVideos[bIndex];
+              const metadataPair = scoreDuplicatePair(a, b);
+              mergeDuplicatePairScore(context, a, b, {
+                score: Math.max(metadataPair.score, 95),
+                reasons: ["内容指纹一致", ...metadataPair.reasons],
+              });
+            }
+          }
+        }
+      }
+    }
+  }
 
   return buildDuplicateVideoGroups(videos, context);
 }
