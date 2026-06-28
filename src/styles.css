@@ -2955,10 +2955,10 @@ button {
   display: inline-flex;
   align-items: center;
   flex: 0 1 auto;
-  gap: 4px;
+  gap: 5px;
   height: 30px;
   min-width: 0;
-  padding: 0 7px;
+  padding: 0 8px;
   border: 1px solid #344050;
   border-radius: 6px;
   background: #171d25;
@@ -2980,7 +2980,7 @@ button {
 
 .special-stat-pill strong {
   min-width: 0;
-  max-width: 68px;
+  max-width: 96px;
   overflow: hidden;
   color: #f5f7fb;
   font-weight: 800;

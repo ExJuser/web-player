@@ -8298,45 +8298,49 @@ export default function App() {
                 onChange={setHoldPlaybackRate}
               />
 
-              <ControlSelect
-                label={<Subtitles size={18} aria-hidden="true" />}
-                ariaLabel="字幕"
-                value={selectedSubtitleId}
-                options={subtitleControlOptions}
-                onChange={(value) => {
-                  autoSubtitleSelectionVideoIdRef.current = null;
-                  if (value === "manual") {
-                    void chooseSubtitleFile();
-                    return;
-                  }
-                  updateSelectedSubtitleId(value);
-                }}
-                className="subtitle-control"
-                disabled={!currentVideo}
-              />
+              {homeMediaMode !== "special" ? (
+                <>
+                  <ControlSelect
+                    label={<Subtitles size={18} aria-hidden="true" />}
+                    ariaLabel="字幕"
+                    value={selectedSubtitleId}
+                    options={subtitleControlOptions}
+                    onChange={(value) => {
+                      autoSubtitleSelectionVideoIdRef.current = null;
+                      if (value === "manual") {
+                        void chooseSubtitleFile();
+                        return;
+                      }
+                      updateSelectedSubtitleId(value);
+                    }}
+                    className="subtitle-control"
+                    disabled={!currentVideo}
+                  />
 
-              <button
-                className="icon-button"
-                type="button"
-                onClick={probeEmbeddedSubtitles}
-                disabled={!canUseEmbeddedSubtitles || isEmbeddedSubtitleLoading}
-                title={
-                  canUseEmbeddedSubtitles
-                    ? "检测内封字幕"
-                    : "需要在 config/app.json 配置媒体根路径，并安装 ffmpeg/ffprobe"
-                }
-              >
-                CC
-              </button>
-              <button
-                className={`icon-button ${isAiPanelOpen ? "active" : ""}`}
-                type="button"
-                onClick={() => setIsAiPanelOpen(true)}
-                disabled={!selectedSubtitle}
-                title={selectedSubtitle ? "字幕总结和问答" : "请先选择字幕"}
-              >
-                AI
-              </button>
+                  <button
+                    className="icon-button"
+                    type="button"
+                    onClick={probeEmbeddedSubtitles}
+                    disabled={!canUseEmbeddedSubtitles || isEmbeddedSubtitleLoading}
+                    title={
+                      canUseEmbeddedSubtitles
+                        ? "检测内封字幕"
+                        : "需要在 config/app.json 配置媒体根路径，并安装 ffmpeg/ffprobe"
+                    }
+                  >
+                    CC
+                  </button>
+                  <button
+                    className={`icon-button ${isAiPanelOpen ? "active" : ""}`}
+                    type="button"
+                    onClick={() => setIsAiPanelOpen(true)}
+                    disabled={!selectedSubtitle}
+                    title={selectedSubtitle ? "字幕总结和问答" : "请先选择字幕"}
+                  >
+                    AI
+                  </button>
+                </>
+              ) : null}
               {homeMediaMode === "anime" ? (
                 <button
                   className={`icon-button ${danmakuPreferences.enabled && currentDanmakuSource ? "active" : ""}`}
@@ -8379,7 +8383,7 @@ export default function App() {
                   </button>
                   <span className="special-stat-pill" title={`上次发射距今：${currentVideoSpecialStats.lastEmissionLabel}`}>
                     <Clock3 size={14} />
-                    <span>上次</span>
+                    <span>上次发射</span>
                     <strong>{currentVideoSpecialStats.lastEmissionLabel}</strong>
                   </span>
                   <span
@@ -8391,7 +8395,7 @@ export default function App() {
                     }`}
                   >
                     <Activity size={14} />
-                    <span>强度</span>
+                    <span>播放强度</span>
                     <strong>
                       {currentVideoSpecialStats.playIntensity === null
                         ? "暂无"
@@ -8400,12 +8404,12 @@ export default function App() {
                   </span>
                   <span className="special-stat-pill" title={`播放次数：${currentVideoSpecialStats.playCount}`}>
                     <Play size={14} />
-                    <span>播放</span>
+                    <span>播放次数</span>
                     <strong>{currentVideoSpecialStats.playCount}</strong>
                   </span>
                   <span className="special-stat-pill emission-stat-pill" title={`发射次数：${currentVideoSpecialStats.emissionCount}`}>
                     <Rocket size={14} />
-                    <span>发射</span>
+                    <span>发射次数</span>
                     <strong>{currentVideoSpecialStats.emissionCount}</strong>
                   </span>
                 </div>
