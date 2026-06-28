@@ -4975,6 +4975,14 @@ button {
   touch-action: auto;
 }
 
+.auto-tag-dialog .dialog-icon.loading {
+  animation: auto-tag-icon-pulse 1.2s ease-in-out infinite;
+}
+
+.auto-tag-dialog .dialog-icon.loading .lucide-refresh-cw {
+  animation: tag-query-spin 0.9s linear infinite;
+}
+
 .auto-tag-suggestion-list {
   display: flex;
   min-height: 42px;
@@ -5100,6 +5108,21 @@ button {
 @keyframes tag-query-spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+@keyframes auto-tag-icon-pulse {
+  0%,
+  100% {
+    border-color: rgba(0, 161, 214, 0.32);
+    background: rgba(0, 161, 214, 0.13);
+    box-shadow: 0 0 0 rgba(0, 161, 214, 0);
+  }
+
+  50% {
+    border-color: rgba(121, 223, 255, 0.62);
+    background: rgba(0, 161, 214, 0.22);
+    box-shadow: 0 0 18px rgba(0, 161, 214, 0.28);
   }
 }
 
