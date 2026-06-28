@@ -42,6 +42,11 @@ test("reports no remaining library search results when all results are visible",
   assert.equal(state.hasMoreResults, false);
 });
 
+test("creates stable library search signatures", () => {
+  assert.equal(librarySearchUtils.createLibrarySearchSignature("  show name  "), "show name");
+  assert.equal(librarySearchUtils.createLibrarySearchSignature(""), "");
+});
+
 test("normalizes and tokenizes library search text consistently", () => {
   assert.equal(librarySearchUtils.normalizeLibrarySearchText("  Ａ/B-动画!!  "), "a b 动画");
   assert.deepEqual(librarySearchUtils.tokenizeLibrarySearchQuery("A  b 动画 12"), ["动画", "12"]);

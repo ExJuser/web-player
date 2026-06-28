@@ -52,6 +52,10 @@ export function getVisibleLibrarySearchResults<T>(results: T[], visibleCount: nu
   };
 }
 
+export function createLibrarySearchSignature(query: string) {
+  return query.trim();
+}
+
 export function libraryFolderTitleForVideo(video: LibrarySearchVideo) {
   return directoryPartsOf(video.relativePath)[0] ?? baseNameWithoutExtension(video.name);
 }

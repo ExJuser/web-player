@@ -44,6 +44,7 @@ import { fetchLocalJson as fetchJson, readLocalApiStream } from "./localApiClien
 import { normalizeClientLocalConfig } from "./localConfigClient";
 import {
   createAiLibrarySearchResults,
+  createLibrarySearchSignature,
   getVisibleLibrarySearchResults,
   shouldUseAiLibrarySearch,
   librarySearchResultPageSize,
@@ -896,10 +897,6 @@ async function restoreCachedEmbeddedSubtitles(
   );
 
   return restored.filter((subtitle): subtitle is SubtitleItem => Boolean(subtitle));
-}
-
-function createLibrarySearchSignature(query: string) {
-  return query.trim();
 }
 
 function formatLibrarySearchProgressLabel(card: HomeVideoCard) {
