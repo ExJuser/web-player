@@ -23,6 +23,22 @@ test("createLocalApiHeaders lets explicit headers override defaults", () => {
   );
 });
 
+test("handleLocalApiStreamLine parses events and ignores blank lines", () => {
+  const events = [];
+
+  localApiClient.handleLocalApiStreamLine("  ", (event) => events.push(event));
+  localApiClient.handleLocalApiStreamLine('{"type":"delta","text":"hi"}', (event) => events.push(event));
+
+  assert.deepEqual(events, [{ type: "delta", text: "hi" }]);
+});
+
+test("handleLocalApiStreamLine converts error events to exceptions", () => {
+  assert.throws(
+    () => localApiClient.handleLocalApiStreamLine('{"type":"error","error":"failed"}', () => {}),
+    /failed/,
+  );
+});
+
 test("readLocalApiErrorMessage uses local api error payloads", async () => {
   const message = await localApiClient.readLocalApiErrorMessage({
     statusText: "Internal Server Error",

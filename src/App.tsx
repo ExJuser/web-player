@@ -40,7 +40,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 
-import { createLocalApiHeaders, readLocalApiErrorMessage } from "./localApiClient";
+import { createLocalApiHeaders, handleLocalApiStreamLine, readLocalApiErrorMessage } from "./localApiClient";
 import {
   createAiLibrarySearchResults,
   getVisibleLibrarySearchResults,
@@ -852,24 +852,16 @@ async function readAiStream(url: string, init: RequestInit, onEvent: (event: AiS
   const decoder = new TextDecoder();
   let buffer = "";
 
-  const readLine = (line: string) => {
-    const trimmed = line.trim();
-    if (!trimmed) return;
-    const event = JSON.parse(trimmed) as AiStreamEvent;
-    if (event.type === "error") throw new Error(event.error);
-    onEvent(event);
-  };
-
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
     buffer += decoder.decode(value, { stream: true });
     const lines = buffer.split(/\r?\n/);
     buffer = lines.pop() ?? "";
-    lines.forEach(readLine);
+    lines.forEach((line) => handleLocalApiStreamLine<AiStreamEvent>(line, onEvent));
   }
   buffer += decoder.decode();
-  if (buffer.trim()) readLine(buffer);
+  if (buffer.trim()) handleLocalApiStreamLine<AiStreamEvent>(buffer, onEvent);
 }
 
 async function createSubtitleUrl(subtitle: SubtitleItem) {
