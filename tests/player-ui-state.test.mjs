@@ -43,6 +43,16 @@ test("uses compatible video urls when available", () => {
     }),
     "/api/media-compatible/video.mp4",
   );
+  assert.equal(
+    uiState.getPlayableVideoUrl(
+      {
+        url: "blob:original",
+        playability: { status: "remuxRecommended", compatibleUrl: "/api/media-compatible/video.mp4" },
+      },
+      "original",
+    ),
+    "blob:original",
+  );
   assert.equal(uiState.getPlayableVideoUrl({ url: "blob:original" }), "blob:original");
 });
 

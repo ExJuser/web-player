@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
@@ -259,6 +259,27 @@ async function remuxMediaToCompatibleMp4(config, payload, options = {}) {
       compatibleUrl: createCompatibleMediaUrl(cached.cacheId),
     },
   };
+}
+
+async function deleteCompatibleMedia(config, payload) {
+  const root = findMediaRoot(config, payload?.rootId);
+  if (!root) throw new Error("Unknown media root.");
+  if (root.source === "browser" && !root.localPath) {
+    throw new Error("浏览器添加的媒体库需要先配置本机路径，才能删除兼容 MP4。");
+  }
+
+  const videoPath = resolveVideoPathFromConfig(config, payload?.rootId, payload?.relativePath);
+  await ensureFileExists(videoPath);
+  const fileStat = await stat(videoPath);
+  const video = {
+    name: path.basename(videoPath),
+    relativePath: payload.relativePath,
+    size: fileStat.size,
+    lastModified: Math.round(fileStat.mtimeMs),
+  };
+  const cached = await getCachedCompatibleMedia(compatibleMediaRoot, root.id, video);
+  await rm(cached.cachePath, { force: true });
+  return { deleted: Boolean(cached.compatibleUrl), cacheId: cached.cacheId };
 }
 
 async function streamRemuxMediaToCompatibleMp4(config, payload, request, response) {
@@ -721,6 +742,12 @@ function playerDataApiPlugin(env) {
       if (url.pathname === "/api/media/compatible/remux" && request.method === "POST") {
         const payload = await parseJsonBody(request);
         await streamRemuxMediaToCompatibleMp4(await loadAppConfig(), payload, request, response);
+        return;
+      }
+
+      if (url.pathname === "/api/media/compatible" && request.method === "DELETE") {
+        const payload = await parseJsonBody(request);
+        sendJson(response, 200, await deleteCompatibleMedia(await loadAppConfig(), payload));
         return;
       }
 

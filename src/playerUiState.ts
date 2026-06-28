@@ -114,7 +114,8 @@ export function formatPhotoRootStatus(status?: MediaRootStatusForUi) {
   return formatRootStatus(status, "本写真集");
 }
 
-export function getPlayableVideoUrl(video: VideoForCompatibilityUi) {
+export function getPlayableVideoUrl(video: VideoForCompatibilityUi, source: "original" | "compatible" = "compatible") {
+  if (source === "original") return video.url || "";
   return video.playability?.compatibleUrl || video.url || "";
 }
 

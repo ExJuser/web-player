@@ -821,6 +821,11 @@ type CompatibleRemuxResponse = {
   playability: VideoPlayability;
 };
 
+type CompatibleMediaDeleteResponse = {
+  deleted: boolean;
+  cacheId: string;
+};
+
 type CompatibleRemuxStreamEvent =
   | { type: "progress"; percent?: number; message?: string }
   | { type: "done"; result: CompatibleRemuxResponse }
@@ -830,6 +835,8 @@ type MediaProbeResponse = {
   playability: VideoPlayability;
   metadata?: VideoMetadata;
 };
+
+type PlaybackSourceChoice = "original" | "compatible";
 
 async function createSubtitleUrl(subtitle: SubtitleItem) {
   if (subtitle.url && !isObjectUrl(subtitle.url)) {
@@ -1313,9 +1320,17 @@ export default function App() {
     videoId: string;
     videoName: string;
   } | null>(null);
+  const [compatibleMediaDeleteConfirm, setCompatibleMediaDeleteConfirm] = useState<{
+    rootId: string;
+    relativePath: string;
+    videoId: string;
+    videoName: string;
+  } | null>(null);
   const [compatibleMediaTask, setCompatibleMediaTask] = useState<{ label: string; videoName: string; progress: number; status: string } | null>(null);
   const compatibleMediaAbortControllerRef = useRef<AbortController | null>(null);
   const [compatibleMediaMessage, setCompatibleMediaMessage] = useState("");
+  const [isDeletingCompatibleMedia, setIsDeletingCompatibleMedia] = useState(false);
+  const [playbackSourceChoices, setPlaybackSourceChoices] = useState<Record<string, PlaybackSourceChoice>>({});
   const [isAiPanelOpen, setIsAiPanelOpen] = useState(false);
   const [aiTab, setAiTab] = useState<"summary" | "qa" | "recap">("summary");
   const [subtitleSummary, setSubtitleSummary] = useState("");
@@ -1817,7 +1832,9 @@ export default function App() {
     () => videos.find((item) => item.id === currentVideoId) ?? null,
     [currentVideoId, videos],
   );
-  const currentVideoPlaybackUrl = currentVideo ? getPlayableVideoUrl(currentVideo) : "";
+  const currentVideoSourceChoice = currentVideo ? playbackSourceChoices[currentVideo.id] ?? "compatible" : "compatible";
+  const currentVideoPlaybackUrl = currentVideo ? getPlayableVideoUrl(currentVideo, currentVideoSourceChoice) : "";
+  const currentVideoHasCompatibleMedia = Boolean(currentVideo?.playability?.compatibleUrl);
   const currentVideoTags = currentVideo ? videoTags[currentVideo.id] ?? [] : [];
   const seriesOptionsKey = useMemo(
     () => seriesOptions.map((series) => `${series.key}\t${series.title}\t${series.count}`).join("\n"),
@@ -2971,6 +2988,20 @@ export default function App() {
         if (video.id !== videoId) return video;
         didChange = true;
         return { ...video, playability };
+      });
+      if (didChange) videosRef.current = nextVideos;
+      return didChange ? nextVideos : previous;
+    });
+  }, []);
+
+  const removeVideoCompatibleMediaUrl = useCallback((videoId: string) => {
+    setVideos((previous) => {
+      let didChange = false;
+      const nextVideos = previous.map((video) => {
+        if (video.id !== videoId || !video.playability?.compatibleUrl) return video;
+        const { compatibleUrl: _removedCompatibleUrl, ...nextPlayability } = video.playability;
+        didChange = true;
+        return { ...video, playability: nextPlayability };
       });
       if (didChange) videosRef.current = nextVideos;
       return didChange ? nextVideos : previous;
@@ -5588,6 +5619,16 @@ export default function App() {
     });
   }, [canCreateCompatibleMedia, compatibleMediaAction.label, compatibleMediaVideoId, currentMediaRootId, currentVideo]);
 
+  const openCompatibleMediaDeleteConfirm = useCallback(() => {
+    if (!currentVideo || !currentMediaRootId || !currentVideo.playability?.compatibleUrl || isDeletingCompatibleMedia) return;
+    setCompatibleMediaDeleteConfirm({
+      rootId: currentMediaRootId,
+      relativePath: currentVideo.relativePath,
+      videoId: currentVideo.id,
+      videoName: currentVideo.name,
+    });
+  }, [currentMediaRootId, currentVideo, isDeletingCompatibleMedia]);
+
   const createCompatibleMedia = useCallback(async () => {
     if (!compatibleMediaConfirm) return;
     if (compatibleMediaVideoId) return;
@@ -5628,6 +5669,7 @@ export default function App() {
       const result = remuxResult as CompatibleRemuxResponse | null;
       if (!result) throw new Error("生成兼容 MP4 未返回结果。");
       updateVideoPlayability(compatibleMediaConfirm.videoId, result.playability);
+      setPlaybackSourceChoices((previous) => ({ ...previous, [compatibleMediaConfirm.videoId]: "compatible" }));
       setCompatibleMediaMessage("已生成兼容 MP4，播放器将优先使用兼容版本。");
       setMessage("已生成兼容 MP4。");
     } catch (error) {
@@ -5645,6 +5687,31 @@ export default function App() {
       setCompatibleMediaTask(null);
     }
   }, [compatibleMediaConfirm, compatibleMediaVideoId, updateVideoPlayability]);
+
+  const deleteCompatibleMedia = useCallback(async () => {
+    if (!compatibleMediaDeleteConfirm || isDeletingCompatibleMedia) return;
+
+    setIsDeletingCompatibleMedia(true);
+    setCompatibleMediaMessage("正在删除修复版本...");
+    try {
+      await fetchJson<CompatibleMediaDeleteResponse>("/api/media/compatible", {
+        method: "DELETE",
+        body: JSON.stringify({
+          rootId: compatibleMediaDeleteConfirm.rootId,
+          relativePath: compatibleMediaDeleteConfirm.relativePath,
+        }),
+      });
+      removeVideoCompatibleMediaUrl(compatibleMediaDeleteConfirm.videoId);
+      setPlaybackSourceChoices((previous) => ({ ...previous, [compatibleMediaDeleteConfirm.videoId]: "original" }));
+      setCompatibleMediaDeleteConfirm(null);
+      setCompatibleMediaMessage("已删除修复版本，播放器已切回原版。");
+      setMessage("已删除修复版本。");
+    } catch (error) {
+      setCompatibleMediaMessage(error instanceof Error ? error.message : "删除修复版本失败。");
+    } finally {
+      setIsDeletingCompatibleMedia(false);
+    }
+  }, [compatibleMediaDeleteConfirm, isDeletingCompatibleMedia, removeVideoCompatibleMediaUrl]);
 
   const cancelCompatibleMediaGeneration = useCallback(() => {
     compatibleMediaAbortControllerRef.current?.abort();
@@ -8165,6 +8232,36 @@ export default function App() {
                 className="rate-control"
               />
 
+              {currentVideoHasCompatibleMedia ? (
+                <>
+                  <ControlSelect
+                    label="片源"
+                    ariaLabel="播放源"
+                    value={currentVideoSourceChoice}
+                    options={[
+                      { value: "compatible", label: "修复版" },
+                      { value: "original", label: "原版" },
+                    ]}
+                    onChange={(value) => {
+                      if (!currentVideo) return;
+                      setPlaybackSourceChoices((previous) => ({ ...previous, [currentVideo.id]: value }));
+                    }}
+                    className="source-control"
+                    disabled={!currentVideo}
+                  />
+                  <button
+                    className="icon-button"
+                    type="button"
+                    onClick={openCompatibleMediaDeleteConfirm}
+                    disabled={!currentVideo || isDeletingCompatibleMedia}
+                    title="删除修复版"
+                    aria-label="删除修复版"
+                  >
+                    <Trash2 size={18} />
+                  </button>
+                </>
+              ) : null}
+
               {!isSeriesMode ? (
                 <ControlSelect
                   label="播放模式"
@@ -9041,6 +9138,54 @@ export default function App() {
           <div className="dialog-actions">
             <button className="secondary-button" type="button" onClick={cancelCompatibleMediaGeneration}>
               取消生成
+            </button>
+          </div>
+        </section>
+      </div>
+    ) : null}
+    {compatibleMediaDeleteConfirm ? (
+      <div
+        className="modal-backdrop"
+        role="presentation"
+        onMouseDown={() => {
+          if (!isDeletingCompatibleMedia) setCompatibleMediaDeleteConfirm(null);
+        }}
+      >
+        <section
+          aria-labelledby="compatible-media-delete-title"
+          aria-modal="true"
+          className="delete-dialog"
+          role="dialog"
+          onMouseDown={(event) => event.stopPropagation()}
+        >
+          <div className="dialog-icon danger">
+            <Trash2 size={28} />
+          </div>
+          <div className="dialog-copy">
+            <h2 id="compatible-media-delete-title">删除修复版？</h2>
+            <p>只会删除项目本地缓存目录里的修复 MP4，不会删除原视频。删除后播放器会切回原版。</p>
+          </div>
+          <div className="delete-file-preview">
+            <strong>{compatibleMediaDeleteConfirm.videoName}</strong>
+            <span>{compatibleMediaMessage || "修复版可重新生成。"}</span>
+          </div>
+          <div className="dialog-actions">
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={() => setCompatibleMediaDeleteConfirm(null)}
+              disabled={isDeletingCompatibleMedia}
+            >
+              取消
+            </button>
+            <button
+              className="danger-button"
+              type="button"
+              onClick={() => void deleteCompatibleMedia()}
+              disabled={isDeletingCompatibleMedia}
+            >
+              <Trash2 size={18} />
+              {isDeletingCompatibleMedia ? "删除中..." : "删除修复版"}
             </button>
           </div>
         </section>

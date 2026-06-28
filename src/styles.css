@@ -2932,6 +2932,10 @@ button {
   width: 142px;
 }
 
+.source-control .control-select {
+  width: 88px;
+}
+
 .control-spacer {
   flex: 1;
 }
