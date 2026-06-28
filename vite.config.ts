@@ -901,7 +901,6 @@ function playerDataApiPlugin(env) {
           return;
         }
 
-        const filePath = path.join(librariesRoot, `${libraryId}.json`);
         if (request.method === "GET") {
           const payload = store.loadPlayerDataStore(libraryId);
           sendJson(response, payload ? 200 : 404, payload ?? { error: "Library data not found." });
