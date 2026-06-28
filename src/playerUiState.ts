@@ -8,6 +8,12 @@ type MediaRootForUi = {
   localPath?: string;
 };
 
+type MediaRootStatusForUi = {
+  status: "ready" | "needsAccess" | "error";
+  videoCount: number;
+  error?: string;
+};
+
 type VideoForCompatibilityUi = {
   playbackSource?: "browser" | "server";
   playability?: {
@@ -61,6 +67,21 @@ export function getMediaRootLocalPathAction(root: MediaRootForUi) {
     disabled: isConfigured,
     label: isConfigured ? "本机路径已配置" : "配置本机路径",
   };
+}
+
+function formatRootStatus(status: MediaRootStatusForUi | undefined, readyUnit: string) {
+  if (!status) return "等待扫描";
+  if (status.status === "ready") return `${status.videoCount} ${readyUnit}`;
+  if (status.status === "needsAccess") return "需配置本机路径";
+  return status.error ? `扫描失败：${status.error}` : "扫描失败";
+}
+
+export function formatMediaRootStatus(status?: MediaRootStatusForUi) {
+  return formatRootStatus(status, "个视频");
+}
+
+export function formatPhotoRootStatus(status?: MediaRootStatusForUi) {
+  return formatRootStatus(status, "本写真集");
 }
 
 export function getCompatibleMediaAction(video: VideoForCompatibilityUi | null | undefined, options: { canUseServerTools: boolean }) {

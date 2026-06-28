@@ -250,6 +250,8 @@ async function hasDirectoryReadPermission(directory: FileSystemDirectoryHandle) 
 import { ControlSelect } from "./ControlSelect";
 import {
   createPersistedEmbeddedSubtitles,
+  formatMediaRootStatus,
+  formatPhotoRootStatus,
   getCompatibleMediaAction,
   createSubtitleControlOptions,
   createVideoStatsKey,
@@ -300,20 +302,6 @@ import {
   writeRecentFolderHandle
 } from "./playerStorage";
 
-
-function formatMediaRootStatus(status?: PlayerMediaRootStatus) {
-  if (!status) return "等待扫描";
-  if (status.status === "ready") return `${status.videoCount} 个视频`;
-  if (status.status === "needsAccess") return "需配置本机路径";
-  return status.error ? `扫描失败：${status.error}` : "扫描失败";
-}
-
-function formatPhotoRootStatus(status?: PlayerMediaRootStatus) {
-  if (!status) return "等待扫描";
-  if (status.status === "ready") return `${status.videoCount} 本写真集`;
-  if (status.status === "needsAccess") return "需配置本机路径";
-  return status.error ? `扫描失败：${status.error}` : "扫描失败";
-}
 
 function videoMetadataRows(video: VideoItem) {
   return [

@@ -19,6 +19,22 @@ test("browser media root with localPath renders a disabled configured action", (
   );
 });
 
+test("formats media root status labels for video libraries", () => {
+  assert.equal(uiState.formatMediaRootStatus(undefined), "等待扫描");
+  assert.equal(uiState.formatMediaRootStatus({ status: "ready", videoCount: 12 }), "12 个视频");
+  assert.equal(uiState.formatMediaRootStatus({ status: "needsAccess", videoCount: 0 }), "需配置本机路径");
+  assert.equal(uiState.formatMediaRootStatus({ status: "error", videoCount: 0 }), "扫描失败");
+  assert.equal(uiState.formatMediaRootStatus({ status: "error", videoCount: 0, error: "权限不足" }), "扫描失败：权限不足");
+});
+
+test("formats media root status labels for photo albums", () => {
+  assert.equal(uiState.formatPhotoRootStatus(undefined), "等待扫描");
+  assert.equal(uiState.formatPhotoRootStatus({ status: "ready", videoCount: 3 }), "3 本写真集");
+  assert.equal(uiState.formatPhotoRootStatus({ status: "needsAccess", videoCount: 0 }), "需配置本机路径");
+  assert.equal(uiState.formatPhotoRootStatus({ status: "error", videoCount: 0 }), "扫描失败");
+  assert.equal(uiState.formatPhotoRootStatus({ status: "error", videoCount: 0, error: "目录不存在" }), "扫描失败：目录不存在");
+});
+
 test("compatible media action is enabled only for server remux candidates", () => {
   assert.deepEqual(
     uiState.getCompatibleMediaAction(
