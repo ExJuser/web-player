@@ -3,6 +3,7 @@ import { Converter } from "opencc-js";
 import type { DanmakuComment, DanmakuCommentMode, DanmakuProvider } from "./playerTypes";
 
 const traditionalToSimplified = Converter({ from: "tw", to: "cn" });
+export const danmakuLaneLineHeight = 1.12;
 
 export type ParsedDanmakuUrl =
   | { provider: "bilibili"; kind: "bvid"; value: string; url: string }
@@ -139,4 +140,31 @@ export function inferEpisodeNumber(value: string) {
 
 export function createDanmakuSourceId(provider: DanmakuProvider, key: string) {
   return `${provider}:${stableHash(key)}`;
+}
+
+export function getDanmakuLane(comment: Pick<DanmakuComment, "id" | "hash" | "time">, laneCount: number) {
+  if (laneCount <= 1) return 0;
+  const hash = stableHash(`${comment.id}:${comment.hash}:${comment.time.toFixed(3)}`);
+  return Number.parseInt(hash.slice(0, 8), 16) % laneCount;
+}
+
+export function formatDanmakuSpeedLevel(speed: number) {
+  if (speed <= 16) return "较快";
+  if (speed <= 20) return "稍快";
+  if (speed <= 24) return "中等";
+  if (speed <= 28) return "稍慢";
+  return "较慢";
+}
+
+export function getDanmakuLaneCount(displayArea: number, fontSize: number, layerHeight: number) {
+  const boundedDisplayArea = Math.min(1, Math.max(0.25, displayArea));
+  const laneStep = Math.max(14, fontSize * danmakuLaneLineHeight);
+  const effectiveHeight = Math.max(180, layerHeight || 0);
+  return Math.max(4, Math.floor((effectiveHeight * boundedDisplayArea) / laneStep));
+}
+
+export function formatDanmakuLaneTop(lane: number, laneCount: number, displayArea: number) {
+  if (laneCount <= 1) return "0%";
+  const percent = (lane / laneCount) * Math.min(1, Math.max(0.25, displayArea)) * 100;
+  return `${percent.toFixed(3)}%`;
 }

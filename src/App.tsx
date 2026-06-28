@@ -142,7 +142,14 @@ import {
   defaultDanmakuPreferences,
   shortcutGroups
 } from "./playerConstants";
-import { createDanmakuComment, stableHash } from "./danmakuUtils";
+import {
+  createDanmakuComment,
+  danmakuLaneLineHeight,
+  formatDanmakuLaneTop,
+  formatDanmakuSpeedLevel,
+  getDanmakuLane,
+  getDanmakuLaneCount,
+} from "./danmakuUtils";
 import { directoryPartsOf, fallbackMediaRootLabelForVideo } from "./mediaPathUtils";
 import {
   basePathOf,
@@ -827,35 +834,6 @@ type MediaProbeResponse = {
   playability: NonNullable<VideoItem["playability"]>;
   metadata?: VideoMetadata;
 };
-
-function getDanmakuLane(comment: DanmakuComment, laneCount: number) {
-  if (laneCount <= 1) return 0;
-  const hash = stableHash(`${comment.id}:${comment.hash}:${comment.time.toFixed(3)}`);
-  return Number.parseInt(hash.slice(0, 8), 16) % laneCount;
-}
-
-function formatDanmakuSpeedLevel(speed: number) {
-  if (speed <= 16) return "较快";
-  if (speed <= 20) return "稍快";
-  if (speed <= 24) return "中等";
-  if (speed <= 28) return "稍慢";
-  return "较慢";
-}
-
-const DANMAKU_LANE_LINE_HEIGHT = 1.12;
-
-function getDanmakuLaneCount(displayArea: number, fontSize: number, layerHeight: number) {
-  const boundedDisplayArea = Math.min(1, Math.max(0.25, displayArea));
-  const laneStep = Math.max(14, fontSize * DANMAKU_LANE_LINE_HEIGHT);
-  const effectiveHeight = Math.max(180, layerHeight || 0);
-  return Math.max(4, Math.floor((effectiveHeight * boundedDisplayArea) / laneStep));
-}
-
-function formatDanmakuLaneTop(lane: number, laneCount: number, displayArea: number) {
-  if (laneCount <= 1) return "0%";
-  const percent = (lane / laneCount) * Math.min(1, Math.max(0.25, displayArea)) * 100;
-  return `${percent.toFixed(3)}%`;
-}
 
 function normalizeLocalConfig(config: LocalConfig): LocalConfig {
   return {
@@ -8109,7 +8087,7 @@ export default function App() {
                           "--danmaku-lane": lane,
                           "--danmaku-lanes": danmakuLaneCount,
                           "--danmaku-lane-top": formatDanmakuLaneTop(lane, danmakuLaneCount, danmakuPreferences.displayArea),
-                          "--danmaku-lane-offset": `${Math.round(lane * danmakuPreferences.fontSize * DANMAKU_LANE_LINE_HEIGHT)}px`,
+                          "--danmaku-lane-offset": `${Math.round(lane * danmakuPreferences.fontSize * danmakuLaneLineHeight)}px`,
                           "--danmaku-delay": `-${elapsed}s`,
                           color: comment.color,
                         } as React.CSSProperties
