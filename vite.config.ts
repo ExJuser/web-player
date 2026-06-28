@@ -148,7 +148,30 @@ function findMediaRoot(config, rootId) {
   return normalizeMediaRootsFromConfig(config).find((root) => root.id === id) ?? null;
 }
 
-async function probeMedia(config, payload) {
+function createMediaProbeResponse(result) {
+  return {
+    probe: result.probe,
+    canRemux: result.canRemux,
+    metadata: {
+      duration: result.probe?.format?.duration,
+      width: result.probe?.video?.width,
+      height: result.probe?.video?.height,
+    },
+    playability: result.playability,
+  };
+}
+
+function withCompatibleMediaUrl(response, cached) {
+  return {
+    ...response,
+    playability: {
+      ...response.playability,
+      ...(cached.compatibleUrl ? { compatibleUrl: cached.compatibleUrl } : {}),
+    },
+  };
+}
+
+async function probeMedia(config, payload, store) {
   const root = findMediaRoot(config, payload?.rootId);
   if (!root) throw new Error("Unknown media root.");
   if (root.source === "browser" && !root.localPath) {
@@ -170,22 +193,18 @@ async function probeMedia(config, payload) {
     size: fileStat.size,
     lastModified: Math.round(fileStat.mtimeMs),
   };
+  const fileIdentity = { size: video.size, lastModified: video.lastModified };
+  const cachedProbe = store.getMediaProbeCache(root.id, video.relativePath, fileIdentity);
+  const cachedCompatibleMedia = await getCachedCompatibleMedia(compatibleMediaRoot, root.id, video);
+  if (cachedProbe) {
+    return withCompatibleMediaUrl(cachedProbe, cachedCompatibleMedia);
+  }
+
   const rawProbe = await probeMediaFile(runProcess, videoPath);
   const result = classifyMediaProbe(rawProbe, video.name);
-  const cached = await getCachedCompatibleMedia(compatibleMediaRoot, root.id, video);
-  return {
-    probe: result.probe,
-    canRemux: result.canRemux,
-    metadata: {
-      duration: result.probe?.format?.duration,
-      width: result.probe?.video?.width,
-      height: result.probe?.video?.height,
-    },
-    playability: {
-      ...result.playability,
-      ...(cached.compatibleUrl ? { compatibleUrl: cached.compatibleUrl } : {}),
-    },
-  };
+  const response = createMediaProbeResponse(result);
+  store.saveMediaProbeCache(root.id, video.relativePath, fileIdentity, response);
+  return withCompatibleMediaUrl(response, cachedCompatibleMedia);
 }
 
 async function remuxMediaToCompatibleMp4(config, payload) {
@@ -660,7 +679,7 @@ function playerDataApiPlugin(env) {
 
       if (url.pathname === "/api/media/probe" && request.method === "POST") {
         const payload = await parseJsonBody(request);
-        sendJson(response, 200, await probeMedia(await loadAppConfig(), payload));
+        sendJson(response, 200, await probeMedia(await loadAppConfig(), payload, store));
         return;
       }
 

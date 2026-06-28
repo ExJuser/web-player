@@ -216,6 +216,16 @@ export class LocalDataSqliteStore {
         updated_at INTEGER NOT NULL,
         PRIMARY KEY (kind, cache_id)
       );
+
+      CREATE TABLE IF NOT EXISTS media_probe_cache (
+        root_id TEXT NOT NULL,
+        relative_path TEXT NOT NULL,
+        size INTEGER NOT NULL,
+        last_modified INTEGER NOT NULL,
+        result_json TEXT NOT NULL,
+        updated_at INTEGER NOT NULL,
+        PRIMARY KEY (root_id, relative_path)
+      );
     `);
     this.setMeta("schema_version", String(schemaVersion));
   }
@@ -815,6 +825,31 @@ export class LocalDataSqliteStore {
       this.db
         .prepare("INSERT INTO cache_entries (kind, cache_id, path, content_type, bytes, updated_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(kind, cache_id) DO UPDATE SET path = excluded.path, content_type = excluded.content_type, bytes = excluded.bytes, updated_at = excluded.updated_at")
         .run(kind, cacheId, filePath, contentType, bytes, now());
+    });
+  }
+
+  getMediaProbeCache(rootId, relativePath, fileIdentity) {
+    const row = this.db
+      .prepare("SELECT size, last_modified, result_json FROM media_probe_cache WHERE root_id = ? AND relative_path = ?")
+      .get(rootId, relativePath);
+    if (!row) return null;
+    if (row.size !== fileIdentity.size || row.last_modified !== fileIdentity.lastModified) return null;
+    return parseJson(row.result_json, null);
+  }
+
+  saveMediaProbeCache(rootId, relativePath, fileIdentity, result) {
+    return this.transaction(() => {
+      this.db
+        .prepare(`
+          INSERT INTO media_probe_cache (root_id, relative_path, size, last_modified, result_json, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?)
+          ON CONFLICT(root_id, relative_path) DO UPDATE SET
+            size = excluded.size,
+            last_modified = excluded.last_modified,
+            result_json = excluded.result_json,
+            updated_at = excluded.updated_at
+        `)
+        .run(rootId, relativePath, fileIdentity.size, fileIdentity.lastModified, stringifyJson(result), now());
     });
   }
 

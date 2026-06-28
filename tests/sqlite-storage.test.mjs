@@ -179,3 +179,33 @@ test("sqlite progress upsert ignores stale writes and preserves known duration",
     await rm(context.root, { recursive: true, force: true });
   }
 });
+
+test("sqlite media probe cache is keyed by file identity", async () => {
+  const context = await createTempStore();
+  try {
+    await context.store.initialize();
+    const result = {
+      canRemux: false,
+      metadata: { duration: 12, width: 1920, height: 1080 },
+      playability: {
+        status: "direct",
+        reason: "视频可直接播放。",
+        videoCodec: "h264",
+        audioCodec: "aac",
+      },
+      probe: { format: { duration: 12 }, video: { codec: "h264" }, audio: { codec: "aac" } },
+    };
+
+    context.store.saveMediaProbeCache("root-a", "movie.mp4", { size: 100, lastModified: 200 }, result);
+
+    assert.deepEqual(
+      context.store.getMediaProbeCache("root-a", "movie.mp4", { size: 100, lastModified: 200 }),
+      result,
+    );
+    assert.equal(context.store.getMediaProbeCache("root-a", "movie.mp4", { size: 101, lastModified: 200 }), null);
+    assert.equal(context.store.getMediaProbeCache("root-a", "movie.mp4", { size: 100, lastModified: 201 }), null);
+  } finally {
+    context.store.close();
+    await rm(context.root, { recursive: true, force: true });
+  }
+});
