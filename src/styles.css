@@ -873,7 +873,7 @@ button {
 
 .home-dashboard {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+  grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
   gap: 14px;
   min-height: 0;
   flex: 1;
@@ -894,7 +894,12 @@ button {
 }
 
 .home-side-column {
+  order: 1;
   padding-right: 0;
+}
+
+.home-primary-column {
+  order: 2;
 }
 
 .home-resume-card,
@@ -6034,6 +6039,7 @@ button {
 
   .home-primary-column,
   .home-side-column {
+    order: initial;
     overflow: visible;
   }
 
