@@ -250,9 +250,12 @@ async function hasDirectoryReadPermission(directory: FileSystemDirectoryHandle) 
 import { ControlSelect } from "./ControlSelect";
 import {
   createPersistedEmbeddedSubtitles,
+  formatCodecSummary,
   formatMediaRootStatus,
   formatPhotoRootStatus,
+  formatPlayabilityStatus,
   getCompatibleMediaAction,
+  getPlayableVideoUrl,
   createSubtitleControlOptions,
   createVideoStatsKey,
   getMediaRootLocalPathAction,
@@ -825,25 +828,6 @@ type MediaProbeResponse = {
   metadata?: VideoMetadata;
 };
 
-function playableUrlForVideo(video: VideoItem) {
-  return video.playability?.compatibleUrl || video.url;
-}
-
-function formatPlayabilityStatus(playability?: VideoItem["playability"]) {
-  if (!playability) return "未探测";
-  if (playability.compatibleUrl) return "兼容 MP4";
-  if (playability.status === "direct") return "可直接播放";
-  if (playability.status === "remuxRecommended") return "建议转封装";
-  if (playability.status === "unsupported") return "需转码";
-  if (playability.status === "needsLocalPath") return "需本机路径";
-  return "兼容性未知";
-}
-
-function formatCodecSummary(playability?: VideoItem["playability"]) {
-  if (!playability) return "未探测";
-  return [playability.videoCodec, playability.audioCodec, playability.pixelFormat].filter(Boolean).join(" / ") || "未探测";
-}
-
 function getDanmakuLane(comment: DanmakuComment, laneCount: number) {
   if (laneCount <= 1) return 0;
   const hash = stableHash(`${comment.id}:${comment.hash}:${comment.time.toFixed(3)}`);
@@ -1252,7 +1236,7 @@ async function createVideoThumbnailBlob(video: VideoItem) {
     element.muted = true;
     element.preload = "auto";
     element.playsInline = true;
-    element.src = playableUrlForVideo(video);
+    element.src = getPlayableVideoUrl(video);
 
     if (element.readyState < HTMLMediaElement.HAVE_METADATA) {
       await waitForMediaEvent(element, "loadedmetadata");
@@ -1948,7 +1932,7 @@ export default function App() {
     () => videos.find((item) => item.id === currentVideoId) ?? null,
     [currentVideoId, videos],
   );
-  const currentVideoPlaybackUrl = currentVideo ? playableUrlForVideo(currentVideo) : "";
+  const currentVideoPlaybackUrl = currentVideo ? getPlayableVideoUrl(currentVideo) : "";
   const currentVideoTags = currentVideo ? videoTags[currentVideo.id] ?? [] : [];
   const seriesOptionsKey = useMemo(
     () => seriesOptions.map((series) => `${series.key}\t${series.title}\t${series.count}`).join("\n"),

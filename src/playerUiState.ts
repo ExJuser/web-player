@@ -15,11 +15,15 @@ type MediaRootStatusForUi = {
 };
 
 type VideoForCompatibilityUi = {
+  url?: string;
   playbackSource?: "browser" | "server";
   playability?: {
     status: "direct" | "remuxRecommended" | "unsupported" | "unknown" | "needsLocalPath";
     reason?: string;
     compatibleUrl?: string;
+    videoCodec?: string;
+    audioCodec?: string;
+    pixelFormat?: string;
   };
 };
 
@@ -82,6 +86,25 @@ export function formatMediaRootStatus(status?: MediaRootStatusForUi) {
 
 export function formatPhotoRootStatus(status?: MediaRootStatusForUi) {
   return formatRootStatus(status, "本写真集");
+}
+
+export function getPlayableVideoUrl(video: VideoForCompatibilityUi) {
+  return video.playability?.compatibleUrl || video.url || "";
+}
+
+export function formatPlayabilityStatus(playability?: VideoForCompatibilityUi["playability"]) {
+  if (!playability) return "未探测";
+  if (playability.compatibleUrl) return "兼容 MP4";
+  if (playability.status === "direct") return "可直接播放";
+  if (playability.status === "remuxRecommended") return "建议转封装";
+  if (playability.status === "unsupported") return "需转码";
+  if (playability.status === "needsLocalPath") return "需本机路径";
+  return "兼容性未知";
+}
+
+export function formatCodecSummary(playability?: VideoForCompatibilityUi["playability"]) {
+  if (!playability) return "未探测";
+  return [playability.videoCodec, playability.audioCodec, playability.pixelFormat].filter(Boolean).join(" / ") || "未探测";
 }
 
 export function getCompatibleMediaAction(video: VideoForCompatibilityUi | null | undefined, options: { canUseServerTools: boolean }) {

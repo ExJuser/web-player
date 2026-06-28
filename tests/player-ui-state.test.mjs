@@ -35,6 +35,34 @@ test("formats media root status labels for photo albums", () => {
   assert.equal(uiState.formatPhotoRootStatus({ status: "error", videoCount: 0, error: "目录不存在" }), "扫描失败：目录不存在");
 });
 
+test("uses compatible video urls when available", () => {
+  assert.equal(
+    uiState.getPlayableVideoUrl({
+      url: "blob:original",
+      playability: { status: "remuxRecommended", compatibleUrl: "/api/media-compatible/video.mp4" },
+    }),
+    "/api/media-compatible/video.mp4",
+  );
+  assert.equal(uiState.getPlayableVideoUrl({ url: "blob:original" }), "blob:original");
+});
+
+test("formats playability status labels", () => {
+  assert.equal(uiState.formatPlayabilityStatus(undefined), "未探测");
+  assert.equal(uiState.formatPlayabilityStatus({ status: "direct" }), "可直接播放");
+  assert.equal(uiState.formatPlayabilityStatus({ status: "remuxRecommended" }), "建议转封装");
+  assert.equal(uiState.formatPlayabilityStatus({ status: "unsupported" }), "需转码");
+  assert.equal(uiState.formatPlayabilityStatus({ status: "needsLocalPath" }), "需本机路径");
+  assert.equal(uiState.formatPlayabilityStatus({ status: "unknown" }), "兼容性未知");
+  assert.equal(uiState.formatPlayabilityStatus({ status: "unsupported", compatibleUrl: "/compatible.mp4" }), "兼容 MP4");
+});
+
+test("formats codec summaries from available playability metadata", () => {
+  assert.equal(uiState.formatCodecSummary(undefined), "未探测");
+  assert.equal(uiState.formatCodecSummary({ status: "direct", videoCodec: "h264", audioCodec: "aac", pixelFormat: "yuv420p" }), "h264 / aac / yuv420p");
+  assert.equal(uiState.formatCodecSummary({ status: "direct", audioCodec: "aac" }), "aac");
+  assert.equal(uiState.formatCodecSummary({ status: "unknown" }), "未探测");
+});
+
 test("compatible media action is enabled only for server remux candidates", () => {
   assert.deepEqual(
     uiState.getCompatibleMediaAction(
