@@ -1071,12 +1071,24 @@ button {
   transition: width 120ms ease;
 }
 
+.duplicate-video-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .duplicate-detection-button {
+  flex: 1 1 150px;
   width: 100%;
   min-height: 36px;
   justify-content: center;
   gap: 8px;
   white-space: nowrap;
+}
+
+.duplicate-video-more {
+  width: 100%;
+  justify-content: center;
 }
 
 .duplicate-video-groups {
@@ -1128,6 +1140,25 @@ button {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.episode-duplicate-meta {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  width: fit-content;
+  max-width: 100%;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 161, 214, 0.32);
+  color: #9bdcf2;
+  background: rgba(0, 161, 214, 0.1);
+}
+
+.episode-duplicate-meta.severity-duplicate {
+  border-color: rgba(245, 99, 84, 0.36);
+  color: #ffb7ad;
+  background: rgba(245, 99, 84, 0.12);
 }
 
 .home-resume-actions {
@@ -5877,6 +5908,20 @@ button {
 .app-shell.theme-light .duplicate-video-list button,
 :root[data-theme="light"] .duplicate-video-list button {
   background: rgba(26, 75, 110, 0.07);
+}
+
+.app-shell.theme-light .episode-duplicate-meta,
+:root[data-theme="light"] .episode-duplicate-meta {
+  border-color: rgba(0, 119, 171, 0.26);
+  color: #006d9e;
+  background: rgba(0, 161, 214, 0.09);
+}
+
+.app-shell.theme-light .episode-duplicate-meta.severity-duplicate,
+:root[data-theme="light"] .episode-duplicate-meta.severity-duplicate {
+  border-color: rgba(199, 60, 44, 0.24);
+  color: #a83b2e;
+  background: rgba(245, 99, 84, 0.1);
 }
 
 .app-shell.theme-light .highlight-chip,

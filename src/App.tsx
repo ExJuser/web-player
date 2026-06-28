@@ -254,6 +254,13 @@ type DuplicateNameSimilarityResponse = {
   }>;
 };
 
+type DuplicatePlaylistVideoMeta = {
+  groupIndex: number;
+  groupSize: number;
+  severity: DuplicateVideoGroup["severity"];
+  reasons: string[];
+};
+
 function createDuplicateFingerprintCacheKey(video: VideoItem) {
   return `${video.id}|${Math.floor(video.size || 0)}|${Math.round(video.lastModified || 0)}`;
 }
@@ -1489,6 +1496,7 @@ export default function App() {
   const [duplicateDetectionProgress, setDuplicateDetectionProgress] = useState<DuplicateDetectionProgress | null>(null);
   const [duplicateDetectionMessage, setDuplicateDetectionMessage] = useState("尚未检测重复视频。");
   const [isDuplicateDetectionRunning, setIsDuplicateDetectionRunning] = useState(false);
+  const [isDuplicatePlaylistActive, setIsDuplicatePlaylistActive] = useState(false);
   const [bangumiMatchesBySeriesKey, setBangumiMatchesBySeriesKey] = useState<Record<string, BangumiSeriesMatch>>({});
   const [cacheStatus, setCacheStatus] = useState<CacheStatus | null>(null);
   const [cacheStatusMessage, setCacheStatusMessage] = useState("");
@@ -2020,14 +2028,52 @@ export default function App() {
     () => seriesFilteredVideos.filter((video) => favoriteVideoIds.has(video.id)),
     [favoriteVideoIds, seriesFilteredVideos],
   );
+  const duplicatePlaylistVideos = useMemo(() => {
+    const availableVideosById = new Map(videos.map((video) => [video.id, video]));
+    const seenIds = new Set<string>();
+    const nextVideos: VideoItem[] = [];
+
+    duplicateVideoGroups.forEach((group) => {
+      group.videos.forEach((groupVideo) => {
+        if (seenIds.has(groupVideo.id)) return;
+        const video = availableVideosById.get(groupVideo.id);
+        if (!video) return;
+        seenIds.add(video.id);
+        nextVideos.push(video);
+      });
+    });
+
+    return nextVideos;
+  }, [duplicateVideoGroups, videos]);
+  const duplicatePlaylistMetaByVideoId = useMemo(() => {
+    const metaById = new Map<string, DuplicatePlaylistVideoMeta>();
+    duplicateVideoGroups.forEach((group, groupIndex) => {
+      group.videos.forEach((video) => {
+        if (metaById.has(video.id)) return;
+        metaById.set(video.id, {
+          groupIndex: groupIndex + 1,
+          groupSize: group.videos.length,
+          severity: group.severity,
+          reasons: group.reasons,
+        });
+      });
+    });
+    return metaById;
+  }, [duplicateVideoGroups]);
   const visibleVideos = useMemo(
-    () => (playlistFilter === "favorites" ? favoritePlaylistVideos : seriesFilteredVideos),
-    [favoritePlaylistVideos, playlistFilter, seriesFilteredVideos],
+    () =>
+      isDuplicatePlaylistActive
+        ? duplicatePlaylistVideos
+        : playlistFilter === "favorites"
+          ? favoritePlaylistVideos
+          : seriesFilteredVideos,
+    [duplicatePlaylistVideos, favoritePlaylistVideos, isDuplicatePlaylistActive, playlistFilter, seriesFilteredVideos],
   );
+  const isPlaylistSeriesMode = isSeriesMode && !isDuplicatePlaylistActive;
   const visibleVideoIdsKey = useMemo(() => visibleVideos.map((video) => video.id).join("\n"), [visibleVideos]);
-  const isAnimePlaylistSearchScope = homeMediaMode === "anime" && isSeriesMode;
+  const isAnimePlaylistSearchScope = homeMediaMode === "anime" && isPlaylistSeriesMode;
   const homeLibrarySearchVideos = modeFilteredVideos;
-  const playerLibrarySearchVideos = isAnimePlaylistSearchScope ? visibleVideos : modeFilteredVideos;
+  const playerLibrarySearchVideos = isDuplicatePlaylistActive || isAnimePlaylistSearchScope ? visibleVideos : modeFilteredVideos;
   const librarySearchScopeKey = useMemo(
     () =>
       [
@@ -2056,9 +2102,10 @@ export default function App() {
   const shouldShowPlayerLibrarySearchStatus = Boolean(isPlayerLibrarySearchLoading || playerLibrarySearchMessage || defaultLibrarySearchStatus);
   const playlistIndexById = useMemo(() => {
     const indexes = new Map<string, number>();
-    playlistVideos.forEach((video, index) => indexes.set(video.id, index));
+    const sourceVideos = isDuplicatePlaylistActive ? duplicatePlaylistVideos : playlistVideos;
+    sourceVideos.forEach((video, index) => indexes.set(video.id, index));
     return indexes;
-  }, [playlistVideos]);
+  }, [duplicatePlaylistVideos, isDuplicatePlaylistActive, playlistVideos]);
   const visibleVideoIndexById = useMemo(() => {
     const indexes = new Map<string, number>();
     visibleVideos.forEach((video, index) => indexes.set(video.id, index));
@@ -2102,6 +2149,11 @@ export default function App() {
     () => !!currentVideoId && visibleVideos.some((video) => video.id === currentVideoId),
     [currentVideoId, visibleVideos],
   );
+  useEffect(() => {
+    if (isDuplicatePlaylistActive && !duplicatePlaylistVideos.length) {
+      setIsDuplicatePlaylistActive(false);
+    }
+  }, [duplicatePlaylistVideos.length, isDuplicatePlaylistActive]);
   const createHomeVideoCard = useCallback(
     (video: VideoItem): HomeVideoCard => {
       const progress = progressStore[video.id];
@@ -2329,11 +2381,11 @@ export default function App() {
         },
       });
       if (duplicateDetectionRunIdRef.current !== runId) return;
-      const visibleGroups = groups.slice(0, 6);
-      setDuplicateVideoGroups(visibleGroups);
+      setDuplicateVideoGroups(groups);
+      setIsDuplicatePlaylistActive(false);
       setDuplicateDetectionMessage(
         groups.length
-          ? `检测完成，发现 ${groups.length} 组重复或疑似重复视频${groups.length > visibleGroups.length ? "，已显示前 6 组" : ""}。`
+          ? `检测完成，发现 ${groups.length} 组重复或疑似重复视频，可进入重复列表筛选删除。`
           : "检测完成，未发现重复或疑似重复视频。",
       );
     } catch (error) {
@@ -3690,6 +3742,7 @@ export default function App() {
 
   const updateHomeMediaMode = useCallback(
     (nextMode: HomeMediaMode) => {
+      setIsDuplicatePlaylistActive(false);
       replacePlayerPreferences({
         ...playerPreferencesRef.current,
         homeMediaMode: nextMode,
@@ -4037,11 +4090,12 @@ export default function App() {
   );
 
   const selectVideo = useCallback(
-    (videoId: string, options?: { syncSeriesMode?: boolean }) => {
+    (videoId: string, options?: { syncSeriesMode?: boolean; keepDuplicatePlaylist?: boolean }) => {
       cancelAutoNextPrompt();
       persistCurrentProgress();
       resetHoldSpeedState();
       if (options?.syncSeriesMode !== false) syncSeriesModeForPlayerEntry(videoId);
+      if (!options?.keepDuplicatePlaylist) setIsDuplicatePlaylistActive(false);
       setActiveView("player");
       pendingAutoPlayVideoIdRef.current = videoId;
       autoSubtitleSelectionVideoIdRef.current = videoId;
@@ -4109,6 +4163,18 @@ export default function App() {
         delete nextChoices[video.id];
         return nextChoices;
       });
+      setDuplicateVideoGroups((groups) =>
+        groups
+          .map((group) => ({
+            ...group,
+            videos: group.videos.filter((item) => item.id !== video.id),
+          }))
+          .filter((group) => group.videos.length > 1)
+          .map((group) => ({
+            ...group,
+            id: group.videos.map((item) => item.id).join("|"),
+          })),
+      );
       setSubtitles(nextSubtitles);
       setMediaRootStatuses((statuses) =>
         statuses.map((status) =>
@@ -4254,6 +4320,15 @@ export default function App() {
     },
     [selectVideo],
   );
+
+  const openDuplicatePlaylist = useCallback(() => {
+    const firstVideo = duplicatePlaylistVideos[0];
+    if (!firstVideo) return;
+    setIsDuplicatePlaylistActive(true);
+    setPlaylistFilter("all");
+    setIsSeriesMenuOpen(false);
+    selectVideo(firstVideo.id, { keepDuplicatePlaylist: true, syncSeriesMode: false });
+  }, [duplicatePlaylistVideos, selectVideo]);
 
   const openLibraryFolderFromSearch = useCallback(
     (result: LibrarySearchResult) => {
@@ -5272,6 +5347,7 @@ export default function App() {
       setFavoriteVideoIds(new Set());
       setVideoTags({});
       setTagMergeDecisions({});
+      setIsDuplicatePlaylistActive(false);
       setIsSeriesMode(playerPreferencesRef.current.isSeriesMode);
       setSelectedSeriesKey(playerPreferencesRef.current.selectedSeriesKey);
       revokeVideoUrls(videosRef.current);
@@ -8403,19 +8479,40 @@ export default function App() {
                     <span style={{ width: `${duplicateDetectionPercent}%` }} />
                   </div>
                 ) : null}
-                <button
-                  className="secondary-button duplicate-detection-button"
-                  type="button"
-                  onClick={() => void runDuplicateVideoDetection()}
-                  disabled={isDuplicateDetectionRunning || modeFilteredVideos.length < 2}
-                  title={modeFilteredVideos.length < 2 ? "当前模式视频不足 2 个" : "手动检测重复或疑似重复视频"}
-                >
-                  <Activity size={16} className={isDuplicateDetectionRunning ? "spin-icon" : undefined} />
-                  {isDuplicateDetectionRunning ? "检测中" : "检测重复视频"}
-                </button>
+                <div className="duplicate-video-actions">
+                  <button
+                    className="secondary-button duplicate-detection-button"
+                    type="button"
+                    onClick={() => void runDuplicateVideoDetection()}
+                    disabled={isDuplicateDetectionRunning || modeFilteredVideos.length < 2}
+                    title={modeFilteredVideos.length < 2 ? "当前模式视频不足 2 个" : "手动检测重复或疑似重复视频"}
+                  >
+                    <Activity size={16} className={isDuplicateDetectionRunning ? "spin-icon" : undefined} />
+                    {isDuplicateDetectionRunning ? "检测中" : "检测重复视频"}
+                  </button>
+                  <button
+                    className="primary-button duplicate-detection-button"
+                    type="button"
+                    onClick={openDuplicatePlaylist}
+                    disabled={isDuplicateDetectionRunning || !duplicatePlaylistVideos.length}
+                    title={duplicatePlaylistVideos.length ? "进入重复视频播放列表" : "暂无可处理的重复视频"}
+                  >
+                    <Play size={16} />
+                    进入重复列表
+                  </button>
+                </div>
                 {duplicateVideoGroups.length ? (
                   <div className="duplicate-video-groups">
-                    {duplicateVideoGroups.map(renderDuplicateVideoGroup)}
+                    {duplicateVideoGroups.slice(0, 6).map(renderDuplicateVideoGroup)}
+                    {duplicateVideoGroups.length > 6 ? (
+                      <button
+                        className="secondary-button duplicate-video-more"
+                        type="button"
+                        onClick={openDuplicatePlaylist}
+                      >
+                        查看全部 {duplicateVideoGroups.length} 组
+                      </button>
+                    ) : null}
                   </div>
                 ) : null}
               </section>
@@ -9197,14 +9294,16 @@ export default function App() {
       </section>
 
       {!isNonPlayerViewVisible && !isPrivacyMode && !isCinemaMode ? (
-      <aside className="playlist-panel" aria-label={isSeriesMode ? "追番列表" : "播放列表"}>
+      <aside className="playlist-panel" aria-label={isDuplicatePlaylistActive ? "重复视频列表" : isPlaylistSeriesMode ? "追番列表" : "播放列表"}>
         <div className="playlist-header">
           <div className="playlist-title-row">
             <span>
-              {modeFilteredVideos.length
+              {isDuplicatePlaylistActive
+                ? `重复列表 · ${visibleVideos.length} 个视频 · ${duplicateVideoGroups.length} 组`
+                : modeFilteredVideos.length
                 ? playlistFilter === "favorites"
                   ? `${visibleVideos.length} / ${modeFilteredVideos.length} 个收藏`
-                  : isSeriesMode
+                  : isPlaylistSeriesMode
                     ? `${visibleVideos.length} / ${modeFilteredVideos.length} 个视频`
                     : homeMediaMode === "all"
                       ? `${modeFilteredVideos.length} 个视频`
@@ -9214,11 +9313,11 @@ export default function App() {
                   : "等待新增媒体库"}
             </span>
           </div>
-          <div className={`playlist-tools ${isSeriesMode ? "series-mode" : ""}`}>
+          <div className={`playlist-tools ${isPlaylistSeriesMode ? "series-mode" : ""}`}>
             <span className={`player-mode-indicator mode-${homeMediaMode}`} title={`当前播放模式：${playerMediaModeLabel}`}>
-              {playerMediaModeLabel}
+              {isDuplicatePlaylistActive ? "重复" : playerMediaModeLabel}
             </span>
-            {isSeriesMode ? (
+            {isPlaylistSeriesMode ? (
               <div className="series-menu">
                 <button
                   className="series-menu-trigger"
@@ -9269,7 +9368,7 @@ export default function App() {
                 ) : null}
               </div>
             ) : null}
-            {isSeriesMode ? (
+            {isPlaylistSeriesMode ? (
               <button
                 className={`bangumi-link-button ${canOpenBangumiSubject ? "active" : ""} ${activeBangumiMatch?.status === "loading" ? "loading" : ""}`}
                 type="button"
@@ -9288,13 +9387,13 @@ export default function App() {
               options={playlistSortOptions}
               onChange={updatePlaylistSortMode}
               className="playlist-sort-control"
-              disabled={!modeFilteredVideos.length}
+              disabled={isDuplicatePlaylistActive || !modeFilteredVideos.length}
             />
             <button
               className={`playlist-order-button ${isPlaylistSortReversed ? "active" : ""}`}
               type="button"
               onClick={togglePlaylistSortDirection}
-              disabled={!modeFilteredVideos.length}
+              disabled={isDuplicatePlaylistActive || !modeFilteredVideos.length}
               title={isPlaylistSortReversed ? "切换为正序" : "切换为倒序"}
               aria-label={isPlaylistSortReversed ? "切换为正序" : "切换为倒序"}
             >
@@ -9320,7 +9419,16 @@ export default function App() {
             >
               <LocateFixed size={16} />
             </button>
-            {!isSeriesMode ? (
+            {isDuplicatePlaylistActive ? (
+              <button
+                className="playlist-clear-button"
+                type="button"
+                onClick={() => setIsDuplicatePlaylistActive(false)}
+                title="退出重复列表"
+              >
+                退出
+              </button>
+            ) : !isPlaylistSeriesMode ? (
               <div className="playlist-filter" aria-label="播放列表筛选">
                 <button
                   className={playlistFilter === "all" ? "active" : ""}
@@ -9430,7 +9538,8 @@ export default function App() {
             const isCompleted = Boolean(progress?.completed);
             const playlistIndex = playlistIndexById.get(video.id) ?? 0;
             const isFavorite = favoriteVideoIds.has(video.id);
-            const seriesTitle = isSeriesMode ? seriesTitleByVideoId.get(video.id) : "";
+            const seriesTitle = isPlaylistSeriesMode ? seriesTitleByVideoId.get(video.id) : "";
+            const duplicateMeta = isDuplicatePlaylistActive ? duplicatePlaylistMetaByVideoId.get(video.id) : null;
             const tags = videoTags[video.id] ?? [];
             return (
               <div
@@ -9453,6 +9562,11 @@ export default function App() {
                   <span className="episode-main">
                     <strong>{video.name}</strong>
                     <small>{video.relativePath}</small>
+                    {duplicateMeta ? (
+                      <small className={`episode-duplicate-meta severity-${duplicateMeta.severity}`}>
+                        第 {duplicateMeta.groupIndex} 组 · {duplicateMeta.severity === "duplicate" ? "高度重复" : "疑似重复"} · {duplicateMeta.groupSize} 个 · {duplicateMeta.reasons.join("、")}
+                      </small>
+                    ) : null}
                     {seriesTitle ? <small className="episode-series">{seriesTitle}</small> : null}
                     {renderTagChips(tags, { compact: true })}
                     {isCompleted ? (
@@ -9507,8 +9621,9 @@ export default function App() {
           ) : null}
 
           {!videos.length ? <div className="empty-list">{message}</div> : null}
-          {videos.length && !modeFilteredVideos.length ? <div className="empty-list">当前{homeMediaModeLabel}没有视频</div> : null}
-          {modeFilteredVideos.length && !visibleVideos.length ? <div className="empty-list">还没有收藏的视频</div> : null}
+          {videos.length && isDuplicatePlaylistActive && !visibleVideos.length ? <div className="empty-list">重复列表已清空</div> : null}
+          {videos.length && !isDuplicatePlaylistActive && !modeFilteredVideos.length ? <div className="empty-list">当前{homeMediaModeLabel}没有视频</div> : null}
+          {modeFilteredVideos.length && !isDuplicatePlaylistActive && !visibleVideos.length ? <div className="empty-list">还没有收藏的视频</div> : null}
         </div>
       </aside>
       ) : null}
