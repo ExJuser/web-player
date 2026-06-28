@@ -1,12 +1,11 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-
-const imageSubtitleCodecs = new Set(["hdmv_pgs_subtitle", "pgs", "dvd_subtitle", "dvb_subtitle", "xsub"]);
+import { isImageSubtitleCodec } from "./subtitleCodecUtils.mjs";
 
 export function normalizeSubtitleTrack(stream) {
   const codec = String(stream.codec_name || "unknown");
   const tags = stream.tags && typeof stream.tags === "object" ? stream.tags : {};
-  const extractable = !imageSubtitleCodecs.has(codec.toLowerCase());
+  const extractable = !isImageSubtitleCodec(codec);
   return {
     streamIndex: Number(stream.index),
     codec,

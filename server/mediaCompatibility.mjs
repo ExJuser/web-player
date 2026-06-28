@@ -1,12 +1,12 @@
 import { createHash } from "node:crypto";
 import { access, mkdir, stat } from "node:fs/promises";
 import path from "node:path";
+import { isImageSubtitleCodec } from "./subtitleCodecUtils.mjs";
 
 const mp4FormatNames = new Set(["mov", "mp4", "m4a", "3gp", "3g2", "mj2"]);
 const directVideoCodecs = new Set(["h264", "av1", "vp8", "vp9"]);
 const directAudioCodecs = new Set(["aac", "mp3", "opus", "vorbis"]);
 const mp4AudioCodecs = new Set(["aac", "mp3"]);
-const imageSubtitleCodecs = new Set(["hdmv_pgs_subtitle", "pgs", "dvd_subtitle", "dvb_subtitle", "xsub"]);
 
 export function mediaContentTypeForPath(filePath) {
   const extension = path.extname(filePath).toLowerCase();
@@ -96,7 +96,7 @@ export function classifyMediaProbe(rawProbe, fileName = "") {
   const extension = path.extname(fileName).toLowerCase();
   const video = probe.video;
   const audio = probe.audio;
-  const hasImageSubtitle = probe.subtitles.some((subtitle) => imageSubtitleCodecs.has(subtitle.codec));
+  const hasImageSubtitle = probe.subtitles.some((subtitle) => isImageSubtitleCodec(subtitle.codec));
 
   if (!video) {
     return {

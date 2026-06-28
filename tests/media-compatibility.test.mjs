@@ -31,6 +31,16 @@ test("classifies browser direct MP4 media", () => {
   assert.equal(result.playability.audioCodec, "aac");
 });
 
+test("direct MP4 media reports image subtitle limitations", () => {
+  const result = classifyMediaProbe(
+    probe({ format: "mov,mp4,m4a,3gp,3g2,mj2", subtitles: ["hdmv_pgs_subtitle"] }),
+    "Episode.mp4",
+  );
+
+  assert.equal(result.playability.status, "direct");
+  assert.match(result.playability.reason, /图形字幕/);
+});
+
 test("classifies MKV with MP4-compatible streams as remux recommended", () => {
   const result = classifyMediaProbe(probe(), "Episode.mkv");
 
