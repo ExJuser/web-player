@@ -100,6 +100,7 @@ import type {
   SubtitleItem,
   TagMergeDecisionStore,
   VideoItem,
+  VideoPlayability,
   VideoMetadata,
   VideoStatsStore,
   VideoTagStore
@@ -816,7 +817,7 @@ type ExtractedEmbeddedSubtitle = {
 type CompatibleRemuxResponse = {
   cacheId: string;
   compatibleUrl: string;
-  playability: NonNullable<VideoItem["playability"]>;
+  playability: VideoPlayability;
 };
 
 type CompatibleRemuxStreamEvent =
@@ -825,7 +826,7 @@ type CompatibleRemuxStreamEvent =
   | { type: "error"; error: string };
 
 type MediaProbeResponse = {
-  playability: NonNullable<VideoItem["playability"]>;
+  playability: VideoPlayability;
   metadata?: VideoMetadata;
 };
 
@@ -5729,8 +5730,9 @@ export default function App() {
           remuxResult = event.result;
         }
       });
-      if (!remuxResult) throw new Error("生成兼容 MP4 未返回结果。");
-      updateVideoPlayability(compatibleMediaConfirm.videoId, remuxResult.playability);
+      const result = remuxResult as CompatibleRemuxResponse | null;
+      if (!result) throw new Error("生成兼容 MP4 未返回结果。");
+      updateVideoPlayability(compatibleMediaConfirm.videoId, result.playability);
       setCompatibleMediaMessage("已生成兼容 MP4，播放器将优先使用兼容版本。");
       setMessage("已生成兼容 MP4。");
     } catch (error) {
