@@ -38,7 +38,7 @@ import {
   VolumeX,
   Volume2,
 } from "lucide-react";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 
 import { fetchLocalJson as fetchJson, readLocalApiStream } from "./localApiClient";
 import { normalizeClientLocalConfig } from "./localConfigClient";
@@ -7068,24 +7068,77 @@ export default function App() {
   const renderSpecialTagInsightButton = (
     insight: SpecialModeTagInsight,
     metric: "videoCount" | "played" | "emission",
+    maxValue: number,
+    index: number,
   ) => {
-    const value =
+    const metricValue =
+      metric === "videoCount"
+        ? insight.videoCount
+        : metric === "played"
+          ? insight.totalPlayedSeconds
+          : insight.emissionCount;
+    const valueLabel =
       metric === "videoCount"
         ? `${insight.videoCount} 个`
         : metric === "played"
           ? formatCumulativeDuration(insight.totalPlayedSeconds)
           : `${insight.emissionCount} 次`;
+    const share = maxValue > 0 ? Math.max(8, Math.round((metricValue / maxValue) * 100)) : 0;
     return (
       <button
         className="special-tag-insight"
         key={`${metric}-${insight.key}`}
         type="button"
         onClick={() => runSpecialInsightTagSearch(insight.tag)}
+        style={{
+          "--tag-share": `${share}%`,
+        } as CSSProperties}
         title={`筛选标签：${insight.tag}`}
       >
-        <span>{insight.tag}</span>
-        <strong>{value}</strong>
+        <span className="special-tag-insight-meter" aria-hidden="true">
+          <span />
+        </span>
+        <span className="special-tag-insight-rank">{index + 1}</span>
+        <span className="special-tag-insight-copy">
+          <span>{insight.tag}</span>
+          <small>{insight.videoCount} 个视频</small>
+        </span>
+        <strong>{valueLabel}</strong>
       </button>
+    );
+  };
+  const renderSpecialTagChartGroup = (
+    label: string,
+    icon: ReactNode,
+    insights: SpecialModeTagInsight[],
+    metric: "videoCount" | "played" | "emission",
+    emptyText: string,
+  ) => {
+    const maxValue = insights.reduce((max, insight) => {
+      const value =
+        metric === "videoCount"
+          ? insight.videoCount
+          : metric === "played"
+            ? insight.totalPlayedSeconds
+            : insight.emissionCount;
+      return Math.max(max, value);
+    }, 0);
+    return (
+      <div className={`special-tag-group special-tag-chart-${metric}`}>
+        <span>
+          {icon}
+          {label}
+        </span>
+        <div className="special-tag-chart" role="list" aria-label={label}>
+          {insights.length ? (
+            insights.map((insight, index) =>
+              renderSpecialTagInsightButton(insight, metric, maxValue, index),
+            )
+          ) : (
+            <small>{emptyText}</small>
+          )}
+        </div>
+      </div>
     );
   };
   const renderHomeListCard = (card: HomeVideoCard, index: number) => (
@@ -7461,51 +7514,27 @@ export default function App() {
                     <div className="empty-list compact">当前榜单暂无统计记录。</div>
                   )}
                   <div className="special-tag-groups">
-                    <div className="special-tag-group">
-                      <span>
-                        <Tags size={14} />
-                        热门标签
-                      </span>
-                      <div>
-                        {specialModeInsights.tagsByVideoCount.length ? (
-                          specialModeInsights.tagsByVideoCount.map((insight) =>
-                            renderSpecialTagInsightButton(insight, "videoCount"),
-                          )
-                        ) : (
-                          <small>暂无标签</small>
-                        )}
-                      </div>
-                    </div>
-                    <div className="special-tag-group">
-                      <span>
-                        <Clock3 size={14} />
-                        播放标签
-                      </span>
-                      <div>
-                        {specialModeInsights.tagsByPlayedDuration.length ? (
-                          specialModeInsights.tagsByPlayedDuration.map((insight) =>
-                            renderSpecialTagInsightButton(insight, "played"),
-                          )
-                        ) : (
-                          <small>暂无播放统计</small>
-                        )}
-                      </div>
-                    </div>
-                    <div className="special-tag-group">
-                      <span>
-                        <Rocket size={14} />
-                        发射标签
-                      </span>
-                      <div>
-                        {specialModeInsights.tagsByEmissionCount.length ? (
-                          specialModeInsights.tagsByEmissionCount.map((insight) =>
-                            renderSpecialTagInsightButton(insight, "emission"),
-                          )
-                        ) : (
-                          <small>暂无发射统计</small>
-                        )}
-                      </div>
-                    </div>
+                    {renderSpecialTagChartGroup(
+                      "热门标签",
+                      <Tags size={14} />,
+                      specialModeInsights.tagsByVideoCount,
+                      "videoCount",
+                      "暂无标签",
+                    )}
+                    {renderSpecialTagChartGroup(
+                      "播放标签",
+                      <Clock3 size={14} />,
+                      specialModeInsights.tagsByPlayedDuration,
+                      "played",
+                      "暂无播放统计",
+                    )}
+                    {renderSpecialTagChartGroup(
+                      "发射标签",
+                      <Rocket size={14} />,
+                      specialModeInsights.tagsByEmissionCount,
+                      "emission",
+                      "暂无发射统计",
+                    )}
                   </div>
                 </section>
               ) : null}

@@ -28,7 +28,10 @@ test("tag chips have explicit light theme colors in app and root theme scopes", 
 
 test("special insight controls have light theme coverage in app and root theme scopes", () => {
   assert.match(styles, /\.app-shell\.theme-light \.special-tag-insight,/);
+  assert.match(styles, /\.app-shell\.theme-light \.special-tag-insight-meter,/);
+  assert.match(styles, /\.special-tag-insight-meter span\s*\{(?<body>[^}]+height:\s*var\(--tag-share\);[^}]+)\}/);
   assert.match(styles, /:root\[data-theme="light"\] \.special-tag-insight\s*\{/);
+  assert.match(styles, /:root\[data-theme="light"\] \.special-tag-insight-copy small\s*\{/);
   assert.match(styles, /\.app-shell\.theme-light \.special-insight-tabs button:hover,/);
   assert.match(styles, /:root\[data-theme="light"\] \.special-insight-video-row:focus-visible\s*\{/);
 });
