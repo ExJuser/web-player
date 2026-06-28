@@ -62,6 +62,7 @@ export type VideoPlayability = {
   frameRate?: number;
   bitRate?: number;
   performanceWarning?: string;
+  canRemux?: boolean;
 };
 
 export type SubtitleItem = {

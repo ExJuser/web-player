@@ -49,7 +49,7 @@ test("classifies browser direct MP4 media", () => {
   const result = classifyMediaProbe(probe({ format: "mov,mp4,m4a,3gp,3g2,mj2" }), "Episode.mp4");
 
   assert.equal(result.playability.status, "direct");
-  assert.equal(result.canRemux, false);
+  assert.equal(result.canRemux, true);
   assert.equal(result.playability.videoCodec, "h264");
   assert.equal(result.playability.audioCodec, "aac");
 });

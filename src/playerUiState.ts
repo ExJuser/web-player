@@ -41,6 +41,7 @@ type VideoForCompatibilityUi = {
     frameRate?: number;
     bitRate?: number;
     performanceWarning?: string;
+    canRemux?: boolean;
   };
 };
 
@@ -167,23 +168,25 @@ export function createVideoMetadataTitle(video: VideoForCompatibilityUi) {
 }
 
 export function getCompatibleMediaAction(video: VideoForCompatibilityUi | null | undefined, options: { canUseServerTools: boolean }) {
-  const canCreate =
-    Boolean(video) &&
+  const playability = video?.playability;
+  const isDirectRepairCandidate = playability?.status === "direct" && Boolean(playability.canRemux);
+  const canCreate = Boolean(
     video?.playbackSource === "server" &&
     options.canUseServerTools &&
-    video.playability?.status === "remuxRecommended" &&
-    !video.playability.compatibleUrl;
+    (playability?.status === "remuxRecommended" || isDirectRepairCandidate) &&
+    !playability?.compatibleUrl,
+  );
   const shouldExplainPlayability = Boolean(
-    video?.playability &&
-      !video.playability.compatibleUrl &&
-      (video.playability.status !== "direct" || video.playability.performanceWarning),
+    playability &&
+      !playability.compatibleUrl &&
+      (playability.status !== "direct" || playability.performanceWarning || isDirectRepairCandidate),
   );
 
   return {
     visible: shouldExplainPlayability || canCreate,
     disabled: !canCreate,
     canCreate,
-    label: canCreate ? "生成兼容 MP4" : "",
+    label: canCreate ? (isDirectRepairCandidate ? "生成修复 MP4" : "生成兼容 MP4") : "",
   };
 }
 

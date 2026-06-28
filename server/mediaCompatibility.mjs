@@ -205,7 +205,7 @@ export function classifyMediaProbe(rawProbe, fileName = "") {
         hasImageSubtitle ? "视频可直接播放；内封图形字幕不会原生显示。" : "视频可直接播放。",
         probe,
       ),
-      canRemux: false,
+      canRemux: hasMp4CompatibleStreams,
     };
   }
 

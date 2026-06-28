@@ -5657,7 +5657,7 @@ export default function App() {
     if (!canCreateCompatibleMedia || compatibleMediaVideoId) return;
 
     setCompatibleMediaVideoId(currentVideo.id);
-    setCompatibleMediaMessage("正在生成兼容 MP4...");
+    setCompatibleMediaMessage(`正在${compatibleMediaAction.label || "生成兼容 MP4"}...`);
     try {
       const payload = await fetchJson<CompatibleRemuxResponse>("/api/media/compatible/remux", {
         method: "POST",
@@ -5674,7 +5674,7 @@ export default function App() {
     } finally {
       setCompatibleMediaVideoId(null);
     }
-  }, [canCreateCompatibleMedia, compatibleMediaVideoId, currentMediaRootId, currentVideo, updateVideoPlayability]);
+  }, [canCreateCompatibleMedia, compatibleMediaAction.label, compatibleMediaVideoId, currentMediaRootId, currentVideo, updateVideoPlayability]);
 
   const applyDanmakuSourcePayload = useCallback(
     (payload: DanmakuSourcePayload, options?: { persist?: boolean; message?: string }) => {
@@ -7166,7 +7166,7 @@ export default function App() {
                         disabled={compatibleMediaVideoId === currentVideo.id}
                       >
                         <RefreshCw size={15} className={compatibleMediaVideoId === currentVideo.id ? "spin-icon" : undefined} />
-                        {compatibleMediaVideoId === currentVideo.id ? "生成中" : "生成兼容 MP4"}
+                        {compatibleMediaVideoId === currentVideo.id ? "生成中" : compatibleMediaAction.label}
                       </button>
                     ) : null}
                     {compatibleMediaMessage ? <small>{compatibleMediaMessage}</small> : null}

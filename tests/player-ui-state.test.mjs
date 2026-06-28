@@ -164,6 +164,22 @@ test("compatible media action is enabled only for server remux candidates", () =
     false,
   );
 
+  assert.deepEqual(
+    uiState.getCompatibleMediaAction(
+      {
+        playbackSource: "server",
+        playability: { status: "direct", canRemux: true },
+      },
+      { canUseServerTools: true },
+    ),
+    {
+      visible: true,
+      disabled: false,
+      canCreate: true,
+      label: "生成修复 MP4",
+    },
+  );
+
   assert.equal(
     uiState.getCompatibleMediaAction(
       {

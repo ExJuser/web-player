@@ -157,7 +157,10 @@ function createMediaProbeResponse(result) {
       width: result.probe?.video?.width,
       height: result.probe?.video?.height,
     },
-    playability: result.playability,
+    playability: {
+      ...result.playability,
+      canRemux: result.canRemux,
+    },
   };
 }
 
@@ -169,6 +172,10 @@ function withCompatibleMediaUrl(response, cached) {
       ...(cached.compatibleUrl ? { compatibleUrl: cached.compatibleUrl } : {}),
     },
   };
+}
+
+function isUsableMediaProbeCache(value) {
+  return Boolean(value?.playability && typeof value.playability.canRemux === "boolean");
 }
 
 async function probeMedia(config, payload, store) {
@@ -196,7 +203,7 @@ async function probeMedia(config, payload, store) {
   const fileIdentity = { size: video.size, lastModified: video.lastModified };
   const cachedProbe = store.getMediaProbeCache(root.id, video.relativePath, fileIdentity);
   const cachedCompatibleMedia = await getCachedCompatibleMedia(compatibleMediaRoot, root.id, video);
-  if (cachedProbe) {
+  if (isUsableMediaProbeCache(cachedProbe)) {
     return withCompatibleMediaUrl(cachedProbe, cachedCompatibleMedia);
   }
 
@@ -225,7 +232,7 @@ async function remuxMediaToCompatibleMp4(config, payload) {
   };
   const rawProbe = await probeMediaFile(runProcess, videoPath);
   const result = classifyMediaProbe(rawProbe, video.name);
-  if (!result.canRemux || result.playability.status !== "remuxRecommended") {
+  if (!result.canRemux || (result.playability.status !== "remuxRecommended" && result.playability.status !== "direct")) {
     throw new Error(result.playability.reason || "当前视频不能无损生成兼容 MP4。");
   }
 
@@ -243,6 +250,7 @@ async function remuxMediaToCompatibleMp4(config, payload) {
     compatibleUrl: createCompatibleMediaUrl(cached.cacheId),
     playability: {
       ...result.playability,
+      canRemux: result.canRemux,
       compatibleUrl: createCompatibleMediaUrl(cached.cacheId),
     },
   };
