@@ -40,6 +40,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 
+import { readLocalApiErrorMessage } from "./localApiClient";
 import {
   createAiLibrarySearchResults,
   getVisibleLibrarySearchResults,
@@ -836,14 +837,7 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
     },
   });
   if (!response.ok) {
-    let message = response.statusText;
-    try {
-      const payload = (await response.json()) as { error?: string };
-      message = payload.error || message;
-    } catch {
-      // Keep status text when the local API does not return JSON.
-    }
-    throw new Error(message);
+    throw new Error(await readLocalApiErrorMessage(response));
   }
   return response.json() as Promise<T>;
 }
@@ -858,14 +852,7 @@ async function readAiStream(url: string, init: RequestInit, onEvent: (event: AiS
     },
   });
   if (!response.ok) {
-    let message = response.statusText;
-    try {
-      const payload = (await response.json()) as { error?: string };
-      message = payload.error || message;
-    } catch {
-      // Keep status text when the local API does not return JSON.
-    }
-    throw new Error(message);
+    throw new Error(await readLocalApiErrorMessage(response));
   }
   if (!response.body) throw new Error("浏览器不支持流式响应。");
 
