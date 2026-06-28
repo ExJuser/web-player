@@ -132,6 +132,7 @@ import {
   doubleClickFeedbackDelay,
   playlistItemHeight,
   playlistVirtualOverscan,
+  playlistActiveThumbnailRadius,
   thumbnailWidth,
   thumbnailHeight,
   thumbnailCacheTimeout,
@@ -1918,6 +1919,28 @@ export default function App() {
       bottomSpacerHeight: Math.max(0, (visibleVideos.length - endIndex) * playlistItemHeight),
     };
   }, [playlistViewport.height, playlistViewport.scrollTop, visibleVideos]);
+  const playlistThumbnailVideos = useMemo(() => {
+    const queuedVideos: VideoItem[] = [];
+    const seenIds = new Set<string>();
+    const addVideoRange = (startIndex: number, endIndex: number) => {
+      for (let index = Math.max(0, startIndex); index < Math.min(visibleVideos.length, endIndex); index += 1) {
+        const video = visibleVideos[index];
+        if (!video || seenIds.has(video.id)) continue;
+        seenIds.add(video.id);
+        queuedVideos.push(video);
+      }
+    };
+
+    if (currentVideoId) {
+      const activeIndex = visibleVideoIndexById.get(currentVideoId);
+      if (activeIndex !== undefined) {
+        addVideoRange(activeIndex - playlistActiveThumbnailRadius, activeIndex + playlistActiveThumbnailRadius + 1);
+      }
+    }
+
+    addVideoRange(virtualPlaylist.startIndex, virtualPlaylist.startIndex + virtualPlaylist.items.length);
+    return queuedVideos;
+  }, [currentVideoId, visibleVideoIndexById, virtualPlaylist.items.length, virtualPlaylist.startIndex, visibleVideos]);
   const isCurrentVideoVisible = useMemo(
     () => !!currentVideoId && visibleVideos.some((video) => video.id === currentVideoId),
     [currentVideoId, visibleVideos],
@@ -2024,9 +2047,9 @@ export default function App() {
           nextEpisodeCard?.video,
           ...recentHomeCards.map((card) => card.video),
           ...favoriteHomeCards.map((card) => card.video),
-          ...visibleVideos,
+          ...playlistThumbnailVideos,
         ]
-      : visibleVideos;
+      : playlistThumbnailVideos;
     const seenIds = new Set<string>();
     const ids: string[] = [];
     queuedVideos.forEach((video) => {
@@ -2035,7 +2058,7 @@ export default function App() {
       ids.push(video.id);
     });
     return ids;
-  }, [favoriteHomeCards, isHomeViewVisible, nextEpisodeCard, primaryHomeCard, recentHomeCards, visibleVideos]);
+  }, [favoriteHomeCards, isHomeViewVisible, nextEpisodeCard, playlistThumbnailVideos, primaryHomeCard, recentHomeCards]);
   const thumbnailQueueVideoIdsKey = useMemo(() => thumbnailQueueVideoIds.join("\n"), [thumbnailQueueVideoIds]);
   const libraryStats = useMemo(() => {
     const completed = modeFilteredVideos.filter((video) => progressStore[video.id]?.completed).length;

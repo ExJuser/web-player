@@ -40,6 +40,7 @@ export const mediaScanBatchSize = 150;
 export const mediaScanBatchDelay = 500;
 export const playlistItemHeight = 76;
 export const playlistVirtualOverscan = 10;
+export const playlistActiveThumbnailRadius = 15;
 export const thumbnailCacheVersion = "v2";
 export const thumbnailWidth = 960;
 export const thumbnailHeight = 540;
