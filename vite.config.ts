@@ -53,7 +53,7 @@ import { readJsonFile, writeJsonFile } from "./server/jsonFiles.mjs";
 import { createPublicLocalConfig, defaultAppConfig } from "./server/localConfig.mjs";
 import { detectTools, runProcess } from "./server/processRunner.mjs";
 import { formatRemoteFetchError, requestExternalJson, requestExternalText } from "./server/remoteFetch.mjs";
-import { readBody, sanitizeStorageId } from "./server/requestUtils.mjs";
+import { parseJsonBody, readBody, sanitizeStorageId } from "./server/requestUtils.mjs";
 import { LocalDataSqliteStore } from "./server/sqliteStorage.mjs";
 
 const dataRoot = path.resolve(__dirname, ".local-web-player-data");
@@ -614,7 +614,7 @@ function playerDataApiPlugin(env) {
       }
 
       if (url.pathname === "/api/local-config/media-root" && request.method === "POST") {
-        const payload = JSON.parse((await readBody(request)).toString("utf8"));
+        const payload = await parseJsonBody(request);
         const mediaRoot = await upsertMediaRoot(payload);
         sendJson(response, 200, {
           ...createPublicLocalConfig(await loadAppConfig(), await getTools(), env),
@@ -624,7 +624,7 @@ function playerDataApiPlugin(env) {
       }
 
       if (url.pathname === "/api/local-config/media-root/local-path" && request.method === "PUT") {
-        const payload = JSON.parse((await readBody(request)).toString("utf8"));
+        const payload = await parseJsonBody(request);
         const result = await updateMediaRootLocalPath(payload);
         sendJson(response, 200, {
           ...createPublicLocalConfig(result.config, await getTools(), env),
@@ -639,7 +639,7 @@ function playerDataApiPlugin(env) {
       }
 
       if (url.pathname === "/api/cache-status/clear" && request.method === "POST") {
-        const payload = JSON.parse((await readBody(request)).toString("utf8"));
+        const payload = await parseJsonBody(request);
         sendJson(response, 200, await clearCacheItems(payload));
         return;
       }
@@ -659,67 +659,67 @@ function playerDataApiPlugin(env) {
       }
 
       if (url.pathname === "/api/media/probe" && request.method === "POST") {
-        const payload = JSON.parse((await readBody(request)).toString("utf8"));
+        const payload = await parseJsonBody(request);
         sendJson(response, 200, await probeMedia(await loadAppConfig(), payload));
         return;
       }
 
       if (url.pathname === "/api/media/compatible/remux" && request.method === "POST") {
-        const payload = JSON.parse((await readBody(request)).toString("utf8"));
+        const payload = await parseJsonBody(request);
         sendJson(response, 200, await remuxMediaToCompatibleMp4(await loadAppConfig(), payload));
         return;
       }
 
       if (url.pathname === "/api/subtitles/embedded/probe" && request.method === "POST") {
-        const payload = JSON.parse((await readBody(request)).toString("utf8"));
+        const payload = await parseJsonBody(request);
         sendJson(response, 200, await embeddedSubtitles.probeEmbeddedSubtitles(await loadAppConfig(), payload));
         return;
       }
 
       if (url.pathname === "/api/subtitles/embedded/extract" && request.method === "POST") {
-        const payload = JSON.parse((await readBody(request)).toString("utf8"));
+        const payload = await parseJsonBody(request);
         sendJson(response, 200, await embeddedSubtitles.extractEmbeddedSubtitle(await loadAppConfig(), payload));
         return;
       }
 
       if (url.pathname === "/api/subtitles/embedded/cached" && request.method === "POST") {
-        const payload = JSON.parse((await readBody(request)).toString("utf8"));
+        const payload = await parseJsonBody(request);
         sendJson(response, 200, await embeddedSubtitles.readCachedEmbeddedSubtitle(await loadAppConfig(), payload));
         return;
       }
 
       if (url.pathname === "/api/danmaku/fetch" && request.method === "POST") {
-        const payload = JSON.parse((await readBody(request)).toString("utf8"));
+        const payload = await parseJsonBody(request);
         sendJson(response, 200, await fetchDanmakuSource(payload));
         return;
       }
 
       if (url.pathname === "/api/danmaku/source" && request.method === "POST") {
-        const payload = JSON.parse((await readBody(request)).toString("utf8"));
+        const payload = await parseJsonBody(request);
         sendJson(response, 200, await readDanmakuSource(payload?.sourceId));
         return;
       }
 
       if (url.pathname === "/api/ai/subtitles/summarize" && request.method === "POST") {
-        const payload = JSON.parse((await readBody(request)).toString("utf8"));
+        const payload = await parseJsonBody(request);
         await streamSubtitleSummary(env, payload, response);
         return;
       }
 
       if (url.pathname === "/api/ai/subtitles/ask" && request.method === "POST") {
-        const payload = JSON.parse((await readBody(request)).toString("utf8"));
+        const payload = await parseJsonBody(request);
         await streamSubtitleAnswer(env, payload, response);
         return;
       }
 
       if (url.pathname === "/api/ai/subtitles/recap" && request.method === "POST") {
-        const payload = JSON.parse((await readBody(request)).toString("utf8"));
+        const payload = await parseJsonBody(request);
         await streamProgressRecap(env, payload, response);
         return;
       }
 
       if (url.pathname === "/api/ai/library/search" && request.method === "POST") {
-        const payload = JSON.parse((await readBody(request)).toString("utf8"));
+        const payload = await parseJsonBody(request);
         sendJson(response, 200, await searchLibraryWithAi(env, payload));
         return;
       }
@@ -732,8 +732,7 @@ function playerDataApiPlugin(env) {
         }
 
         if (request.method === "PUT") {
-          const rawBody = await readBody(request);
-          const payload = JSON.parse(rawBody.toString("utf8"));
+          const payload = await parseJsonBody(request);
           store.savePlayerDataStore("global", payload);
           sendJson(response, 200, { ok: true });
           return;
@@ -748,8 +747,7 @@ function playerDataApiPlugin(env) {
         }
 
         if (request.method === "PUT") {
-          const rawBody = await readBody(request);
-          const payload = JSON.parse(rawBody.toString("utf8"));
+          const payload = await parseJsonBody(request);
           store.savePhotoAlbumStore(payload);
           sendJson(response, 200, { ok: true });
           return;
@@ -759,7 +757,7 @@ function playerDataApiPlugin(env) {
       if (progressMatch) {
         const videoId = decodeURIComponent(progressMatch[1]);
         if (request.method === "PUT") {
-          const payload = JSON.parse((await readBody(request)).toString("utf8"));
+          const payload = await parseJsonBody(request);
           store.upsertProgress("global", videoId, payload);
           sendJson(response, 200, { ok: true });
           return;
@@ -782,14 +780,14 @@ function playerDataApiPlugin(env) {
 
       if (tagsMatch && request.method === "PUT") {
         const videoId = decodeURIComponent(tagsMatch[1]);
-        const payload = JSON.parse((await readBody(request)).toString("utf8"));
+        const payload = await parseJsonBody(request);
         store.replaceVideoTags("global", videoId, payload?.tags ?? payload);
         sendJson(response, 200, { ok: true });
         return;
       }
 
       if (url.pathname === "/api/player-data/tag-merge-decisions" && request.method === "PUT") {
-        const payload = JSON.parse((await readBody(request)).toString("utf8"));
+        const payload = await parseJsonBody(request);
         store.replaceTagMergeDecisions("global", payload);
         sendJson(response, 200, { ok: true });
         return;
@@ -797,7 +795,7 @@ function playerDataApiPlugin(env) {
 
       if (statsMatch && request.method === "PUT") {
         const videoId = decodeURIComponent(statsMatch[1]);
-        const payload = JSON.parse((await readBody(request)).toString("utf8"));
+        const payload = await parseJsonBody(request);
         store.upsertVideoStats("global", videoId, payload);
         sendJson(response, 200, { ok: true });
         return;
@@ -805,7 +803,7 @@ function playerDataApiPlugin(env) {
 
       if (preferenceMatch && request.method === "PUT") {
         const key = decodeURIComponent(preferenceMatch[1]);
-        const payload = JSON.parse((await readBody(request)).toString("utf8"));
+        const payload = await parseJsonBody(request);
         store.setPreferenceValue("global", key, payload?.value ?? payload);
         sendJson(response, 200, { ok: true });
         return;
@@ -813,7 +811,7 @@ function playerDataApiPlugin(env) {
 
       if (settingMatch && request.method === "PUT") {
         const key = decodeURIComponent(settingMatch[1]);
-        const payload = JSON.parse((await readBody(request)).toString("utf8"));
+        const payload = await parseJsonBody(request);
         store.setSettingValue("global", key, payload?.value ?? payload);
         sendJson(response, 200, { ok: true });
         return;
@@ -822,7 +820,7 @@ function playerDataApiPlugin(env) {
       if (danmakuSelectionMatch) {
         const videoId = decodeURIComponent(danmakuSelectionMatch[1]);
         if (request.method === "PUT") {
-          const payload = JSON.parse((await readBody(request)).toString("utf8"));
+          const payload = await parseJsonBody(request);
           store.upsertDanmakuSelection("global", videoId, payload);
           sendJson(response, 200, { ok: true });
           return;
@@ -835,7 +833,7 @@ function playerDataApiPlugin(env) {
       }
 
       if (url.pathname === "/api/player-data/danmaku-preferences" && request.method === "PUT") {
-        const payload = JSON.parse((await readBody(request)).toString("utf8"));
+        const payload = await parseJsonBody(request);
         store.replaceDanmakuPreferences("global", payload);
         sendJson(response, 200, { ok: true });
         return;
@@ -843,7 +841,7 @@ function playerDataApiPlugin(env) {
 
       if (photoAlbumProgressMatch && request.method === "PUT") {
         const albumId = decodeURIComponent(photoAlbumProgressMatch[1]);
-        const payload = JSON.parse((await readBody(request)).toString("utf8"));
+        const payload = await parseJsonBody(request);
         store.replacePhotoAlbumProgress(albumId, payload);
         sendJson(response, 200, { ok: true });
         return;
@@ -859,7 +857,7 @@ function playerDataApiPlugin(env) {
       }
 
       if (url.pathname === "/api/photo-albums/preferences" && request.method === "PUT") {
-        const payload = JSON.parse((await readBody(request)).toString("utf8"));
+        const payload = await parseJsonBody(request);
         store.replacePhotoAlbumPreferences(payload);
         sendJson(response, 200, { ok: true });
         return;
@@ -872,7 +870,7 @@ function playerDataApiPlugin(env) {
           return;
         }
         if (request.method === "PUT") {
-          const payload = JSON.parse((await readBody(request)).toString("utf8"));
+          const payload = await parseJsonBody(request);
           store.savePhotoAlbumScanCache(payload);
           sendJson(response, 200, { ok: true });
           return;
@@ -885,13 +883,13 @@ function playerDataApiPlugin(env) {
       }
 
       if (url.pathname === "/api/ai/tags/merge-suggestion" && request.method === "POST") {
-        const payload = JSON.parse((await readBody(request)).toString("utf8"));
+        const payload = await parseJsonBody(request);
         sendJson(response, 200, await suggestTagMergeWithAi(env, payload));
         return;
       }
 
       if (url.pathname === "/api/bangumi/series/match" && request.method === "POST") {
-        const payload = JSON.parse((await readBody(request)).toString("utf8"));
+        const payload = await parseJsonBody(request);
         sendJson(response, 200, await matchBangumiSeries(env, payload));
         return;
       }
@@ -911,8 +909,7 @@ function playerDataApiPlugin(env) {
         }
 
         if (request.method === "PUT") {
-          const rawBody = await readBody(request);
-          const payload = JSON.parse(rawBody.toString("utf8"));
+          const payload = await parseJsonBody(request);
           store.savePlayerDataStore(libraryId, payload);
           store.updateIndex(libraryId, payload.metadata);
           sendJson(response, 200, { ok: true });

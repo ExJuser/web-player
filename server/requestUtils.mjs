@@ -24,3 +24,7 @@ export function readBody(request) {
     request.on("error", reject);
   });
 }
+
+export async function parseJsonBody(request) {
+  return JSON.parse((await readBody(request)).toString("utf8"));
+}
