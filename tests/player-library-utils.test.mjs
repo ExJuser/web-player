@@ -89,6 +89,19 @@ test("detects whether a player data store contains user data", () => {
     }),
     true,
   );
+  assert.equal(
+    libraryUtils.hasStoredData({
+      ...emptyStore,
+      duplicateDetections: {
+        special: {
+          mode: "special",
+          updatedAt: 100,
+          pairs: [{ key: "a\u0000b", aId: "a", bId: "b", score: 120, severity: "duplicate", reasons: [] }],
+        },
+      },
+    }),
+    true,
+  );
 });
 
 test("migrates video data when the same file moves to another media root", () => {

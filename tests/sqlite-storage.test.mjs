@@ -130,6 +130,106 @@ test("sqlite incremental writes keep unrelated player data", async () => {
   }
 });
 
+test("sqlite player data stores preserve duplicate detections", async () => {
+  const context = await createTempStore();
+  try {
+    await context.store.initialize();
+    context.store.savePlayerDataStore("global", {
+      version: 5,
+      items: {},
+      favorites: [],
+      videoTags: {},
+      videoStats: {},
+      videoHighlights: {},
+      tagMergeDecisions: {},
+      embeddedSubtitles: [],
+      danmakuSelections: {},
+      danmakuPreferences: {},
+      preferences: { homeMediaMode: "special" },
+      settings: {},
+      duplicateDetections: {
+        special: {
+          mode: "special",
+          updatedAt: 100,
+          message: "检测完成",
+          pairs: [{
+            key: "a\u0000b",
+            aId: "a",
+            bId: "b",
+            score: 120,
+            severity: "duplicate",
+            reasons: ["内容指纹一致"],
+          }],
+        },
+      },
+    });
+
+    context.store.close();
+    context.store = new LocalDataSqliteStore({
+      dataRoot: context.dataRoot,
+      librariesRoot: context.librariesRoot,
+      photoAlbumsRoot: context.photoAlbumsRoot,
+      indexPath: path.join(context.dataRoot, "index.json"),
+      globalDataPath: path.join(context.dataRoot, "global.json"),
+    });
+    await context.store.initialize();
+
+    const store = context.store.loadPlayerDataStore("global");
+    assert.deepEqual(store.duplicateDetections.special, {
+      mode: "special",
+      updatedAt: 100,
+      message: "检测完成",
+      pairs: [{
+        key: "a\u0000b",
+        aId: "a",
+        bId: "b",
+        score: 120,
+        severity: "duplicate",
+        reasons: ["内容指纹一致"],
+      }],
+    });
+  } finally {
+    context.store.close();
+    await rm(context.root, { recursive: true, force: true });
+  }
+});
+
+test("sqlite imports legacy duplicate detection json", async () => {
+  const context = await createTempStore();
+  try {
+    await writeFile(
+      path.join(context.dataRoot, "global.json"),
+      JSON.stringify({
+        version: 5,
+        items: {},
+        favorites: [],
+        duplicateDetection: {
+          scopeKey: "special\nvideo-a",
+          updatedAt: 100,
+          pairs: [{
+            key: "a\u0000b",
+            aId: "a",
+            bId: "b",
+            score: 120,
+            severity: "duplicate",
+            reasons: ["内容指纹一致"],
+          }],
+        },
+      }),
+      "utf8",
+    );
+
+    await context.store.initialize();
+    const store = context.store.loadPlayerDataStore("global");
+
+    assert.equal(store.duplicateDetections.special.mode, "special");
+    assert.equal(store.duplicateDetections.special.pairs[0].key, "a\u0000b");
+  } finally {
+    context.store.close();
+    await rm(context.root, { recursive: true, force: true });
+  }
+});
+
 test("sqlite initialization migrates high energy highlight tags into existing databases", async () => {
   const context = await createTempStore();
   try {

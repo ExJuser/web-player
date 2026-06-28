@@ -111,6 +111,8 @@ export function hasStoredData(store: PlayerDataStore) {
       Object.keys(store.tagMergeDecisions).length ||
       store.embeddedSubtitles.length ||
       Object.keys(store.danmakuSelections).length ||
+      Object.keys(store.duplicateDetections ?? {}).length ||
+      Boolean(store.duplicateDetection) ||
       JSON.stringify(store.danmakuPreferences) !== defaultDanmakuPreferencesJson ||
       JSON.stringify(store.preferences) !== defaultPlayerPreferencesJson
   );

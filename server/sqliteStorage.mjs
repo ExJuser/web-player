@@ -35,6 +35,28 @@ function asObject(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
 
+function normalizeDuplicateDetections(store) {
+  const detections = {};
+  for (const mode of ["all", "anime", "special"]) {
+    const result = asObject(store.duplicateDetections)[mode];
+    if (result && typeof result === "object" && !Array.isArray(result) && Array.isArray(result.pairs)) {
+      detections[mode] = { ...result, mode };
+    }
+  }
+
+  const legacy = store.duplicateDetection;
+  if (legacy && typeof legacy === "object" && !Array.isArray(legacy) && Array.isArray(legacy.pairs)) {
+    const mode = ["all", "anime", "special"].includes(legacy.mode)
+      ? legacy.mode
+      : typeof legacy.scopeKey === "string" && ["all", "anime", "special"].includes(legacy.scopeKey.split("\n")[0])
+        ? legacy.scopeKey.split("\n")[0]
+        : null;
+    if (mode && !detections[mode]) detections[mode] = { ...legacy, mode };
+  }
+
+  return detections;
+}
+
 function allRows(statement, ...params) {
   return statement.all(...params);
 }
@@ -189,6 +211,12 @@ export class LocalDataSqliteStore {
       CREATE TABLE IF NOT EXISTS player_settings (
         library_id TEXT PRIMARY KEY,
         settings_json TEXT NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS duplicate_detections (
+        library_id TEXT PRIMARY KEY,
+        detections_json TEXT NOT NULL,
         updated_at INTEGER NOT NULL
       );
 
@@ -500,6 +528,9 @@ export class LocalDataSqliteStore {
     this.db
       .prepare("INSERT INTO player_settings (library_id, settings_json, updated_at) VALUES (?, ?, ?) ON CONFLICT(library_id) DO UPDATE SET settings_json = excluded.settings_json, updated_at = excluded.updated_at")
       .run(libraryId, stringifyJson(store.settings ?? {}), timestamp);
+    this.db
+      .prepare("INSERT INTO duplicate_detections (library_id, detections_json, updated_at) VALUES (?, ?, ?) ON CONFLICT(library_id) DO UPDATE SET detections_json = excluded.detections_json, updated_at = excluded.updated_at")
+      .run(libraryId, stringifyJson(normalizeDuplicateDetections(store)), timestamp);
   }
 
   loadPlayerDataStore(libraryId) {
@@ -507,6 +538,7 @@ export class LocalDataSqliteStore {
     const hasData = Boolean(metadataRow)
       || Boolean(this.db.prepare("SELECT 1 FROM video_progress WHERE library_id = ? LIMIT 1").get(libraryId))
       || Boolean(this.db.prepare("SELECT 1 FROM video_highlights WHERE library_id = ? LIMIT 1").get(libraryId))
+      || Boolean(this.db.prepare("SELECT 1 FROM duplicate_detections WHERE library_id = ? LIMIT 1").get(libraryId))
       || Boolean(this.db.prepare("SELECT 1 FROM player_preferences WHERE library_id = ? LIMIT 1").get(libraryId));
     if (!hasData) return null;
 
@@ -594,6 +626,8 @@ export class LocalDataSqliteStore {
       danmakuPreferences: parseJson(this.db.prepare("SELECT preferences_json FROM danmaku_preferences WHERE library_id = ?").get(libraryId)?.preferences_json, {}),
       preferences: parseJson(this.db.prepare("SELECT preferences_json FROM player_preferences WHERE library_id = ?").get(libraryId)?.preferences_json, {}),
       settings: parseJson(this.db.prepare("SELECT settings_json FROM player_settings WHERE library_id = ?").get(libraryId)?.settings_json, {}),
+      duplicateDetection: null,
+      duplicateDetections: parseJson(this.db.prepare("SELECT detections_json FROM duplicate_detections WHERE library_id = ?").get(libraryId)?.detections_json, {}),
       metadata: parseJson(metadataRow?.metadata_json, undefined),
     };
   }
