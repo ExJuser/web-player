@@ -28,6 +28,11 @@ import {
   parseDanmakuUrl,
 } from "./src/danmakuUtils";
 import { parseAiJsonObject } from "./server/aiResponseUtils.mjs";
+import {
+  createProgressRecapCache,
+  createSubtitleAnswerCache,
+  createSubtitleSummaryCache,
+} from "./server/aiStreamCache.mjs";
 import { searchLibraryWithAi, suggestTagMergeWithAi } from "./server/aiLibraryService.mjs";
 import {
   createBangumiMatchResult,
@@ -275,8 +280,7 @@ async function streamSubtitleSummary(env, payload, response) {
   try {
     const subtitleText = typeof payload?.subtitleText === "string" ? payload.subtitleText.trim() : "";
     if (!subtitleText) throw new Error("Subtitle text is required.");
-    const cacheId = hashValue(`summary|${payload?.videoName || ""}|${subtitleText}`);
-    const cachePath = path.join(aiRoot, "summaries", `${cacheId}.json`);
+    const { cachePath } = createSubtitleSummaryCache(aiRoot, payload?.videoName, subtitleText);
     const cached = await readJsonFile(cachePath, null);
     if (cached?.summary) {
       writeStreamEvent(response, { type: "result", text: cached.summary });
@@ -335,8 +339,7 @@ async function streamSubtitleAnswer(env, payload, response) {
     const context = chunks
       .map((chunk) => `[${chunk.start || "?"} - ${chunk.end || "?"}]\n${chunk.text || ""}`)
       .join("\n\n");
-    const cacheId = hashValue(`qa|${payload?.videoName || ""}|${question}|${context}`);
-    const cachePath = path.join(aiRoot, "qa", `${cacheId}.json`);
+    const { cachePath } = createSubtitleAnswerCache(aiRoot, payload?.videoName, question, context);
     const cached = await readJsonFile(cachePath, null);
     if (cached?.answer) {
       writeStreamEvent(response, { type: "result", text: cached.answer });
@@ -378,8 +381,7 @@ async function streamProgressRecap(env, payload, response) {
     if (!Number.isFinite(currentTime) || currentTime < 0) throw new Error("Current time is required.");
 
     const recapEndSeconds = Math.floor(currentTime);
-    const cacheId = hashValue(`recap|${payload?.videoName || ""}|${subtitleId}|${recapEndSeconds}|${viewedText}`);
-    const cachePath = path.join(aiRoot, "recaps", `${cacheId}.json`);
+    const { cachePath } = createProgressRecapCache(aiRoot, payload?.videoName, subtitleId, recapEndSeconds, viewedText);
     const cached = await readJsonFile(cachePath, null);
     if (cached?.recap) {
       writeStreamEvent(response, { type: "result", text: cached.recap });
