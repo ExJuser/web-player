@@ -2918,7 +2918,7 @@ button {
   scrollbar-color: rgba(0, 161, 214, 0.82) rgba(15, 18, 23, 0.88);
   scrollbar-width: thin;
   position: absolute;
-  z-index: 12;
+  z-index: 60;
   bottom: calc(100% + 6px);
   left: 50%;
   transform: translateX(-50%);
@@ -3304,7 +3304,7 @@ button {
   scrollbar-color: rgba(0, 161, 214, 0.82) rgba(15, 18, 23, 0.88);
   scrollbar-width: thin;
   position: absolute;
-  z-index: 12;
+  z-index: 60;
   top: calc(100% + 6px);
   left: 50%;
   transform: translateX(-50%);
