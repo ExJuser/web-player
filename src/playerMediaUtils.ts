@@ -154,10 +154,15 @@ export function isResumableProgress(progress?: PlaybackProgress) {
 }
 
 export function getLatestResumableVideo(videos: VideoItem[], progressStore: ProgressStore) {
-  return videos
-    .map((video) => ({ video, progress: progressStore[video.id] }))
-    .filter(({ progress }) => isResumableProgress(progress))
-    .sort((a, b) => b.progress.updatedAt - a.progress.updatedAt)[0];
+  let latest: { video: VideoItem; progress: PlaybackProgress } | undefined;
+  for (const video of videos) {
+    const progress = progressStore[video.id];
+    if (!isResumableProgress(progress)) continue;
+    if (!latest || progress.updatedAt > latest.progress.updatedAt) {
+      latest = { video, progress };
+    }
+  }
+  return latest;
 }
 
 export function createEmptyMediaCollection(): MediaCollection {

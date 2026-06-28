@@ -4,12 +4,11 @@ import {
   defaultPlayerPreferences,
   IGNORED_VIDEO_BASENAMES,
   MIN_LOCAL_VIDEO_SIZE_BYTES,
+  PHOTO_EXTENSIONS,
   SUBTITLE_EXTENSIONS,
   VIDEO_EXTENSIONS,
 } from "./playerConstants";
 import type { MediaCollection, PlayerDataStore, PlayerLibraryMetadata } from "./playerTypes";
-
-const PHOTO_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif", ".bmp"]);
 
 type FileFingerprint = Pick<File, "size" | "lastModified">;
 type LibraryDirectory = { name: string };
