@@ -49,6 +49,14 @@ test("special insight controls have light theme coverage in app and root theme s
   assert.match(styles, /:root\[data-theme="light"\] \.special-insight-video-row:focus-visible\s*\{/);
 });
 
+test("watch activity controls have responsive and light theme coverage", () => {
+  assert.match(styles, /\.watch-activity-heatmap\s*\{(?<body>[^}]+grid-template-columns:\s*repeat\(auto-fill,\s*minmax\(18px,\s*1fr\)\);[^}]+)\}/);
+  assert.match(styles, /\.watch-activity-day\s*\{(?<body>[^}]+aspect-ratio:\s*1;[^}]+--activity-level[^}]+)\}/);
+  assert.match(styles, /\.app-shell\.theme-light \.watch-activity-day,/);
+  assert.match(styles, /:root\[data-theme="light"\] \.watch-activity-day\s*\{/);
+  assert.match(styles, /@media \(max-width:\s*640px\)\s*\{[\s\S]+\.watch-activity-video-list\s*\{[\s\S]+grid-template-columns:\s*1fr;/);
+});
+
 test("media library refresh button keeps the sidebar control compact", () => {
   const rule = styles.match(/\.media-library-refresh-button\s*\{(?<body>[^}]+)\}/);
 

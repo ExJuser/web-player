@@ -171,6 +171,16 @@ export type VideoStats = {
   updatedAt: number;
 };
 export type VideoStatsStore = Record<string, VideoStats>;
+export type WatchActivityItem = {
+  date: string;
+  videoId: string;
+  watchedSeconds: number;
+  playCount: number;
+  completedCount: number;
+  emissionCount: number;
+  updatedAt: number;
+};
+export type WatchActivityStore = Record<string, WatchActivityItem>;
 type TagMergeDecision = {
   from: string;
   to: string;
@@ -236,6 +246,7 @@ export type PlayerDataStore = {
   favorites: string[];
   videoTags: VideoTagStore;
   videoStats: VideoStatsStore;
+  watchActivity: WatchActivityStore;
   videoHighlights: VideoHighlightStore;
   tagMergeDecisions: TagMergeDecisionStore;
   embeddedSubtitles: PersistedEmbeddedSubtitle[];

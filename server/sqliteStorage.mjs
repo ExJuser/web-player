@@ -35,6 +35,10 @@ function asObject(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
 
+function isValidActivityDate(value) {
+  return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
 function normalizeDuplicateDetections(store) {
   const detections = {};
   for (const mode of ["all", "anime", "special"]) {
@@ -152,6 +156,18 @@ export class LocalDataSqliteStore {
         last_emission_at INTEGER,
         updated_at INTEGER NOT NULL,
         PRIMARY KEY (library_id, video_id)
+      );
+
+      CREATE TABLE IF NOT EXISTS watch_activity (
+        library_id TEXT NOT NULL,
+        activity_date TEXT NOT NULL,
+        video_id TEXT NOT NULL,
+        watched_seconds REAL NOT NULL,
+        play_count INTEGER NOT NULL,
+        completed_count INTEGER NOT NULL,
+        emission_count INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        PRIMARY KEY (library_id, activity_date, video_id)
       );
 
       CREATE TABLE IF NOT EXISTS video_highlights (
@@ -392,6 +408,7 @@ export class LocalDataSqliteStore {
       "video_favorites",
       "video_tags",
       "video_stats",
+      "watch_activity",
       "video_highlights",
       "tag_merge_decisions",
       "embedded_subtitles",
@@ -444,6 +461,25 @@ export class LocalDataSqliteStore {
         Math.max(0, Math.floor(Number(stats.emissionCount) || 0)),
         Number.isFinite(Number(stats.lastEmissionAt)) ? Number(stats.lastEmissionAt) : null,
         Number.isFinite(Number(stats.updatedAt)) ? Number(stats.updatedAt) : timestamp,
+      );
+    }
+
+    const activityInsert = this.db.prepare(`
+      INSERT INTO watch_activity (library_id, activity_date, video_id, watched_seconds, play_count, completed_count, emission_count, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    for (const activity of Object.values(asObject(store.watchActivity))) {
+      if (!activity || typeof activity !== "object") continue;
+      if (!isValidActivityDate(activity.date) || typeof activity.videoId !== "string" || !activity.videoId) continue;
+      activityInsert.run(
+        libraryId,
+        activity.date,
+        activity.videoId,
+        Math.max(0, Number(activity.watchedSeconds) || 0),
+        Math.max(0, Math.floor(Number(activity.playCount) || 0)),
+        Math.max(0, Math.floor(Number(activity.completedCount) || 0)),
+        Math.max(0, Math.floor(Number(activity.emissionCount) || 0)),
+        Number.isFinite(Number(activity.updatedAt)) ? Number(activity.updatedAt) : timestamp,
       );
     }
 
@@ -543,6 +579,7 @@ export class LocalDataSqliteStore {
     const metadataRow = this.db.prepare("SELECT metadata_json FROM library_metadata WHERE library_id = ?").get(libraryId);
     const hasData = Boolean(metadataRow)
       || Boolean(this.db.prepare("SELECT 1 FROM video_progress WHERE library_id = ? LIMIT 1").get(libraryId))
+      || Boolean(this.db.prepare("SELECT 1 FROM watch_activity WHERE library_id = ? LIMIT 1").get(libraryId))
       || Boolean(this.db.prepare("SELECT 1 FROM video_highlights WHERE library_id = ? LIMIT 1").get(libraryId))
       || Boolean(this.db.prepare("SELECT 1 FROM duplicate_detections WHERE library_id = ? LIMIT 1").get(libraryId))
       || Boolean(this.db.prepare("SELECT 1 FROM player_preferences WHERE library_id = ? LIMIT 1").get(libraryId));
@@ -574,6 +611,19 @@ export class LocalDataSqliteStore {
         durationSeconds: row.duration_seconds,
         emissionCount: row.emission_count,
         ...(row.last_emission_at ? { lastEmissionAt: row.last_emission_at } : {}),
+        updatedAt: row.updated_at,
+      };
+    }
+
+    const watchActivity = {};
+    for (const row of allRows(this.db.prepare("SELECT * FROM watch_activity WHERE library_id = ?"), libraryId)) {
+      watchActivity[`${row.activity_date}::${row.video_id}`] = {
+        date: row.activity_date,
+        videoId: row.video_id,
+        watchedSeconds: row.watched_seconds,
+        playCount: row.play_count,
+        completedCount: row.completed_count,
+        emissionCount: row.emission_count,
         updatedAt: row.updated_at,
       };
     }
@@ -625,6 +675,7 @@ export class LocalDataSqliteStore {
       favorites,
       videoTags,
       videoStats,
+      watchActivity,
       videoHighlights,
       tagMergeDecisions,
       embeddedSubtitles,
@@ -754,6 +805,34 @@ export class LocalDataSqliteStore {
           Math.max(0, Math.floor(Number(stats?.emissionCount) || 0)),
           Number.isFinite(Number(stats?.lastEmissionAt)) ? Number(stats.lastEmissionAt) : null,
           Number.isFinite(Number(stats?.updatedAt)) ? Number(stats.updatedAt) : now(),
+        );
+    });
+  }
+
+  upsertWatchActivity(libraryId, activity) {
+    return this.transaction(() => {
+      if (!activity || typeof activity !== "object") return;
+      if (!isValidActivityDate(activity.date) || typeof activity.videoId !== "string" || !activity.videoId) return;
+      this.db
+        .prepare(`
+          INSERT INTO watch_activity (library_id, activity_date, video_id, watched_seconds, play_count, completed_count, emission_count, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(library_id, activity_date, video_id) DO UPDATE SET
+            watched_seconds = excluded.watched_seconds,
+            play_count = excluded.play_count,
+            completed_count = excluded.completed_count,
+            emission_count = excluded.emission_count,
+            updated_at = excluded.updated_at
+        `)
+        .run(
+          libraryId,
+          activity.date,
+          activity.videoId,
+          Math.max(0, Number(activity.watchedSeconds) || 0),
+          Math.max(0, Math.floor(Number(activity.playCount) || 0)),
+          Math.max(0, Math.floor(Number(activity.completedCount) || 0)),
+          Math.max(0, Math.floor(Number(activity.emissionCount) || 0)),
+          Number.isFinite(Number(activity.updatedAt)) ? Number(activity.updatedAt) : now(),
         );
     });
   }

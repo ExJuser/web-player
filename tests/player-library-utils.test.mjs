@@ -92,6 +92,23 @@ test("detects whether a player data store contains user data", () => {
   assert.equal(
     libraryUtils.hasStoredData({
       ...emptyStore,
+      watchActivity: {
+        "2026-06-29::video-1": {
+          date: "2026-06-29",
+          videoId: "video-1",
+          watchedSeconds: 20,
+          playCount: 1,
+          completedCount: 0,
+          emissionCount: 0,
+          updatedAt: 100,
+        },
+      },
+    }),
+    true,
+  );
+  assert.equal(
+    libraryUtils.hasStoredData({
+      ...emptyStore,
       duplicateDetections: {
         special: {
           mode: "special",
@@ -115,6 +132,17 @@ test("migrates video data when the same file moves to another media root", () =>
     favorites: [oldId],
     videoTags: {
       [oldId]: ["剧情", "AI字幕"],
+    },
+    watchActivity: {
+      [`2026-06-29::${oldId}`]: {
+        date: "2026-06-29",
+        videoId: oldId,
+        watchedSeconds: 80,
+        playCount: 1,
+        completedCount: 0,
+        emissionCount: 0,
+        updatedAt: 1700000002000,
+      },
     },
     embeddedSubtitles: [
       {
@@ -147,6 +175,10 @@ test("migrates video data when the same file moves to another media root", () =>
 
   assert.equal(migrated.progress[newId], store.progress[oldId]);
   assert.equal(migrated.videoTags[newId], store.videoTags[oldId]);
+  assert.deepEqual(migrated.watchActivity[`2026-06-29::${newId}`], {
+    ...store.watchActivity[`2026-06-29::${oldId}`],
+    videoId: newId,
+  });
   assert.equal(migrated.danmakuSelections[newId], store.danmakuSelections[oldId]);
   assert.deepEqual(migrated.favorites, [oldId, newId]);
   assert.equal(migrated.embeddedSubtitles.at(-1).videoId, newId);

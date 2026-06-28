@@ -9,6 +9,7 @@ import {
   VIDEO_EXTENSIONS,
 } from "./playerConstants";
 import type { MediaCollection, PersistedEmbeddedSubtitle, PlayerDataStore, PlayerLibraryMetadata, VideoItem } from "./playerTypes";
+import { createWatchActivityKey } from "./watchActivityInsights";
 
 type FileFingerprint = Pick<File, "size" | "lastModified">;
 type LibraryDirectory = { name: string };
@@ -108,6 +109,7 @@ export function hasStoredData(store: PlayerDataStore) {
       store.favorites.length ||
       Object.keys(store.videoTags).length ||
       Object.keys(store.videoStats).length ||
+      Object.keys(store.watchActivity).length ||
       Object.keys(store.tagMergeDecisions).length ||
       store.embeddedSubtitles.length ||
       Object.keys(store.danmakuSelections).length ||
@@ -227,6 +229,16 @@ export function migrateMovedVideoData(store: PlayerDataStore, targetVideos: Vide
     }
   });
 
+  const nextWatchActivity = { ...store.watchActivity };
+  Object.values(store.watchActivity).forEach((activity) => {
+    const nextVideoId = resolveMovedVideoId(activity.videoId, mapping);
+    if (!nextVideoId) return;
+    const nextKey = createWatchActivityKey(activity.date, nextVideoId);
+    if (nextWatchActivity[nextKey]) return;
+    nextWatchActivity[nextKey] = { ...activity, videoId: nextVideoId };
+    didMigrate = true;
+  });
+
   const nextDanmakuSelections = { ...store.danmakuSelections };
   Object.entries(store.danmakuSelections).forEach(([videoId, selection]) => {
     const nextVideoId = resolveMovedVideoId(videoId, mapping);
@@ -248,6 +260,7 @@ export function migrateMovedVideoData(store: PlayerDataStore, targetVideos: Vide
         progress: nextProgress,
         favorites: Array.from(favoriteIds),
         videoTags: nextVideoTags,
+        watchActivity: nextWatchActivity,
         embeddedSubtitles: nextEmbeddedSubtitles,
         danmakuSelections: nextDanmakuSelections,
       }

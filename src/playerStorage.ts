@@ -21,7 +21,9 @@ import type {
   VideoHighlightSegment,
   VideoHighlightStore,
   VideoStatsStore,
-  VideoTagStore
+  VideoTagStore,
+  WatchActivityItem,
+  WatchActivityStore
 } from "./playerTypes";
 import {
   PROGRESS_FILE_NAME,
@@ -37,6 +39,7 @@ import {
   defaultPlayerPreferences,
   defaultShortcuts
 } from "./playerConstants";
+import { createWatchActivityKey, isValidWatchActivityDate } from "./watchActivityInsights";
 
 const LEGACY_THUMBNAIL_STORE_NAME = "thumbnails";
 export const mediaRootScanCacheVersion = 1;
@@ -126,6 +129,39 @@ export function parseVideoStats(source: unknown): VideoStatsStore {
         updatedAt,
       };
     }
+  }
+  return store;
+}
+
+export function parseWatchActivity(source: unknown): WatchActivityStore {
+  if (!source || typeof source !== "object" || Array.isArray(source)) return {};
+
+  const store: WatchActivityStore = {};
+  for (const value of Object.values(source)) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+    const item = value as Partial<WatchActivityItem>;
+    if (
+      typeof item.date !== "string" ||
+      !isValidWatchActivityDate(item.date) ||
+      typeof item.videoId !== "string" ||
+      !item.videoId ||
+      !Number.isFinite(item.watchedSeconds) ||
+      !Number.isFinite(item.playCount) ||
+      !Number.isFinite(item.completedCount) ||
+      !Number.isFinite(item.emissionCount) ||
+      !Number.isFinite(item.updatedAt)
+    ) {
+      continue;
+    }
+    store[createWatchActivityKey(item.date, item.videoId)] = {
+      date: item.date,
+      videoId: item.videoId,
+      watchedSeconds: Math.max(0, Number(item.watchedSeconds)),
+      playCount: Math.max(0, Math.floor(Number(item.playCount))),
+      completedCount: Math.max(0, Math.floor(Number(item.completedCount))),
+      emissionCount: Math.max(0, Math.floor(Number(item.emissionCount))),
+      updatedAt: Number(item.updatedAt),
+    };
   }
   return store;
 }
@@ -446,6 +482,7 @@ export function parsePlayerDataStore(raw: string): PlayerDataStore {
     settings?: unknown;
     videoTags?: unknown;
     videoStats?: unknown;
+    watchActivity?: unknown;
     videoHighlights?: unknown;
     tagMergeDecisions?: unknown;
     embeddedSubtitles?: unknown;
@@ -467,6 +504,7 @@ export function parsePlayerDataStore(raw: string): PlayerDataStore {
     favorites,
     videoTags: parseVideoTags(parsed?.videoTags),
     videoStats: parseVideoStats(parsed?.videoStats),
+    watchActivity: parseWatchActivity(parsed?.watchActivity),
     videoHighlights: parseVideoHighlights(parsed?.videoHighlights),
     tagMergeDecisions: parseTagMergeDecisions(parsed?.tagMergeDecisions),
     embeddedSubtitles: parsePersistedEmbeddedSubtitles(parsed?.embeddedSubtitles),
@@ -490,6 +528,7 @@ export function createDefaultPlayerDataStore(metadata?: PlayerDataStore["metadat
     favorites: [],
     videoTags: {},
     videoStats: {},
+    watchActivity: {},
     videoHighlights: {},
     tagMergeDecisions: {},
     embeddedSubtitles: [],
@@ -930,6 +969,18 @@ export async function savePlayerVideoStats(videoId: string, stats: VideoStatsSto
       Accept: "application/json",
     },
     body: JSON.stringify(stats),
+  });
+  if (!response.ok) throw new Error(await readApiError(response));
+}
+
+export async function savePlayerWatchActivity(activity: WatchActivityItem) {
+  const response = await fetch(createApiUrl("watch-activity"), {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify(activity),
   });
   if (!response.ok) throw new Error(await readApiError(response));
 }

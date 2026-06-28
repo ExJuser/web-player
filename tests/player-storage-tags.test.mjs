@@ -14,6 +14,7 @@ test("old player data stores load with empty video tags and merge decisions", ()
 
   assert.deepEqual(parsed.videoTags, {});
   assert.deepEqual(parsed.videoStats, {});
+  assert.deepEqual(parsed.watchActivity, {});
   assert.deepEqual(parsed.tagMergeDecisions, {});
   assert.deepEqual(parsed.videoHighlights, {});
   assert.deepEqual(parsed.danmakuSelections, {});
@@ -107,6 +108,26 @@ test("player data stores parse valid tags, stats, and merge decisions", () => {
         updatedAt: 1720000000000,
       },
     },
+    watchActivity: {
+      "2026-06-29::video-1": {
+        date: "2026-06-29",
+        videoId: "video-1",
+        watchedSeconds: 366.5,
+        playCount: 2,
+        completedCount: 1,
+        emissionCount: 1,
+        updatedAt: 1780000000000,
+      },
+      bad: {
+        date: "20260629",
+        videoId: "video-2",
+        watchedSeconds: 1,
+        playCount: 1,
+        completedCount: 0,
+        emissionCount: 0,
+        updatedAt: 1780000000000,
+      },
+    },
     tagMergeDecisions: {
       "a::b": { from: "腿玩年", to: "美腿", decision: "merge", updatedAt: 10 },
       "c::d": { from: "长镜头感", to: "长镜头", decision: "keep", updatedAt: 11 },
@@ -125,6 +146,17 @@ test("player data stores parse valid tags, stats, and merge decisions", () => {
       emissionCount: 2,
       lastEmissionAt: 1710000000000,
       updatedAt: 1720000000000,
+    },
+  });
+  assert.deepEqual(parsed.watchActivity, {
+    "2026-06-29::video-1": {
+      date: "2026-06-29",
+      videoId: "video-1",
+      watchedSeconds: 366.5,
+      playCount: 2,
+      completedCount: 1,
+      emissionCount: 1,
+      updatedAt: 1780000000000,
     },
   });
   assert.deepEqual(parsed.tagMergeDecisions, {

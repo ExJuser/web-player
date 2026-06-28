@@ -4,6 +4,7 @@ import {
   ArrowUp,
   Activity,
   BarChart3,
+  CalendarDays,
   CheckCircle2,
   ChevronDown,
   ChevronLeft,
@@ -71,6 +72,15 @@ import {
   type SpecialModeVideoInsight,
 } from "./specialInsights";
 import {
+  buildWatchActivityInsights,
+  createLocalDateKey,
+  createWatchActivityKey,
+  getWatchActivityMetricValue,
+  type WatchActivityMetric,
+  type WatchActivityRange,
+  type WatchActivityTagInsight,
+} from "./watchActivityInsights";
+import {
   createViewedSubtitleText,
   normalizeSubtitleText,
   parseSubtitleCues,
@@ -119,7 +129,8 @@ import type {
   VideoPlayability,
   VideoMetadata,
   VideoStatsStore,
-  VideoTagStore
+  VideoTagStore,
+  WatchActivityStore
 } from "./playerTypes";
 import {
   clearCachedPhotoAlbumScan,
@@ -474,6 +485,7 @@ import {
   savePlayerProgress,
   savePlayerSetting,
   saveTagMergeDecisions,
+  savePlayerWatchActivity,
   savePlayerVideoHighlights,
   savePlayerVideoStats,
   savePlayerVideoTags,
@@ -1463,6 +1475,7 @@ export default function App() {
   const favoriteVideoIdsRef = useRef(new Set<string>());
   const videoTagsRef = useRef<VideoTagStore>({});
   const videoStatsRef = useRef<VideoStatsStore>({});
+  const watchActivityRef = useRef<WatchActivityStore>({});
   const videoHighlightsRef = useRef<VideoHighlightStore>({});
   const tagMergeDecisionsRef = useRef<TagMergeDecisionStore>({});
   const tagDialogRef = useRef<HTMLElement | null>(null);
@@ -1503,6 +1516,7 @@ export default function App() {
   const lastSubtitleSelectionVideoIdRef = useRef<string | null>(null);
   const selectedSubtitleIdRef = useRef("off");
   const playbackStatsSessionRef = useRef<{ key: string; lastTime: number | null; hasCountedPlay: boolean } | null>(null);
+  const playbackActivitySessionRef = useRef<{ videoId: string; lastTime: number | null; hasCountedPlay: boolean } | null>(null);
   const photoAlbumsRef = useRef<PhotoAlbum[]>([]);
   const photoObjectUrlsRef = useRef<Record<string, string>>({});
   const photoObjectUrlAccessRef = useRef<Record<string, number>>({});
@@ -1660,6 +1674,10 @@ export default function App() {
     defaultPlayerPreferences.playlistSortMode,
   );
   const [videoStatsRevision, setVideoStatsRevision] = useState(0);
+  const [watchActivityRevision, setWatchActivityRevision] = useState(0);
+  const [watchActivityRange, setWatchActivityRange] = useState<WatchActivityRange>(90);
+  const [watchActivityMetric, setWatchActivityMetric] = useState<WatchActivityMetric>("watched");
+  const [selectedWatchActivityDate, setSelectedWatchActivityDate] = useState<string | null>(null);
   const [launchEffectKey, setLaunchEffectKey] = useState(0);
   const [isPlaylistSortReversed, setIsPlaylistSortReversed] = useState(
     defaultPlayerPreferences.isPlaylistSortReversed,
@@ -1846,6 +1864,7 @@ export default function App() {
       favorites: Array.from(favoriteVideoIdsRef.current),
       videoTags: videoTagsRef.current,
       videoStats: videoStatsRef.current,
+      watchActivity: watchActivityRef.current,
       videoHighlights: videoHighlightsRef.current,
       tagMergeDecisions: tagMergeDecisionsRef.current,
       embeddedSubtitles: createPersistedEmbeddedSubtitles(subtitlesRef.current),
@@ -1921,6 +1940,7 @@ export default function App() {
     favoriteVideoIdsRef.current = new Set(nextDataStore.favorites);
     videoTagsRef.current = nextDataStore.videoTags;
     videoStatsRef.current = nextDataStore.videoStats;
+    watchActivityRef.current = nextDataStore.watchActivity;
     videoHighlightsRef.current = nextDataStore.videoHighlights;
     tagMergeDecisionsRef.current = nextDataStore.tagMergeDecisions;
     danmakuSelectionsRef.current = nextDataStore.danmakuSelections;
@@ -1943,6 +1963,7 @@ export default function App() {
     setFavoriteVideoIds(new Set(nextDataStore.favorites));
     setVideoTags(nextDataStore.videoTags);
     setVideoHighlights(nextDataStore.videoHighlights);
+    setWatchActivityRevision((revision) => revision + 1);
     setTagMergeDecisions(nextDataStore.tagMergeDecisions);
     setDanmakuSelections(nextDataStore.danmakuSelections);
     setDanmakuPreferences(nextDataStore.danmakuPreferences);
@@ -2482,6 +2503,37 @@ export default function App() {
         : null,
     [homeMediaMode, modeFilteredVideos, progressStore, videoStatsRevision, videoTags],
   );
+  const watchActivityInsights = useMemo(
+    () =>
+      buildWatchActivityInsights(watchActivityRef.current, modeFilteredVideos, videoTags, {
+        rangeDays: watchActivityRange,
+        metric: watchActivityMetric,
+      }),
+    [modeFilteredVideos, videoTags, watchActivityMetric, watchActivityRange, watchActivityRevision],
+  );
+  const selectedWatchActivityDay = useMemo(
+    () =>
+      watchActivityInsights.days.find((day) => day.date === selectedWatchActivityDate) ??
+      [...watchActivityInsights.days]
+        .reverse()
+        .find((day) => day.watchedSeconds > 0 || day.playCount > 0 || day.completedCount > 0 || day.emissionCount > 0) ??
+      watchActivityInsights.days[watchActivityInsights.days.length - 1] ??
+      null,
+    [selectedWatchActivityDate, watchActivityInsights.days],
+  );
+  const selectedWatchActivityCards = useMemo(() => {
+    if (!selectedWatchActivityDay) return [];
+    const selectedIds = new Set(selectedWatchActivityDay.videoIds);
+    return modeFilteredVideos
+      .filter((video) => selectedIds.has(video.id))
+      .map(createHomeVideoCard)
+      .sort((a, b) => {
+        const aActivity = watchActivityRef.current[createWatchActivityKey(selectedWatchActivityDay.date, a.video.id)];
+        const bActivity = watchActivityRef.current[createWatchActivityKey(selectedWatchActivityDay.date, b.video.id)];
+        return (bActivity?.watchedSeconds ?? 0) - (aActivity?.watchedSeconds ?? 0) || compareNaturalRelativePath(a.video.relativePath, b.video.relativePath);
+      })
+      .slice(0, 5);
+  }, [createHomeVideoCard, modeFilteredVideos, selectedWatchActivityDay, watchActivityRevision]);
   const getDuplicateFingerprint = useCallback(async (video: VideoItem, signal?: AbortSignal) => {
     const cacheKey = createDuplicateFingerprintCacheKey(video);
     const cached = duplicateFingerprintCacheRef.current.get(cacheKey);
@@ -3065,6 +3117,59 @@ export default function App() {
     [],
   );
 
+  const updateWatchActivity = useCallback(
+    (
+      video: VideoItem,
+      increments: { watchedSeconds?: number; playCount?: number; completedCount?: number; emissionCount?: number },
+      timestamp = Date.now(),
+    ) => {
+      const date = createLocalDateKey(timestamp);
+      const key = createWatchActivityKey(date, video.id);
+      const currentActivity = watchActivityRef.current[key] ?? {
+        date,
+        videoId: video.id,
+        watchedSeconds: 0,
+        playCount: 0,
+        completedCount: 0,
+        emissionCount: 0,
+        updatedAt: timestamp,
+      };
+      const nextActivity = {
+        ...currentActivity,
+        watchedSeconds: currentActivity.watchedSeconds + Math.max(0, increments.watchedSeconds ?? 0),
+        playCount: currentActivity.playCount + Math.max(0, Math.floor(increments.playCount ?? 0)),
+        completedCount: currentActivity.completedCount + Math.max(0, Math.floor(increments.completedCount ?? 0)),
+        emissionCount: currentActivity.emissionCount + Math.max(0, Math.floor(increments.emissionCount ?? 0)),
+        updatedAt: timestamp,
+      };
+      const nextStore = {
+        ...watchActivityRef.current,
+        [key]: nextActivity,
+      };
+      watchActivityRef.current = nextStore;
+      setWatchActivityRevision((revision) => revision + 1);
+      savePlayerWatchActivity(nextActivity).catch(() => {
+        setMessage("无法写入项目数据目录，请确认通过 npm run dev 或 npm run preview 启动。");
+      });
+    },
+    [],
+  );
+
+  const recordPlaybackStartForActivity = useCallback(
+    (video: VideoItem) => {
+      const session = playbackActivitySessionRef.current;
+      if (session?.videoId === video.id && session.hasCountedPlay) return;
+
+      playbackActivitySessionRef.current = {
+        videoId: video.id,
+        lastTime: videoRef.current?.currentTime ?? null,
+        hasCountedPlay: true,
+      };
+      updateWatchActivity(video, { playCount: 1 });
+    },
+    [updateWatchActivity],
+  );
+
   const recordPlaybackStartForStats = useCallback(
     (video: VideoItem) => {
       const statsKey = createVideoStatsKey(video);
@@ -3114,8 +3219,31 @@ export default function App() {
     [updateSpecialVideoStats],
   );
 
+  const recordPlaybackProgressForActivity = useCallback(
+    (video: VideoItem, nextTime: number) => {
+      const session = playbackActivitySessionRef.current;
+      const nextSession =
+        session?.videoId === video.id
+          ? session
+          : { videoId: video.id, lastTime: null, hasCountedPlay: false };
+      const previousTime = nextSession.lastTime;
+      nextSession.lastTime = nextTime;
+      playbackActivitySessionRef.current = nextSession;
+      if (previousTime === null || !Number.isFinite(previousTime) || !Number.isFinite(nextTime)) return;
+
+      const delta = nextTime - previousTime;
+      if (delta <= 0 || delta > 10) return;
+      updateWatchActivity(video, { watchedSeconds: delta });
+    },
+    [updateWatchActivity],
+  );
+
   const recordPlaybackEndedForStats = useCallback(() => {
     playbackStatsSessionRef.current = null;
+  }, []);
+
+  const recordPlaybackEndedForActivity = useCallback(() => {
+    playbackActivitySessionRef.current = null;
   }, []);
 
   const recordEmissionForCurrentVideo = useCallback(() => {
@@ -3139,10 +3267,12 @@ export default function App() {
       }),
       { saveMessage: "已记录一次发射。" },
     );
-  }, [canRecordEmission, currentVideo, duration, updateSpecialVideoStats]);
+    updateWatchActivity(currentVideo, { emissionCount: 1 });
+  }, [canRecordEmission, currentVideo, duration, updateSpecialVideoStats, updateWatchActivity]);
 
   useEffect(() => {
     playbackStatsSessionRef.current = null;
+    playbackActivitySessionRef.current = null;
     setPendingHighEnergyStart(null);
     setHighEnergyTagPrompt(null);
   }, [currentVideoId]);
@@ -3437,6 +3567,16 @@ export default function App() {
         }
       });
 
+      const nextWatchActivity = { ...baseStore.watchActivity };
+      Object.values(legacyStore.watchActivity).forEach((activity) => {
+        const globalId = legacyToGlobalId.get(activity.videoId);
+        if (!globalId) return;
+        const key = createWatchActivityKey(activity.date, globalId);
+        if (nextWatchActivity[key]) return;
+        nextWatchActivity[key] = { ...activity, videoId: globalId };
+        didImport = true;
+      });
+
       const nextEmbeddedSubtitles = [...baseStore.embeddedSubtitles];
       const existingSubtitleKeys = new Set(nextEmbeddedSubtitles.map((subtitle) => `${subtitle.videoId}:${subtitle.embeddedTrack.streamIndex}`));
       legacyStore.embeddedSubtitles.forEach((subtitle) => {
@@ -3459,6 +3599,7 @@ export default function App() {
             favorites: Array.from(favoriteIds),
             videoTags: nextVideoTags,
             videoStats: nextVideoStats,
+            watchActivity: nextWatchActivity,
             tagMergeDecisions: nextTagMergeDecisions,
             embeddedSubtitles: nextEmbeddedSubtitles,
           }
@@ -3736,11 +3877,15 @@ export default function App() {
       progressStoreRef.current = nextStore;
       setProgressStore(nextStore);
 
+      if (progress.completed && !previous?.completed) {
+        updateWatchActivity(video, { completedCount: 1 }, progress.updatedAt);
+      }
+
       savePlayerProgress(video.id, progress).catch(() => {
         setMessage("无法写入项目数据目录，请确认通过 npm run dev 或 npm run preview 启动。");
       });
     },
-    [],
+    [updateWatchActivity],
   );
 
   const replaceProgressStore = useCallback((nextStore: ProgressStore, successMessage?: string) => {
@@ -4074,12 +4219,15 @@ export default function App() {
     favoriteVideoIdsRef.current = new Set();
     videoTagsRef.current = {};
     videoStatsRef.current = {};
+    watchActivityRef.current = {};
     tagMergeDecisionsRef.current = {};
     clearedProgressVideoIdsRef.current = new Set(videosRef.current.map((video) => video.id));
     playbackStatsSessionRef.current = null;
+    playbackActivitySessionRef.current = null;
     setProgressStore({});
     setFavoriteVideoIds(new Set());
     setVideoTags({});
+    setWatchActivityRevision((revision) => revision + 1);
     setTagMergeDecisions({});
     setHomeProgressRecap("");
     setHomeProgressRecapMessage("");
@@ -4518,6 +4666,9 @@ export default function App() {
       const nextProgress = { ...progressStoreRef.current };
       const nextVideoTags = { ...videoTagsRef.current };
       const nextVideoStats = { ...videoStatsRef.current };
+      const nextWatchActivity = Object.fromEntries(
+        Object.entries(watchActivityRef.current).filter(([, activity]) => activity.videoId !== video.id),
+      );
       const nextVideoHighlights = { ...videoHighlightsRef.current };
       const nextDanmakuSelections = { ...danmakuSelectionsRef.current };
       const nextFavorites = new Set(favoriteVideoIdsRef.current);
@@ -4537,6 +4688,7 @@ export default function App() {
       progressStoreRef.current = nextProgress;
       videoTagsRef.current = nextVideoTags;
       videoStatsRef.current = nextVideoStats;
+      watchActivityRef.current = nextWatchActivity;
       videoHighlightsRef.current = nextVideoHighlights;
       danmakuSelectionsRef.current = nextDanmakuSelections;
       favoriteVideoIdsRef.current = nextFavorites;
@@ -4547,6 +4699,7 @@ export default function App() {
       setVideoTags(nextVideoTags);
       setVideoHighlights(nextVideoHighlights);
       setVideoStatsRevision((revision) => revision + 1);
+      setWatchActivityRevision((revision) => revision + 1);
       setDanmakuSelections(nextDanmakuSelections);
       setFavoriteVideoIds(nextFavorites);
       setPlaybackSourceChoices((previous) => {
@@ -4602,6 +4755,7 @@ export default function App() {
           favorites: Array.from(nextFavorites),
           videoTags: nextVideoTags,
           videoStats: nextVideoStats,
+          watchActivity: nextWatchActivity,
           videoHighlights: nextVideoHighlights,
           danmakuSelections: nextDanmakuSelections,
           embeddedSubtitles: createPersistedEmbeddedSubtitles(subtitlesRef.current),
@@ -8027,12 +8181,14 @@ export default function App() {
       if (videoRef.current !== scheduledElement || currentVideoIdRef.current !== scheduledVideo.id) return;
       const scheduledDuration = selectTrustedDuration([scheduledVideo.duration, scheduledElement.duration, nextDuration]) || 0;
       updateProgress(scheduledVideo, scheduledElement.currentTime, scheduledDuration);
+      recordPlaybackProgressForActivity(scheduledVideo, scheduledElement.currentTime);
       recordPlaybackProgressForStats(scheduledVideo, scheduledElement.currentTime, scheduledDuration);
     }, 1500);
   };
 
   const handleEnded = () => {
     persistCurrentProgress(true);
+    recordPlaybackEndedForActivity();
     recordPlaybackEndedForStats();
     setIsPlaying(false);
 
@@ -8206,6 +8362,68 @@ export default function App() {
           )}
         </div>
       </div>
+    );
+  };
+  const watchActivityRangeOptions: Array<{ value: WatchActivityRange; label: string }> = [
+    { value: 30, label: "30 天" },
+    { value: 90, label: "90 天" },
+    { value: 365, label: "365 天" },
+  ];
+  const watchActivityMetricOptions: Array<{ value: WatchActivityMetric; label: string }> = [
+    { value: "watched", label: "时长" },
+    { value: "plays", label: "次数" },
+    { value: "completed", label: "完成" },
+    { value: "emission", label: "发射" },
+  ];
+  const formatWatchActivityDate = (date: string) => {
+    const parsed = new Date(`${date}T00:00:00`);
+    if (Number.isNaN(parsed.getTime())) return date;
+    return parsed.toLocaleDateString("zh-Hans-CN", { month: "numeric", day: "numeric", weekday: "short" });
+  };
+  const formatWatchActivityMetric = (value: number, metric: WatchActivityMetric) => {
+    if (metric === "watched") return formatCumulativeDuration(value);
+    return `${Math.round(value)} 次`;
+  };
+  const renderWatchActivityDay = (day: typeof watchActivityInsights.days[number]) => {
+    const metricValue = getWatchActivityMetricValue(day, watchActivityMetric);
+    const share = watchActivityInsights.maxMetricValue > 0 ? metricValue / watchActivityInsights.maxMetricValue : 0;
+    const level = metricValue > 0 ? Math.max(0.18, share) : 0;
+    const isSelected = selectedWatchActivityDay?.date === day.date;
+    return (
+      <button
+        className={`watch-activity-day ${isSelected ? "active" : ""}`}
+        key={day.date}
+        type="button"
+        onClick={() => setSelectedWatchActivityDate(day.date)}
+        style={{ "--activity-level": level } as CSSProperties}
+        title={`${formatWatchActivityDate(day.date)}：${formatWatchActivityMetric(metricValue, watchActivityMetric)}`}
+        aria-label={`${formatWatchActivityDate(day.date)}，${formatWatchActivityMetric(metricValue, watchActivityMetric)}`}
+      >
+        <span>{Number(day.date.slice(-2))}</span>
+      </button>
+    );
+  };
+  const renderWatchActivityTagInsight = (insight: WatchActivityTagInsight, index: number) => {
+    const metricValue =
+      watchActivityMetric === "plays"
+        ? insight.playCount
+        : watchActivityMetric === "completed"
+          ? insight.completedCount
+          : watchActivityMetric === "emission"
+            ? insight.emissionCount
+            : insight.watchedSeconds;
+    return (
+      <button
+        className="watch-activity-tag"
+        key={insight.key}
+        type="button"
+        onClick={() => runSpecialInsightTagSearch(insight.tag)}
+        title={`筛选标签：${insight.tag}`}
+      >
+        <span>{index + 1}</span>
+        <strong>{insight.tag}</strong>
+        <small>{formatWatchActivityMetric(metricValue, watchActivityMetric)}</small>
+      </button>
     );
   };
   const renderHomeListCard = (card: HomeVideoCard, index: number) => (
@@ -8549,6 +8767,111 @@ export default function App() {
                   <div className="home-list-grid">{recentHomeCards.map(renderHomeListCard)}</div>
                 </section>
               ) : null}
+
+              <section className="home-section watch-activity-card">
+                <div className="home-section-header">
+                  <h2>观看日历</h2>
+                  <span>{watchActivityInsights.activeDays} 个活跃日</span>
+                </div>
+                <div className="watch-activity-summary">
+                  <div>
+                    <strong>{formatCumulativeDuration(watchActivityInsights.totalWatchedSeconds)}</strong>
+                    <span>观看时长</span>
+                  </div>
+                  <div>
+                    <strong>{watchActivityInsights.totalPlayCount}</strong>
+                    <span>播放次数</span>
+                  </div>
+                  <div>
+                    <strong>{watchActivityInsights.totalCompletedCount}</strong>
+                    <span>完成</span>
+                  </div>
+                  <div>
+                    <strong>{watchActivityInsights.totalEmissionCount}</strong>
+                    <span>发射</span>
+                  </div>
+                </div>
+                <div className="watch-activity-toolbar">
+                  <div className="watch-activity-segment" role="group" aria-label="观看日历范围">
+                    {watchActivityRangeOptions.map((option) => (
+                      <button
+                        className={watchActivityRange === option.value ? "active" : ""}
+                        key={option.value}
+                        type="button"
+                        onClick={() => setWatchActivityRange(option.value)}
+                        aria-pressed={watchActivityRange === option.value}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="watch-activity-segment" role="group" aria-label="观看日历指标">
+                    {watchActivityMetricOptions.map((option) => (
+                      <button
+                        className={watchActivityMetric === option.value ? "active" : ""}
+                        key={option.value}
+                        type="button"
+                        onClick={() => setWatchActivityMetric(option.value)}
+                        aria-pressed={watchActivityMetric === option.value}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="watch-activity-heatmap" role="list" aria-label="最近观看分布">
+                  {watchActivityInsights.days.map(renderWatchActivityDay)}
+                </div>
+                <div className="watch-activity-detail">
+                  <div className="watch-activity-detail-header">
+                    <span>
+                      <CalendarDays size={14} />
+                      {selectedWatchActivityDay ? formatWatchActivityDate(selectedWatchActivityDay.date) : "暂无日期"}
+                    </span>
+                    <strong>
+                      {selectedWatchActivityDay
+                        ? formatWatchActivityMetric(getWatchActivityMetricValue(selectedWatchActivityDay, watchActivityMetric), watchActivityMetric)
+                        : "暂无记录"}
+                    </strong>
+                  </div>
+                  {selectedWatchActivityCards.length ? (
+                    <div className="watch-activity-video-list">
+                      {selectedWatchActivityCards.map((card, index) => {
+                        const activity = selectedWatchActivityDay
+                          ? watchActivityRef.current[createWatchActivityKey(selectedWatchActivityDay.date, card.video.id)]
+                          : null;
+                        const label = activity
+                          ? `${formatCumulativeDuration(activity.watchedSeconds)} · ${activity.playCount} 次播放`
+                          : formatHomeMeta(card);
+                        return (
+                          <button
+                            className="watch-activity-video"
+                            key={card.video.id}
+                            type="button"
+                            onClick={() => openVideoFromHome(card.video)}
+                            title={card.video.relativePath || card.video.name}
+                          >
+                            {homeCardThumbnail(card, index)}
+                            <span>
+                              <strong>{card.video.name}</strong>
+                              <small>{label}</small>
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="empty-list compact">这一天还没有观看记录。</div>
+                  )}
+                </div>
+                <div className="watch-activity-tags" aria-label="当前范围热门标签">
+                  {watchActivityInsights.topTags.length ? (
+                    watchActivityInsights.topTags.map(renderWatchActivityTagInsight)
+                  ) : (
+                    <small>当前范围暂无可统计标签。</small>
+                  )}
+                </div>
+              </section>
 
               {specialModeInsights && specialModeInsights.summary.totalVideos ? (
                 <section className="home-section special-insights-card">
@@ -9194,7 +9517,10 @@ export default function App() {
                 onClick={togglePlay}
                 onPlay={() => {
                   setIsPlaying(true);
-                  if (currentVideo) recordPlaybackStartForStats(currentVideo);
+                  if (currentVideo) {
+                    recordPlaybackStartForActivity(currentVideo);
+                    recordPlaybackStartForStats(currentVideo);
+                  }
                 }}
                 onPause={() => {
                   setIsPlaying(false);

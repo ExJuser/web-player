@@ -923,6 +923,13 @@ function playerDataApiPlugin(env) {
         return;
       }
 
+      if (url.pathname === "/api/player-data/watch-activity" && request.method === "PUT") {
+        const payload = await parseJsonBody(request);
+        store.upsertWatchActivity("global", payload);
+        sendJson(response, 200, { ok: true });
+        return;
+      }
+
       if (highlightsMatch && request.method === "PUT") {
         const videoId = decodeURIComponent(highlightsMatch[1]);
         const payload = await parseJsonBody(request);

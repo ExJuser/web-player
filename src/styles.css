@@ -1803,6 +1803,260 @@ button {
   font-size: 12px;
 }
 
+.watch-activity-card {
+  min-width: 0;
+}
+
+.watch-activity-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.watch-activity-summary div {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid #2b323d;
+  border-radius: 6px;
+  background: #20252d;
+}
+
+.watch-activity-summary strong {
+  overflow: hidden;
+  color: #f5f7fb;
+  font-size: 18px;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.watch-activity-summary span {
+  color: #8e97a5;
+  font-size: 12px;
+}
+
+.watch-activity-toolbar {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.watch-activity-segment {
+  display: inline-flex;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid #2b323d;
+  border-radius: 6px;
+  background: #20252d;
+}
+
+.watch-activity-segment button {
+  min-width: 46px;
+  height: 30px;
+  padding: 0 10px;
+  border: 0;
+  border-left: 1px solid #2b323d;
+  background: transparent;
+  color: #aab1bd;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+.watch-activity-segment button:first-child {
+  border-left: 0;
+}
+
+.watch-activity-segment button:hover,
+.watch-activity-segment button:focus-visible,
+.watch-activity-segment button.active {
+  background: rgba(0, 161, 214, 0.18);
+  color: #79dfff;
+  outline: none;
+}
+
+.watch-activity-heatmap {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(18px, 1fr));
+  gap: 4px;
+  min-width: 0;
+}
+
+.watch-activity-day {
+  position: relative;
+  aspect-ratio: 1;
+  min-width: 0;
+  min-height: 18px;
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 4px;
+  background: color-mix(in srgb, #32d583 calc(var(--activity-level) * 100%), #20252d);
+  color: rgba(245, 247, 251, 0.58);
+  cursor: pointer;
+  font: inherit;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0;
+  line-height: 1;
+}
+
+.watch-activity-day:hover,
+.watch-activity-day:focus-visible,
+.watch-activity-day.active {
+  border-color: #79dfff;
+  box-shadow: 0 0 0 1px rgba(121, 223, 255, 0.35);
+  outline: none;
+}
+
+.watch-activity-day span {
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+}
+
+.watch-activity-detail {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+}
+
+.watch-activity-detail-header {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: #aab1bd;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.watch-activity-detail-header span {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+}
+
+.watch-activity-detail-header strong {
+  color: #32d583;
+  white-space: nowrap;
+}
+
+.watch-activity-video-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.watch-activity-video {
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid #2b323d;
+  border-radius: 6px;
+  background: #20252d;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.watch-activity-video:hover,
+.watch-activity-video:focus-visible {
+  border-color: rgba(50, 213, 131, 0.44);
+  background: #17251f;
+  outline: none;
+}
+
+.watch-activity-video > span:last-child {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.watch-activity-video strong,
+.watch-activity-video small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.watch-activity-video strong {
+  color: #f5f7fb;
+  font-size: 13px;
+}
+
+.watch-activity-video small {
+  color: #8e97a5;
+  font-size: 12px;
+}
+
+.watch-activity-tags {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.watch-activity-tag {
+  display: inline-grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  min-height: 30px;
+  padding: 0 9px;
+  border: 1px solid rgba(50, 213, 131, 0.24);
+  border-radius: 6px;
+  background: rgba(50, 213, 131, 0.1);
+  color: #d1fae5;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.watch-activity-tag:hover,
+.watch-activity-tag:focus-visible {
+  border-color: rgba(50, 213, 131, 0.56);
+  background: rgba(50, 213, 131, 0.16);
+  outline: none;
+}
+
+.watch-activity-tag span {
+  color: #32d583;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.watch-activity-tag strong,
+.watch-activity-tag small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.watch-activity-tag small {
+  color: #a7f3d0;
+}
+
+.watch-activity-tags > small {
+  color: #8e97a5;
+  font-size: 12px;
+}
+
 .special-insights-card {
   min-width: 0;
 }
@@ -5694,6 +5948,102 @@ button {
   color: #0077a8;
 }
 
+.app-shell.theme-light .watch-activity-summary div,
+.app-shell.theme-light .watch-activity-segment,
+.app-shell.theme-light .watch-activity-video,
+:root[data-theme="light"] .watch-activity-summary div,
+:root[data-theme="light"] .watch-activity-segment,
+:root[data-theme="light"] .watch-activity-video {
+  border-color: #d7e0ea;
+  background: #f8fafc;
+}
+
+.app-shell.theme-light .watch-activity-summary strong,
+.app-shell.theme-light .watch-activity-video strong,
+:root[data-theme="light"] .watch-activity-summary strong,
+:root[data-theme="light"] .watch-activity-video strong {
+  color: #172033;
+}
+
+.app-shell.theme-light .watch-activity-summary span,
+.app-shell.theme-light .watch-activity-detail-header,
+.app-shell.theme-light .watch-activity-video small,
+.app-shell.theme-light .watch-activity-tags > small,
+:root[data-theme="light"] .watch-activity-summary span,
+:root[data-theme="light"] .watch-activity-detail-header,
+:root[data-theme="light"] .watch-activity-video small,
+:root[data-theme="light"] .watch-activity-tags > small {
+  color: #667085;
+}
+
+.app-shell.theme-light .watch-activity-segment button,
+:root[data-theme="light"] .watch-activity-segment button {
+  border-color: #d7e0ea;
+  color: #475467;
+}
+
+.app-shell.theme-light .watch-activity-segment button:hover,
+.app-shell.theme-light .watch-activity-segment button:focus-visible,
+.app-shell.theme-light .watch-activity-segment button.active,
+:root[data-theme="light"] .watch-activity-segment button:hover,
+:root[data-theme="light"] .watch-activity-segment button:focus-visible,
+:root[data-theme="light"] .watch-activity-segment button.active {
+  background: #dcfce7;
+  color: #047857;
+}
+
+.app-shell.theme-light .watch-activity-day,
+:root[data-theme="light"] .watch-activity-day {
+  border-color: rgba(15, 23, 42, 0.1);
+  background: color-mix(in srgb, #22c55e calc(var(--activity-level) * 100%), #e8eef6);
+  color: rgba(15, 23, 42, 0.5);
+}
+
+.app-shell.theme-light .watch-activity-day:hover,
+.app-shell.theme-light .watch-activity-day:focus-visible,
+.app-shell.theme-light .watch-activity-day.active,
+:root[data-theme="light"] .watch-activity-day:hover,
+:root[data-theme="light"] .watch-activity-day:focus-visible,
+:root[data-theme="light"] .watch-activity-day.active {
+  border-color: #047857;
+  box-shadow: 0 0 0 1px rgba(4, 120, 87, 0.26);
+}
+
+.app-shell.theme-light .watch-activity-detail-header strong,
+:root[data-theme="light"] .watch-activity-detail-header strong {
+  color: #047857;
+}
+
+.app-shell.theme-light .watch-activity-video:hover,
+.app-shell.theme-light .watch-activity-video:focus-visible,
+:root[data-theme="light"] .watch-activity-video:hover,
+:root[data-theme="light"] .watch-activity-video:focus-visible {
+  border-color: rgba(4, 120, 87, 0.32);
+  background: #f0fdf4;
+}
+
+.app-shell.theme-light .watch-activity-tag,
+:root[data-theme="light"] .watch-activity-tag {
+  border-color: rgba(4, 120, 87, 0.28);
+  background: #dcfce7;
+  color: #065f46;
+}
+
+.app-shell.theme-light .watch-activity-tag:hover,
+.app-shell.theme-light .watch-activity-tag:focus-visible,
+:root[data-theme="light"] .watch-activity-tag:hover,
+:root[data-theme="light"] .watch-activity-tag:focus-visible {
+  border-color: rgba(4, 120, 87, 0.42);
+  background: #bbf7d0;
+}
+
+.app-shell.theme-light .watch-activity-tag span,
+.app-shell.theme-light .watch-activity-tag small,
+:root[data-theme="light"] .watch-activity-tag span,
+:root[data-theme="light"] .watch-activity-tag small {
+  color: #047857;
+}
+
 .app-shell.theme-light .special-insight-summary div,
 .app-shell.theme-light .special-insight-tabs button,
 .app-shell.theme-light .special-insight-video-row,
@@ -6558,6 +6908,34 @@ button {
 
   .top-actions .primary-button {
     flex: 1;
+  }
+
+  .watch-activity-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .watch-activity-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .watch-activity-segment {
+    display: grid;
+    grid-auto-columns: minmax(0, 1fr);
+    grid-auto-flow: column;
+  }
+
+  .watch-activity-segment button {
+    min-width: 0;
+    padding: 0 6px;
+  }
+
+  .watch-activity-heatmap {
+    grid-template-columns: repeat(auto-fill, minmax(16px, 1fr));
+  }
+
+  .watch-activity-video-list {
+    grid-template-columns: 1fr;
   }
 
   .home-primary-column .special-insight-summary,

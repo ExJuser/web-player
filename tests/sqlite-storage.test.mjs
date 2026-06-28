@@ -36,6 +36,17 @@ test("sqlite store imports legacy player and photo album json once", async () =>
         favorites: ["video1"],
         videoTags: { video1: ["Tag A"] },
         videoStats: {},
+        watchActivity: {
+          "2026-06-29::video1": {
+            date: "2026-06-29",
+            videoId: "video1",
+            watchedSeconds: 90,
+            playCount: 1,
+            completedCount: 0,
+            emissionCount: 0,
+            updatedAt: 3000,
+          },
+        },
         videoHighlights: {
           video1: [{ id: "mark-1", startTime: 12, endTime: 18, tag: "名场面", updatedAt: 1200 }],
         },
@@ -68,6 +79,7 @@ test("sqlite store imports legacy player and photo album json once", async () =>
     assert.equal(playerStore.items.video1.currentTime, 12);
     assert.deepEqual(playerStore.favorites, ["video1"]);
     assert.deepEqual(playerStore.videoTags.video1, ["Tag A"]);
+    assert.equal(playerStore.watchActivity["2026-06-29::video1"].watchedSeconds, 90);
     assert.deepEqual(playerStore.videoHighlights.video1, [{ id: "mark-1", startTime: 12, endTime: 18, tag: "名场面", updatedAt: 1200 }]);
     assert.equal(photoStore.progress.album1.imageIndex, 2);
     assert.equal(photoStore.coverImageByAlbumId.album1, "image-2");
@@ -102,6 +114,7 @@ test("sqlite incremental writes keep unrelated player data", async () => {
       favorites: [],
       videoTags: { video1: ["Old"] },
       videoStats: {},
+      watchActivity: {},
       videoHighlights: {},
       tagMergeDecisions: {},
       embeddedSubtitles: [],
@@ -114,6 +127,15 @@ test("sqlite incremental writes keep unrelated player data", async () => {
     context.store.upsertProgress("global", "video1", { currentTime: 5, duration: 10, completed: false, updatedAt: 2000 });
     context.store.replaceVideoTags("global", "video1", ["New"]);
     context.store.replaceVideoHighlights("global", "video1", [{ id: "h1", startTime: 8, endTime: 15, tag: " 高能 ", updatedAt: 2200 }]);
+    context.store.upsertWatchActivity("global", {
+      date: "2026-06-29",
+      videoId: "video1",
+      watchedSeconds: 44,
+      playCount: 2,
+      completedCount: 1,
+      emissionCount: 0,
+      updatedAt: 2300,
+    });
     context.store.setPreferenceValue("global", "homeMediaMode", "anime");
     context.store.setSettingValue("global", "theme", "light");
 
@@ -121,6 +143,15 @@ test("sqlite incremental writes keep unrelated player data", async () => {
     assert.equal(store.items.video1.currentTime, 5);
     assert.deepEqual(store.videoTags.video1, ["New"]);
     assert.deepEqual(store.videoHighlights.video1, [{ id: "h1", startTime: 8, endTime: 15, tag: "高能", updatedAt: 2200 }]);
+    assert.deepEqual(store.watchActivity["2026-06-29::video1"], {
+      date: "2026-06-29",
+      videoId: "video1",
+      watchedSeconds: 44,
+      playCount: 2,
+      completedCount: 1,
+      emissionCount: 0,
+      updatedAt: 2300,
+    });
     assert.equal(store.preferences.homeMediaMode, "anime");
     assert.equal(store.settings.theme, "light");
     assert.equal(store.settings.volume, 0.5);
