@@ -1,6 +1,5 @@
 // @ts-nocheck
 import { createHash } from "node:crypto";
-import { createReadStream } from "node:fs";
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { defineConfig, loadEnv } from "vite";
@@ -9,7 +8,6 @@ import {
   classifyMediaProbe,
   createCompatibleMediaUrl,
   getCachedCompatibleMedia,
-  mediaContentTypeForPath,
   probeMediaFile,
   remuxCompatibleMedia,
   resolveCompatibleMediaPath,
@@ -44,6 +42,7 @@ import { createBilibiliDanmakuService } from "./server/bilibiliDanmaku.mjs";
 import { clearLocalCacheItems, createCacheStatus as createLocalCacheStatus, createDanmakuSourcesStats } from "./server/cacheStatus.mjs";
 import { callDeepSeek, chunkText, streamDeepSeek } from "./server/deepSeekClient.mjs";
 import { createEmbeddedSubtitleService } from "./server/embeddedSubtitles.mjs";
+import { sendBlob, sendJson, sendMediaFile, sendNdjson, writeStreamEvent } from "./server/httpResponses.mjs";
 import { readJsonFile, writeJsonFile } from "./server/jsonFiles.mjs";
 import { createPublicLocalConfig, defaultAppConfig } from "./server/localConfig.mjs";
 import { detectTools, runProcess } from "./server/processRunner.mjs";
@@ -80,67 +79,6 @@ const embeddedSubtitles = createEmbeddedSubtitleService({
   hashValue,
   readTextFile,
 });
-
-function sendJson(response, status, payload) {
-  response.statusCode = status;
-  response.setHeader("Content-Type", "application/json; charset=utf-8");
-  response.end(JSON.stringify(payload));
-}
-
-function sendNdjson(response, status) {
-  response.statusCode = status;
-  response.setHeader("Content-Type", "application/x-ndjson; charset=utf-8");
-  response.setHeader("Cache-Control", "no-cache, no-transform");
-  response.setHeader("X-Accel-Buffering", "no");
-}
-
-function writeStreamEvent(response, payload) {
-  response.write(`${JSON.stringify(payload)}\n`);
-}
-
-function sendBlob(response, status, buffer) {
-  response.statusCode = status;
-  response.setHeader("Content-Type", "image/jpeg");
-  response.end(buffer);
-}
-
-async function sendMediaFile(request, response, filePath) {
-  const fileStat = await stat(filePath);
-  const fileSize = fileStat.size;
-  const range = request.headers.range;
-  const contentType = mediaContentTypeForPath(filePath);
-
-  if (range) {
-    const match = /^bytes=(\d*)-(\d*)$/.exec(range);
-    if (!match) {
-      response.statusCode = 416;
-      response.setHeader("Content-Range", `bytes */${fileSize}`);
-      response.end();
-      return;
-    }
-    const start = match[1] ? Number(match[1]) : 0;
-    const end = match[2] ? Number(match[2]) : fileSize - 1;
-    if (!Number.isFinite(start) || !Number.isFinite(end) || start > end || start < 0 || end >= fileSize) {
-      response.statusCode = 416;
-      response.setHeader("Content-Range", `bytes */${fileSize}`);
-      response.end();
-      return;
-    }
-    response.statusCode = 206;
-    response.setHeader("Content-Type", contentType);
-    response.setHeader("Accept-Ranges", "bytes");
-    response.setHeader("Content-Range", `bytes ${start}-${end}/${fileSize}`);
-    response.setHeader("Content-Length", String(end - start + 1));
-    createReadStream(filePath, { start, end }).pipe(response);
-    return;
-  }
-
-  response.statusCode = 200;
-  response.setHeader("Content-Type", contentType);
-  response.setHeader("Accept-Ranges", "bytes");
-  response.setHeader("Content-Length", String(fileSize));
-  createReadStream(filePath).pipe(response);
-}
 
 function sanitizeStorageId(value) {
   if (!/^[A-Za-z0-9._~-]{1,240}$/.test(value)) {
