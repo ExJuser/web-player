@@ -638,9 +638,6 @@ export function createDuplicateDetectionScopeKey(mode: string, videos: VideoItem
         video.relativePath,
         Math.floor(video.size || 0),
         Math.round(video.lastModified || 0),
-        Math.round(video.duration ?? 0),
-        video.width ?? 0,
-        video.height ?? 0,
       ].join("|"),
     ),
   ].join("\n");

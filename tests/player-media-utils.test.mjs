@@ -447,3 +447,12 @@ test("duplicate detection scope key changes with mode or video identity", () => 
     mediaUtils.createDuplicateDetectionScopeKey("all", [{ ...video, size: 1001 }]),
   );
 });
+
+test("duplicate detection scope key ignores playback-populated metadata", () => {
+  const video = createVideo({ id: "video", name: "Video.mp4", relativePath: "Video.mp4", size: 1000, lastModified: 1 });
+
+  assert.equal(
+    mediaUtils.createDuplicateDetectionScopeKey("special", [video]),
+    mediaUtils.createDuplicateDetectionScopeKey("special", [{ ...video, duration: 100, width: 1920, height: 1080 }]),
+  );
+});
