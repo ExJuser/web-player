@@ -3549,7 +3549,8 @@ button {
 .folder-dialog,
 .delete-dialog,
 .media-root-label-dialog,
-.media-root-local-path-dialog {
+.media-root-local-path-dialog,
+.compatible-media-dialog {
   position: relative;
   display: grid;
   grid-template-columns: 52px minmax(0, 1fr);
@@ -3560,6 +3561,39 @@ button {
   border-radius: 8px;
   background: #181c22;
   box-shadow: 0 24px 64px rgba(0, 0, 0, 0.42);
+}
+
+.compatible-media-dialog {
+  width: min(560px, 100%);
+}
+
+.compatible-media-dialog-file {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid #303743;
+  border-radius: 8px;
+  background: #20252d;
+}
+
+.compatible-media-dialog-file strong,
+.compatible-media-dialog-file span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.compatible-media-dialog-file strong {
+  color: #f5f7fb;
+  font-size: 14px;
+}
+
+.compatible-media-dialog-file span {
+  color: #9aa4b2;
+  font-size: 12px;
 }
 
 .dialog-close {
@@ -4680,6 +4714,7 @@ button {
 .app-shell.theme-light .shortcut-dialog-footer span,
 .app-shell.theme-light .shortcut-group h3,
 .app-shell.theme-light .dialog-copy p,
+.app-shell.theme-light .compatible-media-dialog-file span,
 .app-shell.theme-light .current-video-meta dt,
 .app-shell.theme-light .compatible-media-status,
 .app-shell.theme-light .timeline-row > span,
@@ -4708,6 +4743,7 @@ button {
 .app-shell.theme-light .cache-status-row strong,
 .app-shell.theme-light .cache-status-row dd,
 .app-shell.theme-light .dialog-copy h2,
+.app-shell.theme-light .compatible-media-dialog-file strong,
 .app-shell.theme-light .shortcut-dialog-title,
 .app-shell.theme-light .shortcut-key-button,
 .app-shell.theme-light .shortcut-group dd,
@@ -4735,6 +4771,7 @@ button {
 .app-shell.theme-light .auto-next-actions button,
 .app-shell.theme-light .shortcut-key-button,
 .app-shell.theme-light .permission-notes span,
+.app-shell.theme-light .compatible-media-dialog-file,
 .app-shell.theme-light .episode-action-button {
   border-color: #cfd8e3;
   background: #ffffff;
@@ -5494,6 +5531,7 @@ button {
 :root[data-theme="light"] .delete-dialog,
 :root[data-theme="light"] .media-root-label-dialog,
 :root[data-theme="light"] .media-root-local-path-dialog,
+:root[data-theme="light"] .compatible-media-dialog,
 :root[data-theme="light"] .shortcut-dialog,
 :root[data-theme="light"] .embedded-subtitle-dialog,
 :root[data-theme="light"] .cache-status-dialog,
@@ -5506,6 +5544,7 @@ button {
 }
 
 :root[data-theme="light"] .dialog-copy h2,
+:root[data-theme="light"] .compatible-media-dialog-file strong,
 :root[data-theme="light"] .shortcut-dialog-title,
 :root[data-theme="light"] .shortcut-key-button,
 :root[data-theme="light"] .shortcut-group dd,
@@ -5522,6 +5561,7 @@ button {
 }
 
 :root[data-theme="light"] .dialog-copy p,
+:root[data-theme="light"] .compatible-media-dialog-file span,
 :root[data-theme="light"] .shortcut-dialog-note,
 :root[data-theme="light"] .shortcut-dialog-footer span,
 :root[data-theme="light"] .shortcut-group h3,
@@ -5543,7 +5583,8 @@ button {
 :root[data-theme="light"] .secondary-button,
 :root[data-theme="light"] .dialog-close,
 :root[data-theme="light"] .shortcut-key-button,
-:root[data-theme="light"] .permission-notes span {
+:root[data-theme="light"] .permission-notes span,
+:root[data-theme="light"] .compatible-media-dialog-file {
   border-color: #cfd8e3;
   background: #ffffff;
   color: #243044;

@@ -1296,6 +1296,7 @@ export default function App() {
   const [mediaProbeVideoId, setMediaProbeVideoId] = useState<string | null>(null);
   const mediaProbeVideoIdRef = useRef<string | null>(null);
   const [compatibleMediaVideoId, setCompatibleMediaVideoId] = useState<string | null>(null);
+  const [compatibleMediaTask, setCompatibleMediaTask] = useState<{ label: string; videoName: string } | null>(null);
   const [compatibleMediaMessage, setCompatibleMediaMessage] = useState("");
   const [isAiPanelOpen, setIsAiPanelOpen] = useState(false);
   const [aiTab, setAiTab] = useState<"summary" | "qa" | "recap">("summary");
@@ -5657,6 +5658,10 @@ export default function App() {
     if (!canCreateCompatibleMedia || compatibleMediaVideoId) return;
 
     setCompatibleMediaVideoId(currentVideo.id);
+    setCompatibleMediaTask({
+      label: compatibleMediaAction.label || "生成兼容 MP4",
+      videoName: currentVideo.name,
+    });
     setCompatibleMediaMessage(`正在${compatibleMediaAction.label || "生成兼容 MP4"}...`);
     try {
       const payload = await fetchJson<CompatibleRemuxResponse>("/api/media/compatible/remux", {
@@ -5673,6 +5678,7 @@ export default function App() {
       setCompatibleMediaMessage(error instanceof Error ? error.message : "生成兼容 MP4 失败。");
     } finally {
       setCompatibleMediaVideoId(null);
+      setCompatibleMediaTask(null);
     }
   }, [canCreateCompatibleMedia, compatibleMediaAction.label, compatibleMediaVideoId, currentMediaRootId, currentVideo, updateVideoPlayability]);
 
@@ -8932,6 +8938,29 @@ export default function App() {
               <FolderOpen size={18} />
               继续添加
             </button>
+          </div>
+        </section>
+      </div>
+    ) : null}
+    {compatibleMediaTask ? (
+      <div className="modal-backdrop" role="presentation">
+        <section
+          aria-labelledby="compatible-media-title"
+          aria-modal="true"
+          className="compatible-media-dialog"
+          role="dialog"
+          onMouseDown={(event) => event.stopPropagation()}
+        >
+          <div className="dialog-icon">
+            <RefreshCw size={28} className="spin-icon" />
+          </div>
+          <div className="dialog-copy">
+            <h2 id="compatible-media-title">{compatibleMediaTask.label}</h2>
+            <p>正在生成本地缓存文件，完成后播放器会自动优先使用修复版本。</p>
+          </div>
+          <div className="compatible-media-dialog-file">
+            <strong>{compatibleMediaTask.videoName}</strong>
+            <span>请保持当前页面打开</span>
           </div>
         </section>
       </div>
