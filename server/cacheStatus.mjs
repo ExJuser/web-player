@@ -12,6 +12,21 @@ const cacheKindsByStatusId = {
   subtitles: ["embedded-subtitle"],
 };
 
+function createEmptyStats() {
+  return { bytes: 0, files: 0, updatedAt: null };
+}
+
+function isMissingPathError(error) {
+  return error && error.code === "ENOENT";
+}
+
+function createStatsError(error, fallbackMessage) {
+  return {
+    ...createEmptyStats(),
+    error: error instanceof Error ? error.message : fallbackMessage,
+  };
+}
+
 export async function getPathStats(targetPath) {
   try {
     const entryStat = await stat(targetPath);
@@ -35,15 +50,7 @@ export async function getPathStats(targetPath) {
     }
     return { bytes, files, updatedAt };
   } catch (error) {
-    if (error && error.code === "ENOENT") {
-      return { bytes: 0, files: 0, updatedAt: null };
-    }
-    return {
-      bytes: 0,
-      files: 0,
-      updatedAt: null,
-      error: error instanceof Error ? error.message : "Unable to inspect cache path.",
-    };
+    return isMissingPathError(error) ? createEmptyStats() : createStatsError(error, "Unable to inspect cache path.");
   }
 }
 
@@ -58,15 +65,7 @@ export async function createDanmakuSourcesStats(danmakuSourcesRoot) {
       updatedAt: stats.reduce((latest, entryStat) => Math.max(latest, entryStat.mtimeMs), 0) || null,
     };
   } catch (error) {
-    if (error && error.code === "ENOENT") {
-      return { bytes: 0, files: 0, updatedAt: null };
-    }
-    return {
-      bytes: 0,
-      files: 0,
-      updatedAt: null,
-      error: error instanceof Error ? error.message : "Unable to inspect danmaku sources.",
-    };
+    return isMissingPathError(error) ? createEmptyStats() : createStatsError(error, "Unable to inspect danmaku sources.");
   }
 }
 
