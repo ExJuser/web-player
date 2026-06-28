@@ -114,10 +114,6 @@ import {
   savePhotoAlbumStore
 } from "./photoAlbumStorage";
 import {
-  VIDEO_EXTENSIONS,
-  SUBTITLE_EXTENSIONS,
-  MIN_LOCAL_VIDEO_SIZE_BYTES,
-  IGNORED_VIDEO_BASENAMES,
   PROGRESS_FILE_NAME,
   collator,
   rates,
@@ -150,6 +146,19 @@ import {
 import { createDanmakuComment, stableHash } from "./danmakuUtils";
 import { baseNameWithoutExtension, directoryPartsOf, fallbackMediaRootLabelForVideo } from "./mediaPathUtils";
 import {
+  basePathOf,
+  createGlobalVideoId,
+  createLegacyVideoId,
+  createPhotoAlbumFolderId,
+  hashString,
+  isObjectUrl,
+  isPhotoFile,
+  isSubtitleFile,
+  isVideoFile,
+  sanitizeLibraryName,
+  shouldFilterLocalVideoFile,
+} from "./playerLibraryUtils";
+import {
   clamp,
   formatShortcutKey,
   getShortcutConflict,
@@ -176,30 +185,6 @@ import {
 } from "./playerMediaUtils";
 
 
-function isVideoFile(name: string) {
-  return hasExtension(name, VIDEO_EXTENSIONS);
-}
-
-function isIgnoredVideoFile(name: string) {
-  const fileName = name.split(/[\\/]/).pop() || name;
-  const dotIndex = fileName.lastIndexOf(".");
-  const baseName = dotIndex >= 0 ? fileName.slice(0, dotIndex) : fileName;
-  return IGNORED_VIDEO_BASENAMES.has(baseName.toLowerCase());
-}
-
-function shouldFilterLocalVideoFile(name: string, size: number) {
-  return size < MIN_LOCAL_VIDEO_SIZE_BYTES || isIgnoredVideoFile(name);
-}
-
-function isObjectUrl(value: string) {
-  return value.startsWith("blob:");
-}
-
-function isSubtitleFile(name: string) {
-  return hasExtension(name, SUBTITLE_EXTENSIONS);
-}
-
-const PHOTO_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif", ".bmp"]);
 const photoAlbumPageSize = 20;
 const cacheStatusPageSize = 10;
 const photoThumbnailWindowSize = 24;
@@ -239,21 +224,6 @@ function prunePhotoObjectUrlCache(
   return nextUrls;
 }
 
-function isPhotoFile(name: string) {
-  return hasExtension(name, PHOTO_EXTENSIONS);
-}
-
-function hasExtension(name: string, extensions: Set<string>) {
-  const dotIndex = name.lastIndexOf(".");
-  if (dotIndex < 0) return false;
-  return extensions.has(name.slice(dotIndex).toLowerCase());
-}
-
-function basePathOf(path: string) {
-  const dotIndex = path.lastIndexOf(".");
-  return dotIndex >= 0 ? path.slice(0, dotIndex).toLowerCase() : path.toLowerCase();
-}
-
 function supportsServerFileAccess(root: LocalMediaRoot | null | undefined) {
   return Boolean(root && (root.source !== "browser" || root.localPath));
 }
@@ -282,37 +252,6 @@ function seriesKeyFromTitle(title: string) {
 function scopedSeriesKeyForVideo(video: VideoItem, title: string) {
   const titleKey = seriesKeyFromTitle(title);
   return video.mediaRootId ? `${video.mediaRootId}:${titleKey}` : titleKey;
-}
-
-function createLegacyVideoId(relativePath: string, file: Pick<File, "size" | "lastModified">) {
-  return `${relativePath}|${file.size}|${file.lastModified}`;
-}
-
-function createGlobalVideoId(rootId: string, relativePath: string, file: Pick<File, "size" | "lastModified">) {
-  return `${rootId}|${relativePath}|${file.size}|${file.lastModified}`;
-}
-
-function createPhotoAlbumFolderId(rootId: string, relativePath: string) {
-  return `${rootId}|${relativePath}`;
-}
-
-function hashString(value: string) {
-  let hash = 2166136261;
-  for (let index = 0; index < value.length; index += 1) {
-    hash ^= value.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
-  }
-  return (hash >>> 0).toString(36);
-}
-
-function sanitizeLibraryName(name: string) {
-  return (
-    name
-      .trim()
-      .replace(/[^A-Za-z0-9._~-]+/g, "-")
-      .replace(/^-+|-+$/g, "")
-      .slice(0, 48) || "library"
-  );
 }
 
 function createLibraryMetadata(directory: FileSystemDirectoryHandle, media: MediaCollection): PlayerLibraryMetadata {
