@@ -60,7 +60,6 @@ export const defaultShortcuts: ShortcutMap = {
   toggleMute: "KeyM",
   toggleFullscreen: "KeyF",
   toggleFavorite: "KeyS",
-  markCompleted: "KeyC",
   playNext: "KeyN",
   togglePrivacy: "KeyP",
   toggleCinema: "KeyT",
@@ -107,7 +106,6 @@ export const shortcutGroups: Array<{ title: string; items: Array<{ action: Short
     items: [
       { action: "toggleFullscreen", label: "进入 / 退出全屏" },
       { action: "toggleFavorite", label: "收藏 / 取消收藏" },
-      { action: "markCompleted", label: "标记看完" },
       { action: "toggleMute", label: "静音 / 取消静音" },
     ],
   },

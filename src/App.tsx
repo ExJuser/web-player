@@ -1402,7 +1402,6 @@ export default function App() {
   const [isMediaLibraryPanelOpen, setIsMediaLibraryPanelOpen] = useState(false);
   const [isPrivacyMode, setIsPrivacyMode] = useState(false);
   const [theme, setTheme] = useState<AppTheme>(readStoredTheme);
-  const [deleteCandidate, setDeleteCandidate] = useState<VideoItem | null>(null);
   const [photoDeleteCandidate, setPhotoDeleteCandidate] = useState<{
     albumId: string;
     albumTitle: string;
@@ -1832,18 +1831,6 @@ export default function App() {
     return seriesOptions[0] ?? null;
   }, [currentSeriesKey, isSeriesMode, selectedSeriesKey, seriesOptions]);
   const activeBangumiMatch = activeBangumiSeries ? bangumiMatchesBySeriesKey[activeBangumiSeries.key] : null;
-  const activeSeriesProgressVideoIds = useMemo(() => {
-    if (!isSeriesMode || !activeBangumiSeries) return [];
-    return playlistVideos
-      .filter((video) => scopedSeriesKeyForVideo(video, seriesTitleByVideoId.get(video.id) ?? inferSeriesTitle(video)) === activeBangumiSeries.key)
-      .map((video) => video.id);
-  }, [activeBangumiSeries, isSeriesMode, playlistVideos, seriesTitleByVideoId]);
-  const canClearPlaylistProgress = useMemo(() => {
-    if (isSeriesMode) return activeSeriesProgressVideoIds.some((videoId) => Boolean(progressStore[videoId]));
-    return modeFilteredVideos.some((video) => Boolean(progressStore[video.id]));
-  }, [activeSeriesProgressVideoIds, isSeriesMode, modeFilteredVideos, progressStore]);
-  const clearPlaylistProgressTitle =
-    isSeriesMode && activeBangumiSeries ? `清除《${activeBangumiSeries.title}》观看记录` : "清空当前模式观看记录";
   const currentVideoSourceAspectRatio = currentVideo?.width && currentVideo.height ? currentVideo.width / currentVideo.height : 9 / 16;
   const normalizedVideoRotation = ((videoRotation % 360) + 360) % 360;
   const isVideoSideways = normalizedVideoRotation === 90 || normalizedVideoRotation === 270;
@@ -3573,36 +3560,6 @@ export default function App() {
     toggleFavorite(currentVideo);
   }, [currentVideo, toggleFavorite]);
 
-  const markVideoCompleted = useCallback(
-    (video: VideoItem) => {
-      clearedProgressVideoIdsRef.current.delete(video.id);
-      const element = videoRef.current;
-      const previous = progressStoreRef.current[video.id];
-      const nextDuration =
-        video.id === currentVideoId && element
-          ? selectTrustedDuration([video.duration, element.duration]) || 1
-          : previous?.duration && previous.duration > 0
-            ? previous.duration
-            : 1;
-      const progress = createProgress(nextDuration, nextDuration, true);
-      if (!progress) return;
-
-      replaceProgressStore(
-        {
-          ...progressStoreRef.current,
-          [video.id]: progress,
-        },
-        `已标记《${video.name}》为已看完`,
-      );
-    },
-    [currentVideoId, replaceProgressStore],
-  );
-
-  const markCurrentVideoCompleted = useCallback(() => {
-    if (!currentVideo) return;
-    markVideoCompleted(currentVideo);
-  }, [currentVideo, markVideoCompleted]);
-
   const resetVideoProgress = useCallback(
     (video: VideoItem) => {
       clearedProgressVideoIdsRef.current.add(video.id);
@@ -3621,143 +3578,6 @@ export default function App() {
     },
     [currentVideoId, replaceProgressStore],
   );
-
-  const requestDeleteLocalVideo = useCallback((video: VideoItem) => {
-    if (!video.parentDirectory?.removeEntry) {
-      setMessage("当前加载方式不支持删除本地文件，请通过“新增媒体库”重新加载后再试。");
-      return;
-    }
-
-    setDeleteCandidate(video);
-  }, []);
-
-  const deleteLocalVideo = useCallback(
-    async (video: VideoItem) => {
-      const parentDirectory = video.parentDirectory;
-      if (!parentDirectory?.removeEntry) {
-        setMessage("当前加载方式不支持删除本地文件，请通过“新增媒体库”重新加载后再试。");
-        return;
-      }
-
-      try {
-        const rootDirectory = directoryRef.current;
-        if (!rootDirectory || !(await hasDirectoryWritePermission(rootDirectory))) {
-          setMessage("为避免浏览器原生确认框，当前未启用应用内删除本地文件。请在文件管理器中删除。");
-          return;
-        }
-
-        const sortedBeforeDelete = getSortedVideos(
-          videosRef.current,
-          playerPreferencesRef.current.playlistSortMode,
-          playerPreferencesRef.current.isPlaylistSortReversed,
-        );
-        const previousIndex = sortedBeforeDelete.findIndex((item) => item.id === video.id);
-
-        await parentDirectory.removeEntry(video.name);
-
-        const nextVideos = videosRef.current.filter((item) => item.id !== video.id);
-        const nextProgressStore = { ...progressStoreRef.current };
-        const nextFavoriteVideoIds = new Set(favoriteVideoIdsRef.current);
-        const nextVideoTags = { ...videoTagsRef.current };
-        delete nextProgressStore[video.id];
-        delete nextVideoTags[video.id];
-        nextFavoriteVideoIds.delete(video.id);
-        clearedProgressVideoIdsRef.current.delete(video.id);
-        if (video.thumbnailUrl && isObjectUrl(video.thumbnailUrl)) URL.revokeObjectURL(video.thumbnailUrl);
-        if (isObjectUrl(video.url)) URL.revokeObjectURL(video.url);
-
-        videosRef.current = nextVideos;
-        progressStoreRef.current = nextProgressStore;
-        favoriteVideoIdsRef.current = nextFavoriteVideoIds;
-        videoTagsRef.current = nextVideoTags;
-        setVideos(nextVideos);
-        setProgressStore(nextProgressStore);
-        setFavoriteVideoIds(nextFavoriteVideoIds);
-        setVideoTags(nextVideoTags);
-
-        if (video.id === currentVideoId) {
-          videoRef.current?.pause();
-          const sortedAfterDelete = getSortedVideos(
-            nextVideos,
-            playerPreferencesRef.current.playlistSortMode,
-            playerPreferencesRef.current.isPlaylistSortReversed,
-          );
-          const fallbackIndex = previousIndex < 0 ? 0 : Math.min(previousIndex, sortedAfterDelete.length - 1);
-          setCurrentVideoId(sortedAfterDelete[fallbackIndex]?.id ?? null);
-          setCurrentTime(0);
-          setDuration(0);
-          updateSelectedSubtitleId("off");
-          setIsPlaying(false);
-        }
-
-        await Promise.all([
-          deletePlayerProgress(video.id),
-          savePlayerFavorite(video.id, false),
-          savePlayerVideoTags(video.id, nextVideoTags[video.id] ?? []),
-        ]);
-
-        setMessage(`已删除本地文件《${video.name}》`);
-      } catch {
-        setMessage("删除本地文件失败，请确认浏览器仍有文件夹写入权限。");
-      }
-    },
-    [currentVideoId, updateSelectedSubtitleId],
-  );
-
-  const confirmDeleteLocalVideo = useCallback(async () => {
-    if (!deleteCandidate) return;
-    const target = deleteCandidate;
-    setDeleteCandidate(null);
-    await deleteLocalVideo(target);
-  }, [deleteCandidate, deleteLocalVideo]);
-
-  const clearFolderProgress = useCallback(() => {
-    if (!modeFilteredVideos.length) return;
-    if (isSeriesMode && activeBangumiSeries) {
-      const targetVideoIds = new Set(activeSeriesProgressVideoIds);
-      if (!targetVideoIds.size) return;
-
-      const nextStore = { ...progressStoreRef.current };
-      let didClear = false;
-      targetVideoIds.forEach((videoId) => {
-        clearedProgressVideoIdsRef.current.add(videoId);
-        if (nextStore[videoId]) {
-          delete nextStore[videoId];
-          didClear = true;
-        }
-      });
-      if (!didClear) return;
-
-      if (currentVideoId && targetVideoIds.has(currentVideoId)) {
-        const element = videoRef.current;
-        if (element && Number.isFinite(element.duration)) {
-          element.currentTime = 0;
-        }
-        setCurrentTime(0);
-      }
-
-      replaceProgressStore(nextStore, `已清除《${activeBangumiSeries.title}》的观看记录`);
-      return;
-    }
-
-    const element = videoRef.current;
-    if (element && Number.isFinite(element.duration)) {
-      element.currentTime = 0;
-    }
-    setCurrentTime(0);
-    const targetVideoIds = new Set(modeFilteredVideos.map((video) => video.id));
-    const nextStore = { ...progressStoreRef.current };
-    let didClear = false;
-    targetVideoIds.forEach((videoId) => {
-      clearedProgressVideoIdsRef.current.add(videoId);
-      if (nextStore[videoId]) {
-        delete nextStore[videoId];
-        didClear = true;
-      }
-    });
-    if (!didClear) return;
-    replaceProgressStore(nextStore, "已清空当前模式的观看记录");
-  }, [activeBangumiSeries, activeSeriesProgressVideoIds, currentVideoId, isSeriesMode, modeFilteredVideos, replaceProgressStore]);
 
   const clearPendingProgressSave = useCallback(() => {
     if (saveTimerRef.current) {
@@ -6412,7 +6232,6 @@ export default function App() {
     persistCurrentProgress();
     resetHoldSpeedState();
     setIsShortcutDialogOpen(false);
-    setDeleteCandidate(null);
     setPhotoDeleteCandidate(null);
     setPhotoDeleteError("");
     setIsPhotoDeletePending(false);
@@ -6639,12 +6458,6 @@ export default function App() {
         return;
       }
 
-      if (event.key === "Escape" && deleteCandidate) {
-        event.preventDefault();
-        setDeleteCandidate(null);
-        return;
-      }
-
       if (event.key === "Escape" && photoDeleteCandidate && !isPhotoDeletePending) {
         event.preventDefault();
         setPhotoDeleteCandidate(null);
@@ -6739,7 +6552,7 @@ export default function App() {
         return;
       }
 
-      if (!currentVideo || isShortcutDialogOpen || deleteCandidate || photoDeleteCandidate || photoAlbumDeleteCandidate || isFormControl(event.target)) return;
+      if (!currentVideo || isShortcutDialogOpen || photoDeleteCandidate || photoAlbumDeleteCandidate || isFormControl(event.target)) return;
 
       if (isPrivacyMode) {
         if (eventCode === activeShortcuts.seekBackward) {
@@ -6780,14 +6593,6 @@ export default function App() {
         event.preventDefault();
         if (!event.repeat) {
           toggleCurrentFavorite();
-        }
-        return;
-      }
-
-      if (eventCode === activeShortcuts.markCompleted) {
-        event.preventDefault();
-        if (!event.repeat) {
-          markCurrentVideoCompleted();
         }
         return;
       }
@@ -6878,7 +6683,6 @@ export default function App() {
     toggleCurrentFavorite,
     toggleShortcutDialog,
     stopRightMouseHoldSpeed,
-    deleteCandidate,
     exitPrivacyMode,
     photoAlbumDeleteCandidate,
     photoDeleteCandidate,
@@ -6887,7 +6691,6 @@ export default function App() {
     isClearCacheConfirmOpen,
     isPrivacyMode,
     isShortcutDialogOpen,
-    markCurrentVideoCompleted,
     movePhoto,
     playNext,
     selectedPhotoAlbum,
@@ -8605,15 +8408,6 @@ export default function App() {
                 </button>
               </div>
             ) : null}
-            <button
-              className="playlist-clear-button icon-only"
-              type="button"
-              onClick={clearFolderProgress}
-              disabled={!canClearPlaylistProgress}
-              title={clearPlaylistProgressTitle}
-            >
-              <Trash2 size={16} />
-            </button>
           </div>
         </div>
 
@@ -8751,30 +8545,11 @@ export default function App() {
                   <button
                     className="episode-action-button"
                     type="button"
-                    onClick={() => markVideoCompleted(video)}
-                    disabled={isCompleted}
-                    title="标记已看"
-                  >
-                    <CheckCircle2 size={15} />
-                  </button>
-                  <button
-                    className="episode-action-button"
-                    type="button"
                     onClick={() => resetVideoProgress(video)}
                     disabled={!progressStore[video.id]}
                     title="清除进度"
                   >
                     <RotateCcw size={15} />
-                  </button>
-                  <button
-                    className="episode-action-button danger"
-                    type="button"
-                    onClick={() => requestDeleteLocalVideo(video)}
-                    disabled={!video.parentDirectory?.removeEntry}
-                    title={video.parentDirectory?.removeEntry ? "删除本地文件" : "当前加载方式不支持删除本地文件"}
-                    aria-label={video.parentDirectory?.removeEntry ? "删除本地文件" : "当前加载方式不支持删除本地文件"}
-                  >
-                    <Trash2 size={15} />
                   </button>
                 </span>
               </div>
@@ -8791,46 +8566,6 @@ export default function App() {
       </aside>
       ) : null}
     </main>
-    {deleteCandidate ? (
-      <div className="modal-backdrop" role="presentation" onMouseDown={() => setDeleteCandidate(null)}>
-        <section
-          aria-labelledby="delete-file-title"
-          aria-modal="true"
-          className="delete-dialog"
-          role="dialog"
-          onMouseDown={(event) => event.stopPropagation()}
-        >
-          <button
-            aria-label="关闭"
-            className="dialog-close"
-            type="button"
-            onClick={() => setDeleteCandidate(null)}
-          >
-            <X size={18} />
-          </button>
-          <div className="dialog-icon danger">
-            <Trash2 size={28} />
-          </div>
-          <div className="dialog-copy">
-            <h2 id="delete-file-title">删除本地文件？</h2>
-            <p>这个操作会直接从本地磁盘删除视频文件，删除后无法在播放器内恢复。</p>
-          </div>
-          <div className="delete-file-preview">
-            <strong>{deleteCandidate.name}</strong>
-            <span>{deleteCandidate.relativePath}</span>
-          </div>
-          <div className="dialog-actions">
-            <button className="secondary-button" type="button" onClick={() => setDeleteCandidate(null)}>
-              取消
-            </button>
-            <button className="danger-button" type="button" onClick={() => void confirmDeleteLocalVideo()}>
-              <Trash2 size={18} />
-              删除文件
-            </button>
-          </div>
-        </section>
-      </div>
-    ) : null}
     {photoDeleteCandidate ? (
       <div
         className="modal-backdrop"
