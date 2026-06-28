@@ -153,6 +153,13 @@ export type PlaybackProgress = {
 };
 
 export type ProgressStore = Record<string, PlaybackProgress>;
+export type VideoHighlightSegment = {
+  id: string;
+  startTime: number;
+  endTime: number;
+  updatedAt: number;
+};
+export type VideoHighlightStore = Record<string, VideoHighlightSegment[]>;
 export type VideoTagStore = Record<string, string[]>;
 export type VideoStats = {
   totalPlayedSeconds: number;
@@ -211,6 +218,7 @@ export type PlayerDataStore = {
   favorites: string[];
   videoTags: VideoTagStore;
   videoStats: VideoStatsStore;
+  videoHighlights: VideoHighlightStore;
   tagMergeDecisions: TagMergeDecisionStore;
   embeddedSubtitles: PersistedEmbeddedSubtitle[];
   danmakuSelections: DanmakuSelectionStore;
@@ -330,6 +338,7 @@ export type PhotoAlbumStore = {
   version?: number;
   favorites: string[];
   progress: Record<string, PhotoAlbumProgress>;
+  coverImageByAlbumId: Record<string, string>;
   preferences: PhotoAlbumPreferences;
 };
 

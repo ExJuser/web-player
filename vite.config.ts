@@ -666,11 +666,13 @@ function playerDataApiPlugin(env) {
     const favoriteMatch = url.pathname.match(/^\/api\/player-data\/favorites\/(.+)$/);
     const tagsMatch = url.pathname.match(/^\/api\/player-data\/tags\/(.+)$/);
     const statsMatch = url.pathname.match(/^\/api\/player-data\/stats\/(.+)$/);
+    const highlightsMatch = url.pathname.match(/^\/api\/player-data\/highlights\/(.+)$/);
     const preferenceMatch = url.pathname.match(/^\/api\/player-data\/preferences\/([^/]+)$/);
     const settingMatch = url.pathname.match(/^\/api\/player-data\/settings\/([^/]+)$/);
     const danmakuSelectionMatch = url.pathname.match(/^\/api\/player-data\/danmaku-selection\/(.+)$/);
     const photoAlbumProgressMatch = url.pathname.match(/^\/api\/photo-albums\/progress\/(.+)$/);
     const photoAlbumFavoriteMatch = url.pathname.match(/^\/api\/photo-albums\/favorites\/(.+)$/);
+    const photoAlbumCoverMatch = url.pathname.match(/^\/api\/photo-albums\/cover\/(.+)$/);
 
     try {
       const store = await getLocalDataStore();
@@ -901,6 +903,14 @@ function playerDataApiPlugin(env) {
         return;
       }
 
+      if (highlightsMatch && request.method === "PUT") {
+        const videoId = decodeURIComponent(highlightsMatch[1]);
+        const payload = await parseJsonBody(request);
+        store.replaceVideoHighlights("global", videoId, payload?.highlights ?? payload);
+        sendJson(response, 200, { ok: true });
+        return;
+      }
+
       if (preferenceMatch && request.method === "PUT") {
         const key = decodeURIComponent(preferenceMatch[1]);
         const payload = await parseJsonBody(request);
@@ -951,6 +961,21 @@ function playerDataApiPlugin(env) {
         const albumId = decodeURIComponent(photoAlbumFavoriteMatch[1]);
         if (request.method === "PUT" || request.method === "DELETE") {
           store.setPhotoAlbumFavorite(albumId, request.method === "PUT");
+          sendJson(response, 200, { ok: true });
+          return;
+        }
+      }
+
+      if (photoAlbumCoverMatch) {
+        const albumId = decodeURIComponent(photoAlbumCoverMatch[1]);
+        if (request.method === "PUT") {
+          const payload = await parseJsonBody(request);
+          store.setPhotoAlbumCoverPreference(albumId, payload?.imageId ?? payload);
+          sendJson(response, 200, { ok: true });
+          return;
+        }
+        if (request.method === "DELETE") {
+          store.setPhotoAlbumCoverPreference(albumId, "");
           sendJson(response, 200, { ok: true });
           return;
         }

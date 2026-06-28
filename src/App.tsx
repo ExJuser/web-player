@@ -27,6 +27,7 @@ import {
   Search,
   ShieldCheck,
   SkipForward,
+  Sparkles,
   Star,
   Subtitles,
   Tags,
@@ -110,6 +111,8 @@ import type {
   ShortcutMap,
   SubtitleItem,
   TagMergeDecisionStore,
+  VideoHighlightSegment,
+  VideoHighlightStore,
   VideoItem,
   VideoPlayability,
   VideoMetadata,
@@ -124,6 +127,7 @@ import {
   photoAlbumScanCacheVersion,
   saveCachedPhotoAlbumScan,
   savePhotoAlbumFavorite,
+  savePhotoAlbumCoverPreference,
   savePhotoAlbumPreferences,
   savePhotoAlbumProgress,
   savePhotoAlbumStore
@@ -208,6 +212,7 @@ import {
   getLatestResumableVideo,
   getSortedVideos,
   isResumableProgress,
+  detectDuplicateVideos,
   mergeMediaBatch,
   mergeVideoRuntimeState,
   shouldFlushMediaScan,
@@ -344,6 +349,7 @@ import {
   savePlayerProgress,
   savePlayerSetting,
   saveTagMergeDecisions,
+  savePlayerVideoHighlights,
   savePlayerVideoStats,
   savePlayerVideoTags,
   writeCachedThumbnail,
@@ -1269,6 +1275,7 @@ export default function App() {
   const favoriteVideoIdsRef = useRef(new Set<string>());
   const videoTagsRef = useRef<VideoTagStore>({});
   const videoStatsRef = useRef<VideoStatsStore>({});
+  const videoHighlightsRef = useRef<VideoHighlightStore>({});
   const tagMergeDecisionsRef = useRef<TagMergeDecisionStore>({});
   const tagDialogRef = useRef<HTMLElement | null>(null);
   const tagDialogDragRef = useRef<DialogDragState | null>(null);
@@ -1280,6 +1287,7 @@ export default function App() {
   const cachedEmbeddedSubtitleLookupKeysRef = useRef(new Set<string>());
   const bangumiMatchesBySeriesKeyRef = useRef<Record<string, BangumiSeriesMatch>>({});
   const photoAlbumProgressRef = useRef<Record<string, PhotoAlbumProgress>>({});
+  const photoAlbumCoverPreferencesRef = useRef<Record<string, string>>({});
   const favoritePhotoAlbumIdsRef = useRef(new Set<string>());
   const photoAlbumPreferencesRef = useRef(defaultPhotoAlbumPreferences);
   const photoAlbumAutoLoadAttemptedRef = useRef(false);
@@ -1406,6 +1414,7 @@ export default function App() {
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
   const [photoObjectUrls, setPhotoObjectUrls] = useState<Record<string, string>>({});
   const [photoAlbumProgress, setPhotoAlbumProgress] = useState<Record<string, PhotoAlbumProgress>>({});
+  const [photoAlbumCoverPreferences, setPhotoAlbumCoverPreferences] = useState<Record<string, string>>({});
   const [favoritePhotoAlbumIds, setFavoritePhotoAlbumIds] = useState<Set<string>>(() => new Set());
   const [photoAlbumSortMode, setPhotoAlbumSortMode] = useState<PhotoAlbumSortMode>(defaultPhotoAlbumPreferences.sortMode);
   const [photoAlbumFilter, setPhotoAlbumFilter] = useState<PhotoAlbumViewFilter>(
@@ -1419,6 +1428,7 @@ export default function App() {
   const [progressStore, setProgressStore] = useState<ProgressStore>({});
   const [favoriteVideoIds, setFavoriteVideoIds] = useState<Set<string>>(() => new Set());
   const [videoTags, setVideoTags] = useState<VideoTagStore>({});
+  const [videoHighlights, setVideoHighlights] = useState<VideoHighlightStore>({});
   const [, setTagMergeDecisions] = useState<TagMergeDecisionStore>({});
   const [isTagDialogOpen, setIsTagDialogOpen] = useState(false);
   const [tagInput, setTagInput] = useState("");
@@ -1530,7 +1540,9 @@ export default function App() {
   localConfigRef.current = localConfig;
   bangumiMatchesBySeriesKeyRef.current = bangumiMatchesBySeriesKey;
   photoAlbumProgressRef.current = photoAlbumProgress;
+  photoAlbumCoverPreferencesRef.current = photoAlbumCoverPreferences;
   favoritePhotoAlbumIdsRef.current = favoritePhotoAlbumIds;
+  videoHighlightsRef.current = videoHighlights;
   photoAlbumPreferencesRef.current = {
     sortMode: photoAlbumSortMode,
     favoritesOnly: photoAlbumFilter === "favorites",
@@ -1548,6 +1560,7 @@ export default function App() {
       favorites: Array.from(favoriteVideoIdsRef.current),
       videoTags: videoTagsRef.current,
       videoStats: videoStatsRef.current,
+      videoHighlights: videoHighlightsRef.current,
       tagMergeDecisions: tagMergeDecisionsRef.current,
       embeddedSubtitles: createPersistedEmbeddedSubtitles(subtitlesRef.current),
       danmakuSelections: danmakuSelectionsRef.current,
@@ -1576,6 +1589,7 @@ export default function App() {
       version: 1,
       favorites: Array.from(favoritePhotoAlbumIdsRef.current),
       progress: photoAlbumProgressRef.current,
+      coverImageByAlbumId: photoAlbumCoverPreferencesRef.current,
       preferences: photoAlbumPreferencesRef.current,
       ...overrides,
     }),
@@ -1593,9 +1607,11 @@ export default function App() {
     const favoriteIds = new Set(store.favorites);
     favoritePhotoAlbumIdsRef.current = favoriteIds;
     photoAlbumProgressRef.current = store.progress;
+    photoAlbumCoverPreferencesRef.current = store.coverImageByAlbumId;
     photoAlbumPreferencesRef.current = store.preferences;
     setFavoritePhotoAlbumIds(favoriteIds);
     setPhotoAlbumProgress(store.progress);
+    setPhotoAlbumCoverPreferences(store.coverImageByAlbumId);
     setPhotoAlbumSortMode(store.preferences.sortMode);
     setPhotoAlbumFilter(store.preferences.favoritesOnly ? "favorites" : "all");
   }, []);
@@ -1617,6 +1633,7 @@ export default function App() {
     favoriteVideoIdsRef.current = new Set(nextDataStore.favorites);
     videoTagsRef.current = nextDataStore.videoTags;
     videoStatsRef.current = nextDataStore.videoStats;
+    videoHighlightsRef.current = nextDataStore.videoHighlights;
     tagMergeDecisionsRef.current = nextDataStore.tagMergeDecisions;
     danmakuSelectionsRef.current = nextDataStore.danmakuSelections;
     danmakuPreferencesRef.current = nextDataStore.danmakuPreferences;
@@ -1636,6 +1653,7 @@ export default function App() {
     setSkipFolderAccessPrompt(nextDataStore.settings.skipFolderAccessPrompt);
     setFavoriteVideoIds(new Set(nextDataStore.favorites));
     setVideoTags(nextDataStore.videoTags);
+    setVideoHighlights(nextDataStore.videoHighlights);
     setTagMergeDecisions(nextDataStore.tagMergeDecisions);
     setDanmakuSelections(nextDataStore.danmakuSelections);
     setDanmakuPreferences(nextDataStore.danmakuPreferences);
@@ -1653,6 +1671,7 @@ export default function App() {
             version: 1,
             favorites: [],
             progress: {},
+            coverImageByAlbumId: {},
             preferences: defaultPhotoAlbumPreferences,
           })),
         ]);
@@ -1749,6 +1768,7 @@ export default function App() {
             version: 1,
             favorites: [],
             progress: {},
+            coverImageByAlbumId: {},
             preferences: defaultPhotoAlbumPreferences,
           })),
         ]);
@@ -2112,6 +2132,11 @@ export default function App() {
         : null,
     [homeMediaMode, modeFilteredVideos, progressStore, videoStatsRevision, videoTags],
   );
+  const duplicateVideoGroups = useMemo(
+    () => detectDuplicateVideos(modeFilteredVideos).slice(0, 6),
+    [modeFilteredVideos],
+  );
+  const currentVideoHighlights = currentVideo ? videoHighlights[currentVideo.id] ?? [] : [];
   const selectedPhotoAlbum = useMemo(
     () => photoAlbums.find((album) => album.id === selectedPhotoAlbumId) ?? null,
     [photoAlbums, selectedPhotoAlbumId],
@@ -2164,7 +2189,7 @@ export default function App() {
 
     if (activeView === "photos") {
       pagedPhotoAlbums.forEach((album) => {
-        rememberNeededImage(album.images[0]);
+        rememberNeededImage(album.images.find((image) => image.id === photoAlbumCoverPreferences[album.id]) ?? album.images[0]);
       });
     } else if (activeView === "photoViewer" && selectedPhotoAlbum) {
       const warmStart = Math.max(currentPhotoIndex - photoViewerWarmRadius, 0);
@@ -2241,7 +2266,7 @@ export default function App() {
     return () => {
       isCancelled = true;
     };
-  }, [activeView, currentPhotoIndex, pagedPhotoAlbums, selectedPhotoAlbum]);
+  }, [activeView, currentPhotoIndex, pagedPhotoAlbums, photoAlbumCoverPreferences, selectedPhotoAlbum]);
   useEffect(() => {
     if (activeView !== "photoViewer" || !selectedPhotoAlbum) return;
 
@@ -3834,6 +3859,7 @@ export default function App() {
       const nextProgress = { ...progressStoreRef.current };
       const nextVideoTags = { ...videoTagsRef.current };
       const nextVideoStats = { ...videoStatsRef.current };
+      const nextVideoHighlights = { ...videoHighlightsRef.current };
       const nextDanmakuSelections = { ...danmakuSelectionsRef.current };
       const nextFavorites = new Set(favoriteVideoIdsRef.current);
       const nextSubtitles = subtitlesRef.current.filter((subtitle) => subtitle.videoId !== video.id);
@@ -3841,6 +3867,7 @@ export default function App() {
       delete nextProgress[video.id];
       delete nextVideoTags[video.id];
       delete nextVideoStats[createVideoStatsKey(video)];
+      delete nextVideoHighlights[video.id];
       delete nextDanmakuSelections[video.id];
       nextFavorites.delete(video.id);
 
@@ -3851,6 +3878,7 @@ export default function App() {
       progressStoreRef.current = nextProgress;
       videoTagsRef.current = nextVideoTags;
       videoStatsRef.current = nextVideoStats;
+      videoHighlightsRef.current = nextVideoHighlights;
       danmakuSelectionsRef.current = nextDanmakuSelections;
       favoriteVideoIdsRef.current = nextFavorites;
       subtitlesRef.current = nextSubtitles;
@@ -3858,6 +3886,7 @@ export default function App() {
       setVideos(nextVideos);
       setProgressStore(nextProgress);
       setVideoTags(nextVideoTags);
+      setVideoHighlights(nextVideoHighlights);
       setVideoStatsRevision((revision) => revision + 1);
       setDanmakuSelections(nextDanmakuSelections);
       setFavoriteVideoIds(nextFavorites);
@@ -3887,6 +3916,7 @@ export default function App() {
           favorites: Array.from(nextFavorites),
           videoTags: nextVideoTags,
           videoStats: nextVideoStats,
+          videoHighlights: nextVideoHighlights,
           danmakuSelections: nextDanmakuSelections,
           embeddedSubtitles: createPersistedEmbeddedSubtitles(subtitlesRef.current),
         }),
@@ -4116,6 +4146,19 @@ export default function App() {
     [],
   );
 
+  const setPhotoAlbumCover = useCallback((album: PhotoAlbum, image: PhotoAlbumImage) => {
+    const nextPreferences = {
+      ...photoAlbumCoverPreferencesRef.current,
+      [album.id]: image.id,
+    };
+    photoAlbumCoverPreferencesRef.current = nextPreferences;
+    setPhotoAlbumCoverPreferences(nextPreferences);
+    setPhotoAlbumMessage(`已将《${image.name}》设为《${album.title}》封面`);
+    void savePhotoAlbumCoverPreference(album.id, image.id).catch(() => {
+      setPhotoAlbumMessage("写真集封面偏好保存失败。");
+    });
+  }, []);
+
   const markSelectedPhotoAlbumCompleted = useCallback(() => {
     if (!selectedPhotoAlbum) return;
     const lastIndex = Math.max(selectedPhotoAlbum.images.length - 1, 0);
@@ -4136,6 +4179,43 @@ export default function App() {
     });
     setPhotoAlbumMessage(`已清除《${selectedPhotoAlbum.title}》的阅读进度`);
   }, [saveCurrentPhotoAlbumStore, selectedPhotoAlbum]);
+
+  const markCurrentHighEnergySegment = useCallback(() => {
+    if (!currentVideo || !duration) return;
+    const startTime = clamp(currentTime - 6, 0, duration);
+    const endTime = clamp(currentTime + 6, startTime + 1, duration);
+    const nextHighlight: VideoHighlightSegment = {
+      id: `${Math.round(startTime * 10)}-${Math.round(endTime * 10)}-${Date.now().toString(36)}`,
+      startTime,
+      endTime,
+      updatedAt: Date.now(),
+    };
+    const nextHighlights = {
+      ...videoHighlightsRef.current,
+      [currentVideo.id]: [...(videoHighlightsRef.current[currentVideo.id] ?? []), nextHighlight].sort((a, b) => a.startTime - b.startTime),
+    };
+    videoHighlightsRef.current = nextHighlights;
+    setVideoHighlights(nextHighlights);
+    setMessage(`已标记高能片段 ${formatTime(startTime)} - ${formatTime(endTime)}`);
+    void savePlayerVideoHighlights(currentVideo.id, nextHighlights[currentVideo.id]).catch(() => {
+      setMessage("高能标记保存失败。");
+    });
+  }, [currentTime, currentVideo, duration]);
+
+  const removeCurrentHighEnergySegment = useCallback((highlightId: string) => {
+    if (!currentVideo) return;
+    const nextVideoHighlights = (videoHighlightsRef.current[currentVideo.id] ?? []).filter((highlight) => highlight.id !== highlightId);
+    const nextHighlights = {
+      ...videoHighlightsRef.current,
+      [currentVideo.id]: nextVideoHighlights,
+    };
+    if (!nextVideoHighlights.length) delete nextHighlights[currentVideo.id];
+    videoHighlightsRef.current = nextHighlights;
+    setVideoHighlights(nextHighlights);
+    void savePlayerVideoHighlights(currentVideo.id, nextVideoHighlights).catch(() => {
+      setMessage("高能标记保存失败。");
+    });
+  }, [currentVideo]);
 
   const clearPhotoAlbumAccessAfterWritePermissionDenied = useCallback(async () => {
     await clearPhotoAlbumFolderHandle().catch(() => undefined);
@@ -4234,6 +4314,7 @@ export default function App() {
         .map((image, index) => ({ ...image, index }));
       const nextPhotoIndex = Math.min(Math.max(photoDeleteCandidate.imageIndex, 0), Math.max(remainingImages.length - 1, 0));
       const nextProgress = { ...photoAlbumProgressRef.current };
+      const nextCoverPreferences = { ...photoAlbumCoverPreferencesRef.current };
       let nextFavorites = favoritePhotoAlbumIdsRef.current;
       let nextSelectedAlbumId: string | null = album.id;
 
@@ -4253,9 +4334,14 @@ export default function App() {
           updatedAt: Date.now(),
           completed: Boolean(previousProgress?.completed && nextPhotoIndex === remainingImages.length - 1),
         };
+        if (nextCoverPreferences[album.id] === photo.id) {
+          const nextCoverImage = remainingImages[nextPhotoIndex] ?? remainingImages[0];
+          if (nextCoverImage) nextCoverPreferences[album.id] = nextCoverImage.id;
+        }
       } else {
         nextAlbums = photoAlbumsRef.current.filter((item) => item.id !== album.id);
         delete nextProgress[album.id];
+        delete nextCoverPreferences[album.id];
         if (favoritePhotoAlbumIdsRef.current.has(album.id)) {
           nextFavorites = new Set(favoritePhotoAlbumIdsRef.current);
           nextFavorites.delete(album.id);
@@ -4275,6 +4361,7 @@ export default function App() {
 
       photoAlbumsRef.current = nextAlbums;
       photoAlbumProgressRef.current = nextProgress;
+      photoAlbumCoverPreferencesRef.current = nextCoverPreferences;
       favoritePhotoAlbumIdsRef.current = nextFavorites;
       setPhotoAlbums(nextAlbums);
       setPhotoRootStatuses((statuses) =>
@@ -4291,6 +4378,7 @@ export default function App() {
       );
       setPhotoObjectUrls(nextPhotoObjectUrls);
       setPhotoAlbumProgress(nextProgress);
+      setPhotoAlbumCoverPreferences(nextCoverPreferences);
       setFavoritePhotoAlbumIds(nextFavorites);
       setCurrentPhotoIndex(nextPhotoIndex);
       setSelectedPhotoAlbumId(nextSelectedAlbumId);
@@ -4299,6 +4387,7 @@ export default function App() {
       await saveCurrentPhotoAlbumStore({
         progress: nextProgress,
         favorites: Array.from(nextFavorites),
+        coverImageByAlbumId: nextCoverPreferences,
       });
 
       void loadCachedPhotoAlbumScan()
@@ -4400,6 +4489,8 @@ export default function App() {
       const nextAlbums = photoAlbumsRef.current.filter((item) => item.id !== album.id);
       const nextProgress = { ...photoAlbumProgressRef.current };
       delete nextProgress[album.id];
+      const nextCoverPreferences = { ...photoAlbumCoverPreferencesRef.current };
+      delete nextCoverPreferences[album.id];
       let nextFavorites = favoritePhotoAlbumIdsRef.current;
       if (favoritePhotoAlbumIdsRef.current.has(album.id)) {
         nextFavorites = new Set(favoritePhotoAlbumIdsRef.current);
@@ -4419,6 +4510,7 @@ export default function App() {
 
       photoAlbumsRef.current = nextAlbums;
       photoAlbumProgressRef.current = nextProgress;
+      photoAlbumCoverPreferencesRef.current = nextCoverPreferences;
       favoritePhotoAlbumIdsRef.current = nextFavorites;
       photoObjectUrlsRef.current = nextPhotoObjectUrls;
       setPhotoAlbums(nextAlbums);
@@ -4436,6 +4528,7 @@ export default function App() {
       );
       setPhotoObjectUrls(nextPhotoObjectUrls);
       setPhotoAlbumProgress(nextProgress);
+      setPhotoAlbumCoverPreferences(nextCoverPreferences);
       setFavoritePhotoAlbumIds(nextFavorites);
       if (selectedPhotoAlbumId === album.id) {
         setSelectedPhotoAlbumId(null);
@@ -4448,6 +4541,7 @@ export default function App() {
       await saveCurrentPhotoAlbumStore({
         progress: nextProgress,
         favorites: Array.from(nextFavorites),
+        coverImageByAlbumId: nextCoverPreferences,
       });
 
       void loadCachedPhotoAlbumScan()
@@ -7457,7 +7551,8 @@ export default function App() {
     const progress = photoAlbumProgress[album.id];
     const progressPercent = progress ? Math.min(100, ((progress.imageIndex + 1) / Math.max(album.imageCount, 1)) * 100) : 0;
     const isFavorite = favoritePhotoAlbumIds.has(album.id);
-    const coverImageUrl = album.coverImageUrl || getPhotoImageUrl(album.images[0]);
+    const preferredCover = album.images.find((image) => image.id === photoAlbumCoverPreferences[album.id]) ?? null;
+    const coverImageUrl = getPhotoImageUrl(preferredCover) || album.coverImageUrl || getPhotoImageUrl(album.images[0]);
     return (
       <article className="photo-album-card" key={album.id}>
         <button className="photo-album-cover" type="button" onClick={() => openPhotoAlbum(album)} title={album.relativePath || album.title}>
@@ -7509,6 +7604,22 @@ export default function App() {
       </article>
     );
   };
+  const renderDuplicateVideoGroup = (group: ReturnType<typeof detectDuplicateVideos>[number]) => (
+    <div className="duplicate-video-group" key={group.id}>
+      <div className="duplicate-video-group-header">
+        <strong>{group.severity === "duplicate" ? "高度重复" : "疑似重复"}</strong>
+        <span>{group.videos.length} 个 · {group.reasons.join("、")}</span>
+      </div>
+      <div className="duplicate-video-list">
+        {group.videos.map((video) => (
+          <button key={video.id} type="button" onClick={() => openVideoFromHome(video)} title={video.relativePath || video.name}>
+            <span>{video.name}</span>
+            <small>{formatFileSize(video.size)} · {video.duration ? formatTime(video.duration) : "未知时长"} · {video.width && video.height ? `${video.width}x${video.height}` : "未知分辨率"}</small>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
   const currentPhoto = selectedPhotoAlbum?.images[currentPhotoIndex] ?? null;
   const currentPhotoUrl = getPhotoImageUrl(currentPhoto);
 
@@ -8022,6 +8133,22 @@ export default function App() {
                 </button>
               </section>
 
+              {duplicateVideoGroups.length ? (
+                <section className="home-section duplicate-video-card">
+                  <div className="home-section-header">
+                    <h2>重复视频</h2>
+                    <span>{duplicateVideoGroups.length} 组</span>
+                  </div>
+                  <div className="duplicate-video-summary">
+                    <Sparkles size={24} />
+                    <span>按名称、路径、大小、时长和分辨率识别，仅提示不自动删除。</span>
+                  </div>
+                  <div className="duplicate-video-groups">
+                    {duplicateVideoGroups.map(renderDuplicateVideoGroup)}
+                  </div>
+                </section>
+              ) : null}
+
               {favoriteHomeCards.length ? (
                 <section className="home-section">
                   <div className="home-section-header">
@@ -8183,6 +8310,16 @@ export default function App() {
                   <RotateCcw size={16} />
                   重读
                 </button>
+                {currentPhoto ? (
+                  <button
+                    className={`secondary-button ${photoAlbumCoverPreferences[selectedPhotoAlbum.id] === currentPhoto.id ? "active" : ""}`}
+                    type="button"
+                    onClick={() => setPhotoAlbumCover(selectedPhotoAlbum, currentPhoto)}
+                  >
+                    <Images size={16} />
+                    {photoAlbumCoverPreferences[selectedPhotoAlbum.id] === currentPhoto.id ? "当前封面" : "设为封面"}
+                  </button>
+                ) : null}
                 <button
                   className="danger-button photo-delete-button"
                   type="button"
@@ -8437,6 +8574,19 @@ export default function App() {
                   </span>
                   <span className="timeline-preview-time">{formatTime(timelinePreview.time)}</span>
                 </output>
+                {duration && currentVideoHighlights.length ? (
+                  <div className="timeline-highlights" aria-hidden="true">
+                    {currentVideoHighlights.map((highlight) => (
+                      <span
+                        key={highlight.id}
+                        style={{
+                          left: `${clamp((highlight.startTime / duration) * 100, 0, 100)}%`,
+                          width: `${clamp(((highlight.endTime - highlight.startTime) / duration) * 100, 0.5, 100)}%`,
+                        }}
+                      />
+                    ))}
+                  </div>
+                ) : null}
                 <input
                   ref={timelineRef}
                 aria-label="播放进度"
@@ -8482,6 +8632,29 @@ export default function App() {
               </div>
               <span>{formatTime(duration)}</span>
             </div>
+
+            {currentVideo ? (
+              <div className="highlight-control-row">
+                <button className="secondary-button" type="button" onClick={markCurrentHighEnergySegment} disabled={!duration || isPrivacyMode}>
+                  <Sparkles size={16} />
+                  标记高能
+                </button>
+                {currentVideoHighlights.length ? (
+                  <div className="highlight-chip-list" aria-label="高能片段">
+                    {currentVideoHighlights.map((highlight) => (
+                      <span className="highlight-chip" key={highlight.id}>
+                        <button type="button" onClick={() => seekTo(highlight.startTime)}>
+                          {formatTime(highlight.startTime)} - {formatTime(highlight.endTime)}
+                        </button>
+                        <button type="button" onClick={() => removeCurrentHighEnergySegment(highlight.id)} aria-label="删除高能标记">
+                          <X size={13} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
 
             <div className="control-row">
               <button className="icon-button" type="button" onClick={togglePlay} disabled={!currentVideo} title="播放/暂停">

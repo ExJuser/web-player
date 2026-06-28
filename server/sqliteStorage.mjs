@@ -132,6 +132,16 @@ export class LocalDataSqliteStore {
         PRIMARY KEY (library_id, video_id)
       );
 
+      CREATE TABLE IF NOT EXISTS video_highlights (
+        library_id TEXT NOT NULL,
+        video_id TEXT NOT NULL,
+        highlight_id TEXT NOT NULL,
+        start_time REAL NOT NULL,
+        end_time REAL NOT NULL,
+        updated_at INTEGER NOT NULL,
+        PRIMARY KEY (library_id, video_id, highlight_id)
+      );
+
       CREATE TABLE IF NOT EXISTS tag_merge_decisions (
         library_id TEXT NOT NULL,
         decision_key TEXT NOT NULL,
@@ -190,6 +200,12 @@ export class LocalDataSqliteStore {
         album_id TEXT PRIMARY KEY,
         image_index INTEGER NOT NULL,
         completed INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS photo_album_cover_preferences (
+        album_id TEXT PRIMARY KEY,
+        image_id TEXT NOT NULL,
         updated_at INTEGER NOT NULL
       );
 
@@ -334,6 +350,7 @@ export class LocalDataSqliteStore {
       "video_favorites",
       "video_tags",
       "video_stats",
+      "video_highlights",
       "tag_merge_decisions",
       "embedded_subtitles",
       "danmaku_selections",
@@ -386,6 +403,31 @@ export class LocalDataSqliteStore {
         Number.isFinite(Number(stats.lastEmissionAt)) ? Number(stats.lastEmissionAt) : null,
         Number.isFinite(Number(stats.updatedAt)) ? Number(stats.updatedAt) : timestamp,
       );
+    }
+
+    const highlightInsert = this.db.prepare(`
+      INSERT INTO video_highlights (library_id, video_id, highlight_id, start_time, end_time, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `);
+    for (const [videoId, highlights] of Object.entries(asObject(store.videoHighlights))) {
+      if (!Array.isArray(highlights)) continue;
+      for (const highlight of highlights) {
+        const startTime = Number(highlight?.startTime);
+        const endTime = Number(highlight?.endTime);
+        const updatedAt = Number(highlight?.updatedAt);
+        if (
+          typeof highlight?.id !== "string" ||
+          !highlight.id ||
+          !Number.isFinite(startTime) ||
+          !Number.isFinite(endTime) ||
+          !Number.isFinite(updatedAt) ||
+          startTime < 0 ||
+          endTime <= startTime
+        ) {
+          continue;
+        }
+        highlightInsert.run(libraryId, videoId, highlight.id, startTime, endTime, updatedAt);
+      }
     }
 
     const decisionInsert = this.db.prepare(`
@@ -453,6 +495,7 @@ export class LocalDataSqliteStore {
     const metadataRow = this.db.prepare("SELECT metadata_json FROM library_metadata WHERE library_id = ?").get(libraryId);
     const hasData = Boolean(metadataRow)
       || Boolean(this.db.prepare("SELECT 1 FROM video_progress WHERE library_id = ? LIMIT 1").get(libraryId))
+      || Boolean(this.db.prepare("SELECT 1 FROM video_highlights WHERE library_id = ? LIMIT 1").get(libraryId))
       || Boolean(this.db.prepare("SELECT 1 FROM player_preferences WHERE library_id = ? LIMIT 1").get(libraryId));
     if (!hasData) return null;
 
@@ -484,6 +527,17 @@ export class LocalDataSqliteStore {
         ...(row.last_emission_at ? { lastEmissionAt: row.last_emission_at } : {}),
         updatedAt: row.updated_at,
       };
+    }
+
+    const videoHighlights = {};
+    for (const row of allRows(this.db.prepare("SELECT * FROM video_highlights WHERE library_id = ? ORDER BY video_id, start_time, end_time"), libraryId)) {
+      videoHighlights[row.video_id] ??= [];
+      videoHighlights[row.video_id].push({
+        id: row.highlight_id,
+        startTime: row.start_time,
+        endTime: row.end_time,
+        updatedAt: row.updated_at,
+      });
     }
 
     const tagMergeDecisions = {};
@@ -521,6 +575,7 @@ export class LocalDataSqliteStore {
       favorites,
       videoTags,
       videoStats,
+      videoHighlights,
       tagMergeDecisions,
       embeddedSubtitles,
       danmakuSelections,
@@ -651,6 +706,29 @@ export class LocalDataSqliteStore {
     });
   }
 
+  replaceVideoHighlights(libraryId, videoId, highlights) {
+    return this.transaction(() => {
+      this.db.prepare("DELETE FROM video_highlights WHERE library_id = ? AND video_id = ?").run(libraryId, videoId);
+      const insert = this.db.prepare("INSERT INTO video_highlights (library_id, video_id, highlight_id, start_time, end_time, updated_at) VALUES (?, ?, ?, ?, ?, ?)");
+      for (const highlight of Array.isArray(highlights) ? highlights : []) {
+        const startTime = Number(highlight?.startTime);
+        const endTime = Number(highlight?.endTime);
+        const updatedAt = Number(highlight?.updatedAt) || now();
+        if (
+          typeof highlight?.id !== "string" ||
+          !highlight.id ||
+          !Number.isFinite(startTime) ||
+          !Number.isFinite(endTime) ||
+          startTime < 0 ||
+          endTime <= startTime
+        ) {
+          continue;
+        }
+        insert.run(libraryId, videoId, highlight.id, startTime, endTime, updatedAt);
+      }
+    });
+  }
+
   replaceTagMergeDecisions(libraryId, decisions) {
     return this.transaction(() => {
       this.db.prepare("DELETE FROM tag_merge_decisions WHERE library_id = ?").run(libraryId);
@@ -718,15 +796,21 @@ export class LocalDataSqliteStore {
 
   savePhotoAlbumStoreSync(payload) {
     const store = asObject(payload);
+    const timestamp = now();
     this.db.prepare("DELETE FROM photo_album_favorites").run();
     this.db.prepare("DELETE FROM photo_album_progress").run();
+    this.db.prepare("DELETE FROM photo_album_cover_preferences").run();
     const favoriteInsert = this.db.prepare("INSERT INTO photo_album_favorites (album_id, created_at) VALUES (?, ?)");
     for (const albumId of Array.isArray(store.favorites) ? store.favorites : []) {
-      if (typeof albumId === "string" && albumId) favoriteInsert.run(albumId, now());
+      if (typeof albumId === "string" && albumId) favoriteInsert.run(albumId, timestamp);
     }
     const progressInsert = this.db.prepare("INSERT INTO photo_album_progress (album_id, image_index, completed, updated_at) VALUES (?, ?, ?, ?)");
     for (const [albumId, progress] of Object.entries(asObject(store.progress))) {
       progressInsert.run(albumId, Math.max(0, Math.floor(Number(progress?.imageIndex) || 0)), progress?.completed ? 1 : 0, Number(progress?.updatedAt) || now());
+    }
+    const coverInsert = this.db.prepare("INSERT INTO photo_album_cover_preferences (album_id, image_id, updated_at) VALUES (?, ?, ?)");
+    for (const [albumId, imageId] of Object.entries(asObject(store.coverImageByAlbumId))) {
+      if (albumId && typeof imageId === "string" && imageId) coverInsert.run(albumId, imageId, timestamp);
     }
     this.db
       .prepare("INSERT INTO photo_album_preferences (scope, preferences_json, updated_at) VALUES ('global', ?, ?) ON CONFLICT(scope) DO UPDATE SET preferences_json = excluded.preferences_json, updated_at = excluded.updated_at")
@@ -736,7 +820,8 @@ export class LocalDataSqliteStore {
   loadPhotoAlbumStore() {
     const hasData = Boolean(this.db.prepare("SELECT 1 FROM photo_album_preferences WHERE scope = 'global' LIMIT 1").get())
       || Boolean(this.db.prepare("SELECT 1 FROM photo_album_favorites LIMIT 1").get())
-      || Boolean(this.db.prepare("SELECT 1 FROM photo_album_progress LIMIT 1").get());
+      || Boolean(this.db.prepare("SELECT 1 FROM photo_album_progress LIMIT 1").get())
+      || Boolean(this.db.prepare("SELECT 1 FROM photo_album_cover_preferences LIMIT 1").get());
     if (!hasData) return null;
     const favorites = allRows(this.db.prepare("SELECT album_id FROM photo_album_favorites ORDER BY created_at, album_id")).map((row) => row.album_id);
     const progress = {};
@@ -747,10 +832,15 @@ export class LocalDataSqliteStore {
         updatedAt: row.updated_at,
       };
     }
+    const coverImageByAlbumId = {};
+    for (const row of allRows(this.db.prepare("SELECT album_id, image_id FROM photo_album_cover_preferences ORDER BY updated_at, album_id"))) {
+      coverImageByAlbumId[row.album_id] = row.image_id;
+    }
     return {
       version: photoAlbumStoreVersion,
       favorites,
       progress,
+      coverImageByAlbumId,
       preferences: parseJson(this.db.prepare("SELECT preferences_json FROM photo_album_preferences WHERE scope = 'global'").get()?.preferences_json, {}),
     };
   }
@@ -782,6 +872,19 @@ export class LocalDataSqliteStore {
         return;
       }
       this.db.prepare("DELETE FROM photo_album_favorites WHERE album_id = ?").run(albumId);
+    });
+  }
+
+  setPhotoAlbumCoverPreference(albumId, imageId) {
+    return this.transaction(() => {
+      const normalizedImageId = typeof imageId === "string" ? imageId.trim() : "";
+      if (!normalizedImageId) {
+        this.db.prepare("DELETE FROM photo_album_cover_preferences WHERE album_id = ?").run(albumId);
+        return;
+      }
+      this.db
+        .prepare("INSERT INTO photo_album_cover_preferences (album_id, image_id, updated_at) VALUES (?, ?, ?) ON CONFLICT(album_id) DO UPDATE SET image_id = excluded.image_id, updated_at = excluded.updated_at")
+        .run(albumId, normalizedImageId, now());
     });
   }
 

@@ -6,6 +6,18 @@ export const defaultPhotoAlbumPreferences: PhotoAlbumPreferences = {
   favoritesOnly: false,
 };
 
+export function parsePhotoAlbumCoverPreferences(source: unknown): Record<string, string> {
+  if (!source || typeof source !== "object" || Array.isArray(source)) return {};
+
+  const store: Record<string, string> = {};
+  for (const [albumId, imageId] of Object.entries(source)) {
+    if (albumId.trim() && typeof imageId === "string" && imageId.trim()) {
+      store[albumId] = imageId;
+    }
+  }
+  return store;
+}
+
 export function parsePhotoAlbumProgress(source: unknown): Record<string, PhotoAlbumProgress> {
   if (!source || typeof source !== "object" || Array.isArray(source)) return {};
 
@@ -53,6 +65,7 @@ export function parsePhotoAlbumStore(raw: string): PhotoAlbumStore {
     version?: unknown;
     favorites?: unknown;
     progress?: unknown;
+    coverImageByAlbumId?: unknown;
     preferences?: unknown;
   };
   return {
@@ -61,6 +74,7 @@ export function parsePhotoAlbumStore(raw: string): PhotoAlbumStore {
       ? Array.from(new Set(parsed.favorites.filter((id): id is string => typeof id === "string" && Boolean(id.trim()))))
       : [],
     progress: parsePhotoAlbumProgress(parsed?.progress),
+    coverImageByAlbumId: parsePhotoAlbumCoverPreferences(parsed?.coverImageByAlbumId),
     preferences: parsePhotoAlbumPreferences(parsed?.preferences),
   };
 }
@@ -70,6 +84,7 @@ export function createDefaultPhotoAlbumStore(): PhotoAlbumStore {
     version: 1,
     favorites: [],
     progress: {},
+    coverImageByAlbumId: {},
     preferences: defaultPhotoAlbumPreferences,
   };
 }
@@ -223,6 +238,7 @@ export async function savePhotoAlbumStore(store: PhotoAlbumStore) {
       version: 1,
       favorites: Array.from(new Set(store.favorites.filter(Boolean))),
       progress: parsePhotoAlbumProgress(store.progress),
+      coverImageByAlbumId: parsePhotoAlbumCoverPreferences(store.coverImageByAlbumId),
       preferences: parsePhotoAlbumPreferences(store.preferences),
     }),
   });
@@ -290,6 +306,18 @@ export async function savePhotoAlbumPreferences(preferences: PhotoAlbumPreferenc
       Accept: "application/json",
     },
     body: JSON.stringify(preferences),
+  });
+  if (!response.ok) throw new Error(await readApiError(response));
+}
+
+export async function savePhotoAlbumCoverPreference(albumId: string, imageId: string | null) {
+  const response = await fetch(`/api/photo-albums/cover/${encodeURIComponent(albumId)}`, {
+    method: imageId ? "PUT" : "DELETE",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    ...(imageId ? { body: JSON.stringify({ imageId }) } : {}),
   });
   if (!response.ok) throw new Error(await readApiError(response));
 }

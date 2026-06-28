@@ -35,6 +35,9 @@ test("sqlite store imports legacy player and photo album json once", async () =>
         favorites: ["video1"],
         videoTags: { video1: ["Tag A"] },
         videoStats: {},
+        videoHighlights: {
+          video1: [{ id: "mark-1", startTime: 12, endTime: 18, updatedAt: 1200 }],
+        },
         tagMergeDecisions: {},
         embeddedSubtitles: [],
         danmakuSelections: {},
@@ -51,6 +54,7 @@ test("sqlite store imports legacy player and photo album json once", async () =>
         version: 1,
         favorites: ["album1"],
         progress: { album1: { imageIndex: 2, completed: false, updatedAt: 2000 } },
+        coverImageByAlbumId: { album1: "image-2" },
         preferences: { sortMode: "name", favoritesOnly: true },
       }),
       "utf8",
@@ -63,7 +67,9 @@ test("sqlite store imports legacy player and photo album json once", async () =>
     assert.equal(playerStore.items.video1.currentTime, 12);
     assert.deepEqual(playerStore.favorites, ["video1"]);
     assert.deepEqual(playerStore.videoTags.video1, ["Tag A"]);
+    assert.deepEqual(playerStore.videoHighlights.video1, [{ id: "mark-1", startTime: 12, endTime: 18, updatedAt: 1200 }]);
     assert.equal(photoStore.progress.album1.imageIndex, 2);
+    assert.equal(photoStore.coverImageByAlbumId.album1, "image-2");
 
     context.store.close();
     context.store = new LocalDataSqliteStore({
@@ -95,6 +101,7 @@ test("sqlite incremental writes keep unrelated player data", async () => {
       favorites: [],
       videoTags: { video1: ["Old"] },
       videoStats: {},
+      videoHighlights: {},
       tagMergeDecisions: {},
       embeddedSubtitles: [],
       danmakuSelections: {},
@@ -105,15 +112,42 @@ test("sqlite incremental writes keep unrelated player data", async () => {
 
     context.store.upsertProgress("global", "video1", { currentTime: 5, duration: 10, completed: false, updatedAt: 2000 });
     context.store.replaceVideoTags("global", "video1", ["New"]);
+    context.store.replaceVideoHighlights("global", "video1", [{ id: "h1", startTime: 8, endTime: 15, updatedAt: 2200 }]);
     context.store.setPreferenceValue("global", "homeMediaMode", "anime");
     context.store.setSettingValue("global", "theme", "light");
 
     const store = context.store.loadPlayerDataStore("global");
     assert.equal(store.items.video1.currentTime, 5);
     assert.deepEqual(store.videoTags.video1, ["New"]);
+    assert.deepEqual(store.videoHighlights.video1, [{ id: "h1", startTime: 8, endTime: 15, updatedAt: 2200 }]);
     assert.equal(store.preferences.homeMediaMode, "anime");
     assert.equal(store.settings.theme, "light");
     assert.equal(store.settings.volume, 0.5);
+  } finally {
+    context.store.close();
+    await rm(context.root, { recursive: true, force: true });
+  }
+});
+
+test("sqlite photo album cover preferences can be updated independently", async () => {
+  const context = await createTempStore();
+  try {
+    await context.store.initialize();
+    context.store.savePhotoAlbumStore({
+      version: 1,
+      favorites: ["album1"],
+      progress: {},
+      coverImageByAlbumId: { album1: "img-a" },
+      preferences: { sortMode: "updated", favoritesOnly: false },
+    });
+
+    context.store.setPhotoAlbumCoverPreference("album1", "img-b");
+    context.store.setPhotoAlbumCoverPreference("album2", "img-c");
+    context.store.setPhotoAlbumCoverPreference("album2", "");
+
+    const store = context.store.loadPhotoAlbumStore();
+    assert.deepEqual(store.favorites, ["album1"]);
+    assert.deepEqual(store.coverImageByAlbumId, { album1: "img-b" });
   } finally {
     context.store.close();
     await rm(context.root, { recursive: true, force: true });

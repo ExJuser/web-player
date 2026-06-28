@@ -13,6 +13,8 @@ import type {
   PersistedEmbeddedSubtitle,
   ShortcutAction,
   ShortcutMap,
+  VideoHighlightSegment,
+  VideoHighlightStore,
   VideoStatsStore,
   VideoTagStore
 } from "./playerTypes";
@@ -117,6 +119,43 @@ export function parseVideoStats(source: unknown): VideoStatsStore {
           : {}),
         updatedAt,
       };
+    }
+  }
+  return store;
+}
+
+export function parseVideoHighlights(source: unknown): VideoHighlightStore {
+  if (!source || typeof source !== "object" || Array.isArray(source)) return {};
+
+  const store: VideoHighlightStore = {};
+  for (const [videoId, value] of Object.entries(source)) {
+    if (!videoId || !Array.isArray(value)) continue;
+    const highlights = value.flatMap((item): VideoHighlightSegment[] => {
+      if (!item || typeof item !== "object" || Array.isArray(item)) return [];
+      const highlight = item as Partial<VideoHighlightSegment>;
+      if (
+        typeof highlight.id !== "string" ||
+        !highlight.id.trim() ||
+        typeof highlight.startTime !== "number" ||
+        typeof highlight.endTime !== "number" ||
+        typeof highlight.updatedAt !== "number" ||
+        !Number.isFinite(highlight.startTime) ||
+        !Number.isFinite(highlight.endTime) ||
+        !Number.isFinite(highlight.updatedAt) ||
+        highlight.startTime < 0 ||
+        highlight.endTime <= highlight.startTime
+      ) {
+        return [];
+      }
+      return [{
+        id: highlight.id,
+        startTime: highlight.startTime,
+        endTime: highlight.endTime,
+        updatedAt: highlight.updatedAt,
+      }];
+    });
+    if (highlights.length) {
+      store[videoId] = highlights.sort((a, b) => a.startTime - b.startTime || a.endTime - b.endTime);
     }
   }
   return store;
@@ -313,6 +352,7 @@ export function parsePlayerDataStore(raw: string): PlayerDataStore {
     settings?: unknown;
     videoTags?: unknown;
     videoStats?: unknown;
+    videoHighlights?: unknown;
     tagMergeDecisions?: unknown;
     embeddedSubtitles?: unknown;
     danmakuSelections?: unknown;
@@ -331,6 +371,7 @@ export function parsePlayerDataStore(raw: string): PlayerDataStore {
     favorites,
     videoTags: parseVideoTags(parsed?.videoTags),
     videoStats: parseVideoStats(parsed?.videoStats),
+    videoHighlights: parseVideoHighlights(parsed?.videoHighlights),
     tagMergeDecisions: parseTagMergeDecisions(parsed?.tagMergeDecisions),
     embeddedSubtitles: parsePersistedEmbeddedSubtitles(parsed?.embeddedSubtitles),
     danmakuSelections: parseDanmakuSelectionStore(parsed?.danmakuSelections),
@@ -351,6 +392,7 @@ export function createDefaultPlayerDataStore(metadata?: PlayerDataStore["metadat
     favorites: [],
     videoTags: {},
     videoStats: {},
+    videoHighlights: {},
     tagMergeDecisions: {},
     embeddedSubtitles: [],
     danmakuSelections: {},
@@ -421,6 +463,7 @@ function createPersistedPlayerDataPayload(store: PlayerDataStore) {
     favorites: store.favorites,
     videoTags: parseVideoTags(store.videoTags),
     videoStats: parseVideoStats(store.videoStats),
+    videoHighlights: parseVideoHighlights(store.videoHighlights),
     tagMergeDecisions: parseTagMergeDecisions(store.tagMergeDecisions),
     embeddedSubtitles: parsePersistedEmbeddedSubtitles(store.embeddedSubtitles),
     danmakuSelections: parseDanmakuSelectionStore(store.danmakuSelections),
@@ -594,6 +637,18 @@ export async function savePlayerVideoStats(videoId: string, stats: VideoStatsSto
       Accept: "application/json",
     },
     body: JSON.stringify(stats),
+  });
+  if (!response.ok) throw new Error(await readApiError(response));
+}
+
+export async function savePlayerVideoHighlights(videoId: string, highlights: VideoHighlightSegment[]) {
+  const response = await fetch(createApiUrl(`highlights/${encodeURIComponent(videoId)}`), {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify({ highlights }),
   });
   if (!response.ok) throw new Error(await readApiError(response));
 }

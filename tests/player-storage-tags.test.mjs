@@ -15,6 +15,7 @@ test("old player data stores load with empty video tags and merge decisions", ()
   assert.deepEqual(parsed.videoTags, {});
   assert.deepEqual(parsed.videoStats, {});
   assert.deepEqual(parsed.tagMergeDecisions, {});
+  assert.deepEqual(parsed.videoHighlights, {});
   assert.deepEqual(parsed.danmakuSelections, {});
   assert.equal(parsed.danmakuPreferences.enabled, true);
 });
@@ -187,7 +188,27 @@ test("default player data store contains tag containers", () => {
   assert.deepEqual(store.videoTags, {});
   assert.deepEqual(store.videoStats, {});
   assert.deepEqual(store.tagMergeDecisions, {});
+  assert.deepEqual(store.videoHighlights, {});
   assert.deepEqual(store.danmakuSelections, {});
   assert.equal(store.danmakuPreferences.showSimplified, true);
   assert.equal(store.preferences.homeMediaMode, "all");
+});
+
+test("player data stores parse valid high energy highlight segments", () => {
+  const parsed = storage.parsePlayerDataStore(JSON.stringify({
+    version: 5,
+    items: {},
+    favorites: [],
+    videoHighlights: {
+      video1: [
+        { id: "h1", startTime: 10, endTime: 25, updatedAt: 100 },
+        { id: "bad-time", startTime: 30, endTime: 20, updatedAt: 101 },
+        { id: "", startTime: 1, endTime: 2, updatedAt: 102 },
+      ],
+    },
+  }));
+
+  assert.deepEqual(parsed.videoHighlights, {
+    video1: [{ id: "h1", startTime: 10, endTime: 25, updatedAt: 100 }],
+  });
 });

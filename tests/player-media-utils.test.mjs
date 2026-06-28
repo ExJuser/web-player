@@ -111,3 +111,51 @@ test("flushes media scans by batch size or elapsed delay", () => {
   assert.equal(mediaUtils.shouldFlushMediaScan(Date.now() - 1000, [], []), true);
   assert.equal(mediaUtils.shouldFlushMediaScan(Date.now(), [], []), false);
 });
+
+test("detects duplicate and suspicious videos from normalized identity signals", () => {
+  const exact = createVideo({
+    id: "root-a|Show/E01.mkv|1000|1",
+    name: "[Group] Show - 01 [1080p].mkv",
+    relativePath: "Anime/Show/[Group] Show - 01 [1080p].mkv",
+    size: 1000,
+    duration: 1440.2,
+    width: 1920,
+    height: 1080,
+  });
+  const sameFileMoved = createVideo({
+    id: "root-b|Show/E01 copy.mkv|1002|2",
+    name: "Show 01 1080p copy.mkv",
+    relativePath: "Backup/Show/Show 01 1080p copy.mkv",
+    size: 1002,
+    duration: 1440.8,
+    width: 1920,
+    height: 1080,
+  });
+  const suspicious = createVideo({
+    id: "root-c|Show/E01 web.mp4|1100|3",
+    name: "Show Episode 01 WEB.mp4",
+    relativePath: "Downloads/Show/Show Episode 01 WEB.mp4",
+    size: 1100,
+    duration: 1442,
+    width: 1920,
+    height: 1080,
+  });
+  const otherEpisode = createVideo({
+    id: "root-d|Show/E02.mkv|1000|4",
+    name: "Show - 02.mkv",
+    relativePath: "Anime/Show/Show - 02.mkv",
+    size: 1000,
+    duration: 1440,
+    width: 1920,
+    height: 1080,
+  });
+
+  const groups = mediaUtils.detectDuplicateVideos([exact, sameFileMoved, suspicious, otherEpisode]);
+
+  assert.equal(groups.length, 1);
+  assert.deepEqual(groups[0].videos.map((video) => video.id), [exact.id, sameFileMoved.id, suspicious.id]);
+  assert.equal(groups[0].severity, "duplicate");
+  assert.ok(groups[0].reasons.includes("名称相近"));
+  assert.ok(groups[0].reasons.includes("时长接近"));
+  assert.ok(groups[0].reasons.includes("分辨率一致"));
+});

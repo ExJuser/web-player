@@ -14,6 +14,7 @@ test("missing photo album store fields fall back to defaults", () => {
     sortMode: "updated",
     favoritesOnly: false,
   });
+  assert.deepEqual(parsed.coverImageByAlbumId, {});
 });
 
 test("photo album store keeps valid favorites, progress, and preferences", () => {
@@ -25,6 +26,11 @@ test("photo album store keeps valid favorites, progress, and preferences", () =>
       "root|B": { imageIndex: -1, updatedAt: 11, completed: true },
       "root|C": { imageIndex: 0, updatedAt: 12, completed: true },
       "root|D": { imageIndex: 1, updatedAt: "bad", completed: true },
+    },
+    coverImageByAlbumId: {
+      "root|A": "img-1",
+      "root|B": "",
+      "root|C": 42,
     },
     preferences: {
       sortMode: "count",
@@ -40,6 +46,9 @@ test("photo album store keeps valid favorites, progress, and preferences", () =>
   assert.deepEqual(parsed.preferences, {
     sortMode: "count",
     favoritesOnly: true,
+  });
+  assert.deepEqual(parsed.coverImageByAlbumId, {
+    "root|A": "img-1",
   });
 });
 

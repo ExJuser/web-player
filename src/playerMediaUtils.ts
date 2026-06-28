@@ -220,3 +220,150 @@ export function mergeVideoRuntimeState(nextVideos: VideoItem[], previousVideos: 
 export function shouldFlushMediaScan(lastFlushAt: number, pendingVideos: VideoItem[], pendingSubtitles: SubtitleItem[]) {
   return pendingVideos.length + pendingSubtitles.length >= mediaScanBatchSize || Date.now() - lastFlushAt >= mediaScanBatchDelay;
 }
+
+export type DuplicateVideoSeverity = "duplicate" | "suspicious";
+
+export type DuplicateVideoGroup = {
+  id: string;
+  severity: DuplicateVideoSeverity;
+  score: number;
+  reasons: string[];
+  videos: VideoItem[];
+};
+
+const duplicateNoisePattern =
+  /\b(?:copy|copied|backup|web|web-dl|webrip|bluray|bdrip|hdrip|x264|x265|h264|h265|hevc|avc|aac|flac|opus|1080p|720p|2160p|4k|8k)\b/gi;
+
+function normalizeDuplicateName(value: string) {
+  return value
+    .replace(/\.[^.]+$/, "")
+    .normalize("NFKC")
+    .replace(/[\[\u3010][^\]\u3011]*[\]\u3011]/g, " ")
+    .replace(/[\[\]\(\)\u3010\u3011\uff08\uff09]/g, " ")
+    .replace(duplicateNoisePattern, " ")
+    .replace(/\b(?:ep|episode|e)\s*0*(\d{1,4})\b/gi, " $1 ")
+    .replace(/\b0+(\d+)/g, "$1")
+    .replace(/[._-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLocaleLowerCase();
+}
+
+function getDuplicateDirectoryKey(video: VideoItem) {
+  const parts = splitRelativePath(video.relativePath);
+  if (parts.length <= 1) return "";
+  return normalizeDuplicateName(parts.at(-2) ?? "");
+}
+
+function getRelativeDelta(a: number | undefined, b: number | undefined) {
+  if (!Number.isFinite(a) || !Number.isFinite(b) || !a || !b) return null;
+  return Math.abs(a - b) / Math.max(a, b);
+}
+
+function scoreDuplicatePair(a: VideoItem, b: VideoItem) {
+  const reasons: string[] = [];
+  let score = 0;
+
+  if (normalizeDuplicateName(a.name) === normalizeDuplicateName(b.name)) {
+    score += 45;
+    reasons.push("名称相近");
+  }
+
+  const aDirectory = getDuplicateDirectoryKey(a);
+  const bDirectory = getDuplicateDirectoryKey(b);
+  if (aDirectory && bDirectory && aDirectory === bDirectory) {
+    score += 15;
+    reasons.push("路径相近");
+  }
+
+  const sizeDelta = getRelativeDelta(a.size, b.size);
+  if (sizeDelta !== null && sizeDelta <= 0.02) {
+    score += 20;
+    reasons.push("大小接近");
+  } else if (sizeDelta !== null && sizeDelta <= 0.12) {
+    score += 10;
+    reasons.push("大小疑似");
+  }
+
+  const durationDelta = getRelativeDelta(a.duration, b.duration);
+  if (durationDelta !== null && durationDelta <= 0.01) {
+    score += 20;
+    reasons.push("时长接近");
+  } else if (durationDelta !== null && durationDelta <= 0.04) {
+    score += 10;
+    reasons.push("时长疑似");
+  }
+
+  if (a.width && a.height && b.width && b.height && a.width === b.width && a.height === b.height) {
+    score += 10;
+    reasons.push("分辨率一致");
+  }
+
+  return { score, reasons };
+}
+
+export function detectDuplicateVideos(videos: VideoItem[]): DuplicateVideoGroup[] {
+  const parent = new Map<string, string>();
+  const pairScores = new Map<string, { score: number; reasons: string[] }>();
+  const videoById = new Map(videos.map((video) => [video.id, video]));
+
+  const find = (id: string): string => {
+    const current = parent.get(id) ?? id;
+    if (current === id) return id;
+    const root = find(current);
+    parent.set(id, root);
+    return root;
+  };
+  const union = (a: string, b: string) => {
+    const aRoot = find(a);
+    const bRoot = find(b);
+    if (aRoot !== bRoot) parent.set(bRoot, aRoot);
+  };
+
+  for (let aIndex = 0; aIndex < videos.length; aIndex += 1) {
+    for (let bIndex = aIndex + 1; bIndex < videos.length; bIndex += 1) {
+      const a = videos[aIndex];
+      const b = videos[bIndex];
+      const pair = scoreDuplicatePair(a, b);
+      if (pair.score < 70) continue;
+      pairScores.set([a.id, b.id].sort().join("\u0000"), pair);
+      union(a.id, b.id);
+    }
+  }
+
+  const groupedIds = new Map<string, string[]>();
+  for (const video of videos) {
+    const root = find(video.id);
+    if (root === video.id && !Array.from(pairScores.keys()).some((key) => key.includes(video.id))) continue;
+    const ids = groupedIds.get(root) ?? [];
+    ids.push(video.id);
+    groupedIds.set(root, ids);
+  }
+
+  return Array.from(groupedIds.values())
+    .filter((ids) => ids.length > 1)
+    .map((ids) => {
+      let score = 0;
+      const reasons = new Set<string>();
+      for (let aIndex = 0; aIndex < ids.length; aIndex += 1) {
+        for (let bIndex = aIndex + 1; bIndex < ids.length; bIndex += 1) {
+          const pair = pairScores.get([ids[aIndex], ids[bIndex]].sort().join("\u0000"));
+          if (!pair) continue;
+          score = Math.max(score, pair.score);
+          pair.reasons.forEach((reason) => reasons.add(reason));
+        }
+      }
+      const sortedVideos = ids
+        .map((id) => videoById.get(id))
+        .filter((video): video is VideoItem => Boolean(video))
+        .sort((a, b) => compareNaturalRelativePath(a.relativePath, b.relativePath));
+      return {
+        id: sortedVideos.map((video) => video.id).join("|"),
+        severity: (score >= 90 ? "duplicate" : "suspicious") as DuplicateVideoSeverity,
+        score,
+        reasons: Array.from(reasons),
+        videos: sortedVideos,
+      };
+    })
+    .sort((a, b) => b.score - a.score || compareNaturalRelativePath(a.videos[0]?.relativePath ?? "", b.videos[0]?.relativePath ?? ""));
+}
