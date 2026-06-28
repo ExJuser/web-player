@@ -1,4 +1,5 @@
 import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
+import { DatabaseSync } from "node:sqlite";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -36,7 +37,7 @@ test("sqlite store imports legacy player and photo album json once", async () =>
         videoTags: { video1: ["Tag A"] },
         videoStats: {},
         videoHighlights: {
-          video1: [{ id: "mark-1", startTime: 12, endTime: 18, updatedAt: 1200 }],
+          video1: [{ id: "mark-1", startTime: 12, endTime: 18, tag: "名场面", updatedAt: 1200 }],
         },
         tagMergeDecisions: {},
         embeddedSubtitles: [],
@@ -67,7 +68,7 @@ test("sqlite store imports legacy player and photo album json once", async () =>
     assert.equal(playerStore.items.video1.currentTime, 12);
     assert.deepEqual(playerStore.favorites, ["video1"]);
     assert.deepEqual(playerStore.videoTags.video1, ["Tag A"]);
-    assert.deepEqual(playerStore.videoHighlights.video1, [{ id: "mark-1", startTime: 12, endTime: 18, updatedAt: 1200 }]);
+    assert.deepEqual(playerStore.videoHighlights.video1, [{ id: "mark-1", startTime: 12, endTime: 18, tag: "名场面", updatedAt: 1200 }]);
     assert.equal(photoStore.progress.album1.imageIndex, 2);
     assert.equal(photoStore.coverImageByAlbumId.album1, "image-2");
 
@@ -112,17 +113,55 @@ test("sqlite incremental writes keep unrelated player data", async () => {
 
     context.store.upsertProgress("global", "video1", { currentTime: 5, duration: 10, completed: false, updatedAt: 2000 });
     context.store.replaceVideoTags("global", "video1", ["New"]);
-    context.store.replaceVideoHighlights("global", "video1", [{ id: "h1", startTime: 8, endTime: 15, updatedAt: 2200 }]);
+    context.store.replaceVideoHighlights("global", "video1", [{ id: "h1", startTime: 8, endTime: 15, tag: " 高能 ", updatedAt: 2200 }]);
     context.store.setPreferenceValue("global", "homeMediaMode", "anime");
     context.store.setSettingValue("global", "theme", "light");
 
     const store = context.store.loadPlayerDataStore("global");
     assert.equal(store.items.video1.currentTime, 5);
     assert.deepEqual(store.videoTags.video1, ["New"]);
-    assert.deepEqual(store.videoHighlights.video1, [{ id: "h1", startTime: 8, endTime: 15, updatedAt: 2200 }]);
+    assert.deepEqual(store.videoHighlights.video1, [{ id: "h1", startTime: 8, endTime: 15, tag: "高能", updatedAt: 2200 }]);
     assert.equal(store.preferences.homeMediaMode, "anime");
     assert.equal(store.settings.theme, "light");
     assert.equal(store.settings.volume, 0.5);
+  } finally {
+    context.store.close();
+    await rm(context.root, { recursive: true, force: true });
+  }
+});
+
+test("sqlite initialization migrates high energy highlight tags into existing databases", async () => {
+  const context = await createTempStore();
+  try {
+    await mkdir(context.dataRoot, { recursive: true });
+    const db = new DatabaseSync(path.join(context.dataRoot, "web-player.sqlite"));
+    db.exec(`
+      CREATE TABLE meta (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+      INSERT INTO meta (key, value, updated_at) VALUES ('legacy_json_imported_at', '1', 1);
+      CREATE TABLE video_highlights (
+        library_id TEXT NOT NULL,
+        video_id TEXT NOT NULL,
+        highlight_id TEXT NOT NULL,
+        start_time REAL NOT NULL,
+        end_time REAL NOT NULL,
+        updated_at INTEGER NOT NULL,
+        PRIMARY KEY (library_id, video_id, highlight_id)
+      );
+    `);
+    db.close();
+
+    await context.store.initialize();
+    context.store.replaceVideoHighlights("global", "video1", [
+      { id: "h1", startTime: 8, endTime: 15, tag: "名场面", updatedAt: 2200 },
+    ]);
+
+    assert.deepEqual(context.store.loadPlayerDataStore("global").videoHighlights.video1, [
+      { id: "h1", startTime: 8, endTime: 15, tag: "名场面", updatedAt: 2200 },
+    ]);
   } finally {
     context.store.close();
     await rm(context.root, { recursive: true, force: true });

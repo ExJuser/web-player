@@ -138,6 +138,7 @@ export class LocalDataSqliteStore {
         highlight_id TEXT NOT NULL,
         start_time REAL NOT NULL,
         end_time REAL NOT NULL,
+        tag_label TEXT,
         updated_at INTEGER NOT NULL,
         PRIMARY KEY (library_id, video_id, highlight_id)
       );
@@ -243,7 +244,14 @@ export class LocalDataSqliteStore {
         PRIMARY KEY (root_id, relative_path)
       );
     `);
+    this.ensureColumn("video_highlights", "tag_label", "TEXT");
     this.setMeta("schema_version", String(schemaVersion));
+  }
+
+  ensureColumn(table, column, definition) {
+    const columns = allRows(this.db.prepare(`PRAGMA table_info(${table})`));
+    if (columns.some((item) => item.name === column)) return;
+    this.db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
   }
 
   transaction(callback) {
@@ -406,8 +414,8 @@ export class LocalDataSqliteStore {
     }
 
     const highlightInsert = this.db.prepare(`
-      INSERT INTO video_highlights (library_id, video_id, highlight_id, start_time, end_time, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO video_highlights (library_id, video_id, highlight_id, start_time, end_time, tag_label, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
     for (const [videoId, highlights] of Object.entries(asObject(store.videoHighlights))) {
       if (!Array.isArray(highlights)) continue;
@@ -426,7 +434,10 @@ export class LocalDataSqliteStore {
         ) {
           continue;
         }
-        highlightInsert.run(libraryId, videoId, highlight.id, startTime, endTime, updatedAt);
+        const tagLabel = typeof highlight?.tag === "string" && highlight.tag.trim()
+          ? highlight.tag.trim().slice(0, 40)
+          : null;
+        highlightInsert.run(libraryId, videoId, highlight.id, startTime, endTime, tagLabel, updatedAt);
       }
     }
 
@@ -536,6 +547,7 @@ export class LocalDataSqliteStore {
         id: row.highlight_id,
         startTime: row.start_time,
         endTime: row.end_time,
+        ...(typeof row.tag_label === "string" && row.tag_label.trim() ? { tag: row.tag_label.trim() } : {}),
         updatedAt: row.updated_at,
       });
     }
@@ -709,7 +721,7 @@ export class LocalDataSqliteStore {
   replaceVideoHighlights(libraryId, videoId, highlights) {
     return this.transaction(() => {
       this.db.prepare("DELETE FROM video_highlights WHERE library_id = ? AND video_id = ?").run(libraryId, videoId);
-      const insert = this.db.prepare("INSERT INTO video_highlights (library_id, video_id, highlight_id, start_time, end_time, updated_at) VALUES (?, ?, ?, ?, ?, ?)");
+      const insert = this.db.prepare("INSERT INTO video_highlights (library_id, video_id, highlight_id, start_time, end_time, tag_label, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)");
       for (const highlight of Array.isArray(highlights) ? highlights : []) {
         const startTime = Number(highlight?.startTime);
         const endTime = Number(highlight?.endTime);
@@ -724,7 +736,10 @@ export class LocalDataSqliteStore {
         ) {
           continue;
         }
-        insert.run(libraryId, videoId, highlight.id, startTime, endTime, updatedAt);
+        const tagLabel = typeof highlight?.tag === "string" && highlight.tag.trim()
+          ? highlight.tag.trim().slice(0, 40)
+          : null;
+        insert.run(libraryId, videoId, highlight.id, startTime, endTime, tagLabel, updatedAt);
       }
     });
   }
