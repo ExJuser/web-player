@@ -38,7 +38,18 @@ import {
   VolumeX,
   Volume2,
 } from "lucide-react";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type FocusEvent as ReactFocusEvent,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from "react";
 
 import { fetchLocalJson as fetchJson, readLocalApiStream } from "./localApiClient";
 import { normalizeClientLocalConfig } from "./localConfigClient";
@@ -1354,6 +1365,7 @@ export default function App() {
   const [isLibrarySearchLoading, setIsLibrarySearchLoading] = useState(false);
   const [librarySearchSubmittedSignature, setLibrarySearchSubmittedSignature] = useState("");
   const [librarySearchSurface, setLibrarySearchSurface] = useState<LibrarySearchSurface | null>(null);
+  const [focusedLibrarySearchSurface, setFocusedLibrarySearchSurface] = useState<LibrarySearchSurface | null>(null);
   const [specialInsightTab, setSpecialInsightTab] = useState<SpecialInsightTab>("played");
   const [bangumiMatchesBySeriesKey, setBangumiMatchesBySeriesKey] = useState<Record<string, BangumiSeriesMatch>>({});
   const [cacheStatus, setCacheStatus] = useState<CacheStatus | null>(null);
@@ -6225,13 +6237,19 @@ export default function App() {
   const hasHomeLibrarySearchQuery = Boolean(homeLibrarySearchQuery.trim());
   const hasPlayerLibrarySearchQuery = Boolean(playerLibrarySearchQuery.trim());
   const shouldShowHomeLibrarySearchPreview = Boolean(
+    focusedLibrarySearchSurface === "home" &&
     hasHomeLibrarySearchQuery &&
       (homeLibrarySearchDraftSignature !== librarySearchSubmittedSignature || !isHomeLibrarySearchSurface),
   );
   const shouldShowPlayerLibrarySearchPreview = Boolean(
+    focusedLibrarySearchSurface === "player" &&
     hasPlayerLibrarySearchQuery &&
       (playerLibrarySearchDraftSignature !== librarySearchSubmittedSignature || !isPlayerLibrarySearchSurface),
   );
+  const handleLibrarySearchBlur = useCallback((event: ReactFocusEvent<HTMLElement>) => {
+    if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+    setFocusedLibrarySearchSurface(null);
+  }, []);
   const { visibleResults: visibleLibrarySearchResults, hasMoreResults: hasMoreLibrarySearchResults } = useMemo(
     () => getVisibleLibrarySearchResults(librarySearchResults, librarySearchVisibleCount),
     [librarySearchResults, librarySearchVisibleCount],
@@ -7701,47 +7719,53 @@ export default function App() {
                   <h2>片库搜索</h2>
                   <span>{homeMediaMode === "special" ? "本地筛选" : homeLibrarySearchMode === "ai" ? "AI 辅助" : "本地优先"}</span>
                 </div>
-                <form
-                  className="library-search-form"
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    void runLibrarySearch("home");
-                  }}
+                <div
+                  className="library-search-popover-root"
+                  onFocus={() => setFocusedLibrarySearchSurface("home")}
+                  onBlur={handleLibrarySearchBlur}
                 >
-                  <input
-                    type="search"
-                    value={homeLibrarySearchQuery}
-                    onChange={(event) => setHomeLibrarySearchQuery(event.target.value)}
-                    placeholder={homeLibrarySearchPlaceholder}
-                    aria-label="片库搜索"
-                  />
-                  <button
-                    type="submit"
-                    disabled={
-                      isLibrarySearchLoading ||
-                      !homeLibrarySearchVideos.length ||
-                      !homeLibrarySearchQuery.trim()
-                    }
-                    title="搜索片库"
+                  <form
+                    className="library-search-form"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void runLibrarySearch("home");
+                    }}
                   >
-                    <Search size={17} />
-                  </button>
-                </form>
-                {shouldShowHomeLibrarySearchPreview ? (
-                  <div className="library-search-preview">
-                    <div className="library-search-preview-header">
-                      <span>搜索预览</span>
-                      <small>仅本地匹配，不调用 AI</small>
-                    </div>
-                    {homeLibrarySearchPreviewResults.length ? (
-                      <div className="home-compact-list library-search-preview-results">
-                        {homeLibrarySearchPreviewResults.map(renderLibrarySearchResult)}
+                    <input
+                      type="search"
+                      value={homeLibrarySearchQuery}
+                      onChange={(event) => setHomeLibrarySearchQuery(event.target.value)}
+                      placeholder={homeLibrarySearchPlaceholder}
+                      aria-label="片库搜索"
+                    />
+                    <button
+                      type="submit"
+                      disabled={
+                        isLibrarySearchLoading ||
+                        !homeLibrarySearchVideos.length ||
+                        !homeLibrarySearchQuery.trim()
+                      }
+                      title="搜索片库"
+                    >
+                      <Search size={17} />
+                    </button>
+                  </form>
+                  {shouldShowHomeLibrarySearchPreview ? (
+                    <div className="library-search-preview">
+                      <div className="library-search-preview-header">
+                        <span>搜索预览</span>
+                        <small>仅本地匹配，不调用 AI</small>
                       </div>
-                    ) : (
-                      <div className="empty-list compact">本地预览暂无命中</div>
-                    )}
-                  </div>
-                ) : null}
+                      {homeLibrarySearchPreviewResults.length ? (
+                        <div className="home-compact-list library-search-preview-results">
+                          {homeLibrarySearchPreviewResults.map(renderLibrarySearchResult)}
+                        </div>
+                      ) : (
+                        <div className="empty-list compact">本地预览暂无命中</div>
+                      )}
+                    </div>
+                  ) : null}
+                </div>
                 {shouldShowHomeLibrarySearchStatus ? (
                   <div className={`library-search-status ${homeLibrarySearchMode}`}>
                     {isHomeLibrarySearchLoading ? "搜索中..." : homeLibrarySearchMessage || defaultLibrarySearchStatus}
@@ -8651,47 +8675,53 @@ export default function App() {
         </div>
 
         <section className="player-library-search library-search-card" aria-label="播放器片库搜索">
-          <form
-            className="library-search-form player-library-search-form"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void runLibrarySearch("player");
-            }}
+          <div
+            className="library-search-popover-root"
+            onFocus={() => setFocusedLibrarySearchSurface("player")}
+            onBlur={handleLibrarySearchBlur}
           >
-            <input
-              type="search"
-              value={playerLibrarySearchQuery}
-              onChange={(event) => setPlayerLibrarySearchQuery(event.target.value)}
-              placeholder={playerLibrarySearchPlaceholder}
-              aria-label="播放器片库搜索"
-            />
-            <button
-              type="submit"
-              disabled={
-                isLibrarySearchLoading ||
-                !playerLibrarySearchVideos.length ||
-                !playerLibrarySearchQuery.trim()
-              }
-              title="搜索片库"
+            <form
+              className="library-search-form player-library-search-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void runLibrarySearch("player");
+              }}
             >
-              <Search size={17} />
-            </button>
-          </form>
-          {shouldShowPlayerLibrarySearchPreview ? (
-            <div className="library-search-preview player-library-search-preview">
-              <div className="library-search-preview-header">
-                <span>搜索预览</span>
-                <small>仅本地匹配</small>
-              </div>
-              {playerLibrarySearchPreviewResults.length ? (
-                <div className="home-compact-list library-search-preview-results player-library-search-preview-results">
-                  {playerLibrarySearchPreviewResults.map(renderLibrarySearchResult)}
+              <input
+                type="search"
+                value={playerLibrarySearchQuery}
+                onChange={(event) => setPlayerLibrarySearchQuery(event.target.value)}
+                placeholder={playerLibrarySearchPlaceholder}
+                aria-label="播放器片库搜索"
+              />
+              <button
+                type="submit"
+                disabled={
+                  isLibrarySearchLoading ||
+                  !playerLibrarySearchVideos.length ||
+                  !playerLibrarySearchQuery.trim()
+                }
+                title="搜索片库"
+              >
+                <Search size={17} />
+              </button>
+            </form>
+            {shouldShowPlayerLibrarySearchPreview ? (
+              <div className="library-search-preview player-library-search-preview">
+                <div className="library-search-preview-header">
+                  <span>搜索预览</span>
+                  <small>仅本地匹配</small>
                 </div>
-              ) : (
-                <div className="empty-list compact">本地预览暂无命中</div>
-              )}
-            </div>
-          ) : null}
+                {playerLibrarySearchPreviewResults.length ? (
+                  <div className="home-compact-list library-search-preview-results player-library-search-preview-results">
+                    {playerLibrarySearchPreviewResults.map(renderLibrarySearchResult)}
+                  </div>
+                ) : (
+                  <div className="empty-list compact">本地预览暂无命中</div>
+                )}
+              </div>
+            ) : null}
+          </div>
           {shouldShowPlayerLibrarySearchStatus ? (
             <div className={`library-search-status player-library-search-status ${playerLibrarySearchMode}`}>
               {isPlayerLibrarySearchLoading ? "搜索中..." : playerLibrarySearchMessage || defaultLibrarySearchStatus}
