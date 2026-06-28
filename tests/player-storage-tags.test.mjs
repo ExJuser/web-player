@@ -20,6 +20,67 @@ test("old player data stores load with empty video tags and merge decisions", ()
   assert.equal(parsed.danmakuPreferences.enabled, true);
 });
 
+test("media root scan cache keeps valid server entries and drops invalid records", () => {
+  const parsed = storage.parseCachedMediaRootScan(JSON.stringify({
+    version: storage.mediaRootScanCacheVersion,
+    videos: [
+      {
+        id: "anime|Show/01.mkv|100|200",
+        name: "01.mkv",
+        relativePath: "Show\\01.mkv",
+        url: "/api/media/anime/Show/01.mkv",
+        size: 100,
+        lastModified: 200,
+        mediaRootId: "anime",
+        thumbnailUrl: "blob:runtime",
+      },
+      { id: "bad", name: "bad.mkv" },
+    ],
+    subtitles: [
+      {
+        id: "anime|Show/01.srt|10|200",
+        name: "01.srt",
+        relativePath: "Show\\01.srt",
+        url: "/api/media/anime/Show/01.srt",
+        mediaRootId: "anime",
+      },
+      { id: "bad-subtitle", name: "bad.srt" },
+    ],
+    scannedFiles: 3,
+    filteredSmallVideos: 1,
+    metadata: {
+      id: "global",
+      name: "全局媒体库",
+      videoCount: 2,
+      scannedFiles: 3,
+      updatedAt: 1000,
+      mediaRoots: [
+        { id: "anime", label: "Anime", source: "local", status: "ready", videoCount: 1, scannedFiles: 2, updatedAt: 1000 },
+      ],
+    },
+    updatedAt: 1000,
+  }));
+
+  assert.equal(parsed.videos.length, 1);
+  assert.equal(parsed.videos[0].relativePath, "Show/01.mkv");
+  assert.equal(parsed.videos[0].playbackSource, "server");
+  assert.equal(parsed.videos[0].thumbnailUrl, undefined);
+  assert.equal(parsed.subtitles.length, 1);
+  assert.equal(parsed.subtitles[0].relativePath, "Show/01.srt");
+  assert.equal(parsed.metadata.videoCount, 1);
+  assert.equal(parsed.filteredSmallVideos, 1);
+});
+
+test("invalid media root scan cache is ignored", () => {
+  assert.equal(storage.parseCachedMediaRootScan(JSON.stringify({ version: 0 })), null);
+  assert.equal(storage.parseCachedMediaRootScan(JSON.stringify({
+    version: storage.mediaRootScanCacheVersion,
+    videos: [],
+    subtitles: [],
+    metadata: { id: "legacy" },
+  })), null);
+});
+
 test("player data stores parse valid tags, stats, and merge decisions", () => {
   const parsed = storage.parsePlayerDataStore(JSON.stringify({
     version: 5,

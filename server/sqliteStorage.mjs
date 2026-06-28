@@ -252,6 +252,12 @@ export class LocalDataSqliteStore {
         updated_at INTEGER NOT NULL
       );
 
+      CREATE TABLE IF NOT EXISTS media_root_scan_caches (
+        cache_id TEXT PRIMARY KEY,
+        scan_json TEXT NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+
       CREATE TABLE IF NOT EXISTS cache_entries (
         kind TEXT NOT NULL,
         cache_id TEXT NOT NULL,
@@ -970,6 +976,20 @@ export class LocalDataSqliteStore {
     return this.transaction(() => {
       this.db.prepare("DELETE FROM photo_album_scan_caches").run();
     });
+  }
+
+  saveMediaRootScanCache(cache) {
+    return this.transaction(() => {
+      const updatedAt = Number(cache?.updatedAt) || Number(cache?.metadata?.updatedAt) || now();
+      this.db
+        .prepare("INSERT INTO media_root_scan_caches (cache_id, scan_json, updated_at) VALUES ('global', ?, ?) ON CONFLICT(cache_id) DO UPDATE SET scan_json = excluded.scan_json, updated_at = excluded.updated_at")
+        .run(stringifyJson(cache), updatedAt);
+    });
+  }
+
+  loadMediaRootScanCache() {
+    const row = this.db.prepare("SELECT scan_json FROM media_root_scan_caches WHERE cache_id = 'global'").get();
+    return row ? parseJson(row.scan_json, null) : null;
   }
 
   recordCacheEntry(kind, cacheId, filePath, contentType = null, bytes = null) {

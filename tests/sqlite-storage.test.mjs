@@ -382,3 +382,46 @@ test("sqlite media probe cache is keyed by file identity", async () => {
     await rm(context.root, { recursive: true, force: true });
   }
 });
+
+test("sqlite media root scan cache stores the latest global scan", async () => {
+  const context = await createTempStore();
+  try {
+    await context.store.initialize();
+    const cache = {
+      version: 1,
+      videos: [
+        {
+          id: "anime|Show/01.mkv|100|200",
+          name: "01.mkv",
+          relativePath: "Show/01.mkv",
+          url: "/api/media/anime/Show/01.mkv",
+          size: 100,
+          lastModified: 200,
+          mediaRootId: "anime",
+          playbackSource: "server",
+        },
+      ],
+      subtitles: [],
+      scannedFiles: 1,
+      filteredSmallVideos: 0,
+      metadata: {
+        id: "global",
+        name: "全局媒体库",
+        videoCount: 1,
+        scannedFiles: 1,
+        updatedAt: 1234,
+        mediaRoots: [
+          { id: "anime", label: "Anime", source: "local", status: "ready", videoCount: 1, scannedFiles: 1, updatedAt: 1234 },
+        ],
+      },
+      updatedAt: 1234,
+    };
+
+    context.store.saveMediaRootScanCache(cache);
+
+    assert.deepEqual(context.store.loadMediaRootScanCache(), cache);
+  } finally {
+    context.store.close();
+    await rm(context.root, { recursive: true, force: true });
+  }
+});

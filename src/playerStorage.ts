@@ -1,4 +1,5 @@
 import type {
+  CachedMediaRootScan,
   FileSystemDirectoryHandle,
   DanmakuPreferences,
   DanmakuSelectionStore,
@@ -15,6 +16,8 @@ import type {
   PersistedEmbeddedSubtitle,
   ShortcutAction,
   ShortcutMap,
+  SubtitleItem,
+  VideoItem,
   VideoHighlightSegment,
   VideoHighlightStore,
   VideoStatsStore,
@@ -36,6 +39,7 @@ import {
 } from "./playerConstants";
 
 const LEGACY_THUMBNAIL_STORE_NAME = "thumbnails";
+export const mediaRootScanCacheVersion = 1;
 
 export function createProgress(currentTime: number, duration: number, completed = false): PlaybackProgress | null {
   if (!Number.isFinite(currentTime) || !Number.isFinite(duration)) return null;
@@ -499,6 +503,172 @@ export function createDefaultPlayerDataStore(metadata?: PlayerDataStore["metadat
   };
 }
 
+function parseFiniteNumber(value: unknown, fallback = 0) {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function parseCachedServerVideo(source: unknown): VideoItem | null {
+  if (!source || typeof source !== "object" || Array.isArray(source)) return null;
+  const video = source as Partial<VideoItem>;
+  if (
+    typeof video.id !== "string" ||
+    !video.id.trim() ||
+    typeof video.name !== "string" ||
+    !video.name.trim() ||
+    typeof video.relativePath !== "string" ||
+    !video.relativePath.trim() ||
+    typeof video.url !== "string" ||
+    !video.url.trim() ||
+    typeof video.mediaRootId !== "string" ||
+    !video.mediaRootId.trim()
+  ) {
+    return null;
+  }
+
+  return {
+    id: video.id,
+    name: video.name,
+    relativePath: video.relativePath.replace(/\\/g, "/"),
+    url: video.url,
+    size: parseFiniteNumber(video.size),
+    lastModified: parseFiniteNumber(video.lastModified),
+    mediaRootId: video.mediaRootId,
+    playbackSource: "server",
+    ...(parseFiniteNumber(video.duration) > 0 ? { duration: parseFiniteNumber(video.duration) } : {}),
+    ...(parseFiniteNumber(video.width) > 0 ? { width: parseFiniteNumber(video.width) } : {}),
+    ...(parseFiniteNumber(video.height) > 0 ? { height: parseFiniteNumber(video.height) } : {}),
+    ...(video.playability && typeof video.playability === "object" && !Array.isArray(video.playability)
+      ? { playability: video.playability as VideoItem["playability"] }
+      : {}),
+  };
+}
+
+function parseCachedServerSubtitle(source: unknown): SubtitleItem | null {
+  if (!source || typeof source !== "object" || Array.isArray(source)) return null;
+  const subtitle = source as Partial<SubtitleItem>;
+  if (
+    typeof subtitle.id !== "string" ||
+    !subtitle.id.trim() ||
+    typeof subtitle.name !== "string" ||
+    !subtitle.name.trim() ||
+    typeof subtitle.relativePath !== "string" ||
+    !subtitle.relativePath.trim() ||
+    typeof subtitle.url !== "string" ||
+    !subtitle.url.trim() ||
+    typeof subtitle.mediaRootId !== "string" ||
+    !subtitle.mediaRootId.trim()
+  ) {
+    return null;
+  }
+
+  return {
+    id: subtitle.id,
+    name: subtitle.name,
+    relativePath: subtitle.relativePath.replace(/\\/g, "/"),
+    url: subtitle.url,
+    mediaRootId: subtitle.mediaRootId,
+  };
+}
+
+function parseCachedMediaRootStatus(source: unknown): PlayerGlobalMetadata["mediaRoots"][number] | null {
+  if (!source || typeof source !== "object" || Array.isArray(source)) return null;
+  const status = source as Partial<PlayerGlobalMetadata["mediaRoots"][number]>;
+  if (
+    typeof status.id !== "string" ||
+    !status.id.trim() ||
+    typeof status.label !== "string" ||
+    !status.label.trim() ||
+    (status.status !== "ready" && status.status !== "needsAccess" && status.status !== "error")
+  ) {
+    return null;
+  }
+
+  return {
+    id: status.id,
+    label: status.label,
+    ...(status.source === "browser" || status.source === "local" ? { source: status.source } : {}),
+    status: status.status,
+    videoCount: parseFiniteNumber(status.videoCount),
+    scannedFiles: parseFiniteNumber(status.scannedFiles),
+    updatedAt: parseFiniteNumber(status.updatedAt),
+    ...(typeof status.error === "string" && status.error.trim() ? { error: status.error } : {}),
+  };
+}
+
+function parseCachedGlobalMetadata(source: unknown): PlayerGlobalMetadata | null {
+  if (!source || typeof source !== "object" || Array.isArray(source)) return null;
+  const metadata = source as Partial<PlayerGlobalMetadata>;
+  if (metadata.id !== "global" || typeof metadata.name !== "string" || !Array.isArray(metadata.mediaRoots)) return null;
+  return {
+    id: "global",
+    name: metadata.name || "全局媒体库",
+    videoCount: parseFiniteNumber(metadata.videoCount),
+    scannedFiles: parseFiniteNumber(metadata.scannedFiles),
+    updatedAt: parseFiniteNumber(metadata.updatedAt),
+    mediaRoots: metadata.mediaRoots
+      .map((status) => parseCachedMediaRootStatus(status))
+      .filter((status): status is PlayerGlobalMetadata["mediaRoots"][number] => Boolean(status)),
+  };
+}
+
+export function parseCachedMediaRootScan(raw: string): CachedMediaRootScan | null {
+  const parsed = JSON.parse(raw) as Partial<CachedMediaRootScan>;
+  if (parsed?.version !== mediaRootScanCacheVersion || !Array.isArray(parsed.videos) || !Array.isArray(parsed.subtitles)) return null;
+  const metadata = parseCachedGlobalMetadata(parsed.metadata);
+  if (!metadata) return null;
+
+  const videos = parsed.videos
+    .map((video) => parseCachedServerVideo(video))
+    .filter((video): video is VideoItem => Boolean(video));
+  const subtitles = parsed.subtitles
+    .map((subtitle) => parseCachedServerSubtitle(subtitle))
+    .filter((subtitle): subtitle is SubtitleItem => Boolean(subtitle));
+
+  return {
+    version: mediaRootScanCacheVersion,
+    videos,
+    subtitles,
+    scannedFiles: parseFiniteNumber(parsed.scannedFiles),
+    filteredSmallVideos: parseFiniteNumber(parsed.filteredSmallVideos),
+    metadata: {
+      ...metadata,
+      videoCount: videos.length,
+    },
+    updatedAt: parseFiniteNumber(parsed.updatedAt, metadata.updatedAt),
+  };
+}
+
+function serializeCachedMediaRootScan(scan: CachedMediaRootScan): CachedMediaRootScan {
+  return {
+    version: mediaRootScanCacheVersion,
+    videos: scan.videos.map((video) => ({
+      id: video.id,
+      name: video.name,
+      relativePath: video.relativePath,
+      url: video.url,
+      size: video.size,
+      lastModified: video.lastModified,
+      mediaRootId: video.mediaRootId,
+      playbackSource: "server",
+      duration: video.duration,
+      width: video.width,
+      height: video.height,
+      playability: video.playability,
+    })),
+    subtitles: scan.subtitles.map((subtitle) => ({
+      id: subtitle.id,
+      name: subtitle.name,
+      relativePath: subtitle.relativePath,
+      url: subtitle.url,
+      mediaRootId: subtitle.mediaRootId,
+    })),
+    scannedFiles: scan.scannedFiles,
+    filteredSmallVideos: scan.filteredSmallVideos,
+    metadata: scan.metadata,
+    updatedAt: scan.updatedAt,
+  };
+}
+
 function createApiUrl(path: string) {
   return `/api/player-data/${path}`;
 }
@@ -531,6 +701,31 @@ async function loadPlayerDataStoreFromApi(
 
 export async function loadGlobalPlayerDataStore(metadata?: PlayerGlobalMetadata): Promise<PlayerDataStore> {
   return loadPlayerDataStoreFromApi("global", metadata);
+}
+
+export async function loadCachedMediaRootScan(): Promise<CachedMediaRootScan | null> {
+  try {
+    const response = await fetch("/api/media-roots/scan-cache", {
+      headers: { Accept: "application/json" },
+    });
+    if (response.status === 404) return null;
+    if (!response.ok) throw new Error(await readApiError(response));
+    return parseCachedMediaRootScan(JSON.stringify(await response.json()));
+  } catch {
+    return null;
+  }
+}
+
+export async function saveCachedMediaRootScan(scan: CachedMediaRootScan) {
+  const response = await fetch("/api/media-roots/scan-cache", {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify(serializeCachedMediaRootScan(scan)),
+  });
+  if (!response.ok) throw new Error(await readApiError(response));
 }
 
 export async function loadPlayerDataStore(libraryId: string, metadata?: PlayerLibraryMetadata): Promise<PlayerDataStore> {

@@ -371,6 +371,16 @@ export type CachedPhotoAlbumScan = {
   updatedAt: number;
 };
 
+export type CachedMediaRootScan = {
+  version: number;
+  videos: VideoItem[];
+  subtitles: SubtitleItem[];
+  scannedFiles: number;
+  filteredSmallVideos: number;
+  metadata: PlayerGlobalMetadata;
+  updatedAt: number;
+};
+
 declare global {
   interface Window {
     showDirectoryPicker?: (options?: { mode?: "read" | "readwrite" }) => Promise<FileSystemDirectoryHandle>;

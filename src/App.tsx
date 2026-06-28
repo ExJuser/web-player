@@ -98,6 +98,7 @@ import type {
   PlayerMediaRootStatus,
   PlayerPersistentSettings,
   PlayerPreferences,
+  CachedMediaRootScan,
   CachedPhotoAlbumScan,
   PhotoAlbum,
   PhotoAlbumImage,
@@ -455,14 +456,17 @@ import {
   deleteLegacyPlayerDataStore,
   deletePlayerProgress,
   hasDirectoryWritePermission,
+  loadCachedMediaRootScan,
   loadLegacyPlayerDataStore,
   loadGlobalPlayerDataStore,
   loadPlayerDataStore,
+  mediaRootScanCacheVersion,
   migrateLegacyCachedThumbnailsToLocalData,
   readPhotoAlbumFolderHandle,
   readCachedThumbnail,
   saveDanmakuPreferences,
   saveDanmakuSelection,
+  saveCachedMediaRootScan,
   saveGlobalPlayerDataStore,
   savePlayerFavorite,
   savePlayerPreference,
@@ -757,6 +761,60 @@ function createCachedPhotoAlbumScan(scan: Awaited<ReturnType<typeof collectPhoto
     albums: scan.albums,
     scannedFiles: scan.scannedFiles,
     updatedAt: Date.now(),
+  };
+}
+
+function createCachedMediaRootScan(scan: MediaRootsScanResponse, videos: VideoItem[], subtitles: SubtitleItem[]): CachedMediaRootScan {
+  const updatedAt = Date.now();
+  return {
+    version: mediaRootScanCacheVersion,
+    videos,
+    subtitles: subtitles.filter((subtitle) => !subtitle.source || subtitle.source === "external"),
+    scannedFiles: scan.scannedFiles,
+    filteredSmallVideos: scan.filteredSmallVideos,
+    metadata: {
+      ...scan.metadata,
+      updatedAt,
+    },
+    updatedAt,
+  };
+}
+
+function alignCachedMediaRootScanWithConfig(cache: CachedMediaRootScan, config: LocalConfig): CachedMediaRootScan {
+  const configuredRootIds = new Set(config.mediaRoots.map((root) => root.id));
+  const cachedStatusesById = new Map(cache.metadata.mediaRoots.map((status) => [status.id, status]));
+  const mediaRoots = config.mediaRoots.map((root) => {
+    const cachedStatus = cachedStatusesById.get(root.id);
+    return cachedStatus
+      ? {
+          ...cachedStatus,
+          label: root.label,
+          source: root.source,
+        }
+      : {
+          id: root.id,
+          label: root.label,
+          source: root.source,
+          status: "needsAccess" as const,
+          videoCount: 0,
+          scannedFiles: 0,
+          updatedAt: cache.updatedAt,
+          error: "这个媒体库尚未刷新到缓存。",
+        };
+  });
+  const videos = cache.videos.filter((video) => video.mediaRootId && configuredRootIds.has(video.mediaRootId));
+  const subtitles = cache.subtitles.filter((subtitle) => subtitle.mediaRootId && configuredRootIds.has(subtitle.mediaRootId));
+  return {
+    ...cache,
+    videos,
+    subtitles,
+    scannedFiles: mediaRoots.reduce((sum, status) => sum + status.scannedFiles, 0),
+    metadata: {
+      ...cache.metadata,
+      videoCount: videos.length,
+      scannedFiles: mediaRoots.reduce((sum, status) => sum + status.scannedFiles, 0),
+      mediaRoots,
+    },
   };
 }
 
@@ -1413,6 +1471,7 @@ export default function App() {
   const danmakuSelectionsRef = useRef<DanmakuSelectionStore>({});
   const danmakuPreferencesRef = useRef<DanmakuPreferences>(defaultDanmakuPreferences);
   const localConfigRef = useRef<LocalConfig | null>(null);
+  const mediaRootCacheLoadAttemptedRef = useRef(false);
   const cachedEmbeddedSubtitleLookupKeysRef = useRef(new Set<string>());
   const bangumiMatchesBySeriesKeyRef = useRef<Record<string, BangumiSeriesMatch>>({});
   const photoAlbumProgressRef = useRef<Record<string, PhotoAlbumProgress>>({});
@@ -2843,6 +2902,50 @@ export default function App() {
     [currentVideoSubtitles],
   );
   const selectedSubtitle = currentVideoSubtitles.find((subtitle) => subtitle.id === selectedSubtitleId) ?? null;
+  useEffect(() => {
+    if (
+      !selectedSubtitle ||
+      !selectedSubtitle.url ||
+      isObjectUrl(selectedSubtitle.url) ||
+      selectedSubtitle.format === "vtt" ||
+      selectedSubtitle.relativePath.toLowerCase().endsWith(".vtt")
+    ) {
+      return;
+    }
+
+    let isCancelled = false;
+    let createdUrl = "";
+    let didApplyUrl = false;
+    void createSubtitleUrl(selectedSubtitle)
+      .then((url) => {
+        createdUrl = url;
+        if (isCancelled) {
+          if (isObjectUrl(url)) URL.revokeObjectURL(url);
+          return;
+        }
+        setSubtitles((previous) => {
+          let didChange = false;
+          const nextSubtitles = previous.map((subtitle) => {
+            if (subtitle.id !== selectedSubtitle.id) return subtitle;
+            didChange = true;
+            return { ...subtitle, url };
+          });
+          if (didChange) {
+            didApplyUrl = true;
+            subtitlesRef.current = nextSubtitles;
+          }
+          return didChange ? nextSubtitles : previous;
+        });
+      })
+      .catch(() => {
+        if (!isCancelled) setMessage("无法读取字幕文件，请确认字幕格式后重试。");
+      });
+
+    return () => {
+      isCancelled = true;
+      if (createdUrl && !didApplyUrl && isObjectUrl(createdUrl)) URL.revokeObjectURL(createdUrl);
+    };
+  }, [selectedSubtitle]);
   const effectivePlaybackRate = isHoldSpeedActive ? holdPlaybackRate : playbackRate;
   const playbackRateOptions = useMemo(() => {
     if (rates.includes(effectivePlaybackRate)) return rates;
@@ -3363,6 +3466,52 @@ export default function App() {
     [],
   );
 
+  const restoreCachedGlobalMediaLibrary = useCallback(async () => {
+    const currentConfig = localConfigRef.current;
+    if (!currentConfig || videosRef.current.length) return;
+    const storedCache = await loadCachedMediaRootScan();
+    if (!storedCache || !storedCache.videos.length) return;
+    const cache = alignCachedMediaRootScanWithConfig(storedCache, currentConfig);
+    if (!cache.videos.length) return;
+
+    const nextDataStore = await loadGlobalPlayerDataStore(cache.metadata).catch(() => createDefaultPlayerDataStore(cache.metadata));
+    const nextVideos = mergeVideoRuntimeState(cache.videos, videosRef.current);
+    videosRef.current = nextVideos;
+    subtitlesRef.current = cache.subtitles;
+    libraryIdRef.current = "global";
+    libraryMetadataRef.current = cache.metadata;
+    setLibraryId("global");
+    setMediaRootId(null);
+    setMediaRootStatuses(cache.metadata.mediaRoots);
+    setVideos(nextVideos);
+    setSubtitles(cache.subtitles);
+    applyPlayerDataStore({
+      ...nextDataStore,
+      metadata: cache.metadata,
+    });
+
+    const restoredEmbeddedSubtitles = await restoreCachedEmbeddedSubtitles(nextDataStore.embeddedSubtitles, nextVideos, null);
+    if (restoredEmbeddedSubtitles.length) {
+      const restoredIds = new Set(restoredEmbeddedSubtitles.map((subtitle) => subtitle.id));
+      const mergedSubtitles = [
+        ...cache.subtitles.filter((subtitle) => !restoredIds.has(subtitle.id)),
+        ...restoredEmbeddedSubtitles,
+      ];
+      subtitlesRef.current = mergedSubtitles;
+      setSubtitles(mergedSubtitles);
+    }
+
+    const sortedVideos = getSortedVideos(
+      nextVideos,
+      nextDataStore.preferences.playlistSortMode,
+      nextDataStore.preferences.isPlaylistSortReversed,
+    );
+    const resumeTarget = getLatestResumableVideo(nextVideos, nextDataStore.progress);
+    setCurrentVideoId((currentId) => currentId ?? resumeTarget?.video.id ?? sortedVideos[0]?.id ?? null);
+    setActiveView("home");
+    setMessage(`已加载上次媒体库结果：${nextVideos.length} 个视频，未重新扫描磁盘`);
+  }, [applyPlayerDataStore]);
+
   const loadGlobalMediaLibrary = useCallback(async () => {
     if (!localConfigRef.current) return;
     setIsScanning(true);
@@ -3415,6 +3564,7 @@ export default function App() {
         metadata: scan.metadata,
         embeddedSubtitles: createPersistedEmbeddedSubtitles(subtitlesRef.current),
       }).catch(() => undefined);
+      await saveCachedMediaRootScan(createCachedMediaRootScan(scan, nextVideos, scan.subtitles)).catch(() => undefined);
 
       const sortedVideos = getSortedVideos(
         nextVideos,
@@ -3438,9 +3588,14 @@ export default function App() {
 
   useEffect(() => {
     if (!localConfig) return;
-    if (!shouldAutoScanGlobalMediaLibrary(localConfig)) return;
-    void loadGlobalMediaLibrary();
-  }, [loadGlobalMediaLibrary, localConfig]);
+    if (shouldAutoScanGlobalMediaLibrary(localConfig)) {
+      void loadGlobalMediaLibrary();
+      return;
+    }
+    if (mediaRootCacheLoadAttemptedRef.current) return;
+    mediaRootCacheLoadAttemptedRef.current = true;
+    void restoreCachedGlobalMediaLibrary();
+  }, [loadGlobalMediaLibrary, localConfig, restoreCachedGlobalMediaLibrary]);
 
   const setVideoThumbnailState = useCallback((videoId: string, status: VideoItem["thumbnailStatus"], url?: string) => {
     setVideos((previous) => {

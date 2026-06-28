@@ -698,6 +698,20 @@ function playerDataApiPlugin(env) {
         return;
       }
 
+      if (url.pathname === "/api/media-roots/scan-cache") {
+        if (request.method === "GET") {
+          const payload = store.loadMediaRootScanCache();
+          sendJson(response, payload ? 200 : 404, payload ?? { error: "Media root scan cache not found." });
+          return;
+        }
+        if (request.method === "PUT") {
+          const payload = await parseJsonBody(request);
+          store.saveMediaRootScanCache(payload);
+          sendJson(response, 200, { ok: true });
+          return;
+        }
+      }
+
       if (url.pathname === "/api/photo-albums/scan" && request.method === "GET") {
         sendJson(response, 200, await scanPhotoAlbumsOnce());
         return;
