@@ -179,6 +179,24 @@ test("all and anime modes keep folder-level library search results", () => {
   );
 });
 
+test("playlist-scoped anime search returns episode-level results", () => {
+  const videos = [
+    createVideo({ id: "root-anime|show/01.mp4|100|1", name: "第一集.mp4", relativePath: "show/第一集.mp4", mediaRootId: "root-anime" }),
+    createVideo({ id: "root-anime|show/05.mp4|100|5", name: "第五集.mp4", relativePath: "show/第五集.mp4", mediaRootId: "root-anime", lastModified: 5 }),
+  ];
+
+  const results = librarySearchUtils.searchLibraryEntries("第五集", videos, {
+    mode: "anime",
+    resultKind: "video",
+    ...createSearchContext(),
+  });
+
+  assert.deepEqual(
+    results.map((result) => ({ kind: result.kind, videoId: result.representativeVideo.id })),
+    [{ kind: "video", videoId: "root-anime|show/05.mp4|100|5" }],
+  );
+});
+
 test("AI matches hydrate as videos in special mode and folders otherwise", () => {
   const videos = [
     createVideo({ id: "root-special|actor/one.mp4|100|1", name: "one.mp4", relativePath: "actor/one.mp4" }),
@@ -198,4 +216,22 @@ test("AI matches hydrate as videos in special mode and folders otherwise", () =>
   assert.deepEqual(specialResults.map((result) => result.kind), ["video", "video"]);
   assert.equal(allResults.length, 1);
   assert.equal(allResults[0].kind, "folder");
+});
+
+test("AI matches hydrate as videos for playlist-scoped search", () => {
+  const videos = [
+    createVideo({ id: "root-anime|show/01.mp4|100|1", name: "01.mp4", relativePath: "show/01.mp4", mediaRootId: "root-anime" }),
+    createVideo({ id: "root-anime|show/05.mp4|100|5", name: "05.mp4", relativePath: "show/05.mp4", mediaRootId: "root-anime", lastModified: 5 }),
+  ];
+
+  const results = librarySearchUtils.createAiLibrarySearchResults(["root-anime|show/05.mp4|100|5"], videos, {
+    mode: "anime",
+    resultKind: "video",
+    ...createSearchContext(),
+  });
+
+  assert.deepEqual(
+    results.map((result) => ({ kind: result.kind, videoId: result.representativeVideo.id })),
+    [{ kind: "video", videoId: "root-anime|show/05.mp4|100|5" }],
+  );
 });

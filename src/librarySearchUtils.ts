@@ -14,6 +14,7 @@ export type LibrarySearchVideo = {
 
 export type LibrarySearchContext<Progress = unknown> = {
   mode: LibrarySearchMode;
+  resultKind?: "folder" | "video";
   mediaRootLabelsById?: Record<string, string>;
   progressByVideoId?: Record<string, Progress | undefined>;
   favoriteVideoIds?: ReadonlySet<string>;
@@ -365,7 +366,7 @@ export function searchLibraryEntries<Video extends LibrarySearchVideo, Progress>
     .map((video) => ({ video, ...scoreVideo(video, query, context) }))
     .filter((item) => item.score > 0);
 
-  if (context.mode === "special") {
+  if (context.mode === "special" || context.resultKind === "video") {
     const videoResults = scoredVideos
       .map(({ video, score, reason }) => createLibraryVideoResult(video, score, reason, context))
       .sort((a, b) => b.score - a.score || compareNaturalRelativePath(a.representativeVideo.relativePath, b.representativeVideo.relativePath));
@@ -408,7 +409,7 @@ export function createAiLibrarySearchResults<Video extends LibrarySearchVideo, P
     const video = videoById.get(id);
     if (!video) return;
     const score = 100 - index;
-    if (context.mode === "special") {
+    if (context.mode === "special" || context.resultKind === "video") {
       if (resultsByKey.has(video.id)) return;
       const result = createLibraryVideoResult(video, score, "AI 推荐", context);
       resultsByKey.set(video.id, result);
