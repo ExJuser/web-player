@@ -117,3 +117,35 @@ test("aggregates normalized tag stats by video count, played duration, and emiss
     [["ai字幕", 5], ["剧情", 4]],
   );
 });
+
+test("keeps ten default special insight entries", () => {
+  const videos = Array.from({ length: 12 }, (_, index) =>
+    createVideo({
+      id: `root-a|actor/${index + 1}.mp4|100|${index + 1}`,
+      name: `${index + 1}.mp4`,
+      relativePath: `actor/${index + 1}.mp4`,
+      lastModified: index + 1,
+    }),
+  );
+  const videoStats = Object.fromEntries(
+    videos.map((video, index) => [
+      uiState.createVideoStatsKey(video),
+      {
+        totalPlayedSeconds: 12 - index,
+        playCount: 12 - index,
+        durationSeconds: 100,
+        emissionCount: 12 - index,
+        updatedAt: 12 - index,
+      },
+    ]),
+  );
+  const videoTags = Object.fromEntries(videos.map((video, index) => [video.id, [`标签${index + 1}`]]));
+
+  const insights = specialInsights.buildSpecialModeInsights(videos, videoStats, videoTags, {});
+
+  assert.equal(insights.videosByPlayedDuration.length, 10);
+  assert.equal(insights.videosByPlayCount.length, 10);
+  assert.equal(insights.videosByEmissionCount.length, 10);
+  assert.equal(insights.videosByRecentActivity.length, 10);
+  assert.equal(insights.tagsByVideoCount.length, 10);
+});

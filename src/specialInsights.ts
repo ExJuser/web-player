@@ -49,6 +49,8 @@ const emptyStats: VideoStats = {
   updatedAt: 0,
 };
 
+const defaultInsightLimit = 10;
+
 function compareVideoFallback(a: SpecialModeVideoInsight, b: SpecialModeVideoInsight) {
   return (
     a.video.relativePath.localeCompare(b.video.relativePath, "zh-Hans-CN", { numeric: true }) ||
@@ -89,8 +91,8 @@ export function buildSpecialModeInsights(
   progressStore: ProgressStore,
   options?: { videoLimit?: number; tagLimit?: number },
 ): SpecialModeInsights {
-  const videoLimit = options?.videoLimit ?? 5;
-  const tagLimit = options?.tagLimit ?? 8;
+  const videoLimit = options?.videoLimit ?? defaultInsightLimit;
+  const tagLimit = options?.tagLimit ?? defaultInsightLimit;
   const tagStatsByKey = new Map<string, SpecialModeTagInsight>();
   const videoInsights = videos.map((video) => {
     const stats = videoStats[createVideoStatsKey(video)] ?? emptyStats;
