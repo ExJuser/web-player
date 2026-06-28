@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { scoreDuplicateNameSimilarityWithAi, searchLibraryWithAi, suggestTagMergeWithAi } from "../server/aiLibraryService.mjs";
+import {
+  createDuckDuckGoAutoTagQuery,
+  parseDuckDuckGoHtmlResults,
+  scoreDuplicateNameSimilarityWithAi,
+  searchLibraryWithAi,
+  suggestAutoTagsWithAi,
+  suggestTagMergeWithAi,
+} from "../server/aiLibraryService.mjs";
 
 test("searchLibraryWithAi rejects missing query or candidates", async () => {
   await assert.rejects(
@@ -178,4 +185,101 @@ test("scoreDuplicateNameSimilarityWithAi returns no scores without candidates or
     ),
     { scores: [] },
   );
+});
+
+test("parseDuckDuckGoHtmlResults extracts bounded titles urls and snippets", () => {
+  const html = `
+    <div class="result">
+      <a class="result__a" href="/l/?uddg=https%3A%2F%2Fexample.com%2Fshow&amp;rut=abc">Example &amp; Show</a>
+      <a class="result__snippet">A <b>useful</b> result &amp; summary.</a>
+    </div>
+    <div class="result">
+      <a class="result__a" href="https://example.org/other">Other</a>
+      <div class="result__snippet">Second summary.</div>
+    </div>
+  `;
+
+  assert.deepEqual(parseDuckDuckGoHtmlResults(html, 1), [
+    {
+      title: "Example & Show",
+      url: "https://example.com/show",
+      snippet: "A useful result & summary.",
+    },
+  ]);
+});
+
+test("createDuckDuckGoAutoTagQuery removes noisy filename metadata", () => {
+  assert.equal(
+    createDuckDuckGoAutoTagQuery({
+      name: "[Group] My.Show.S01E02.1080p.x265.mkv",
+      relativePath: "Anime/My Show/[Group] My.Show.S01E02.1080p.x265.mkv",
+      mediaRootLabel: "Anime",
+    }),
+    "My Show Anime",
+  );
+});
+
+test("suggestAutoTagsWithAi returns an empty response without AI config and skips search", async () => {
+  let didSearch = false;
+  const result = await suggestAutoTagsWithAi(
+    {},
+    { name: "Show.mkv", relativePath: "Anime/Show.mkv" },
+    {
+      searchDuckDuckGoImpl: async () => {
+        didSearch = true;
+        return [];
+      },
+    },
+  );
+
+  assert.equal(didSearch, false);
+  assert.deepEqual(result, { tags: [], summary: "AI 未配置，无法生成自动标签。", sources: [] });
+});
+
+test("suggestAutoTagsWithAi sends metadata and search results then filters returned tags", async () => {
+  const calls = [];
+  const result = await suggestAutoTagsWithAi(
+    { DEEPSEEK_API_KEY: "secret" },
+    {
+      id: "video-1",
+      name: "Mystery Show 01.mkv",
+      relativePath: "Anime/Mystery Show/Mystery Show 01.mkv",
+      mediaRootLabel: "Anime",
+      size: 12345,
+      duration: 1440.4,
+      width: 1920,
+      height: 1080,
+      existingTags: ["悬疑"],
+      libraryTags: ["剧情", "动画"],
+    },
+    {
+      searchDuckDuckGoImpl: async (query) => {
+        calls.push({ query });
+        return [
+          {
+            title: "Mystery Show - Wiki",
+            url: "https://example.com/wiki",
+            snippet: "A suspense animation series.",
+          },
+        ];
+      },
+      callDeepSeekImpl: async (_env, messages, options) => {
+        calls.push({ messages, options });
+        return JSON.stringify({
+          tags: ["悬疑", "动画", "剧情", "1080p", "动画", "长篇系列", "x".repeat(30)],
+          summary: "基于搜索结果。",
+        });
+      },
+    },
+  );
+
+  assert.equal(calls[0].query, "Mystery Show 01 Anime Mystery Show");
+  assert.deepEqual(calls[1].options, { responseFormat: { type: "json_object" } });
+  assert.match(calls[1].messages[1].content, /文件名: Mystery Show 01\.mkv/);
+  assert.match(calls[1].messages[1].content, /Mystery Show - Wiki/);
+  assert.deepEqual(result, {
+    tags: ["动画", "剧情", "长篇系列", "xxxxxxxxxxxxxxxxxxxx"],
+    summary: "基于搜索结果。",
+    sources: [{ title: "Mystery Show - Wiki", url: "https://example.com/wiki" }],
+  });
 });

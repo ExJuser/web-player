@@ -34,7 +34,7 @@ import {
   createSubtitleSummaryCache,
   writeCachedAiStreamResult,
 } from "./server/aiStreamCache.mjs";
-import { scoreDuplicateNameSimilarityWithAi, searchLibraryWithAi, suggestTagMergeWithAi } from "./server/aiLibraryService.mjs";
+import { scoreDuplicateNameSimilarityWithAi, searchLibraryWithAi, suggestAutoTagsWithAi, suggestTagMergeWithAi } from "./server/aiLibraryService.mjs";
 import {
   createBangumiMatchResult,
   normalizeBangumiMatchPayload,
@@ -1016,6 +1016,12 @@ function playerDataApiPlugin(env) {
       if (url.pathname === "/api/ai/tags/merge-suggestion" && request.method === "POST") {
         const payload = await parseJsonBody(request);
         sendJson(response, 200, await suggestTagMergeWithAi(env, payload));
+        return;
+      }
+
+      if (url.pathname === "/api/ai/tags/auto-suggest" && request.method === "POST") {
+        const payload = await parseJsonBody(request);
+        sendJson(response, 200, await suggestAutoTagsWithAi(env, payload));
         return;
       }
 

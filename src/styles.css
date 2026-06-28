@@ -4958,6 +4958,82 @@ button {
   cursor: grabbing;
 }
 
+.auto-tag-button svg {
+  flex: 0 0 auto;
+}
+
+.auto-tag-button:disabled svg {
+  opacity: 0.72;
+}
+
+.auto-tag-button:disabled .lucide-refresh-cw {
+  animation: tag-query-spin 0.9s linear infinite;
+}
+
+.auto-tag-dialog-header {
+  cursor: default;
+  touch-action: auto;
+}
+
+.auto-tag-suggestion-list {
+  display: flex;
+  min-height: 42px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.auto-tag-chip {
+  max-width: 220px;
+}
+
+.auto-tag-chip.selected {
+  border-color: rgba(111, 231, 183, 0.58);
+  background: rgba(35, 180, 126, 0.18);
+  color: #e8fff5;
+}
+
+.auto-tag-summary {
+  background: rgba(35, 180, 126, 0.1);
+  border-color: rgba(111, 231, 183, 0.28);
+}
+
+.auto-tag-sources {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid rgba(121, 223, 255, 0.18);
+  border-radius: 8px;
+  background: rgba(18, 23, 31, 0.62);
+}
+
+.auto-tag-sources strong {
+  font-size: 13px;
+}
+
+.auto-tag-sources a {
+  display: inline-grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  color: #aeeeff;
+  font-size: 13px;
+  line-height: 1.35;
+  text-decoration: none;
+}
+
+.auto-tag-sources a:hover {
+  color: #ffffff;
+}
+
+.auto-tag-sources a span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .tag-editor-current {
   display: flex;
   min-height: 44px;
@@ -5709,6 +5785,25 @@ button {
   color: #005f86;
 }
 
+.app-shell.theme-light .auto-tag-chip.selected {
+  border-color: rgba(10, 148, 106, 0.42);
+  background: #dcfce7;
+  color: #047857;
+}
+
+.app-shell.theme-light .auto-tag-sources {
+  border-color: #d7e0ea;
+  background: #f8fafc;
+}
+
+.app-shell.theme-light .auto-tag-sources a {
+  color: #0077a8;
+}
+
+.app-shell.theme-light .auto-tag-sources a:hover {
+  color: #005f86;
+}
+
 .app-shell.theme-light .tag-chip.more {
   background: #eef2f6;
   color: #667085;
@@ -6302,6 +6397,25 @@ button {
 :root[data-theme="light"] .tag-editor-chip:hover {
   border-color: rgba(0, 161, 214, 0.42);
   background: #c9effc;
+  color: #005f86;
+}
+
+:root[data-theme="light"] .auto-tag-chip.selected {
+  border-color: rgba(10, 148, 106, 0.42);
+  background: #dcfce7;
+  color: #047857;
+}
+
+:root[data-theme="light"] .auto-tag-sources {
+  border-color: #d7e0ea;
+  background: #f8fafc;
+}
+
+:root[data-theme="light"] .auto-tag-sources a {
+  color: #0077a8;
+}
+
+:root[data-theme="light"] .auto-tag-sources a:hover {
   color: #005f86;
 }
 

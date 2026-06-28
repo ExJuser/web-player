@@ -899,6 +899,15 @@ type AiTagMergeSuggestionResponse = {
   reason?: string;
 };
 
+type AutoTagSuggestionResponse = {
+  tags?: string[];
+  summary?: string;
+  sources?: Array<{
+    title?: string;
+    url?: string;
+  }>;
+};
+
 type TagMergePrompt = {
   pendingTags: string[];
   suggestion: TagMergeSuggestion;
@@ -1579,6 +1588,13 @@ export default function App() {
   const [tagMergePrompt, setTagMergePrompt] = useState<TagMergePrompt | null>(null);
   const [tagDialogOffset, setTagDialogOffset] = useState<DialogOffset>({ x: 0, y: 0 });
   const [isTagDialogDragging, setIsTagDialogDragging] = useState(false);
+  const [isAutoTagDialogOpen, setIsAutoTagDialogOpen] = useState(false);
+  const [isAutoTagLoading, setIsAutoTagLoading] = useState(false);
+  const [autoTagSuggestions, setAutoTagSuggestions] = useState<string[]>([]);
+  const [selectedAutoTags, setSelectedAutoTags] = useState<Set<string>>(() => new Set());
+  const [autoTagSummary, setAutoTagSummary] = useState("");
+  const [autoTagSources, setAutoTagSources] = useState<Array<{ title: string; url: string }>>([]);
+  const [autoTagMessage, setAutoTagMessage] = useState("");
   const [playlistFilter, setPlaylistFilter] = useState<PlaylistFilter>("all");
   const [playlistSortMode, setPlaylistSortMode] = useState<PlaylistSortMode>(
     defaultPlayerPreferences.playlistSortMode,
@@ -2116,6 +2132,11 @@ export default function App() {
   const currentVideoPlaybackUrl = currentVideo ? getPlayableVideoUrl(currentVideo, currentVideoSourceChoice) : "";
   const currentVideoHasCompatibleMedia = Boolean(currentVideo?.playability?.compatibleUrl);
   const currentVideoTags = currentVideo ? videoTags[currentVideo.id] ?? [] : [];
+  const currentVideoMediaRootLabel = useMemo(() => {
+    if (!currentVideo) return "";
+    const mediaRoot = localConfig?.mediaRoots.find((root) => root.id === currentVideo.mediaRootId);
+    return mediaRoot?.label ?? fallbackMediaRootLabelForVideo(currentVideo);
+  }, [currentVideo, localConfig]);
   const seriesOptionsKey = useMemo(
     () => seriesOptions.map((series) => `${series.key}\t${series.title}\t${series.count}`).join("\n"),
     [seriesOptions],
@@ -3704,6 +3725,81 @@ export default function App() {
     if (isTagSuggestionLoading) return;
     void addTagsToCurrentVideo(parseTagInput(tagInput));
   }, [addTagsToCurrentVideo, isTagSuggestionLoading, tagInput]);
+
+  const generateAutoTagsForCurrentVideo = useCallback(async () => {
+    setIsAutoTagDialogOpen(true);
+    setAutoTagSuggestions([]);
+    setSelectedAutoTags(new Set());
+    setAutoTagSummary("");
+    setAutoTagSources([]);
+
+    if (!currentVideo) {
+      setAutoTagMessage("请先选择一个视频。");
+      return;
+    }
+    if (!localConfig?.ai.configured) {
+      setAutoTagMessage("需要先配置大模型 API，才能生成 AI 自动标签。");
+      return;
+    }
+
+    setAutoTagMessage("");
+    setIsAutoTagLoading(true);
+    try {
+      const response = await fetchJson<AutoTagSuggestionResponse>("/api/ai/tags/auto-suggest", {
+        method: "POST",
+        body: JSON.stringify({
+          id: currentVideo.id,
+          name: currentVideo.name,
+          relativePath: currentVideo.relativePath,
+          mediaRootLabel: currentVideoMediaRootLabel,
+          size: currentVideo.size,
+          duration: currentVideo.duration,
+          width: currentVideo.width,
+          height: currentVideo.height,
+          existingTags: currentVideoTags,
+          libraryTags: getAllLibraryTags(),
+        }),
+      });
+      const tags = parseTagInput((response.tags ?? []).join(" "));
+      const sources = (response.sources ?? [])
+        .filter((source): source is { title: string; url: string } => Boolean(source?.title && source?.url))
+        .slice(0, 5);
+      setAutoTagSuggestions(tags);
+      setSelectedAutoTags(new Set(tags));
+      setAutoTagSummary(response.summary?.trim() ?? "");
+      setAutoTagSources(sources);
+      setAutoTagMessage(tags.length ? "" : response.summary?.trim() || "AI 没有生成可用标签。");
+    } catch (error) {
+      setAutoTagMessage(error instanceof Error ? `AI 自动标签生成失败：${error.message}` : "AI 自动标签生成失败。");
+    } finally {
+      setIsAutoTagLoading(false);
+    }
+  }, [currentVideo, currentVideoMediaRootLabel, currentVideoTags, getAllLibraryTags, localConfig]);
+
+  const toggleSelectedAutoTag = useCallback((tag: string) => {
+    setSelectedAutoTags((selectedTags) => {
+      const nextTags = new Set(selectedTags);
+      if (nextTags.has(tag)) {
+        nextTags.delete(tag);
+      } else {
+        nextTags.add(tag);
+      }
+      return nextTags;
+    });
+  }, []);
+
+  const confirmAutoTags = useCallback(() => {
+    const tags = autoTagSuggestions.filter((tag) => selectedAutoTags.has(tag));
+    if (!tags.length) {
+      setAutoTagMessage("请选择至少一个建议标签。");
+      return;
+    }
+    setIsAutoTagDialogOpen(false);
+    setIsTagDialogOpen(true);
+    setTagMessage("");
+    setTagMergePrompt(null);
+    void addTagsToCurrentVideo(tags);
+  }, [addTagsToCurrentVideo, autoTagSuggestions, selectedAutoTags]);
 
   const removeTagFromCurrentVideo = useCallback((tag: string) => {
     if (!currentVideo) return;
@@ -9344,6 +9440,16 @@ export default function App() {
                 <Tags size={18} />
               </button>
               <button
+                className={`icon-button auto-tag-button ${isAutoTagDialogOpen ? "active" : ""}`}
+                type="button"
+                onClick={() => void generateAutoTagsForCurrentVideo()}
+                disabled={!currentVideo || isAutoTagLoading}
+                title={localConfig?.ai.configured ? "AI 自动标签" : "需要先配置大模型 API"}
+                aria-label="AI 自动标签"
+              >
+                {isAutoTagLoading ? <RefreshCw size={18} /> : <Sparkles size={18} />}
+              </button>
+              <button
                 className={`icon-button highlight-mark-button ${pendingHighEnergyStart?.videoId === currentVideo?.id ? "active" : ""}`}
                 type="button"
                 onClick={markCurrentHighEnergySegment}
@@ -10559,6 +10665,90 @@ export default function App() {
             <button className="danger-button" type="button" onClick={() => void confirmClearSelectedCache()} disabled={isClearingCache}>
               <Trash2 size={18} />
               {isClearingCache ? "正在清除..." : "确认清除"}
+            </button>
+          </div>
+        </section>
+      </div>
+    ) : null}
+    {isAutoTagDialogOpen ? (
+      <div className="modal-backdrop tag-dialog-backdrop" role="presentation" onMouseDown={() => !isAutoTagLoading && setIsAutoTagDialogOpen(false)}>
+        <section
+          aria-labelledby="auto-tag-dialog-title"
+          aria-modal="true"
+          className="tag-dialog auto-tag-dialog"
+          role="dialog"
+          onMouseDown={(event) => event.stopPropagation()}
+        >
+          <button
+            aria-label="关闭"
+            className="dialog-close"
+            type="button"
+            onClick={() => setIsAutoTagDialogOpen(false)}
+            disabled={isAutoTagLoading}
+          >
+            <X size={18} />
+          </button>
+          <div className="tag-dialog-header auto-tag-dialog-header">
+            <div className="dialog-icon">
+              {isAutoTagLoading ? <RefreshCw size={28} /> : <Sparkles size={28} />}
+            </div>
+            <div className="dialog-copy">
+              <h2 id="auto-tag-dialog-title">AI 自动标签</h2>
+              <p>{currentVideo?.name ?? "未选择视频"}</p>
+            </div>
+          </div>
+
+          {isAutoTagLoading ? (
+            <div className="ai-empty-state">正在基于视频元信息和 DuckDuckGo 搜索结果生成建议标签。</div>
+          ) : null}
+
+          {autoTagSuggestions.length ? (
+            <div className="auto-tag-suggestion-list" aria-label="建议标签">
+              {autoTagSuggestions.map((tag) => {
+                const isSelected = selectedAutoTags.has(tag);
+                return (
+                  <button
+                    className={`tag-editor-chip auto-tag-chip${isSelected ? " selected" : ""}`}
+                    key={tag}
+                    type="button"
+                    onClick={() => toggleSelectedAutoTag(tag)}
+                    aria-pressed={isSelected}
+                  >
+                    <span>{tag}</span>
+                    {isSelected ? <CheckCircle2 size={14} /> : null}
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
+
+          {autoTagSummary ? (
+            <div className="tag-merge-prompt auto-tag-summary">
+              <strong>生成依据</strong>
+              <p>{autoTagSummary}</p>
+            </div>
+          ) : null}
+
+          {autoTagSources.length ? (
+            <div className="auto-tag-sources">
+              <strong>搜索来源</strong>
+              {autoTagSources.map((source) => (
+                <a href={source.url} key={source.url} target="_blank" rel="noreferrer">
+                  <ExternalLink size={14} />
+                  <span>{source.title}</span>
+                </a>
+              ))}
+            </div>
+          ) : null}
+
+          {autoTagMessage ? <div className="ai-empty-state">{autoTagMessage}</div> : null}
+
+          <div className="dialog-actions">
+            <button className="secondary-button" type="button" onClick={() => setIsAutoTagDialogOpen(false)} disabled={isAutoTagLoading}>
+              取消
+            </button>
+            <button className="primary-button" type="button" onClick={confirmAutoTags} disabled={isAutoTagLoading || !autoTagSuggestions.length}>
+              确认写入
             </button>
           </div>
         </section>
