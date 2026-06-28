@@ -47,6 +47,13 @@ test("creates stable library search signatures", () => {
   assert.equal(librarySearchUtils.createLibrarySearchSignature(""), "");
 });
 
+test("parses excluded tag filters from special mode library search queries", () => {
+  assert.deepEqual(librarySearchUtils.parseLibrarySearchQuery("小雨 -剧情 -AI-字幕 -剧情"), {
+    textQuery: "小雨",
+    excludedTagFilters: ["剧情", "AI-字幕"],
+  });
+});
+
 test("normalizes and tokenizes library search text consistently", () => {
   assert.equal(librarySearchUtils.normalizeLibrarySearchText("  Ａ/B-动画!!  "), "a b 动画");
   assert.deepEqual(librarySearchUtils.tokenizeLibrarySearchQuery("A  b 动画 12"), ["动画", "12"]);
@@ -151,6 +158,52 @@ test("special mode can search by tag filters without text query", () => {
   assert.deepEqual(
     results.map((result) => ({ kind: result.kind, videoId: result.representativeVideo.id, reason: result.reason })),
     [{ kind: "video", videoId: videos[0].id, reason: "标签筛选" }],
+  );
+});
+
+test("special mode excludes videos with negative tag filters in the query", () => {
+  const videos = [
+    createVideo({ id: "root-special|actor/a.mp4|100|1", name: "a.mp4", relativePath: "actor/a.mp4" }),
+    createVideo({ id: "root-special|actor/b.mp4|100|2", name: "b.mp4", relativePath: "actor/b.mp4", lastModified: 2 }),
+    createVideo({ id: "root-special|actor/c.mp4|100|3", name: "c.mp4", relativePath: "actor/c.mp4", lastModified: 3 }),
+  ];
+
+  const results = librarySearchUtils.searchLibraryEntries("actor -剧情 -AI字幕", videos, {
+    mode: "special",
+    ...createSearchContext({
+      videoTags: {
+        [videos[0].id]: ["剧情", "长镜头"],
+        [videos[1].id]: ["AI-字幕"],
+        [videos[2].id]: ["动作"],
+      },
+    }),
+  });
+
+  assert.deepEqual(
+    results.map((result) => result.representativeVideo.id),
+    [videos[2].id],
+  );
+});
+
+test("special mode can use only negative tag filters", () => {
+  const videos = [
+    createVideo({ id: "root-special|actor/a.mp4|100|1", name: "a.mp4", relativePath: "actor/a.mp4" }),
+    createVideo({ id: "root-special|actor/b.mp4|100|2", name: "b.mp4", relativePath: "actor/b.mp4", lastModified: 2 }),
+  ];
+
+  const results = librarySearchUtils.searchLibraryEntries("-剧情", videos, {
+    mode: "special",
+    ...createSearchContext({
+      videoTags: {
+        [videos[0].id]: ["剧情"],
+        [videos[1].id]: ["动作"],
+      },
+    }),
+  });
+
+  assert.deepEqual(
+    results.map((result) => ({ videoId: result.representativeVideo.id, reason: result.reason })),
+    [{ videoId: videos[1].id, reason: "排除标签" }],
   );
 });
 

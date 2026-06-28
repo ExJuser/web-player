@@ -1,4 +1,4 @@
-import { doTagsSatisfyAllFilters, getTagSearchScore } from "./tagUtils";
+import { doTagsSatisfyAllFilters, getTagSearchScore, normalizeTagKey } from "./tagUtils";
 import { baseNameWithoutExtension, directoryPartsOf, fallbackMediaRootLabelForVideo } from "./mediaPathUtils";
 
 export const librarySearchResultPageSize = 24;
@@ -20,6 +20,7 @@ export type LibrarySearchContext<Progress = unknown> = {
   favoriteVideoIds?: ReadonlySet<string>;
   isResumableProgress?: (progress: Progress | undefined) => boolean;
   tagFilters?: string[];
+  excludedTagFilters?: string[];
   videoTags?: Record<string, string[] | undefined>;
 };
 
@@ -55,6 +56,30 @@ export function getVisibleLibrarySearchResults<T>(results: T[], visibleCount: nu
 
 export function createLibrarySearchSignature(query: string) {
   return query.trim();
+}
+
+export function parseLibrarySearchQuery(query: string) {
+  const excludedTagFilters: string[] = [];
+  const seenExcludedTagKeys = new Set<string>();
+  const queryParts = query.split(/([\s,，、;；|]+)/u);
+  const textQuery = queryParts
+    .map((part) => {
+      if (!part || /^[\s,，、;；|]+$/u.test(part)) return part;
+      if (!part.startsWith("-")) return part;
+      const excludedTag = part.slice(1).trim();
+      const excludedTagKey = normalizeTagKey(excludedTag);
+      if (!excludedTagKey) return part;
+      if (!seenExcludedTagKeys.has(excludedTagKey)) {
+        seenExcludedTagKeys.add(excludedTagKey);
+        excludedTagFilters.push(excludedTag);
+      }
+      return "";
+    })
+    .join("")
+    .replace(/[\s,，、;；|]+/gu, " ")
+    .trim();
+
+  return { textQuery, excludedTagFilters };
 }
 
 export function libraryFolderTitleForVideo(video: LibrarySearchVideo) {
@@ -217,9 +242,13 @@ function scoreVideo<Video extends LibrarySearchVideo, Progress>(
   if (hasTagFilters && !doTagsSatisfyAllFilters(tags, context.tagFilters ?? [])) {
     return { score: 0, reason: "标签筛选" };
   }
+  const hasExcludedTagFilters = Boolean(context.excludedTagFilters?.length);
+  if (hasExcludedTagFilters && (context.excludedTagFilters ?? []).some((tag) => doTagsSatisfyAllFilters(tags, [tag]))) {
+    return { score: 0, reason: "排除标签" };
+  }
 
-  let score = normalizedQuery ? 0 : hasTagFilters ? 30 : 0;
-  const reasons: string[] = normalizedQuery ? [] : hasTagFilters ? ["标签筛选"] : [];
+  let score = normalizedQuery ? 0 : hasTagFilters || hasExcludedTagFilters ? 30 : 0;
+  const reasons: string[] = normalizedQuery ? [] : hasTagFilters ? ["标签筛选"] : hasExcludedTagFilters ? ["排除标签"] : [];
 
   if (context.mode === "special" && normalizedQuery && !matchesRequiredSpecialTerms(searchable, query, tags)) {
     return { score: 0, reason: "关键词匹配" };
@@ -359,16 +388,25 @@ export function searchLibraryEntries<Video extends LibrarySearchVideo, Progress>
   context: LibrarySearchContext<Progress>,
   limit?: number,
 ) {
-  const hasTagFilters = Boolean(context.tagFilters?.length);
-  if (!normalizeLibrarySearchText(query) && !hasTagFilters) return [];
+  const parsedQuery = context.mode === "special" ? parseLibrarySearchQuery(query) : { textQuery: query, excludedTagFilters: [] };
+  const searchContext =
+    context.mode === "special" && parsedQuery.excludedTagFilters.length
+      ? {
+          ...context,
+          excludedTagFilters: [...(context.excludedTagFilters ?? []), ...parsedQuery.excludedTagFilters],
+        }
+      : context;
+  const hasTagFilters = Boolean(searchContext.tagFilters?.length);
+  const hasExcludedTagFilters = Boolean(searchContext.excludedTagFilters?.length);
+  if (!normalizeLibrarySearchText(parsedQuery.textQuery) && !hasTagFilters && !hasExcludedTagFilters) return [];
   const folderVideosByKey = groupVideosByLibraryFolderKey(videos);
   const scoredVideos = videos
-    .map((video) => ({ video, ...scoreVideo(video, query, context) }))
+    .map((video) => ({ video, ...scoreVideo(video, parsedQuery.textQuery, searchContext) }))
     .filter((item) => item.score > 0);
 
-  if (context.mode === "special" || context.resultKind === "video") {
+  if (searchContext.mode === "special" || searchContext.resultKind === "video") {
     const videoResults = scoredVideos
-      .map(({ video, score, reason }) => createLibraryVideoResult(video, score, reason, context))
+      .map(({ video, score, reason }) => createLibraryVideoResult(video, score, reason, searchContext))
       .sort((a, b) => b.score - a.score || compareNaturalRelativePath(a.representativeVideo.relativePath, b.representativeVideo.relativePath));
     return applyLibrarySearchResultLimit(videoResults, limit);
   }
@@ -388,7 +426,7 @@ export function searchLibraryEntries<Video extends LibrarySearchVideo, Progress>
       }
       return;
     }
-    folderResults.set(key, createLibraryFolderResult(folderVideosByKey.get(key) ?? [video], video, score, reason, context));
+    folderResults.set(key, createLibraryFolderResult(folderVideosByKey.get(key) ?? [video], video, score, reason, searchContext));
   });
 
   const sortedResults = Array.from(folderResults.values()).sort((a, b) => b.score - a.score || a.title.localeCompare(b.title, "zh-Hans-CN"));
