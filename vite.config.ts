@@ -105,7 +105,7 @@ const cacheStatusDefinitions = [
   { id: "global", label: "全局播放数据", path: globalDataPath },
   { id: "libraries", label: "播放数据", path: librariesRoot },
   { id: "thumbnails", label: "视频缩略图", path: thumbnailsRoot },
-  { id: "photo-albums", label: "写真集数据", path: photoAlbumsRoot },
+  { id: "photo-albums", label: "看图数据", path: photoAlbumsRoot },
   { id: "subtitles", label: "内封字幕", path: embeddedSubtitlesRoot },
   { id: "compatible-media", label: "兼容播放缓存", path: compatibleMediaRoot },
   { id: "danmaku-sources", label: "弹幕源", path: danmakuSourcesRoot, getStats: () => createDanmakuSourcesStats(danmakuSourcesRoot) },

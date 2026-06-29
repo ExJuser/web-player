@@ -406,7 +406,7 @@ async function scanPhotoAlbumsRoot(root) {
       root,
       status: createRootStatus(root, "error", {
         scannedFiles,
-        error: error instanceof Error ? error.message : "扫描写真集失败。",
+        error: error instanceof Error ? error.message : "扫描看图文件夹失败。",
       }),
       albums,
     };
@@ -424,7 +424,7 @@ export async function scanConfiguredPhotoAlbums(config) {
     scannedFiles,
     metadata: {
       id: "photo-albums",
-      name: "写真集",
+      name: "看图",
       albumCount: albums.length,
       scannedFiles,
       updatedAt: Date.now(),

@@ -10,7 +10,7 @@
 
 主要代码债务集中在职责过载和模块边界不清：
 
-- `src/App.tsx` 约 490 KB，混合 UI、浏览器文件扫描、写真集、缩略图、AI、弹幕、播放控制和资源释放。
+- `src/App.tsx` 约 490 KB，混合 UI、浏览器文件扫描、看图模式、缩略图、AI、弹幕、播放控制和资源释放。
 - `src/styles.css` 约 155 KB，样式集中且后续 UI 调整需要浏览器检查。
 - `vite.config.ts` 承载 Vite 配置和大量本地 API 路由，并使用唯一的 `@ts-nocheck`。
 - `server/sqliteStorage.mjs` 约 48 KB，存储职责集中。
@@ -92,7 +92,7 @@
 候选模块：
 
 - 浏览器媒体扫描：`collectVideos`、`collectVideosFromFiles`、目录权限和父目录解析。
-- 写真集扫描与缓存对齐：`collectPhotoAlbumsFromDirectory`、`collectPhotoAlbumsFromBrowserFiles`、缓存状态转换。
+- 看图扫描与缓存对齐：`collectPhotoAlbumsFromDirectory`、`collectPhotoAlbumsFromBrowserFiles`、缓存状态转换。
 - 字幕 URL 与文本读取：`createSubtitleUrl`、`readSubtitleText`、缓存内封字幕恢复。
 - 缩略图生成：视频 metadata、canvas 编码、缓存加载。
 - 对象 URL 生命周期辅助：统一 revoke 和按需保留策略。
@@ -106,7 +106,7 @@
 候选边界：
 
 - 媒体库与搜索面板。
-- 写真集列表和阅读器。
+- 图集列表和阅读器。
 - 弹幕设置与加载。
 - AI 字幕总结、问答和回顾。
 - 兼容 MP4 生成与删除弹窗。
@@ -118,7 +118,7 @@
 
 在模块边界清晰后处理性能：
 
-- 对非首屏功能使用 `React.lazy` 或动态 import，优先拆 AI、写真集、弹幕、缓存状态等重型区域。
+- 对非首屏功能使用 `React.lazy` 或动态 import，优先拆 AI、看图模式、弹幕、缓存状态等重型区域。
 - 复核对象 URL 的创建、复用和释放，给图片/缩略图缓存设置清晰上限。
 - 对重复 `Set`/`Map` 构建和大列表派生数据做 memo 边界复核。
 - 保持媒体扫描和 ffmpeg/ffprobe 按需触发，不扩大首页或全局扫描开销。

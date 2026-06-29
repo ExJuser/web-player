@@ -729,7 +729,7 @@ async function collectPhotoAlbumsFromDirectory(directory: FileSystemDirectoryHan
 
   await walk(directory, []);
 
-  const rootLabel = directory.name || "写真集";
+  const rootLabel = directory.name || "看图";
   const rootId = `browser-photo:${sanitizeLibraryName(rootLabel)}-${hashString(rootLabel)}`;
 
   return collectPhotoAlbumsFromBrowserFiles(rootLabel, rootId, photoFiles);
@@ -1639,7 +1639,7 @@ export default function App() {
     defaultPhotoAlbumPreferences.favoritesOnly ? "favorites" : "all",
   );
   const [photoAlbumPage, setPhotoAlbumPage] = useState(1);
-  const [photoAlbumMessage, setPhotoAlbumMessage] = useState("选择一个写真集文件夹后开始扫描图片。");
+  const [photoAlbumMessage, setPhotoAlbumMessage] = useState("选择一个看图文件夹后开始扫描图片。");
   const [isPhotoAlbumsLoading, setIsPhotoAlbumsLoading] = useState(false);
   const [hasLoadedPhotoAlbums, setHasLoadedPhotoAlbums] = useState(false);
   const [selectedSubtitleId, setSelectedSubtitleId] = useState<string>("off");
@@ -1985,7 +1985,7 @@ export default function App() {
     async (directory: FileSystemDirectoryHandle, options?: { remember?: boolean }) => {
       photoAlbumDirectoryRef.current = directory;
       setIsPhotoAlbumsLoading(true);
-      setPhotoAlbumMessage("正在扫描写真集...");
+      setPhotoAlbumMessage("正在扫描看图文件夹...");
       try {
         const [scan, store] = await Promise.all([
           collectPhotoAlbumsFromDirectory(directory),
@@ -2034,7 +2034,7 @@ export default function App() {
             : `“${scan.rootLabel}”里没有找到包含图片的文件夹`,
         );
       } catch (error) {
-        setPhotoAlbumMessage(error instanceof Error ? error.message : "扫描写真集失败。");
+        setPhotoAlbumMessage(error instanceof Error ? error.message : "扫描看图文件夹失败。");
       } finally {
         setIsPhotoAlbumsLoading(false);
       }
@@ -2054,9 +2054,9 @@ export default function App() {
       await loadPhotoAlbumDirectory(directory);
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
-        setPhotoAlbumMessage("已取消选择写真集文件夹。");
+        setPhotoAlbumMessage("已取消选择看图文件夹。");
       } else {
-        setPhotoAlbumMessage("选择写真集文件夹失败，请确认浏览器权限后重试。");
+        setPhotoAlbumMessage("选择看图文件夹失败，请确认浏览器权限后重试。");
       }
     }
   }, [isPhotoAlbumsLoading, loadPhotoAlbumDirectory]);
@@ -2065,13 +2065,13 @@ export default function App() {
     if (isPhotoAlbumsLoading) return;
     const directory = photoAlbumDirectoryRef.current ?? (await readPhotoAlbumFolderHandle().catch(() => null));
     if (!directory) {
-      setPhotoAlbumMessage("请先选择写真集文件夹。");
+      setPhotoAlbumMessage("请先选择看图文件夹。");
       return;
     }
 
     const canReadDirectory = await ensureDirectoryReadPermission(directory);
     if (!canReadDirectory) {
-      setPhotoAlbumMessage(`浏览器需要重新授权“${directory.name}”，请重新选择写真集文件夹。`);
+      setPhotoAlbumMessage(`浏览器需要重新授权“${directory.name}”，请重新选择看图文件夹。`);
       return;
     }
 
@@ -2114,18 +2114,18 @@ export default function App() {
           return;
         }
         if (!directory) {
-          setPhotoAlbumMessage("首次选择写真集文件夹后，下次进入会自动复用。");
+          setPhotoAlbumMessage("首次选择看图文件夹后，下次进入会自动复用。");
           return;
         }
         const canReadDirectory = await ensureDirectoryReadPermission(directory);
         if (!canReadDirectory) {
-          setPhotoAlbumMessage(`浏览器需要重新授权“${directory.name}”，请重新选择写真集文件夹。`);
+          setPhotoAlbumMessage(`浏览器需要重新授权“${directory.name}”，请重新选择看图文件夹。`);
           return;
         }
         await loadPhotoAlbumDirectory(directory, { remember: true });
       } catch (error) {
         await clearPhotoAlbumFolderHandle().catch(() => undefined);
-        setPhotoAlbumMessage(error instanceof Error ? error.message : "读取已保存的写真集文件夹失败，请重新选择。");
+        setPhotoAlbumMessage(error instanceof Error ? error.message : "读取已保存的看图文件夹失败，请重新选择。");
       }
     })();
   }, [activeView, hasLoadedPhotoAlbums, isPhotoAlbumsLoading, loadPhotoAlbumDirectory]);
@@ -5056,7 +5056,7 @@ export default function App() {
       photoAlbumProgressRef.current = nextProgress;
       setPhotoAlbumProgress(nextProgress);
       void savePhotoAlbumProgress(album.id, nextProgress[album.id]).catch(() => {
-        setPhotoAlbumMessage("写真集进度保存失败。");
+        setPhotoAlbumMessage("看图进度保存失败。");
       });
     },
     [],
@@ -5103,7 +5103,7 @@ export default function App() {
       favoritePhotoAlbumIdsRef.current = nextFavorites;
       setFavoritePhotoAlbumIds(nextFavorites);
       void savePhotoAlbumFavorite(album.id, nextFavorites.has(album.id)).catch(() => {
-        setPhotoAlbumMessage("写真集收藏保存失败。");
+        setPhotoAlbumMessage("看图收藏保存失败。");
       });
     },
     [],
@@ -5118,7 +5118,7 @@ export default function App() {
     setPhotoAlbumCoverPreferences(nextPreferences);
     setPhotoAlbumMessage(`已将《${image.name}》设为《${album.title}》封面`);
     void savePhotoAlbumCoverPreference(album.id, image.id).catch(() => {
-      setPhotoAlbumMessage("写真集封面偏好保存失败。");
+      setPhotoAlbumMessage("看图封面偏好保存失败。");
     });
   }, []);
 
@@ -5138,7 +5138,7 @@ export default function App() {
     setPhotoAlbumProgress(nextProgress);
     setCurrentPhotoIndex(0);
     void saveCurrentPhotoAlbumStore({ progress: nextProgress }).catch(() => {
-      setPhotoAlbumMessage("写真集进度保存失败。");
+      setPhotoAlbumMessage("看图进度保存失败。");
     });
     setPhotoAlbumMessage(`已清除《${selectedPhotoAlbum.title}》的阅读进度`);
   }, [saveCurrentPhotoAlbumStore, selectedPhotoAlbum]);
@@ -5231,14 +5231,14 @@ export default function App() {
     setPhotoDeleteError("");
     setHasLoadedPhotoAlbums(true);
     setActiveView("photos");
-    setPhotoAlbumMessage("旧写真集目录记录没有写入权限，已自动清除。请重新选择写真集文件夹以授予删除权限。");
+    setPhotoAlbumMessage("旧看图目录记录没有写入权限，已自动清除。请重新选择看图文件夹以授予删除权限。");
   }, []);
 
   const requestDeleteCurrentPhoto = useCallback(() => {
     if (!selectedPhotoAlbum) return;
     const photo = selectedPhotoAlbum.images[currentPhotoIndex];
     if (!photo) {
-      setPhotoAlbumMessage("当前没有可删除的写真图片。");
+      setPhotoAlbumMessage("当前没有可删除的图片。");
       return;
     }
 
@@ -5274,7 +5274,7 @@ export default function App() {
     if (!album || !photo) {
       setIsPhotoDeletePending(false);
       setPhotoDeleteCandidate(null);
-      setPhotoAlbumMessage("这张图片已经不在当前写真集中。");
+      setPhotoAlbumMessage("这张图片已经不在当前图集中。");
       return;
     }
 
@@ -5282,7 +5282,7 @@ export default function App() {
       const rootDirectory = photoAlbumDirectoryRef.current ?? (await readPhotoAlbumFolderHandle().catch(() => null));
       const parentDirectory = photo.parentDirectory ?? photoDeleteCandidate.parentDirectory ?? (rootDirectory ? await resolvePhotoParentDirectory(rootDirectory, photo.relativePath) : null);
       if (!parentDirectory?.removeEntry) {
-        setPhotoDeleteError("当前图片来源不支持直接删除，请刷新写真集或在文件管理器中删除。");
+        setPhotoDeleteError("当前图片来源不支持直接删除，请刷新看图文件夹或在文件管理器中删除。");
         setIsPhotoDeletePending(false);
         return;
       }
@@ -5295,7 +5295,7 @@ export default function App() {
 
       await parentDirectory.removeEntry(photo.name);
       if (await photoFileExists(parentDirectory, photo.name)) {
-        setPhotoDeleteError("浏览器没有删除这个本地文件，请确认文件未被占用，并重新选择写真集文件夹授予写入权限。");
+        setPhotoDeleteError("浏览器没有删除这个本地文件，请确认文件未被占用，并重新选择看图文件夹授予写入权限。");
         setIsPhotoDeletePending(false);
         return;
       }
@@ -5412,7 +5412,7 @@ export default function App() {
           });
         })
         .catch(() => {
-          setPhotoAlbumMessage("图片已删除，但写真集扫描缓存更新失败，下次刷新会修正。");
+          setPhotoAlbumMessage("图片已删除，但看图扫描缓存更新失败，下次刷新会修正。");
         });
 
       setPhotoAlbumMessage(
@@ -5421,7 +5421,7 @@ export default function App() {
           : `已删除《${photo.name}》，《${album.title}》已无图片`,
       );
     } catch {
-      setPhotoDeleteError("删除写真图片失败，请确认浏览器仍有文件夹写入权限，或重新选择写真集文件夹。");
+      setPhotoDeleteError("删除图片失败，请确认浏览器仍有文件夹写入权限，或重新选择看图文件夹。");
     } finally {
       setIsPhotoDeletePending(false);
     }
@@ -5436,21 +5436,21 @@ export default function App() {
     if (!album) {
       setIsPhotoDeletePending(false);
       setPhotoAlbumDeleteCandidate(null);
-      setPhotoAlbumMessage("这本写真集已经不在当前列表中。");
+      setPhotoAlbumMessage("这个图集已经不在当前列表中。");
       return;
     }
 
     try {
       const rootDirectory = photoAlbumDirectoryRef.current ?? (await readPhotoAlbumFolderHandle().catch(() => null));
       if (!rootDirectory?.removeEntry) {
-        setPhotoDeleteError("当前写真集来源不支持直接删除，请刷新写真集或在文件管理器中删除。");
+        setPhotoDeleteError("当前图集来源不支持直接删除，请刷新看图文件夹或在文件管理器中删除。");
         setIsPhotoDeletePending(false);
         return;
       }
 
       const albumDirectory = await resolvePhotoAlbumDirectory(rootDirectory, album.relativePath);
       if (!albumDirectory.removeEntry) {
-        setPhotoDeleteError("当前写真集来源不支持直接删除，请刷新写真集或在文件管理器中删除。");
+        setPhotoDeleteError("当前图集来源不支持直接删除，请刷新看图文件夹或在文件管理器中删除。");
         setIsPhotoDeletePending(false);
         return;
       }
@@ -5464,7 +5464,7 @@ export default function App() {
       for (const image of album.images) {
         await albumDirectory.removeEntry(image.name);
         if (await photoFileExists(albumDirectory, image.name)) {
-          setPhotoDeleteError("浏览器没有删除这本写真集中的部分图片，请确认文件未被占用，并重新选择写真集文件夹授予写入权限。");
+          setPhotoDeleteError("浏览器没有删除这个图集中的部分图片，请确认文件未被占用，并重新选择看图文件夹授予写入权限。");
           setIsPhotoDeletePending(false);
           return;
         }
@@ -5550,12 +5550,12 @@ export default function App() {
           });
         })
         .catch(() => {
-          setPhotoAlbumMessage("写真集已删除，但扫描缓存更新失败，下次刷新会修正。");
+          setPhotoAlbumMessage("图集已删除，但扫描缓存更新失败，下次刷新会修正。");
         });
 
       setPhotoAlbumMessage(`已删除《${album.title}》及其中 ${album.imageCount} 张图片`);
     } catch {
-      setPhotoDeleteError("删除整本写真集失败，请确认浏览器仍有文件夹写入权限，或重新选择写真集文件夹。");
+      setPhotoDeleteError("删除整个图集失败，请确认浏览器仍有文件夹写入权限，或重新选择看图文件夹。");
     } finally {
       setIsPhotoDeletePending(false);
     }
@@ -5577,7 +5577,7 @@ export default function App() {
       setPhotoAlbumSortMode(nextSortMode);
       setPhotoAlbumPage(1);
       void savePhotoAlbumPreferences(nextPreferences).catch(() => {
-        setPhotoAlbumMessage("写真集偏好保存失败。");
+        setPhotoAlbumMessage("看图偏好保存失败。");
       });
     },
     [],
@@ -5593,7 +5593,7 @@ export default function App() {
       setPhotoAlbumFilter(nextFilter);
       setPhotoAlbumPage(1);
       void savePhotoAlbumPreferences(nextPreferences).catch(() => {
-        setPhotoAlbumMessage("写真集偏好保存失败。");
+        setPhotoAlbumMessage("看图偏好保存失败。");
       });
     },
     [],
@@ -8692,8 +8692,8 @@ export default function App() {
               className={`icon-button photo-favorite-button ${isFavorite ? "active" : ""}`}
               type="button"
               onClick={() => togglePhotoAlbumFavorite(album)}
-              title={isFavorite ? "取消收藏" : "收藏写真集"}
-              aria-label={isFavorite ? "取消收藏" : "收藏写真集"}
+              title={isFavorite ? "取消收藏" : "收藏图集"}
+              aria-label={isFavorite ? "取消收藏" : "收藏图集"}
             >
               <Star size={16} fill={isFavorite ? "currentColor" : "none"} />
             </button>
@@ -8717,7 +8717,7 @@ export default function App() {
                 className="danger-button photo-album-delete-button"
                 type="button"
                 onClick={() => requestDeletePhotoAlbum(album)}
-                title="删除整本写真集"
+                title="删除整个图集"
               >
                 <Trash2 size={16} />
                 删除
@@ -8810,7 +8810,7 @@ export default function App() {
                   : isPhotoAlbumViewVisible
                     ? activeView === "photoViewer" && selectedPhotoAlbum
                       ? selectedPhotoAlbum.title
-                      : "写真集"
+                      : "看图"
                     : currentVideo
                       ? currentVideo.relativePath
                       : message}
@@ -8837,7 +8837,7 @@ export default function App() {
             {!isPrivacyMode && activeView !== "photos" && activeView !== "photoViewer" ? (
               <button className="secondary-button top-home-button" type="button" onClick={showPhotoAlbumsView}>
                 <Images size={17} />
-                写真集
+                看图
               </button>
             ) : null}
             <button
@@ -9434,14 +9434,14 @@ export default function App() {
         ) : null}
 
         {isPhotoAlbumViewVisible && activeView === "photos" ? (
-          <section className="photo-dashboard" aria-label="写真集">
+          <section className="photo-dashboard" aria-label="看图">
             <section className="photo-toolbar home-section">
               <div>
                 <h2>本地相册</h2>
                 <p>{photoAlbumMessage}</p>
               </div>
               <div className="photo-toolbar-actions">
-                <div className="playlist-filter" role="group" aria-label="写真集筛选">
+                <div className="playlist-filter" role="group" aria-label="看图筛选">
                   <button
                     type="button"
                     className={photoAlbumFilter === "all" ? "active" : ""}
@@ -9459,7 +9459,7 @@ export default function App() {
                 </div>
                 <ControlSelect
                   label="排序"
-                  ariaLabel="写真集排序"
+                  ariaLabel="看图排序"
                   value={photoAlbumSortMode}
                   options={photoAlbumSortOptions}
                   onChange={updatePhotoAlbumSortMode}
@@ -9515,7 +9515,7 @@ export default function App() {
                   {pagedPhotoAlbums.map(renderPhotoAlbumCard)}
                 </section>
                 {photoAlbumPageCount > 1 ? (
-                  <nav className="photo-pagination" aria-label="写真集分页">
+                  <nav className="photo-pagination" aria-label="看图分页">
                     <span>
                       {photoAlbumPageStart}-{photoAlbumPageEnd} / {visiblePhotoAlbums.length}
                     </span>
@@ -9546,11 +9546,11 @@ export default function App() {
             ) : (
               <section className="home-section photo-empty-state">
                 <Images size={42} />
-                <h2>{isPhotoAlbumsLoading ? "正在扫描写真集" : "还没有可显示的写真集"}</h2>
-                <p>{photoAlbumFilter === "favorites" ? "收藏写真集后会出现在这里。" : "手动选择文件夹后，会把其中包含图片的文件夹识别为写真集。"}</p>
+                <h2>{isPhotoAlbumsLoading ? "正在扫描看图文件夹" : "还没有可显示的图集"}</h2>
+                <p>{photoAlbumFilter === "favorites" ? "收藏图集后会出现在这里。" : "手动选择文件夹后，会把其中包含图片的文件夹识别为图集。"}</p>
                 <button className="primary-button" type="button" onClick={() => void choosePhotoAlbumDirectory()} disabled={isPhotoAlbumsLoading}>
                   <FolderOpen size={18} />
-                  {isPhotoAlbumsLoading ? "扫描中" : "选择写真集文件夹"}
+                  {isPhotoAlbumsLoading ? "扫描中" : "选择看图文件夹"}
                 </button>
               </section>
             )}
@@ -9596,7 +9596,7 @@ export default function App() {
                   type="button"
                   onClick={requestDeleteCurrentPhoto}
                   disabled={!currentPhoto}
-                  title={currentPhoto ? "删除当前写真" : "当前没有可删除的写真图片"}
+                  title={currentPhoto ? "删除当前图片" : "当前没有可删除的图片"}
                 >
                   <Trash2 size={16} />
                   删除
@@ -10740,7 +10740,7 @@ export default function App() {
             <Trash2 size={28} />
           </div>
           <div className="dialog-copy">
-            <h2 id="delete-photo-title">删除写真图片？</h2>
+            <h2 id="delete-photo-title">删除图片？</h2>
             <p>这个操作会直接从本地磁盘删除图片文件，删除后无法在播放器内恢复。</p>
           </div>
           <div className="delete-file-preview">
@@ -10793,8 +10793,8 @@ export default function App() {
             <Trash2 size={28} />
           </div>
           <div className="dialog-copy">
-            <h2 id="delete-photo-album-title">删除整本写真集？</h2>
-            <p>这个操作会直接从本地磁盘删除这本写真集中的图片文件，删除后无法在播放器内恢复。</p>
+            <h2 id="delete-photo-album-title">删除整个图集？</h2>
+            <p>这个操作会直接从本地磁盘删除这个图集中的图片文件，删除后无法在播放器内恢复。</p>
           </div>
           <div className="delete-file-preview">
             <strong>{photoAlbumDeleteCandidate.title}</strong>

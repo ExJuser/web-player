@@ -29,7 +29,7 @@ test("formats media root status labels for video libraries", () => {
 
 test("formats media root status labels for photo albums", () => {
   assert.equal(uiState.formatPhotoRootStatus(undefined), "等待扫描");
-  assert.equal(uiState.formatPhotoRootStatus({ status: "ready", videoCount: 3 }), "3 本写真集");
+  assert.equal(uiState.formatPhotoRootStatus({ status: "ready", videoCount: 3 }), "3 个图集");
   assert.equal(uiState.formatPhotoRootStatus({ status: "needsAccess", videoCount: 0 }), "需配置本机路径");
   assert.equal(uiState.formatPhotoRootStatus({ status: "error", videoCount: 0 }), "扫描失败");
   assert.equal(uiState.formatPhotoRootStatus({ status: "error", videoCount: 0, error: "目录不存在" }), "扫描失败：目录不存在");

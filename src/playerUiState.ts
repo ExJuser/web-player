@@ -111,7 +111,7 @@ export function formatMediaRootStatus(status?: MediaRootStatusForUi) {
 }
 
 export function formatPhotoRootStatus(status?: MediaRootStatusForUi) {
-  return formatRootStatus(status, "本写真集");
+  return formatRootStatus(status, "个图集");
 }
 
 export function getPlayableVideoUrl(video: VideoForCompatibilityUi, source: "original" | "compatible" = "compatible") {
