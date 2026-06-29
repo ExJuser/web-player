@@ -35,6 +35,14 @@ export type WatchActivityInsights = {
   topTags: WatchActivityTagInsight[];
 };
 
+export type WatchActivityMonthGroup = {
+  key: string;
+  label: string;
+  leadingEmptyDays: number;
+  activeDays: number;
+  days: WatchActivityDayInsight[];
+};
+
 const dateKeyPattern = /^\d{4}-\d{2}-\d{2}$/;
 
 function padDatePart(value: number) {
@@ -59,6 +67,41 @@ export function getWatchActivityMetricValue(day: WatchActivityDayInsight, metric
   if (metric === "completed") return day.completedCount;
   if (metric === "emission") return day.emissionCount;
   return day.watchedSeconds;
+}
+
+function hasWatchActivity(day: WatchActivityDayInsight) {
+  return day.watchedSeconds > 0 || day.playCount > 0 || day.completedCount > 0 || day.emissionCount > 0;
+}
+
+function getMondayFirstWeekdayIndex(date: Date) {
+  return (date.getDay() + 6) % 7;
+}
+
+export function groupWatchActivityDaysByMonth(days: WatchActivityDayInsight[]): WatchActivityMonthGroup[] {
+  const groups: WatchActivityMonthGroup[] = [];
+  const groupByKey = new Map<string, WatchActivityMonthGroup>();
+
+  days.forEach((day) => {
+    const key = day.date.slice(0, 7);
+    let group = groupByKey.get(key);
+    if (!group) {
+      const monthNumber = Number(day.date.slice(5, 7));
+      const monthStart = new Date(`${key}-01T00:00:00`);
+      group = {
+        key,
+        label: Number.isFinite(monthNumber) ? `${monthNumber}月` : key,
+        leadingEmptyDays: Number.isNaN(monthStart.getTime()) ? 0 : getMondayFirstWeekdayIndex(monthStart),
+        activeDays: 0,
+        days: [],
+      };
+      groupByKey.set(key, group);
+      groups.push(group);
+    }
+    group.days.push(day);
+    if (hasWatchActivity(day)) group.activeDays += 1;
+  });
+
+  return groups;
 }
 
 function createEmptyDay(date: string): WatchActivityDayInsight {
@@ -152,7 +195,7 @@ export function buildWatchActivityInsights(
   const totalCompletedCount = days.reduce((sum, day) => sum + day.completedCount, 0);
   const totalEmissionCount = days.reduce((sum, day) => sum + day.emissionCount, 0);
   const maxMetricValue = days.reduce((max, day) => Math.max(max, getWatchActivityMetricValue(day, metric)), 0);
-  const activeDays = days.filter((day) => day.watchedSeconds > 0 || day.playCount > 0 || day.completedCount > 0 || day.emissionCount > 0).length;
+  const activeDays = days.filter(hasWatchActivity).length;
   const topTags = Array.from(tagStatsByKey.values())
     .filter((tag) => {
       if (metric === "plays") return tag.playCount > 0;

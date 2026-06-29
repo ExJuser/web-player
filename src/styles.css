@@ -1882,18 +1882,70 @@ button {
   outline: none;
 }
 
-.watch-activity-heatmap {
+.watch-activity-calendar {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(18px, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  min-width: 0;
+}
+
+.watch-activity-month {
+  display: grid;
+  min-width: 0;
+  gap: 7px;
+  padding: 10px;
+  border: 1px solid #2b323d;
+  border-radius: 7px;
+  background: #1b222c;
+}
+
+.watch-activity-month-header {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: #f5f7fb;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.watch-activity-month-header span {
+  overflow: hidden;
+  color: #8e97a5;
+  font-size: 11px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.watch-activity-weekdays,
+.watch-activity-month-days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(28px, 1fr));
   gap: 4px;
   min-width: 0;
+}
+
+.watch-activity-weekdays span {
+  color: #6f7a89;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  text-align: center;
+}
+
+.watch-activity-day-placeholder {
+  aspect-ratio: 1;
+  min-width: 0;
+  min-height: 28px;
 }
 
 .watch-activity-day {
   position: relative;
   aspect-ratio: 1;
   min-width: 0;
-  min-height: 18px;
+  min-height: 28px;
   overflow: hidden;
   border: 1px solid rgba(148, 163, 184, 0.16);
   border-radius: 4px;
@@ -1901,7 +1953,7 @@ button {
   color: rgba(245, 247, 251, 0.58);
   cursor: pointer;
   font: inherit;
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 800;
   letter-spacing: 0;
   line-height: 1;
@@ -6036,26 +6088,34 @@ button {
 
 .app-shell.theme-light .watch-activity-summary div,
 .app-shell.theme-light .watch-activity-segment,
+.app-shell.theme-light .watch-activity-month,
 .app-shell.theme-light .watch-activity-video,
 :root[data-theme="light"] .watch-activity-summary div,
 :root[data-theme="light"] .watch-activity-segment,
+:root[data-theme="light"] .watch-activity-month,
 :root[data-theme="light"] .watch-activity-video {
   border-color: #d7e0ea;
   background: #f8fafc;
 }
 
 .app-shell.theme-light .watch-activity-summary strong,
+.app-shell.theme-light .watch-activity-month-header,
 .app-shell.theme-light .watch-activity-video strong,
 :root[data-theme="light"] .watch-activity-summary strong,
+:root[data-theme="light"] .watch-activity-month-header,
 :root[data-theme="light"] .watch-activity-video strong {
   color: #172033;
 }
 
 .app-shell.theme-light .watch-activity-summary span,
+.app-shell.theme-light .watch-activity-month-header span,
+.app-shell.theme-light .watch-activity-weekdays span,
 .app-shell.theme-light .watch-activity-detail-header,
 .app-shell.theme-light .watch-activity-video small,
 .app-shell.theme-light .watch-activity-tags > small,
 :root[data-theme="light"] .watch-activity-summary span,
+:root[data-theme="light"] .watch-activity-month-header span,
+:root[data-theme="light"] .watch-activity-weekdays span,
 :root[data-theme="light"] .watch-activity-detail-header,
 :root[data-theme="light"] .watch-activity-video small,
 :root[data-theme="light"] .watch-activity-tags > small {
@@ -6929,6 +6989,8 @@ button {
 
   .home-dashboard {
     grid-template-columns: 1fr;
+    min-height: auto;
+    flex: 0 0 auto;
     overflow: visible;
   }
 
@@ -6957,11 +7019,16 @@ button {
   .home-primary-column,
   .home-side-column {
     order: initial;
+    min-height: auto;
     overflow: visible;
   }
 
   .home-resume-card {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .watch-activity-calendar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -7016,8 +7083,17 @@ button {
     padding: 0 6px;
   }
 
-  .watch-activity-heatmap {
-    grid-template-columns: repeat(auto-fill, minmax(16px, 1fr));
+  .watch-activity-calendar {
+    grid-template-columns: 1fr;
+  }
+
+  .watch-activity-month {
+    padding: 9px;
+  }
+
+  .watch-activity-weekdays,
+  .watch-activity-month-days {
+    grid-template-columns: repeat(7, minmax(32px, 1fr));
   }
 
   .watch-activity-video-list {

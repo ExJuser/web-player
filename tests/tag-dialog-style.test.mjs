@@ -50,10 +50,14 @@ test("special insight controls have light theme coverage in app and root theme s
 });
 
 test("watch activity controls have responsive and light theme coverage", () => {
-  assert.match(styles, /\.watch-activity-heatmap\s*\{(?<body>[^}]+grid-template-columns:\s*repeat\(auto-fill,\s*minmax\(18px,\s*1fr\)\);[^}]+)\}/);
-  assert.match(styles, /\.watch-activity-day\s*\{(?<body>[^}]+aspect-ratio:\s*1;[^}]+--activity-level[^}]+)\}/);
+  assert.match(styles, /\.watch-activity-calendar\s*\{(?<body>[^}]+grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\);[^}]+)\}/);
+  assert.match(styles, /\.watch-activity-month\s*\{(?<body>[^}]+background:\s*#1b222c;[^}]+)\}/);
+  assert.match(styles, /\.watch-activity-month-days\s*\{(?<body>[^}]+grid-template-columns:\s*repeat\(7,\s*minmax\(28px,\s*1fr\)\);[^}]+)\}/);
+  assert.match(styles, /\.watch-activity-day\s*\{(?<body>[^}]+aspect-ratio:\s*1;[^}]+min-height:\s*28px;[^}]+--activity-level[^}]+)\}/);
+  assert.match(styles, /\.app-shell\.theme-light \.watch-activity-month,/);
   assert.match(styles, /\.app-shell\.theme-light \.watch-activity-day,/);
   assert.match(styles, /:root\[data-theme="light"\] \.watch-activity-day\s*\{/);
+  assert.match(styles, /@media \(max-width:\s*640px\)\s*\{[\s\S]+\.watch-activity-calendar\s*\{[\s\S]+grid-template-columns:\s*1fr;/);
   assert.match(styles, /@media \(max-width:\s*640px\)\s*\{[\s\S]+\.watch-activity-video-list\s*\{[\s\S]+grid-template-columns:\s*1fr;/);
 });
 

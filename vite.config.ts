@@ -1128,6 +1128,8 @@ export default defineConfig(({ mode }) => {
           "**/.git/**",
           "**/.local-web-player-data/**",
           "**/.npm-cache/**",
+          "**/.superpowers/**",
+          "**/.worktrees/**",
           "**/dist/**",
         ],
       },

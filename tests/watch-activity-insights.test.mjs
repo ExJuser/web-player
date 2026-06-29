@@ -73,3 +73,43 @@ test("builds heatmap days and top tags from the selected video scope", () => {
     [["剧情", 3, ["video-1", "video-2"]], ["ai字幕", 3, ["video-2"]]],
   );
 });
+
+test("groups activity days into Monday-first calendar months", () => {
+  const days = [
+    {
+      date: "2026-05-31",
+      watchedSeconds: 0,
+      playCount: 0,
+      completedCount: 0,
+      emissionCount: 0,
+      videoIds: [],
+    },
+    {
+      date: "2026-06-01",
+      watchedSeconds: 90,
+      playCount: 1,
+      completedCount: 0,
+      emissionCount: 0,
+      videoIds: ["video-1"],
+    },
+    {
+      date: "2026-06-02",
+      watchedSeconds: 0,
+      playCount: 0,
+      completedCount: 1,
+      emissionCount: 0,
+      videoIds: ["video-2"],
+    },
+  ];
+
+  const months = activityInsights.groupWatchActivityDaysByMonth(days);
+
+  assert.equal(months.length, 2);
+  assert.deepEqual(
+    months.map((month) => [month.key, month.label, month.leadingEmptyDays, month.activeDays, month.days.map((day) => day.date)]),
+    [
+      ["2026-05", "5月", 4, 0, ["2026-05-31"]],
+      ["2026-06", "6月", 0, 2, ["2026-06-01", "2026-06-02"]],
+    ],
+  );
+});

@@ -76,6 +76,7 @@ import {
   createLocalDateKey,
   createWatchActivityKey,
   getWatchActivityMetricValue,
+  groupWatchActivityDaysByMonth,
   type WatchActivityMetric,
   type WatchActivityRange,
   type WatchActivityTagInsight,
@@ -2527,6 +2528,10 @@ export default function App() {
         metric: watchActivityMetric,
       }),
     [modeFilteredVideos, videoTags, watchActivityMetric, watchActivityRange, watchActivityRevision],
+  );
+  const watchActivityMonthGroups = useMemo(
+    () => groupWatchActivityDaysByMonth(watchActivityInsights.days),
+    [watchActivityInsights.days],
   );
   const selectedWatchActivityDay = useMemo(
     () =>
@@ -8440,6 +8445,7 @@ export default function App() {
     { value: "completed", label: "完成" },
     { value: "emission", label: "发射" },
   ];
+  const watchActivityWeekdayLabels = ["一", "二", "三", "四", "五", "六", "日"];
   const formatWatchActivityDate = (date: string) => {
     const parsed = new Date(`${date}T00:00:00`);
     if (Number.isNaN(parsed.getTime())) return date;
@@ -8468,6 +8474,25 @@ export default function App() {
       </button>
     );
   };
+  const renderWatchActivityMonth = (month: typeof watchActivityMonthGroups[number]) => (
+    <section className="watch-activity-month" key={month.key} aria-label={`${month.label}观看分布`}>
+      <div className="watch-activity-month-header">
+        <strong>{month.label}</strong>
+        <span>{month.activeDays} 个活跃日</span>
+      </div>
+      <div className="watch-activity-weekdays" aria-hidden="true">
+        {watchActivityWeekdayLabels.map((label) => (
+          <span key={`${month.key}-${label}`}>{label}</span>
+        ))}
+      </div>
+      <div className="watch-activity-month-days" role="list">
+        {Array.from({ length: month.leadingEmptyDays }).map((_, index) => (
+          <span className="watch-activity-day-placeholder" key={`${month.key}-empty-${index}`} aria-hidden="true" />
+        ))}
+        {month.days.map(renderWatchActivityDay)}
+      </div>
+    </section>
+  );
   const renderWatchActivityTagInsight = (insight: WatchActivityTagInsight, index: number) => {
     const metricValue =
       watchActivityMetric === "plays"
@@ -8884,8 +8909,8 @@ export default function App() {
                     ))}
                   </div>
                 </div>
-                <div className="watch-activity-heatmap" role="list" aria-label="最近观看分布">
-                  {watchActivityInsights.days.map(renderWatchActivityDay)}
+                <div className="watch-activity-calendar" role="list" aria-label="最近观看分布">
+                  {watchActivityMonthGroups.map(renderWatchActivityMonth)}
                 </div>
                 <div className="watch-activity-detail">
                   <div className="watch-activity-detail-header">
