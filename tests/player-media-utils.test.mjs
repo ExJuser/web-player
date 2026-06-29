@@ -244,6 +244,95 @@ test("keeps short numeric filename matches suspicious even with AI name boost", 
   assert.equal(groups[0].score, 119);
 });
 
+test("anime mode ignores same-series different episodes with similar metadata", async () => {
+  const episodeOne = createVideo({
+    id: "anime|Show/Show - 01.mkv|1000000|1",
+    name: "Show - 01.mkv",
+    relativePath: "Show/Show - 01.mkv",
+    size: 1000000,
+    duration: 1440,
+    width: 1920,
+    height: 1080,
+  });
+  const episodeTwo = createVideo({
+    id: "anime|Show/Show - 02.mkv|1001000|2",
+    name: "Show - 02.mkv",
+    relativePath: "Show/Show - 02.mkv",
+    size: 1001000,
+    duration: 1441,
+    width: 1920,
+    height: 1080,
+  });
+
+  const syncGroups = mediaUtils.detectDuplicateVideos([episodeOne, episodeTwo], { mode: "anime" });
+  const asyncGroups = await mediaUtils.detectDuplicateVideosWithProgress([episodeOne, episodeTwo], {
+    mode: "anime",
+    getContentFingerprint: async () => "same-op-ed-sample",
+    getNameSimilarityScores: async (pairs) => {
+      assert.equal(pairs.length, 0);
+      return new Map();
+    },
+  });
+
+  assert.equal(syncGroups.length, 0);
+  assert.equal(asyncGroups.length, 0);
+});
+
+test("anime mode still detects same-episode copies", async () => {
+  const original = createVideo({
+    id: "anime-a|Show/Show - 01.mkv|1000000|1",
+    name: "Show - 01.mkv",
+    relativePath: "Show/Show - 01.mkv",
+    size: 1000000,
+    duration: 1440,
+    width: 1920,
+    height: 1080,
+  });
+  const copy = createVideo({
+    id: "anime-b|Backup/Show 01 copy.mkv|1000500|2",
+    name: "Show 01 copy.mkv",
+    relativePath: "Backup/Show 01 copy.mkv",
+    size: 1000500,
+    duration: 1440,
+    width: 1920,
+    height: 1080,
+  });
+
+  const groups = await mediaUtils.detectDuplicateVideosWithProgress([original, copy], {
+    mode: "anime",
+    getContentFingerprint: async () => "same-episode",
+  });
+
+  assert.equal(groups.length, 1);
+  assert.equal(groups[0].severity, "duplicate");
+});
+
+test("non-anime duplicate detection keeps existing similar-metadata behavior", () => {
+  const first = createVideo({
+    id: "special-a",
+    name: "Show - 01.mkv",
+    relativePath: "Special/Show - 01.mkv",
+    size: 1000000,
+    duration: 1440,
+    width: 1920,
+    height: 1080,
+  });
+  const second = createVideo({
+    id: "special-b",
+    name: "Show - 02.mkv",
+    relativePath: "Special/Show - 02.mkv",
+    size: 1001000,
+    duration: 1441,
+    width: 1920,
+    height: 1080,
+  });
+
+  const groups = mediaUtils.detectDuplicateVideos([first, second], { mode: "special" });
+
+  assert.equal(groups.length, 1);
+  assert.equal(groups[0].severity, "suspicious");
+});
+
 test("uses normalized names when metadata is missing", () => {
   const first = createVideo({
     id: "first",

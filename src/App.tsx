@@ -2680,6 +2680,7 @@ export default function App() {
 
     try {
       const groups = await detectDuplicateVideosWithProgress(targetVideos, {
+        mode: targetMode,
         signal: abortController.signal,
         getContentFingerprint: getDuplicateFingerprint,
         getNameSimilarityScores: getDuplicateNameSimilarityScores,

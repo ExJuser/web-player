@@ -271,7 +271,13 @@ export type DuplicateNameSimilarityPair = {
   localScore: number;
 };
 
-export type DuplicateDetectionOptions = {
+export type DuplicateDetectionMode = "all" | "anime" | "special";
+
+export type DuplicateDetectionContext = {
+  mode?: DuplicateDetectionMode;
+};
+
+export type DuplicateDetectionOptions = DuplicateDetectionContext & {
   yieldEveryPairs?: number;
   signal?: AbortSignal;
   onProgress?: (progress: DuplicateDetectionProgress) => void;
@@ -294,6 +300,8 @@ const duplicateCandidateNeighborLimit = 36;
 
 const duplicateNoisePattern =
   /\b(?:copy|copied|backup|web|web-dl|webrip|bluray|bdrip|hdrip|x264|x265|h264|h265|hevc|avc|aac|flac|opus|1080p|720p|2160p|4k|8k)\b/gi;
+const animeEpisodePattern =
+  /\b(?:s\d{1,2}\s*e|ep(?:isode)?|e)\s*0*(\d{1,4})(?:\b|v\d\b)|第\s*0*(\d{1,4})\s*[集话話]|(?:^|[\s._-])0*(\d{1,4})(?:\s*(?:v\d|end|fin))?(?=\s*(?:\[[^\]]+\]|【[^】]+】)?(?:\.[^.]+)?$)/i;
 
 function normalizeDuplicateName(value: string) {
   return value
@@ -324,6 +332,39 @@ function getDuplicateNameTokens(value: string) {
 
 function isWeakDuplicateName(tokens: string[]) {
   return tokens.length === 1 && /^\d{1,3}$/.test(tokens[0]);
+}
+
+function getAnimeDuplicateInfo(video: VideoItem) {
+  const fileName = (video.name || video.relativePath || "").split(/[\\/]/).at(-1) ?? "";
+  const source = `${video.relativePath || ""}/${fileName}`.normalize("NFKC");
+  const episodeMatch = fileName.match(animeEpisodePattern) ?? source.match(animeEpisodePattern);
+  const episode = episodeMatch ? Number.parseInt(episodeMatch[1] ?? episodeMatch[2] ?? episodeMatch[3] ?? "", 10) : null;
+  const seriesName = normalizeDuplicateName(fileName || video.relativePath)
+    .replace(/\b(?:s\d{1,2}\s*e|ep(?:isode)?|e)\s*\d{1,4}\b/gi, " ")
+    .replace(/第\s*\d{1,4}\s*[集话話]/g, " ")
+    .replace(/(?:^| )\d{1,4}(?: |$)/g, " ")
+    .replace(/\b(?:copy|copied)\b/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return {
+    episode: Number.isFinite(episode) ? episode : null,
+    seriesName,
+  };
+}
+
+function isAnimeDifferentEpisodePair(a: VideoItem, b: VideoItem, context?: DuplicateDetectionContext) {
+  if (context?.mode !== "anime") return false;
+  const aInfo = getAnimeDuplicateInfo(a);
+  const bInfo = getAnimeDuplicateInfo(b);
+  return Boolean(
+    aInfo.seriesName &&
+      bInfo.seriesName &&
+      aInfo.seriesName === bInfo.seriesName &&
+      aInfo.episode !== null &&
+      bInfo.episode !== null &&
+      aInfo.episode !== bInfo.episode,
+  );
 }
 
 function getDuplicateNameScore(a: VideoItem, b: VideoItem) {
@@ -365,7 +406,11 @@ function getDuplicateNameScore(a: VideoItem, b: VideoItem) {
   return { score: 0, reasons };
 }
 
-function scoreDuplicatePair(a: VideoItem, b: VideoItem) {
+function scoreDuplicatePair(a: VideoItem, b: VideoItem, context?: DuplicateDetectionContext) {
+  if (isAnimeDifferentEpisodePair(a, b, context)) {
+    return { score: 0, reasons: ["追番不同集"] };
+  }
+
   const reasons: string[] = [];
   let score = 0;
 
@@ -616,10 +661,10 @@ function buildDuplicateVideoGroups(videos: VideoItem[], pairScores: Map<string, 
   );
 }
 
-export function detectDuplicateVideos(videos: VideoItem[]): DuplicateVideoGroup[] {
+export function detectDuplicateVideos(videos: VideoItem[], context: DuplicateDetectionContext = {}): DuplicateVideoGroup[] {
   const pairScores = new Map<string, DuplicateVideoPair>();
   createDuplicatePairCandidates(videos).forEach((candidate) => {
-    const pair = scoreDuplicatePair(candidate.a, candidate.b);
+    const pair = scoreDuplicatePair(candidate.a, candidate.b, context);
     mergeDuplicatePairScore(pairScores, candidate.a, candidate.b, pair);
   });
   return buildDuplicateVideoGroups(videos, pairScores);
@@ -707,13 +752,14 @@ export async function detectDuplicateVideosWithProgress(
   reportProgress();
   for (const candidate of candidates) {
     if (options.signal?.aborted) throw new DOMException("Duplicate detection aborted.", "AbortError");
-    const pair = scoreDuplicatePair(candidate.a, candidate.b);
+    const isSuppressedAnimePair = isAnimeDifferentEpisodePair(candidate.a, candidate.b, options);
+    const pair = scoreDuplicatePair(candidate.a, candidate.b, options);
     processedPairs += 1;
     mergeDuplicatePairScore(pairScores, candidate.a, candidate.b, pair);
-    if (pair.score >= duplicateFingerprintCandidateThreshold) {
+    if (!isSuppressedAnimePair && pair.score >= duplicateFingerprintCandidateThreshold) {
       fingerprintCandidatePairs.push({ a: candidate.a, b: candidate.b, pair });
     }
-    if (pair.score >= duplicateAiNameCandidateThreshold) {
+    if (!isSuppressedAnimePair && pair.score >= duplicateAiNameCandidateThreshold) {
       nameSimilarityCandidates.push({ a: candidate.a, b: candidate.b, pair, pairKey: candidate.key });
     }
     if (processedPairs % yieldEveryPairs === 0) {
@@ -767,7 +813,8 @@ export async function detectDuplicateVideosWithProgress(
           for (let bIndex = aIndex + 1; bIndex < fingerprintVideos.length; bIndex += 1) {
             const a = fingerprintVideos[aIndex];
             const b = fingerprintVideos[bIndex];
-            const metadataPair = scoreDuplicatePair(a, b);
+            if (isAnimeDifferentEpisodePair(a, b, options)) continue;
+            const metadataPair = scoreDuplicatePair(a, b, options);
             mergeDuplicatePairScore(pairScores, a, b, {
               score: Math.max(metadataPair.score, duplicateHighConfidenceThreshold),
               reasons: ["内容指纹一致", ...metadataPair.reasons],
