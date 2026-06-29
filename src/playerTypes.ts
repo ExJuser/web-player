@@ -372,6 +372,7 @@ export type PhotoAlbumStore = {
   favorites: string[];
   progress: Record<string, PhotoAlbumProgress>;
   coverImageByAlbumId: Record<string, string>;
+  albumTags: Record<string, string[]>;
   preferences: PhotoAlbumPreferences;
 };
 

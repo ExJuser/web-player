@@ -67,6 +67,7 @@ test("sqlite store imports legacy player and photo album json once", async () =>
         favorites: ["album1"],
         progress: { album1: { imageIndex: 2, completed: false, updatedAt: 2000 } },
         coverImageByAlbumId: { album1: "image-2" },
+        albumTags: { album1: ["剧情", "AI-字幕"] },
         preferences: { sortMode: "name", favoritesOnly: true },
       }),
       "utf8",
@@ -83,6 +84,7 @@ test("sqlite store imports legacy player and photo album json once", async () =>
     assert.deepEqual(playerStore.videoHighlights.video1, [{ id: "mark-1", startTime: 12, endTime: 18, tag: "名场面", updatedAt: 1200 }]);
     assert.equal(photoStore.progress.album1.imageIndex, 2);
     assert.equal(photoStore.coverImageByAlbumId.album1, "image-2");
+    assert.deepEqual(photoStore.albumTags.album1, ["剧情", "AI-字幕"]);
 
     context.store.close();
     context.store = new LocalDataSqliteStore({
@@ -308,6 +310,7 @@ test("sqlite photo album cover preferences can be updated independently", async 
       favorites: ["album1"],
       progress: {},
       coverImageByAlbumId: { album1: "img-a" },
+      albumTags: {},
       preferences: { sortMode: "updated", favoritesOnly: false },
     });
 
@@ -318,6 +321,29 @@ test("sqlite photo album cover preferences can be updated independently", async 
     const store = context.store.loadPhotoAlbumStore();
     assert.deepEqual(store.favorites, ["album1"]);
     assert.deepEqual(store.coverImageByAlbumId, { album1: "img-b" });
+  } finally {
+    context.store.close();
+    await rm(context.root, { recursive: true, force: true });
+  }
+});
+
+test("sqlite photo album tags can be updated independently", async () => {
+  const context = await createTempStore();
+  try {
+    await context.store.initialize();
+    context.store.savePhotoAlbumStore({
+      version: 1,
+      favorites: [],
+      progress: {},
+      coverImageByAlbumId: {},
+      albumTags: { album1: ["旧标签"] },
+      preferences: { sortMode: "updated", favoritesOnly: false },
+    });
+
+    context.store.replacePhotoAlbumTags("album1", ["剧情", "剧情 ", "AI-字幕", "ＡＩ字幕"]);
+
+    const store = context.store.loadPhotoAlbumStore();
+    assert.deepEqual(store.albumTags, { album1: ["剧情", "AI-字幕"] });
   } finally {
     context.store.close();
     await rm(context.root, { recursive: true, force: true });

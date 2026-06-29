@@ -15,9 +15,10 @@ test("missing photo album store fields fall back to defaults", () => {
     favoritesOnly: false,
   });
   assert.deepEqual(parsed.coverImageByAlbumId, {});
+  assert.deepEqual(parsed.albumTags, {});
 });
 
-test("photo album store keeps valid favorites, progress, and preferences", () => {
+test("photo album store keeps valid favorites, progress, preferences, and tags", () => {
   const parsed = storage.parsePhotoAlbumStore(JSON.stringify({
     version: 1,
     favorites: ["root|A", "root|A", "", 42, "root|B"],
@@ -31,6 +32,10 @@ test("photo album store keeps valid favorites, progress, and preferences", () =>
       "root|A": "img-1",
       "root|B": "",
       "root|C": 42,
+    },
+    albumTags: {
+      "root|A": ["剧情", "剧情 ", "AI-字幕", "ＡＩ字幕", "", 42],
+      "root|B": "bad",
     },
     preferences: {
       sortMode: "count",
@@ -49,6 +54,9 @@ test("photo album store keeps valid favorites, progress, and preferences", () =>
   });
   assert.deepEqual(parsed.coverImageByAlbumId, {
     "root|A": "img-1",
+  });
+  assert.deepEqual(parsed.albumTags, {
+    "root|A": ["剧情", "AI-字幕"],
   });
 });
 

@@ -26,9 +26,10 @@ function parseJson(value, fallback) {
 
 function normalizeTagKey(value) {
   return String(value ?? "")
-    .trim()
     .normalize("NFKC")
-    .toLocaleLowerCase();
+    .toLocaleLowerCase()
+    .replace(/[\s\p{P}\p{S}]+/gu, "")
+    .trim();
 }
 
 function asObject(value) {
@@ -252,6 +253,14 @@ export class LocalDataSqliteStore {
         album_id TEXT PRIMARY KEY,
         image_id TEXT NOT NULL,
         updated_at INTEGER NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS photo_album_tags (
+        album_id TEXT NOT NULL,
+        tag_key TEXT NOT NULL,
+        tag_label TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        PRIMARY KEY (album_id, tag_key)
       );
 
       CREATE TABLE IF NOT EXISTS photo_album_preferences (
@@ -934,6 +943,7 @@ export class LocalDataSqliteStore {
     this.db.prepare("DELETE FROM photo_album_favorites").run();
     this.db.prepare("DELETE FROM photo_album_progress").run();
     this.db.prepare("DELETE FROM photo_album_cover_preferences").run();
+    this.db.prepare("DELETE FROM photo_album_tags").run();
     const favoriteInsert = this.db.prepare("INSERT INTO photo_album_favorites (album_id, created_at) VALUES (?, ?)");
     for (const albumId of Array.isArray(store.favorites) ? store.favorites : []) {
       if (typeof albumId === "string" && albumId) favoriteInsert.run(albumId, timestamp);
@@ -946,6 +956,21 @@ export class LocalDataSqliteStore {
     for (const [albumId, imageId] of Object.entries(asObject(store.coverImageByAlbumId))) {
       if (albumId && typeof imageId === "string" && imageId) coverInsert.run(albumId, imageId, timestamp);
     }
+    const tagInsert = this.db.prepare("INSERT INTO photo_album_tags (album_id, tag_key, tag_label, created_at) VALUES (?, ?, ?, ?)");
+    for (const [albumId, tags] of Object.entries(asObject(store.albumTags))) {
+      if (!albumId || !Array.isArray(tags)) continue;
+      const seenKeys = new Set();
+      let tagIndex = 0;
+      for (const tag of tags) {
+        if (typeof tag !== "string") continue;
+        const label = tag.trim().slice(0, 40);
+        const key = normalizeTagKey(label);
+        if (!key || seenKeys.has(key)) continue;
+        seenKeys.add(key);
+        tagInsert.run(albumId, key, label, timestamp + tagIndex);
+        tagIndex += 1;
+      }
+    }
     this.db
       .prepare("INSERT INTO photo_album_preferences (scope, preferences_json, updated_at) VALUES ('global', ?, ?) ON CONFLICT(scope) DO UPDATE SET preferences_json = excluded.preferences_json, updated_at = excluded.updated_at")
       .run(stringifyJson(store.preferences ?? {}), now());
@@ -955,7 +980,8 @@ export class LocalDataSqliteStore {
     const hasData = Boolean(this.db.prepare("SELECT 1 FROM photo_album_preferences WHERE scope = 'global' LIMIT 1").get())
       || Boolean(this.db.prepare("SELECT 1 FROM photo_album_favorites LIMIT 1").get())
       || Boolean(this.db.prepare("SELECT 1 FROM photo_album_progress LIMIT 1").get())
-      || Boolean(this.db.prepare("SELECT 1 FROM photo_album_cover_preferences LIMIT 1").get());
+      || Boolean(this.db.prepare("SELECT 1 FROM photo_album_cover_preferences LIMIT 1").get())
+      || Boolean(this.db.prepare("SELECT 1 FROM photo_album_tags LIMIT 1").get());
     if (!hasData) return null;
     const favorites = allRows(this.db.prepare("SELECT album_id FROM photo_album_favorites ORDER BY created_at, album_id")).map((row) => row.album_id);
     const progress = {};
@@ -970,11 +996,17 @@ export class LocalDataSqliteStore {
     for (const row of allRows(this.db.prepare("SELECT album_id, image_id FROM photo_album_cover_preferences ORDER BY updated_at, album_id"))) {
       coverImageByAlbumId[row.album_id] = row.image_id;
     }
+    const albumTags = {};
+    for (const row of allRows(this.db.prepare("SELECT album_id, tag_label FROM photo_album_tags ORDER BY created_at, tag_label"))) {
+      if (!albumTags[row.album_id]) albumTags[row.album_id] = [];
+      albumTags[row.album_id].push(row.tag_label);
+    }
     return {
       version: photoAlbumStoreVersion,
       favorites,
       progress,
       coverImageByAlbumId,
+      albumTags,
       preferences: parseJson(this.db.prepare("SELECT preferences_json FROM photo_album_preferences WHERE scope = 'global'").get()?.preferences_json, {}),
     };
   }
@@ -1019,6 +1051,25 @@ export class LocalDataSqliteStore {
       this.db
         .prepare("INSERT INTO photo_album_cover_preferences (album_id, image_id, updated_at) VALUES (?, ?, ?) ON CONFLICT(album_id) DO UPDATE SET image_id = excluded.image_id, updated_at = excluded.updated_at")
         .run(albumId, normalizedImageId, now());
+    });
+  }
+
+  replacePhotoAlbumTags(albumId, tags) {
+    return this.transaction(() => {
+      this.db.prepare("DELETE FROM photo_album_tags WHERE album_id = ?").run(albumId);
+      const insert = this.db.prepare("INSERT INTO photo_album_tags (album_id, tag_key, tag_label, created_at) VALUES (?, ?, ?, ?)");
+      const seenKeys = new Set();
+      const timestamp = now();
+      let tagIndex = 0;
+      for (const tag of Array.isArray(tags) ? tags : []) {
+        if (typeof tag !== "string") continue;
+        const label = tag.trim().slice(0, 40);
+        const key = normalizeTagKey(label);
+        if (!key || seenKeys.has(key)) continue;
+        seenKeys.add(key);
+        insert.run(albumId, key, label, timestamp + tagIndex);
+        tagIndex += 1;
+      }
     });
   }
 

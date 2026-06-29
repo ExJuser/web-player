@@ -1359,6 +1359,38 @@ button {
   bottom: auto;
 }
 
+.photo-search-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid #242a31;
+  border-radius: 8px;
+  background: #151922;
+  color: #8e97a5;
+}
+
+.photo-search-row input {
+  width: 100%;
+  min-width: 0;
+  height: 38px;
+  border: 0;
+  background: transparent;
+  color: #f5f7fb;
+  outline: 0;
+}
+
+.photo-search-row input::placeholder {
+  color: #626b78;
+}
+
+.photo-search-row .icon-button {
+  width: 28px;
+  height: 28px;
+}
+
 .photo-stats {
   min-height: 58px;
 }
@@ -1520,6 +1552,23 @@ button {
   white-space: nowrap;
 }
 
+.photo-album-tags {
+  display: flex;
+  min-width: 0;
+  min-height: 26px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  overflow: hidden;
+}
+
+.photo-album-tags .tag-chip {
+  max-width: 112px;
+  min-height: 24px;
+  padding: 0 7px;
+  font-size: 12px;
+}
+
 .photo-album-footer {
   display: flex;
   min-width: 0;
@@ -1530,7 +1579,7 @@ button {
 
 .photo-album-actions {
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   gap: 6px;
 }
 
@@ -1539,7 +1588,7 @@ button {
   min-width: auto;
   width: auto;
   height: 34px;
-  padding: 0 12px;
+  padding: 0 10px;
   font-size: 13px;
 }
 
@@ -6066,6 +6115,7 @@ button {
 .app-shell.theme-light .home-section,
 .app-shell.theme-light .home-mode-card,
 .app-shell.theme-light .home-stats,
+.app-shell.theme-light .photo-search-row,
 .app-shell.theme-light .photo-album-card,
 .app-shell.theme-light .photo-viewer-header,
 .app-shell.theme-light .photo-filmstrip,
@@ -6082,6 +6132,15 @@ button {
   border-color: #d7e0ea;
   background: #ffffff;
   box-shadow: 0 22px 60px rgba(15, 23, 42, 0.12);
+}
+
+.app-shell.theme-light .photo-search-row,
+.app-shell.theme-light .photo-search-row input {
+  color: #243044;
+}
+
+.app-shell.theme-light .photo-search-row input::placeholder {
+  color: #98a2b3;
 }
 
 .app-shell.theme-light .home-card-thumbnail,
@@ -6944,6 +7003,8 @@ button {
 :root[data-theme="light"] .embedded-subtitle-track,
 :root[data-theme="light"] .ai-output,
 :root[data-theme="light"] .ai-question-input,
+:root[data-theme="light"] .photo-search-row,
+:root[data-theme="light"] .photo-search-row input,
 :root[data-theme="light"] .tag-editor-form input {
   color: #172033;
 }
@@ -6967,6 +7028,15 @@ button {
 :root[data-theme="light"] .ai-recap-meta,
 :root[data-theme="light"] .compatible-media-status {
   color: #667085;
+}
+
+:root[data-theme="light"] .photo-search-row {
+  border-color: #d7e0ea;
+  background: #ffffff;
+}
+
+:root[data-theme="light"] .photo-search-row input::placeholder {
+  color: #98a2b3;
 }
 
 :root[data-theme="light"] .secondary-button,

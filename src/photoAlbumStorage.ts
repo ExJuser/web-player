@@ -1,4 +1,5 @@
 import type { CachedPhotoAlbumScan, PhotoAlbum, PhotoAlbumImage, PhotoAlbumPreferences, PhotoAlbumProgress, PhotoAlbumStore } from "./playerTypes";
+import { normalizeTagKey } from "./tagUtils";
 export const photoAlbumScanCacheVersion = 1;
 
 export const defaultPhotoAlbumPreferences: PhotoAlbumPreferences = {
@@ -14,6 +15,27 @@ export function parsePhotoAlbumCoverPreferences(source: unknown): Record<string,
     if (albumId.trim() && typeof imageId === "string" && imageId.trim()) {
       store[albumId] = imageId;
     }
+  }
+  return store;
+}
+
+export function parsePhotoAlbumTags(source: unknown): Record<string, string[]> {
+  if (!source || typeof source !== "object" || Array.isArray(source)) return {};
+
+  const store: Record<string, string[]> = {};
+  for (const [albumId, value] of Object.entries(source)) {
+    if (!albumId.trim() || !Array.isArray(value)) continue;
+    const seenKeys = new Set<string>();
+    const tags: string[] = [];
+    value.forEach((tag) => {
+      if (typeof tag !== "string") return;
+      const label = tag.trim().slice(0, 40);
+      const key = normalizeTagKey(label);
+      if (!key || seenKeys.has(key)) return;
+      seenKeys.add(key);
+      tags.push(label);
+    });
+    if (tags.length) store[albumId] = tags;
   }
   return store;
 }
@@ -66,6 +88,7 @@ export function parsePhotoAlbumStore(raw: string): PhotoAlbumStore {
     favorites?: unknown;
     progress?: unknown;
     coverImageByAlbumId?: unknown;
+    albumTags?: unknown;
     preferences?: unknown;
   };
   return {
@@ -75,6 +98,7 @@ export function parsePhotoAlbumStore(raw: string): PhotoAlbumStore {
       : [],
     progress: parsePhotoAlbumProgress(parsed?.progress),
     coverImageByAlbumId: parsePhotoAlbumCoverPreferences(parsed?.coverImageByAlbumId),
+    albumTags: parsePhotoAlbumTags(parsed?.albumTags),
     preferences: parsePhotoAlbumPreferences(parsed?.preferences),
   };
 }
@@ -85,6 +109,7 @@ export function createDefaultPhotoAlbumStore(): PhotoAlbumStore {
     favorites: [],
     progress: {},
     coverImageByAlbumId: {},
+    albumTags: {},
     preferences: defaultPhotoAlbumPreferences,
   };
 }
@@ -239,8 +264,21 @@ export async function savePhotoAlbumStore(store: PhotoAlbumStore) {
       favorites: Array.from(new Set(store.favorites.filter(Boolean))),
       progress: parsePhotoAlbumProgress(store.progress),
       coverImageByAlbumId: parsePhotoAlbumCoverPreferences(store.coverImageByAlbumId),
+      albumTags: parsePhotoAlbumTags(store.albumTags),
       preferences: parsePhotoAlbumPreferences(store.preferences),
     }),
+  });
+  if (!response.ok) throw new Error(await readApiError(response));
+}
+
+export async function savePhotoAlbumTags(albumId: string, tags: string[]) {
+  const response = await fetch(`/api/photo-albums/tags/${encodeURIComponent(albumId)}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify({ tags }),
   });
   if (!response.ok) throw new Error(await readApiError(response));
 }

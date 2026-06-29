@@ -673,6 +673,7 @@ function playerDataApiPlugin(env) {
     const photoAlbumProgressMatch = url.pathname.match(/^\/api\/photo-albums\/progress\/(.+)$/);
     const photoAlbumFavoriteMatch = url.pathname.match(/^\/api\/photo-albums\/favorites\/(.+)$/);
     const photoAlbumCoverMatch = url.pathname.match(/^\/api\/photo-albums\/cover\/(.+)$/);
+    const photoAlbumTagsMatch = url.pathname.match(/^\/api\/photo-albums\/tags\/(.+)$/);
 
     try {
       const store = await getLocalDataStore();
@@ -1006,6 +1007,14 @@ function playerDataApiPlugin(env) {
           sendJson(response, 200, { ok: true });
           return;
         }
+      }
+
+      if (photoAlbumTagsMatch && request.method === "PUT") {
+        const albumId = decodeURIComponent(photoAlbumTagsMatch[1]);
+        const payload = await parseJsonBody(request);
+        store.replacePhotoAlbumTags(albumId, payload?.tags ?? payload);
+        sendJson(response, 200, { ok: true });
+        return;
       }
 
       if (url.pathname === "/api/photo-albums/preferences" && request.method === "PUT") {

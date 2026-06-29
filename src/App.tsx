@@ -144,7 +144,8 @@ import {
   savePhotoAlbumCoverPreference,
   savePhotoAlbumPreferences,
   savePhotoAlbumProgress,
-  savePhotoAlbumStore
+  savePhotoAlbumStore,
+  savePhotoAlbumTags
 } from "./photoAlbumStorage";
 import {
   PROGRESS_FILE_NAME,
@@ -455,6 +456,7 @@ import {
 import {
   createTagPairKey,
   findTagMergeSuggestion,
+  getTagSearchScore,
   mergeTags,
   normalizeTagKey,
   parseTagInput,
@@ -1491,6 +1493,7 @@ export default function App() {
   const bangumiMatchesBySeriesKeyRef = useRef<Record<string, BangumiSeriesMatch>>({});
   const photoAlbumProgressRef = useRef<Record<string, PhotoAlbumProgress>>({});
   const photoAlbumCoverPreferencesRef = useRef<Record<string, string>>({});
+  const photoAlbumTagsRef = useRef<Record<string, string[]>>({});
   const favoritePhotoAlbumIdsRef = useRef(new Set<string>());
   const photoAlbumPreferencesRef = useRef(defaultPhotoAlbumPreferences);
   const photoAlbumAutoLoadAttemptedRef = useRef(false);
@@ -1633,12 +1636,14 @@ export default function App() {
   const [photoObjectUrls, setPhotoObjectUrls] = useState<Record<string, string>>({});
   const [photoAlbumProgress, setPhotoAlbumProgress] = useState<Record<string, PhotoAlbumProgress>>({});
   const [photoAlbumCoverPreferences, setPhotoAlbumCoverPreferences] = useState<Record<string, string>>({});
+  const [photoAlbumTags, setPhotoAlbumTags] = useState<Record<string, string[]>>({});
   const [favoritePhotoAlbumIds, setFavoritePhotoAlbumIds] = useState<Set<string>>(() => new Set());
   const [photoAlbumSortMode, setPhotoAlbumSortMode] = useState<PhotoAlbumSortMode>(defaultPhotoAlbumPreferences.sortMode);
   const [photoAlbumFilter, setPhotoAlbumFilter] = useState<PhotoAlbumViewFilter>(
     defaultPhotoAlbumPreferences.favoritesOnly ? "favorites" : "all",
   );
   const [photoAlbumPage, setPhotoAlbumPage] = useState(1);
+  const [photoAlbumSearchQuery, setPhotoAlbumSearchQuery] = useState("");
   const [photoAlbumMessage, setPhotoAlbumMessage] = useState("选择一个看图文件夹后开始扫描图片。");
   const [isPhotoAlbumsLoading, setIsPhotoAlbumsLoading] = useState(false);
   const [hasLoadedPhotoAlbums, setHasLoadedPhotoAlbums] = useState(false);
@@ -1719,6 +1724,9 @@ export default function App() {
     imageCount: number;
     totalSize: number;
   } | null>(null);
+  const [photoAlbumTagEditorAlbumId, setPhotoAlbumTagEditorAlbumId] = useState<string | null>(null);
+  const [photoAlbumTagInput, setPhotoAlbumTagInput] = useState("");
+  const [photoAlbumTagMessage, setPhotoAlbumTagMessage] = useState("");
   const [photoDeleteError, setPhotoDeleteError] = useState("");
   const [isPhotoDeletePending, setIsPhotoDeletePending] = useState(false);
   const [videoDeleteCandidate, setVideoDeleteCandidate] = useState<VideoItem | null>(null);
@@ -1782,6 +1790,7 @@ export default function App() {
   bangumiMatchesBySeriesKeyRef.current = bangumiMatchesBySeriesKey;
   photoAlbumProgressRef.current = photoAlbumProgress;
   photoAlbumCoverPreferencesRef.current = photoAlbumCoverPreferences;
+  photoAlbumTagsRef.current = photoAlbumTags;
   favoritePhotoAlbumIdsRef.current = favoritePhotoAlbumIds;
   videoHighlightsRef.current = videoHighlights;
   photoAlbumPreferencesRef.current = {
@@ -1905,6 +1914,7 @@ export default function App() {
       favorites: Array.from(favoritePhotoAlbumIdsRef.current),
       progress: photoAlbumProgressRef.current,
       coverImageByAlbumId: photoAlbumCoverPreferencesRef.current,
+      albumTags: photoAlbumTagsRef.current,
       preferences: photoAlbumPreferencesRef.current,
       ...overrides,
     }),
@@ -1923,10 +1933,12 @@ export default function App() {
     favoritePhotoAlbumIdsRef.current = favoriteIds;
     photoAlbumProgressRef.current = store.progress;
     photoAlbumCoverPreferencesRef.current = store.coverImageByAlbumId;
+    photoAlbumTagsRef.current = store.albumTags;
     photoAlbumPreferencesRef.current = store.preferences;
     setFavoritePhotoAlbumIds(favoriteIds);
     setPhotoAlbumProgress(store.progress);
     setPhotoAlbumCoverPreferences(store.coverImageByAlbumId);
+    setPhotoAlbumTags(store.albumTags);
     setPhotoAlbumSortMode(store.preferences.sortMode);
     setPhotoAlbumFilter(store.preferences.favoritesOnly ? "favorites" : "all");
   }, []);
@@ -1994,6 +2006,7 @@ export default function App() {
             favorites: [],
             progress: {},
             coverImageByAlbumId: {},
+            albumTags: {},
             preferences: defaultPhotoAlbumPreferences,
           })),
         ]);
@@ -2091,6 +2104,7 @@ export default function App() {
             favorites: [],
             progress: {},
             coverImageByAlbumId: {},
+            albumTags: {},
             preferences: defaultPhotoAlbumPreferences,
           })),
         ]);
@@ -2742,12 +2756,32 @@ export default function App() {
     () => photoAlbums.find((album) => album.id === selectedPhotoAlbumId) ?? null,
     [photoAlbums, selectedPhotoAlbumId],
   );
+  const photoAlbumTagEditorAlbum = useMemo(
+    () => photoAlbums.find((album) => album.id === photoAlbumTagEditorAlbumId) ?? null,
+    [photoAlbums, photoAlbumTagEditorAlbumId],
+  );
   const visiblePhotoAlbums = useMemo(() => {
     const source =
       photoAlbumFilter === "favorites"
         ? photoAlbums.filter((album) => favoritePhotoAlbumIds.has(album.id))
         : photoAlbums;
-    return [...source].sort((a, b) => {
+    const queryTokens = parseTagInput(photoAlbumSearchQuery);
+    const filteredSource = queryTokens.length
+      ? source.filter((album) => {
+          const tags = photoAlbumTags[album.id] ?? [];
+          const searchableText = normalizeTagKey([
+            album.title,
+            album.relativePath,
+            album.mediaRootLabel,
+            album.images[0]?.name ?? "",
+          ].join(" "));
+          return queryTokens.every((token) => {
+            const tokenKey = normalizeTagKey(token);
+            return Boolean(tokenKey && (searchableText.includes(tokenKey) || getTagSearchScore(token, tags) > 0));
+          });
+        })
+      : source;
+    return [...filteredSource].sort((a, b) => {
       if (photoAlbumSortMode === "name") {
         return collator.compare(a.title || a.relativePath, b.title || b.relativePath);
       }
@@ -2756,7 +2790,7 @@ export default function App() {
       }
       return b.updatedAt - a.updatedAt || collator.compare(a.title, b.title);
     });
-  }, [favoritePhotoAlbumIds, photoAlbumFilter, photoAlbumSortMode, photoAlbums]);
+  }, [favoritePhotoAlbumIds, photoAlbumFilter, photoAlbumSearchQuery, photoAlbumSortMode, photoAlbumTags, photoAlbums]);
   const photoAlbumPageCount = Math.max(1, Math.ceil(visiblePhotoAlbums.length / photoAlbumPageSize));
   const pagedPhotoAlbums = useMemo(() => {
     const start = (photoAlbumPage - 1) * photoAlbumPageSize;
@@ -5309,6 +5343,7 @@ export default function App() {
       const nextPhotoIndex = Math.min(Math.max(photoDeleteCandidate.imageIndex, 0), Math.max(remainingImages.length - 1, 0));
       const nextProgress = { ...photoAlbumProgressRef.current };
       const nextCoverPreferences = { ...photoAlbumCoverPreferencesRef.current };
+      const nextAlbumTags = { ...photoAlbumTagsRef.current };
       let nextFavorites = favoritePhotoAlbumIdsRef.current;
       let nextSelectedAlbumId: string | null = album.id;
 
@@ -5336,6 +5371,7 @@ export default function App() {
         nextAlbums = photoAlbumsRef.current.filter((item) => item.id !== album.id);
         delete nextProgress[album.id];
         delete nextCoverPreferences[album.id];
+        delete nextAlbumTags[album.id];
         if (favoritePhotoAlbumIdsRef.current.has(album.id)) {
           nextFavorites = new Set(favoritePhotoAlbumIdsRef.current);
           nextFavorites.delete(album.id);
@@ -5356,6 +5392,7 @@ export default function App() {
       photoAlbumsRef.current = nextAlbums;
       photoAlbumProgressRef.current = nextProgress;
       photoAlbumCoverPreferencesRef.current = nextCoverPreferences;
+      photoAlbumTagsRef.current = nextAlbumTags;
       favoritePhotoAlbumIdsRef.current = nextFavorites;
       setPhotoAlbums(nextAlbums);
       setPhotoRootStatuses((statuses) =>
@@ -5373,6 +5410,7 @@ export default function App() {
       setPhotoObjectUrls(nextPhotoObjectUrls);
       setPhotoAlbumProgress(nextProgress);
       setPhotoAlbumCoverPreferences(nextCoverPreferences);
+      setPhotoAlbumTags(nextAlbumTags);
       setFavoritePhotoAlbumIds(nextFavorites);
       setCurrentPhotoIndex(nextPhotoIndex);
       setSelectedPhotoAlbumId(nextSelectedAlbumId);
@@ -5382,6 +5420,7 @@ export default function App() {
         progress: nextProgress,
         favorites: Array.from(nextFavorites),
         coverImageByAlbumId: nextCoverPreferences,
+        albumTags: nextAlbumTags,
       });
 
       void loadCachedPhotoAlbumScan()
@@ -5485,6 +5524,8 @@ export default function App() {
       delete nextProgress[album.id];
       const nextCoverPreferences = { ...photoAlbumCoverPreferencesRef.current };
       delete nextCoverPreferences[album.id];
+      const nextAlbumTags = { ...photoAlbumTagsRef.current };
+      delete nextAlbumTags[album.id];
       let nextFavorites = favoritePhotoAlbumIdsRef.current;
       if (favoritePhotoAlbumIdsRef.current.has(album.id)) {
         nextFavorites = new Set(favoritePhotoAlbumIdsRef.current);
@@ -5505,6 +5546,7 @@ export default function App() {
       photoAlbumsRef.current = nextAlbums;
       photoAlbumProgressRef.current = nextProgress;
       photoAlbumCoverPreferencesRef.current = nextCoverPreferences;
+      photoAlbumTagsRef.current = nextAlbumTags;
       favoritePhotoAlbumIdsRef.current = nextFavorites;
       photoObjectUrlsRef.current = nextPhotoObjectUrls;
       setPhotoAlbums(nextAlbums);
@@ -5523,6 +5565,7 @@ export default function App() {
       setPhotoObjectUrls(nextPhotoObjectUrls);
       setPhotoAlbumProgress(nextProgress);
       setPhotoAlbumCoverPreferences(nextCoverPreferences);
+      setPhotoAlbumTags(nextAlbumTags);
       setFavoritePhotoAlbumIds(nextFavorites);
       if (selectedPhotoAlbumId === album.id) {
         setSelectedPhotoAlbumId(null);
@@ -5536,6 +5579,7 @@ export default function App() {
         progress: nextProgress,
         favorites: Array.from(nextFavorites),
         coverImageByAlbumId: nextCoverPreferences,
+        albumTags: nextAlbumTags,
       });
 
       void loadCachedPhotoAlbumScan()
@@ -5598,6 +5642,54 @@ export default function App() {
     },
     [],
   );
+
+  const openPhotoAlbumTagEditor = useCallback((album: PhotoAlbum) => {
+    setPhotoAlbumTagEditorAlbumId(album.id);
+    setPhotoAlbumTagInput("");
+    setPhotoAlbumTagMessage("");
+  }, []);
+
+  const replacePhotoAlbumTags = useCallback((album: PhotoAlbum, nextTags: string[], successMessage: string) => {
+    const parsedTags = parseTagInput(nextTags.join(" "));
+    const nextAlbumTags = {
+      ...photoAlbumTagsRef.current,
+      [album.id]: parsedTags,
+    };
+    if (!parsedTags.length) delete nextAlbumTags[album.id];
+    photoAlbumTagsRef.current = nextAlbumTags;
+    setPhotoAlbumTags(nextAlbumTags);
+    setPhotoAlbumTagMessage(successMessage);
+    void savePhotoAlbumTags(album.id, parsedTags).catch(() => {
+      setPhotoAlbumTagMessage("图集标签保存失败。");
+    });
+  }, []);
+
+  const addTagsToPhotoAlbum = useCallback(() => {
+    if (!photoAlbumTagEditorAlbum) return;
+    const incomingTags = parseTagInput(photoAlbumTagInput);
+    if (!incomingTags.length) {
+      setPhotoAlbumTagMessage("请输入至少一个标签。");
+      return;
+    }
+    const existingTags = photoAlbumTagsRef.current[photoAlbumTagEditorAlbum.id] ?? [];
+    const nextTags = mergeTags(existingTags, incomingTags);
+    replacePhotoAlbumTags(photoAlbumTagEditorAlbum, nextTags, `已保存 ${nextTags.length} 个标签。`);
+    setPhotoAlbumTagInput("");
+  }, [photoAlbumTagEditorAlbum, photoAlbumTagInput, replacePhotoAlbumTags]);
+
+  const removeTagFromPhotoAlbum = useCallback(
+    (tag: string) => {
+      if (!photoAlbumTagEditorAlbum) return;
+      const removedKey = normalizeTagKey(tag);
+      const nextTags = (photoAlbumTagsRef.current[photoAlbumTagEditorAlbum.id] ?? []).filter((item) => normalizeTagKey(item) !== removedKey);
+      replacePhotoAlbumTags(photoAlbumTagEditorAlbum, nextTags, nextTags.length ? `已移除标签“${tag}”。` : "已清空图集标签。");
+    },
+    [photoAlbumTagEditorAlbum, replacePhotoAlbumTags],
+  );
+
+  useEffect(() => {
+    setPhotoAlbumPage(1);
+  }, [photoAlbumSearchQuery]);
 
   const togglePhotoFullscreen = useCallback(async () => {
     if (document.fullscreenElement) {
@@ -8675,6 +8767,7 @@ export default function App() {
     const progress = photoAlbumProgress[album.id];
     const progressPercent = progress ? Math.min(100, ((progress.imageIndex + 1) / Math.max(album.imageCount, 1)) * 100) : 0;
     const isFavorite = favoritePhotoAlbumIds.has(album.id);
+    const tags = photoAlbumTags[album.id] ?? [];
     const preferredCover = album.images.find((image) => image.id === photoAlbumCoverPreferences[album.id]) ?? null;
     const coverImageUrl = getPhotoImageUrl(preferredCover) || album.coverImageUrl || getPhotoImageUrl(album.images[0]);
     return (
@@ -8699,6 +8792,15 @@ export default function App() {
             </button>
           </div>
           <span>{album.mediaRootLabel} · {album.relativePath || "根目录"}</span>
+          {tags.length ? (
+            <div className="photo-album-tags" aria-label="图集标签">
+              {tags.map((tag) => (
+                <span className="tag-chip" key={`${album.id}-${tag}`}>
+                  {tag}
+                </span>
+              ))}
+            </div>
+          ) : null}
           <span>{formatPhotoAlbumProgress(album)} · {formatFileSize(album.totalSize)} · {formatRelativeTime(album.updatedAt)}</span>
           <div className="photo-album-footer">
             <div className="home-progress" aria-label={formatPhotoAlbumProgress(album)}>
@@ -8713,6 +8815,10 @@ export default function App() {
                   从头
                 </button>
               ) : null}
+              <button className="secondary-button" type="button" onClick={() => openPhotoAlbumTagEditor(album)}>
+                <Tags size={16} />
+                标签
+              </button>
               <button
                 className="danger-button photo-album-delete-button"
                 type="button"
@@ -9472,6 +9578,27 @@ export default function App() {
               </div>
             </section>
 
+            <section className="photo-search-row" aria-label="搜索图集">
+              <Search size={17} />
+              <input
+                type="search"
+                value={photoAlbumSearchQuery}
+                placeholder="搜索图集、路径或标签"
+                onChange={(event) => setPhotoAlbumSearchQuery(event.target.value)}
+              />
+              {photoAlbumSearchQuery ? (
+                <button
+                  className="icon-button"
+                  type="button"
+                  onClick={() => setPhotoAlbumSearchQuery("")}
+                  aria-label="清空看图搜索"
+                  title="清空搜索"
+                >
+                  <X size={16} />
+                </button>
+              ) : null}
+            </section>
+
             <section className="home-stats photo-stats">
               <div>
                 <strong>{photoAlbumStats.total}</strong>
@@ -9547,7 +9674,13 @@ export default function App() {
               <section className="home-section photo-empty-state">
                 <Images size={42} />
                 <h2>{isPhotoAlbumsLoading ? "正在扫描看图文件夹" : "还没有可显示的图集"}</h2>
-                <p>{photoAlbumFilter === "favorites" ? "收藏图集后会出现在这里。" : "手动选择文件夹后，会把其中包含图片的文件夹识别为图集。"}</p>
+                <p>
+                  {photoAlbumSearchQuery.trim()
+                    ? "没有匹配当前搜索的图集。"
+                    : photoAlbumFilter === "favorites"
+                      ? "收藏图集后会出现在这里。"
+                      : "手动选择文件夹后，会把其中包含图片的文件夹识别为图集。"}
+                </p>
                 <button className="primary-button" type="button" onClick={() => void choosePhotoAlbumDirectory()} disabled={isPhotoAlbumsLoading}>
                   <FolderOpen size={18} />
                   {isPhotoAlbumsLoading ? "扫描中" : "选择看图文件夹"}
@@ -9580,6 +9713,10 @@ export default function App() {
                 <button className="secondary-button" type="button" onClick={resetSelectedPhotoAlbumProgress}>
                   <RotateCcw size={16} />
                   重读
+                </button>
+                <button className="secondary-button" type="button" onClick={() => openPhotoAlbumTagEditor(selectedPhotoAlbum)}>
+                  <Tags size={16} />
+                  标签
                 </button>
                 {currentPhoto ? (
                   <button
@@ -10820,6 +10957,71 @@ export default function App() {
               {isPhotoDeletePending ? "删除中" : "删除整本"}
             </button>
           </div>
+        </section>
+      </div>
+    ) : null}
+    {photoAlbumTagEditorAlbum ? (
+      <div className="modal-backdrop" role="presentation" onMouseDown={() => setPhotoAlbumTagEditorAlbumId(null)}>
+        <section
+          aria-labelledby="photo-album-tag-dialog-title"
+          aria-modal="true"
+          className="tag-dialog photo-album-tag-dialog"
+          role="dialog"
+          onMouseDown={(event) => event.stopPropagation()}
+        >
+          <button
+            aria-label="关闭"
+            className="dialog-close"
+            type="button"
+            onClick={() => setPhotoAlbumTagEditorAlbumId(null)}
+          >
+            <X size={18} />
+          </button>
+          <div className="tag-dialog-header auto-tag-dialog-header">
+            <div className="dialog-icon">
+              <Tags size={28} />
+            </div>
+            <div className="dialog-copy">
+              <h2 id="photo-album-tag-dialog-title">图集标签</h2>
+              <p>{photoAlbumTagEditorAlbum.title}</p>
+            </div>
+          </div>
+
+          <div className="tag-editor-current">
+            {(photoAlbumTags[photoAlbumTagEditorAlbum.id] ?? []).length ? (
+              (photoAlbumTags[photoAlbumTagEditorAlbum.id] ?? []).map((tag) => (
+                <button className="tag-editor-chip" key={tag} type="button" onClick={() => removeTagFromPhotoAlbum(tag)}>
+                  <span>{tag}</span>
+                  <X size={14} />
+                </button>
+              ))
+            ) : (
+              <div className="ai-empty-state">当前图集还没有标签。</div>
+            )}
+          </div>
+
+          <form
+            className="tag-editor-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              addTagsToPhotoAlbum();
+            }}
+          >
+            <input
+              autoFocus
+              value={photoAlbumTagInput}
+              placeholder="输入标签，可用空格、逗号、顿号分隔"
+              onChange={(event) => setPhotoAlbumTagInput(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") setPhotoAlbumTagEditorAlbumId(null);
+              }}
+            />
+            <button className="primary-button" type="submit" disabled={!photoAlbumTagInput.trim()}>
+              添加
+            </button>
+          </form>
+
+          {photoAlbumTagMessage ? <div className="ai-empty-state">{photoAlbumTagMessage}</div> : null}
         </section>
       </div>
     ) : null}
