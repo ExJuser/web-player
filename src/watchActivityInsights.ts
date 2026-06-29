@@ -190,6 +190,13 @@ export function buildWatchActivityInsights(
   });
 
   const days = Array.from(daysByDate.values());
+  days.forEach((day) => {
+    day.videoIds.sort((a, b) => {
+      const aActivity = activityStore[createWatchActivityKey(day.date, a)];
+      const bActivity = activityStore[createWatchActivityKey(day.date, b)];
+      return (bActivity?.watchedSeconds ?? 0) - (aActivity?.watchedSeconds ?? 0);
+    });
+  });
   const totalWatchedSeconds = days.reduce((sum, day) => sum + day.watchedSeconds, 0);
   const totalPlayCount = days.reduce((sum, day) => sum + day.playCount, 0);
   const totalCompletedCount = days.reduce((sum, day) => sum + day.completedCount, 0);

@@ -113,3 +113,48 @@ test("groups activity days into Monday-first calendar months", () => {
     ],
   );
 });
+
+test("orders daily video ids by watched seconds for thumbnail carousels", () => {
+  const videos = [
+    createVideo({ id: "video-a", name: "a.mp4" }),
+    createVideo({ id: "video-b", name: "b.mp4" }),
+    createVideo({ id: "video-c", name: "c.mp4" }),
+  ];
+
+  const insights = activityInsights.buildWatchActivityInsights(
+    {
+      "2026-06-29::video-a": {
+        date: "2026-06-29",
+        videoId: "video-a",
+        watchedSeconds: 30,
+        playCount: 3,
+        completedCount: 0,
+        emissionCount: 0,
+        updatedAt: 1,
+      },
+      "2026-06-29::video-b": {
+        date: "2026-06-29",
+        videoId: "video-b",
+        watchedSeconds: 120,
+        playCount: 1,
+        completedCount: 0,
+        emissionCount: 0,
+        updatedAt: 2,
+      },
+      "2026-06-29::video-c": {
+        date: "2026-06-29",
+        videoId: "video-c",
+        watchedSeconds: 120,
+        playCount: 2,
+        completedCount: 0,
+        emissionCount: 0,
+        updatedAt: 3,
+      },
+    },
+    videos,
+    {},
+    { rangeDays: 30, today: "2026-06-29" },
+  );
+
+  assert.deepEqual(insights.days.at(-1).videoIds, ["video-b", "video-c", "video-a"]);
+});

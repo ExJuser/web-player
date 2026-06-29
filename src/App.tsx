@@ -1678,6 +1678,7 @@ export default function App() {
   const [watchActivityRange, setWatchActivityRange] = useState<WatchActivityRange>(90);
   const [watchActivityMetric, setWatchActivityMetric] = useState<WatchActivityMetric>("watched");
   const [selectedWatchActivityDate, setSelectedWatchActivityDate] = useState<string | null>(null);
+  const [watchActivityCarouselTick, setWatchActivityCarouselTick] = useState(0);
   const [launchEffectKey, setLaunchEffectKey] = useState(0);
   const [isPlaylistSortReversed, setIsPlaylistSortReversed] = useState(
     defaultPlayerPreferences.isPlaylistSortReversed,
@@ -2481,28 +2482,15 @@ export default function App() {
   const isPhotoAlbumViewVisible =
     (activeView === "photos" || activeView === "photoViewer") && !isPrivacyMode && !isCinemaMode && !isFullscreen;
   const isNonPlayerViewVisible = isHomeViewVisible || isPhotoAlbumViewVisible;
+  useEffect(() => {
+    if (!isHomeViewVisible) return undefined;
+    const timer = window.setInterval(() => {
+      setWatchActivityCarouselTick((tick) => tick + 1);
+    }, 3200);
+    return () => window.clearInterval(timer);
+  }, [isHomeViewVisible]);
   const firstPlayableHomeCard = playlistVideos[0] ? createHomeVideoCard(playlistVideos[0]) : null;
   const primaryHomeCard = primaryResumeCard ?? firstPlayableHomeCard;
-  const thumbnailQueueVideoIds = useMemo(() => {
-    const queuedVideos = isHomeViewVisible
-      ? [
-          primaryHomeCard?.video,
-          nextEpisodeCard?.video,
-          ...recentHomeCards.map((card) => card.video),
-          ...favoriteHomeCards.map((card) => card.video),
-          ...playlistThumbnailVideos,
-        ]
-      : playlistThumbnailVideos;
-    const seenIds = new Set<string>();
-    const ids: string[] = [];
-    queuedVideos.forEach((video) => {
-      if (!video || seenIds.has(video.id)) return;
-      seenIds.add(video.id);
-      ids.push(video.id);
-    });
-    return ids;
-  }, [favoriteHomeCards, isHomeViewVisible, nextEpisodeCard, playlistThumbnailVideos, primaryHomeCard, recentHomeCards]);
-  const thumbnailQueueVideoIdsKey = useMemo(() => thumbnailQueueVideoIds.join("\n"), [thumbnailQueueVideoIds]);
   const libraryStats = useMemo(() => {
     const completed = modeFilteredVideos.filter((video) => progressStore[video.id]?.completed).length;
     const unfinished = modeFilteredVideos.filter((video) => isResumableProgress(progressStore[video.id])).length;
@@ -2533,6 +2521,31 @@ export default function App() {
     () => groupWatchActivityDaysByMonth(watchActivityInsights.days),
     [watchActivityInsights.days],
   );
+  const modeFilteredVideoById = useMemo(() => new Map(modeFilteredVideos.map((video) => [video.id, video])), [modeFilteredVideos]);
+  const watchActivityCarouselCardsByDate = useMemo(() => {
+    const cardsByDate = new Map<string, HomeVideoCard[]>();
+    watchActivityInsights.days.forEach((day) => {
+      const cards = day.videoIds
+        .slice(0, 5)
+        .map((videoId) => modeFilteredVideoById.get(videoId))
+        .filter((video): video is VideoItem => Boolean(video))
+        .map(createHomeVideoCard);
+      if (cards.length) cardsByDate.set(day.date, cards);
+    });
+    return cardsByDate;
+  }, [createHomeVideoCard, modeFilteredVideoById, watchActivityInsights.days]);
+  const watchActivityCarouselVideoIds = useMemo(() => {
+    const seenIds = new Set<string>();
+    const ids: string[] = [];
+    watchActivityCarouselCardsByDate.forEach((cards) => {
+      cards.forEach((card) => {
+        if (seenIds.has(card.video.id)) return;
+        seenIds.add(card.video.id);
+        ids.push(card.video.id);
+      });
+    });
+    return ids;
+  }, [watchActivityCarouselCardsByDate]);
   const selectedWatchActivityDay = useMemo(
     () =>
       watchActivityInsights.days.find((day) => day.date === selectedWatchActivityDate) ??
@@ -2556,6 +2569,36 @@ export default function App() {
       })
       .slice(0, 5);
   }, [createHomeVideoCard, modeFilteredVideos, selectedWatchActivityDay, watchActivityRevision]);
+  const thumbnailQueueVideoIds = useMemo(() => {
+    const queuedVideos = isHomeViewVisible
+      ? [
+          primaryHomeCard?.video,
+          nextEpisodeCard?.video,
+          ...recentHomeCards.map((card) => card.video),
+          ...favoriteHomeCards.map((card) => card.video),
+          ...watchActivityCarouselVideoIds.map((videoId) => modeFilteredVideoById.get(videoId)),
+          ...playlistThumbnailVideos,
+        ]
+      : playlistThumbnailVideos;
+    const seenIds = new Set<string>();
+    const ids: string[] = [];
+    queuedVideos.forEach((video) => {
+      if (!video || seenIds.has(video.id)) return;
+      seenIds.add(video.id);
+      ids.push(video.id);
+    });
+    return ids;
+  }, [
+    favoriteHomeCards,
+    isHomeViewVisible,
+    modeFilteredVideoById,
+    nextEpisodeCard,
+    playlistThumbnailVideos,
+    primaryHomeCard,
+    recentHomeCards,
+    watchActivityCarouselVideoIds,
+  ]);
+  const thumbnailQueueVideoIdsKey = useMemo(() => thumbnailQueueVideoIds.join("\n"), [thumbnailQueueVideoIds]);
   const getDuplicateFingerprint = useCallback(async (video: VideoItem, signal?: AbortSignal) => {
     const cacheKey = createDuplicateFingerprintCacheKey(video);
     const cached = duplicateFingerprintCacheRef.current.get(cacheKey);
@@ -8460,9 +8503,12 @@ export default function App() {
     const share = watchActivityInsights.maxMetricValue > 0 ? metricValue / watchActivityInsights.maxMetricValue : 0;
     const level = metricValue > 0 ? Math.max(0.18, share) : 0;
     const isSelected = selectedWatchActivityDay?.date === day.date;
+    const carouselCards = watchActivityCarouselCardsByDate.get(day.date) ?? [];
+    const carouselCount = carouselCards.length;
+    const carouselActiveIndex = carouselCount ? (watchActivityCarouselTick + Number(day.date.slice(-2))) % carouselCount : 0;
     return (
       <button
-        className={`watch-activity-day ${isSelected ? "active" : ""}`}
+        className={`watch-activity-day ${carouselCount ? "has-carousel" : ""} ${isSelected ? "active" : ""}`}
         key={day.date}
         type="button"
         onClick={() => setSelectedWatchActivityDate(day.date)}
@@ -8470,7 +8516,19 @@ export default function App() {
         title={`${formatWatchActivityDate(day.date)}：${formatWatchActivityMetric(metricValue, watchActivityMetric)}`}
         aria-label={`${formatWatchActivityDate(day.date)}，${formatWatchActivityMetric(metricValue, watchActivityMetric)}`}
       >
-        <span>{Number(day.date.slice(-2))}</span>
+        {carouselCount ? (
+          <span className="watch-activity-day-carousel" aria-hidden="true">
+            {carouselCards.map((card, index) => (
+              <span
+                className={`watch-activity-day-slide ${index === carouselActiveIndex ? "active" : ""} ${card.video.thumbnailUrl ? "has-image" : ""}`}
+                key={card.video.id}
+              >
+                {card.video.thumbnailUrl ? <img src={card.video.thumbnailUrl} alt="" draggable={false} /> : null}
+              </span>
+            ))}
+          </span>
+        ) : null}
+        <span className="watch-activity-day-number">{Number(day.date.slice(-2))}</span>
       </button>
     );
   };

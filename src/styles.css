@@ -1959,6 +1959,52 @@ button {
   line-height: 1;
 }
 
+.watch-activity-day.has-carousel {
+  background: color-mix(in srgb, #32d583 calc(var(--activity-level) * 46%), #141920);
+}
+
+.watch-activity-day.has-carousel::after {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background:
+    linear-gradient(180deg, rgba(6, 10, 16, 0.06), rgba(6, 10, 16, 0.34)),
+    linear-gradient(135deg, transparent 45%, rgba(50, 213, 131, calc(var(--activity-level) * 0.34)));
+  content: "";
+  pointer-events: none;
+}
+
+.watch-activity-day-carousel,
+.watch-activity-day-slide {
+  position: absolute;
+  inset: 0;
+  display: block;
+  min-width: 0;
+}
+
+.watch-activity-day-carousel {
+  overflow: hidden;
+}
+
+.watch-activity-day-slide {
+  opacity: 0;
+  background:
+    radial-gradient(circle at 30% 24%, rgba(121, 223, 255, 0.24), transparent 34%),
+    linear-gradient(135deg, #263241, #151b24);
+  transition: opacity 420ms ease;
+}
+
+.watch-activity-day-slide.active {
+  opacity: 1;
+}
+
+.watch-activity-day-slide img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
 .watch-activity-day:hover,
 .watch-activity-day:focus-visible,
 .watch-activity-day.active {
@@ -1967,10 +2013,20 @@ button {
   outline: none;
 }
 
-.watch-activity-day span {
+.watch-activity-day-number {
   position: absolute;
+  z-index: 2;
   right: 3px;
   bottom: 3px;
+  display: inline-flex;
+  min-width: 14px;
+  height: 13px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  background: rgba(10, 15, 22, 0.52);
+  color: rgba(245, 247, 251, 0.78);
+  line-height: 1;
 }
 
 .watch-activity-detail {
@@ -6143,6 +6199,24 @@ button {
   border-color: rgba(15, 23, 42, 0.1);
   background: color-mix(in srgb, #22c55e calc(var(--activity-level) * 100%), #e8eef6);
   color: rgba(15, 23, 42, 0.5);
+}
+
+.app-shell.theme-light .watch-activity-day.has-carousel,
+:root[data-theme="light"] .watch-activity-day.has-carousel {
+  background: color-mix(in srgb, #22c55e calc(var(--activity-level) * 38%), #dfe7f0);
+}
+
+.app-shell.theme-light .watch-activity-day.has-carousel::after,
+:root[data-theme="light"] .watch-activity-day.has-carousel::after {
+  background:
+    linear-gradient(180deg, rgba(248, 250, 252, 0.04), rgba(15, 23, 42, 0.2)),
+    linear-gradient(135deg, transparent 45%, rgba(34, 197, 94, calc(var(--activity-level) * 0.28)));
+}
+
+.app-shell.theme-light .watch-activity-day-number,
+:root[data-theme="light"] .watch-activity-day-number {
+  background: rgba(248, 250, 252, 0.76);
+  color: rgba(15, 23, 42, 0.72);
 }
 
 .app-shell.theme-light .watch-activity-day:hover,
