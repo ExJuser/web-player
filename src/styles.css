@@ -338,6 +338,40 @@ button {
   color: #79dfff;
 }
 
+.control-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 9px;
+  border: 1px solid #2f3744;
+  border-radius: 6px;
+  background: #20252d;
+  color: #dce2ec;
+  font-size: 13px;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+
+.control-toggle input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.control-toggle.active {
+  border-color: #00a1d6;
+  background: #07394a;
+  color: #79dfff;
+}
+
+.control-toggle:focus-within {
+  outline: 2px solid #69c8ff;
+  outline-offset: 2px;
+}
+
 .primary-button:disabled {
   cursor: wait;
   opacity: 0.7;
@@ -5814,6 +5848,8 @@ button {
 .app-shell.theme-light .current-video-meta div,
 .app-shell.theme-light .secondary-button,
 .app-shell.theme-light .icon-button,
+.app-shell.theme-light .control-toggle,
+:root[data-theme="light"] .control-toggle,
 .app-shell.theme-light .playlist-order-button,
 .app-shell.theme-light .playlist-top-button,
 .app-shell.theme-light .bangumi-link-button,
@@ -5839,6 +5875,8 @@ button {
 .app-shell.theme-light .theme-toggle,
 .app-shell.theme-light .icon-button.privacy-toggle.active,
 .app-shell.theme-light .icon-button.cinema-toggle.active,
+.app-shell.theme-light .control-toggle.active,
+:root[data-theme="light"] .control-toggle.active,
 .app-shell.theme-light .playlist-order-button.active,
 .app-shell.theme-light .bangumi-link-button.active {
   border-color: #00a1d6;

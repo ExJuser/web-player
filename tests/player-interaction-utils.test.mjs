@@ -48,3 +48,37 @@ test("detects shortcut conflicts while allowing seek and hold speed to share a k
   assert.equal(interactionUtils.getShortcutConflict(shortcuts, "holdSpeed", "ArrowRight"), undefined);
   assert.equal(interactionUtils.getShortcutConflict(shortcuts, "seekForward", "ArrowRight"), undefined);
 });
+
+test("uses the first high energy segment as initial playback time when enabled", () => {
+  const startTime = interactionUtils.resolveInitialPlaybackTime({
+    progressTime: 120,
+    highlights: [
+      { id: "late", startTime: 80, endTime: 90, updatedAt: 100 },
+      { id: "early", startTime: 35, endTime: 45, updatedAt: 101 },
+    ],
+    startFromHighEnergy: true,
+  });
+
+  assert.equal(startTime, 35);
+});
+
+test("keeps explicit beginning and disabled preference ahead of high energy starts", () => {
+  assert.equal(
+    interactionUtils.resolveInitialPlaybackTime({
+      progressTime: 120,
+      highlights: [{ id: "h1", startTime: 35, endTime: 45, updatedAt: 100 }],
+      startFromHighEnergy: true,
+      forceBeginning: true,
+    }),
+    0,
+  );
+  assert.equal(
+    interactionUtils.resolveInitialPlaybackTime({
+      progressTime: 120,
+      progressDuration: 600,
+      highlights: [{ id: "h1", startTime: 35, endTime: 45, updatedAt: 100 }],
+      startFromHighEnergy: false,
+    }),
+    120,
+  );
+});

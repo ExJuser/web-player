@@ -452,6 +452,10 @@ export function parsePlayerPreferences(source: unknown): PlayerPreferences {
       typeof preferences.isCinemaMode === "boolean"
         ? preferences.isCinemaMode
         : defaultPlayerPreferences.isCinemaMode,
+    startFromHighEnergy:
+      typeof preferences.startFromHighEnergy === "boolean"
+        ? preferences.startFromHighEnergy
+        : defaultPlayerPreferences.startFromHighEnergy,
   };
 }
 

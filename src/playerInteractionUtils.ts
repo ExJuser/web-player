@@ -1,4 +1,4 @@
-import type { ShortcutAction, ShortcutMap } from "./playerTypes";
+import type { ShortcutAction, ShortcutMap, VideoHighlightSegment } from "./playerTypes";
 
 export function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
@@ -38,4 +38,36 @@ export function getShortcutConflict(shortcuts: ShortcutMap, action: ShortcutActi
         (action === "holdSpeed" && candidate === "seekForward")
       ),
   );
+}
+
+export function resolveInitialPlaybackTime({
+  progressTime,
+  progressCompleted = false,
+  progressDuration = 0,
+  highlights,
+  startFromHighEnergy,
+  forceBeginning = false,
+}: {
+  progressTime?: number;
+  progressCompleted?: boolean;
+  progressDuration?: number;
+  highlights?: VideoHighlightSegment[];
+  startFromHighEnergy: boolean;
+  forceBeginning?: boolean;
+}) {
+  if (forceBeginning) return 0;
+
+  if (startFromHighEnergy && highlights?.length) {
+    const firstHighlight = highlights
+      .filter((highlight) => Number.isFinite(highlight.startTime) && highlight.startTime >= 0)
+      .sort((a, b) => a.startTime - b.startTime || a.endTime - b.endTime)[0];
+    if (firstHighlight) return firstHighlight.startTime;
+  }
+
+  return !progressCompleted &&
+    typeof progressTime === "number" &&
+    Number.isFinite(progressTime) &&
+    progressTime < Math.max(0, progressDuration - 8)
+    ? progressTime
+    : 0;
 }

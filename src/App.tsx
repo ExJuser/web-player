@@ -210,6 +210,7 @@ import {
   clamp,
   formatShortcutKey,
   getShortcutConflict,
+  resolveInitialPlaybackTime,
   shortcutCodeFromEvent,
 } from "./playerInteractionUtils";
 import {
@@ -1690,6 +1691,7 @@ export default function App() {
   const [isSeriesMode, setIsSeriesMode] = useState(defaultPlayerPreferences.isSeriesMode);
   const [selectedSeriesKey, setSelectedSeriesKey] = useState(defaultPlayerPreferences.selectedSeriesKey);
   const [isCinemaMode, setIsCinemaMode] = useState(defaultPlayerPreferences.isCinemaMode);
+  const [startFromHighEnergy, setStartFromHighEnergy] = useState(defaultPlayerPreferences.startFromHighEnergy);
   const [recordingShortcutAction, setRecordingShortcutAction] = useState<ShortcutAction | null>(null);
   const [shortcutMessage, setShortcutMessage] = useState("");
   const [isScanning, setIsScanning] = useState(false);
@@ -1963,6 +1965,7 @@ export default function App() {
     setIsSeriesMode(nextDataStore.preferences.isSeriesMode);
     setSelectedSeriesKey(nextDataStore.preferences.selectedSeriesKey);
     setIsCinemaMode(nextDataStore.preferences.isCinemaMode);
+    setStartFromHighEnergy(nextDataStore.preferences.startFromHighEnergy);
     setVolume(nextDataStore.settings.volume);
     if (nextDataStore.settings.theme === "dark" || nextDataStore.settings.theme === "light") {
       setTheme(nextDataStore.settings.theme);
@@ -4317,6 +4320,7 @@ export default function App() {
     setIsSeriesMode(nextPreferences.isSeriesMode);
     setSelectedSeriesKey(nextPreferences.selectedSeriesKey);
     setIsCinemaMode(nextPreferences.isCinemaMode);
+    setStartFromHighEnergy(nextPreferences.startFromHighEnergy);
 
     Promise.all(
       (Object.keys(nextPreferences) as Array<keyof PlayerPreferences>).map((key) =>
@@ -4403,6 +4407,13 @@ export default function App() {
     });
     setRecordingShortcutAction(null);
     setShortcutMessage("已恢复默认快捷键");
+  }, [replacePlayerPreferences]);
+
+  const toggleStartFromHighEnergy = useCallback(() => {
+    replacePlayerPreferences({
+      ...playerPreferencesRef.current,
+      startFromHighEnergy: !playerPreferencesRef.current.startFromHighEnergy,
+    });
   }, [replacePlayerPreferences]);
 
   const updateSelectedSeries = useCallback(
@@ -6007,6 +6018,7 @@ export default function App() {
         isSeriesMode,
         selectedSeriesKey,
         isCinemaMode,
+        startFromHighEnergy,
       };
       favoriteVideoIdsRef.current = new Set();
       setProgressStore({});
@@ -6400,15 +6412,19 @@ export default function App() {
     isMainVideoLoadingRef.current = true;
     setIsMainVideoLoading(true);
 
-    const progress = progressStoreRef.current[currentVideo.id];
     const shouldStartFromBeginning = startFromBeginningVideoIdRef.current === currentVideo.id;
     if (shouldStartFromBeginning) {
       startFromBeginningVideoIdRef.current = null;
     }
-    const resumeAt =
-      !shouldStartFromBeginning && progress && !progress.completed && progress.currentTime < Math.max(0, progress.duration - 8)
-        ? progress.currentTime
-        : 0;
+    const progress = progressStoreRef.current[currentVideo.id];
+    const resumeAt = resolveInitialPlaybackTime({
+      progressTime: progress?.currentTime,
+      progressCompleted: progress?.completed,
+      progressDuration: progress?.duration,
+      highlights: videoHighlightsRef.current[currentVideo.id],
+      startFromHighEnergy: playerPreferencesRef.current.startFromHighEnergy,
+      forceBeginning: shouldStartFromBeginning,
+    });
 
     const handleLoadedMetadata = () => {
       const currentVideoId = currentVideo.id;
@@ -10148,6 +10164,17 @@ export default function App() {
               ) : null}
 
               <span className="control-spacer" />
+
+              <label className={`control-toggle ${startFromHighEnergy ? "active" : ""}`} title="播放视频默认从高能片段开始">
+                <input
+                  type="checkbox"
+                  checked={startFromHighEnergy}
+                  onChange={toggleStartFromHighEnergy}
+                  aria-label="播放视频默认从高能时刻开始"
+                />
+                <Zap size={16} aria-hidden="true" />
+                <span>高能开播</span>
+              </label>
 
               <button className="icon-button" type="button" onClick={togglePictureInPicture} disabled={!currentVideo} title="画中画">
                 <PictureInPicture2 size={20} />

@@ -74,6 +74,7 @@ export const defaultPlayerPreferences: PlayerPreferences = {
   isSeriesMode: false,
   selectedSeriesKey: "all",
   isCinemaMode: false,
+  startFromHighEnergy: false,
 };
 
 export const defaultPlayerSettings = {

@@ -29,6 +29,12 @@ test("player preferences parse playlist page size with defaults", () => {
   assert.equal(storage.parsePlayerPreferences({ playlistPageSize: "50" }).playlistPageSize, 50);
 });
 
+test("player preferences remember whether playback starts from high energy highlights", () => {
+  assert.equal(storage.parsePlayerPreferences({}).startFromHighEnergy, false);
+  assert.equal(storage.parsePlayerPreferences({ startFromHighEnergy: true }).startFromHighEnergy, true);
+  assert.equal(storage.parsePlayerPreferences({ startFromHighEnergy: "true" }).startFromHighEnergy, false);
+});
+
 test("media root scan cache keeps valid server entries and drops invalid records", () => {
   const parsed = storage.parseCachedMediaRootScan(JSON.stringify({
     version: storage.mediaRootScanCacheVersion,

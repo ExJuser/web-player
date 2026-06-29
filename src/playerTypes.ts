@@ -302,6 +302,7 @@ export type PlayerPreferences = {
   isSeriesMode: boolean;
   selectedSeriesKey: string;
   isCinemaMode: boolean;
+  startFromHighEnergy: boolean;
 };
 
 export type HomeVideoCard = {
