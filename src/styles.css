@@ -94,23 +94,6 @@ button {
 }
 
 .app-shell.cinema-mode .top-bar {
-  position: absolute;
-  top: 0;
-  right: 0;
-  left: 0;
-  z-index: 3;
-  min-height: 0;
-  padding: 12px 16px;
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0.72), transparent);
-  pointer-events: none;
-}
-
-.app-shell.cinema-mode .top-actions {
-  pointer-events: auto;
-}
-
-.app-shell.cinema-mode .current-video-meta,
-.app-shell.cinema-mode .top-actions .primary-button {
   display: none;
 }
 
