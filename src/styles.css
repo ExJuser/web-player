@@ -5472,8 +5472,15 @@ button {
   opacity: 0.72;
 }
 
-.auto-tag-button:disabled .lucide-refresh-cw {
+.auto-tag-button.loading .lucide-refresh-cw {
   animation: tag-query-spin 0.9s linear infinite;
+}
+
+.tag-dialog > .auto-tag-button {
+  justify-content: center;
+  gap: 7px;
+  width: 100%;
+  min-height: 36px;
 }
 
 .auto-tag-dialog-header {
