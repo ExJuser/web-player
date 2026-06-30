@@ -4165,7 +4165,15 @@ export default function App() {
           libraryTags: getAllLibraryTags(),
         }),
       });
-      const tags = parseTagInput((response.tags ?? []).join(" "));
+      const seenAutoTagKeys = new Set<string>();
+      const tags = (response.tags ?? [])
+        .map((tag) => tag.trim())
+        .filter((tag) => {
+          const key = normalizeTagKey(tag);
+          if (!key || seenAutoTagKeys.has(key)) return false;
+          seenAutoTagKeys.add(key);
+          return true;
+        });
       const sources = (response.sources ?? [])
         .filter((source): source is { title: string; url: string } => Boolean(source?.title && source?.url))
         .slice(0, 5);

@@ -305,3 +305,20 @@ test("suggestAutoTagsWithAi continues with metadata when web search fails", asyn
     sources: [],
   });
 });
+
+test("suggestAutoTagsWithAi accepts string tag responses", async () => {
+  const result = await suggestAutoTagsWithAi(
+    { DEEPSEEK_API_KEY: "secret" },
+    { name: "CAWD-900.mp4", relativePath: "CAWD-900.mp4" },
+    {
+      searchDuckDuckGoImpl: async () => [],
+      callDeepSeekImpl: async () => JSON.stringify({ tags: "SM、M男、巨乳、1080p", summary: "基于文件名。" }),
+    },
+  );
+
+  assert.deepEqual(result, {
+    tags: ["SM", "M男", "巨乳"],
+    summary: "基于文件名。",
+    sources: [],
+  });
+});

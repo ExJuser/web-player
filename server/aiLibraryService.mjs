@@ -30,7 +30,7 @@ function normalizeTagKey(tag) {
 function parseTagList(tags, limit = 80) {
   const seenKeys = new Set();
   const output = [];
-  const source = Array.isArray(tags) ? tags : [];
+  const source = Array.isArray(tags) ? tags : typeof tags === "string" ? tags.split(/[\s,，、;；|]+/u) : [];
   for (const tag of source) {
     if (typeof tag !== "string") continue;
     const value = tag.trim().slice(0, 40);
@@ -350,7 +350,7 @@ export async function suggestAutoTagsWithAi(env, payload, options = {}) {
   );
   const seenKeys = new Set();
   const tags = [];
-  const rawTags = Array.isArray(parsed?.tags) ? parsed.tags : [];
+  const rawTags = parseTagList(parsed?.tags, 16);
   for (const tag of rawTags) {
     if (typeof tag !== "string") continue;
     const normalizedTag = tag.trim().replace(/\s+/g, " ").slice(0, 20);
