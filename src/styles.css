@@ -195,11 +195,12 @@ button {
 .current-video-meta {
   display: flex;
   min-width: 0;
-  flex: 1;
-  flex-wrap: wrap;
+  flex: 0 1 auto;
+  flex-wrap: nowrap;
   justify-content: flex-start;
   gap: 5px;
   margin: 0;
+  overflow: hidden;
 }
 
 .current-video-meta div {
@@ -243,10 +244,10 @@ button {
 
 .compatible-media-status {
   display: inline-flex;
-  min-width: min(360px, 100%);
+  min-width: 0;
   max-width: 100%;
-  flex: 1 1 360px;
-  flex-wrap: wrap;
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 6px;
   color: #aab1bd;
