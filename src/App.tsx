@@ -95,7 +95,6 @@ import type {
   DanmakuPreferences,
   DanmakuSelectionStore,
   DanmakuSource,
-  DanmakuSourceBreakdown,
   DataTransferItemWithHandle,
   EmbeddedSubtitleTrack,
   FileSystemDirectoryHandle,
@@ -175,11 +174,15 @@ import {
 import {
   createDanmakuComment,
   danmakuLaneLineHeight,
+  formatDanmakuLoadedMessage,
+  formatDanmakuProviderLabel,
   formatDanmakuLaneTop,
   formatDanmakuSpeedLevel,
   getActiveDanmakuComments,
+  getDanmakuBreakdownTotal,
   getDanmakuLane,
   getDanmakuLaneCount,
+  getDanmakuSourceBreakdown,
 } from "./danmakuUtils";
 import { directoryPartsOf, fallbackMediaRootLabelForVideo } from "./mediaPathUtils";
 import {
@@ -468,38 +471,6 @@ type DanmakuSourcePayload = {
   reused?: number;
   requested?: number;
 };
-
-function formatDanmakuProviderLabel(provider: DanmakuSource["provider"]) {
-  if (provider === "bilibili") return "Bilibili";
-  if (provider === "bahamut") return "巴哈姆特动画疯";
-  if (provider === "combined") return "多来源";
-  return "手动";
-}
-
-function getDanmakuSourceBreakdown(source: DanmakuSource | null): DanmakuSourceBreakdown[] {
-  if (!source) return [];
-  return source.sourceBreakdown?.length
-    ? source.sourceBreakdown
-    : [
-        {
-          provider: source.provider,
-          label: formatDanmakuProviderLabel(source.provider),
-          sourceUrl: source.sourceUrl,
-          commentCount: source.commentCount,
-          translatedCount: source.translatedCount,
-        },
-      ];
-}
-
-function getDanmakuBreakdownTotal(sources: DanmakuSourceBreakdown[]) {
-  return sources.reduce((sum, source) => sum + source.commentCount, 0);
-}
-
-function formatDanmakuLoadedMessage(source: DanmakuSource, comments: DanmakuComment[], action = "已加载") {
-  const sources = getDanmakuSourceBreakdown(source);
-  const total = getDanmakuBreakdownTotal(sources) || comments.length;
-  return `${action} ${total} 条弹幕，来自 ${Math.max(1, sources.length)} 个来源。`;
-}
 
 type AiTagMergeSuggestionResponse = {
   existingTag?: string;

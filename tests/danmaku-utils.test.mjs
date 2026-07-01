@@ -68,6 +68,28 @@ test("danmaku display helpers format lanes and speeds", () => {
   assert.equal(danmaku.formatDanmakuSpeedLevel(32), "较慢");
 });
 
+test("danmaku source helpers format provider breakdowns", () => {
+  const source = {
+    provider: "bilibili",
+    sourceUrl: "https://example.test",
+    commentCount: 12,
+    translatedCount: 3,
+  };
+
+  assert.equal(danmaku.formatDanmakuProviderLabel("bahamut"), "巴哈姆特动画疯");
+  assert.deepEqual(danmaku.getDanmakuSourceBreakdown(source), [
+    {
+      provider: "bilibili",
+      label: "Bilibili",
+      sourceUrl: "https://example.test",
+      commentCount: 12,
+      translatedCount: 3,
+    },
+  ]);
+  assert.equal(danmaku.getDanmakuBreakdownTotal([{ commentCount: 5 }, { commentCount: 7 }]), 12);
+  assert.equal(danmaku.formatDanmakuLoadedMessage(source, [{}, {}, {}], "已恢复"), "已恢复 12 条弹幕，来自 1 个来源。");
+});
+
 const createComment = (time) => ({
   id: `comment-${time}`,
   time,

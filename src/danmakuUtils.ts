@@ -1,6 +1,6 @@
 import { Converter } from "opencc-js";
 
-import type { DanmakuComment, DanmakuCommentMode, DanmakuProvider } from "./playerTypes";
+import type { DanmakuComment, DanmakuCommentMode, DanmakuProvider, DanmakuSource, DanmakuSourceBreakdown } from "./playerTypes";
 
 const traditionalToSimplified = Converter({ from: "tw", to: "cn" });
 export const danmakuLaneLineHeight = 1.12;
@@ -147,6 +147,38 @@ export function inferEpisodeNumber(value: string) {
 
 export function createDanmakuSourceId(provider: DanmakuProvider, key: string) {
   return `${provider}:${stableHash(key)}`;
+}
+
+export function formatDanmakuProviderLabel(provider: DanmakuSource["provider"]) {
+  if (provider === "bilibili") return "Bilibili";
+  if (provider === "bahamut") return "巴哈姆特动画疯";
+  if (provider === "combined") return "多来源";
+  return "手动";
+}
+
+export function getDanmakuSourceBreakdown(source: DanmakuSource | null): DanmakuSourceBreakdown[] {
+  if (!source) return [];
+  return source.sourceBreakdown?.length
+    ? source.sourceBreakdown
+    : [
+        {
+          provider: source.provider,
+          label: formatDanmakuProviderLabel(source.provider),
+          sourceUrl: source.sourceUrl,
+          commentCount: source.commentCount,
+          translatedCount: source.translatedCount,
+        },
+      ];
+}
+
+export function getDanmakuBreakdownTotal(sources: DanmakuSourceBreakdown[]) {
+  return sources.reduce((sum, source) => sum + source.commentCount, 0);
+}
+
+export function formatDanmakuLoadedMessage(source: DanmakuSource, comments: DanmakuComment[], action = "已加载") {
+  const sources = getDanmakuSourceBreakdown(source);
+  const total = getDanmakuBreakdownTotal(sources) || comments.length;
+  return `${action} ${total} 条弹幕，来自 ${Math.max(1, sources.length)} 个来源。`;
 }
 
 export function getDanmakuLane(comment: Pick<DanmakuComment, "id" | "hash" | "time">, laneCount: number) {
