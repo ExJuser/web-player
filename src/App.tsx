@@ -4194,9 +4194,10 @@ export default function App() {
     void addTagsToCurrentVideo(parseTagInput(tagInput));
   }, [addTagsToCurrentVideo, isTagSuggestionLoading, tagInput]);
 
-  const applyTagInputSuggestion = useCallback((tag: string) => {
-    setTagInput((input) => `${input.replace(/[^\s,，、;；|]*$/u, tag)} `);
-  }, []);
+  const submitTagInputSuggestion = useCallback((tag: string) => {
+    if (isTagSuggestionLoading) return;
+    void addTagsToCurrentVideo([tag]);
+  }, [addTagsToCurrentVideo, isTagSuggestionLoading]);
 
   useEffect(() => {
     setActiveTagSuggestionIndex(0);
@@ -11741,7 +11742,7 @@ export default function App() {
                   }
                   if (tagInputSuggestions.length && event.key === "Enter") {
                     event.preventDefault();
-                    applyTagInputSuggestion(tagInputSuggestions[resolvedActiveTagSuggestionIndex] ?? tagInputSuggestions[0]);
+                    submitTagInputSuggestion(tagInputSuggestions[resolvedActiveTagSuggestionIndex] ?? tagInputSuggestions[0]);
                     return;
                   }
                   if (event.key === "Escape") setIsTagDialogOpen(false);
@@ -11765,7 +11766,7 @@ export default function App() {
                       aria-selected={index === resolvedActiveTagSuggestionIndex}
                       onMouseDown={(event) => event.preventDefault()}
                       onMouseEnter={() => setActiveTagSuggestionIndex(index)}
-                      onClick={() => applyTagInputSuggestion(tag)}
+                      onClick={() => submitTagInputSuggestion(tag)}
                     >
                       {tag}
                     </button>
