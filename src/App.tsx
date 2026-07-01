@@ -309,6 +309,30 @@ function createPersistedDuplicateDetectionResult(
   };
 }
 
+function pruneDuplicateDetectionsForVideos(
+  resultsByMode: PlayerDataStore["duplicateDetections"],
+  videos: VideoItem[],
+): NonNullable<PlayerDataStore["duplicateDetections"]> {
+  const videoIds = new Set(videos.map((video) => video.id));
+  const nextResultsByMode: PlayerDataStore["duplicateDetections"] = {};
+  (["all", "anime", "special"] as const).forEach((mode) => {
+    const result = resultsByMode?.[mode];
+    const pairs = result?.pairs.filter((pair) => videoIds.has(pair.aId) && videoIds.has(pair.bId)) ?? [];
+    if (result && pairs.length) {
+      nextResultsByMode[mode] = {
+        ...result,
+        pairs,
+        updatedAt: Date.now(),
+      };
+    }
+  });
+  return nextResultsByMode;
+}
+
+function isPlayerGlobalMetadata(metadata: PlayerDataStore["metadata"] | null | undefined): metadata is PlayerGlobalMetadata {
+  return Boolean(metadata && "mediaRoots" in metadata && Array.isArray(metadata.mediaRoots));
+}
+
 function createDuplicateFingerprintCacheKey(video: VideoItem) {
   return `${video.id}|${Math.floor(video.size || 0)}|${Math.round(video.lastModified || 0)}`;
 }
@@ -4279,6 +4303,7 @@ export default function App() {
       replaceVideoRating(video, null);
       replaceVideoComment(video, ratingCommentInput);
       setRatingMessage(ratingCommentInput.trim() ? "已保存评价并清除评分。" : "已清除评分。");
+      setRatingDialogVideoId(null);
       return;
     }
     const rating = Number(trimmed);
@@ -4289,6 +4314,7 @@ export default function App() {
     replaceVideoRating(video, rating);
     replaceVideoComment(video, ratingCommentInput);
     setRatingMessage(ratingCommentInput.trim() ? `已保存 ${rating} 分和评价。` : `已保存 ${rating} 分。`);
+    setRatingDialogVideoId(null);
   }, [ratingCommentInput, ratingDialogVideoId, ratingInput, replaceVideoComment, replaceVideoRating]);
 
   const replaceTagMergeDecisions = useCallback((nextDecisions: TagMergeDecisionStore) => {
@@ -5070,6 +5096,7 @@ export default function App() {
 
   const removeDeletedVideoFromState = useCallback(
     async (video: VideoItem) => {
+      const deletedAt = Date.now();
       const nextVideos = videosRef.current.filter((item) => item.id !== video.id);
       const nextProgress = { ...progressStoreRef.current };
       const nextVideoTags = { ...videoTagsRef.current };
@@ -5148,10 +5175,10 @@ export default function App() {
         homeMediaMode === "all"
           ? nextVideos
           : nextVideos.filter((item) => Boolean(item.mediaRootId && modeRootIds.has(item.mediaRootId)));
+      let nextResultsByMode = pruneDuplicateDetectionsForVideos(duplicateDetectionResultsByModeRef.current ?? {}, nextVideos);
       if (duplicateDetectionResultScopeKeyRef.current) {
         const nextDuplicateGroups = rebuildDuplicateVideoGroups(nextDuplicateVideos, duplicateVideoGroupsRef.current);
         const nextMessage = nextDuplicateGroups.length ? "重复检测结果已根据删除操作更新。" : "重复列表已清空。";
-        const nextResultsByMode = { ...(duplicateDetectionResultsByModeRef.current ?? {}) };
         const nextPersistedResult = createPersistedDuplicateDetectionResult(homeMediaMode, nextDuplicateGroups, nextMessage);
         if (nextPersistedResult) {
           nextResultsByMode[homeMediaMode] = nextPersistedResult;
@@ -5166,22 +5193,34 @@ export default function App() {
         setDuplicateDetectionResultScopeKey(homeMediaMode);
         setDuplicateDetectionMessage(nextMessage);
       }
+      duplicateDetectionResultsByModeRef.current = nextResultsByMode;
       setSubtitles(nextSubtitles);
-      setMediaRootStatuses((statuses) =>
-        statuses.map((status) =>
-          status.id === video.mediaRootId
-            ? {
-                ...status,
-                videoCount: Math.max(status.videoCount - 1, 0),
-                scannedFiles: Math.max(status.scannedFiles - 1, 0),
-                updatedAt: Date.now(),
-              }
-            : status,
-        ),
+      const currentGlobalMetadata = isPlayerGlobalMetadata(libraryMetadataRef.current) ? libraryMetadataRef.current : null;
+      const nextMediaRootStatuses = (currentGlobalMetadata?.mediaRoots ?? mediaRootStatuses).map((status) =>
+        status.id === video.mediaRootId
+          ? {
+              ...status,
+              videoCount: Math.max(status.videoCount - 1, 0),
+              scannedFiles: Math.max(status.scannedFiles - 1, 0),
+              updatedAt: deletedAt,
+            }
+          : status,
       );
+      const nextScannedFiles = nextMediaRootStatuses.reduce((sum, status) => sum + status.scannedFiles, 0);
+      if (currentGlobalMetadata) {
+        libraryMetadataRef.current = {
+          ...currentGlobalMetadata,
+          videoCount: nextVideos.length,
+          scannedFiles: nextScannedFiles,
+          mediaRoots: nextMediaRootStatuses,
+          updatedAt: deletedAt,
+        };
+      }
+      setMediaRootStatuses(nextMediaRootStatuses);
 
       await Promise.all([
         saveCurrentPlayerDataStore({
+          ...(libraryMetadataRef.current ? { metadata: libraryMetadataRef.current } : {}),
           progress: nextProgress,
           favorites: Array.from(nextFavorites),
           videoTags: nextVideoTags,
@@ -5195,10 +5234,42 @@ export default function App() {
           duplicateDetection: null,
           duplicateDetections: duplicateDetectionResultsByModeRef.current,
         }),
+        loadCachedMediaRootScan()
+          .then((cache) => {
+            if (!cache?.videos.some((item) => item.id === video.id)) return undefined;
+            const cachedMediaRoots = cache.metadata.mediaRoots.map((status) =>
+              status.id === video.mediaRootId
+                ? {
+                    ...status,
+                    videoCount: Math.max(status.videoCount - 1, 0),
+                    scannedFiles: Math.max(status.scannedFiles - 1, 0),
+                    updatedAt: deletedAt,
+                  }
+                : status,
+            );
+            const cachedVideos = cache.videos.filter((item) => item.id !== video.id);
+            const cachedSubtitles = cache.subtitles.filter((subtitle) => subtitle.videoId !== video.id);
+            const cachedScannedFiles = cachedMediaRoots.reduce((sum, status) => sum + status.scannedFiles, 0);
+            return saveCachedMediaRootScan({
+              ...cache,
+              videos: cachedVideos,
+              subtitles: cachedSubtitles,
+              scannedFiles: cachedScannedFiles,
+              metadata: {
+                ...cache.metadata,
+                videoCount: cachedVideos.length,
+                scannedFiles: cachedScannedFiles,
+                mediaRoots: cachedMediaRoots,
+                updatedAt: deletedAt,
+              },
+              updatedAt: deletedAt,
+            });
+          })
+          .catch(() => undefined),
         saveDanmakuSelection(video.id, null).catch(() => undefined),
       ]);
     },
-    [homeMediaMode, saveCurrentPlayerDataStore],
+    [homeMediaMode, mediaRootStatuses, saveCurrentPlayerDataStore],
   );
 
   const deleteBrowserVideoFile = useCallback(async (video: VideoItem) => {
