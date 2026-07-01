@@ -85,11 +85,8 @@ import {
 } from "./watchActivityInsights";
 import {
   createViewedSubtitleText,
-  normalizeSubtitleText,
   parseSubtitleCues,
   selectRelevantSubtitleChunks,
-  srtToVtt,
-  stripVttStyleBlocks,
 } from "./subtitleUtils";
 import type {
   ActiveView,
@@ -264,6 +261,12 @@ import {
   hasDirectoryReadPermission,
   resolveBrowserVideoParentDirectory,
 } from "./browserMediaScan";
+import {
+  createSubtitleUrl,
+  readSubtitleText,
+  restoreCachedEmbeddedSubtitles,
+  type ExtractedEmbeddedSubtitle,
+} from "./subtitleMedia";
 
 
 const photoAlbumPageSize = 20;
@@ -748,12 +751,6 @@ type AiStreamEvent =
   | { type: "error"; error: string }
   | { type: "done" };
 
-type ExtractedEmbeddedSubtitle = {
-  id: string;
-  format: "vtt";
-  text: string;
-};
-
 type CompatibleRemuxResponse = {
   cacheId: string;
   compatibleUrl: string;
@@ -776,83 +773,6 @@ type MediaProbeResponse = {
 };
 
 type PlaybackSourceChoice = "original" | "compatible";
-
-async function createSubtitleUrl(subtitle: SubtitleItem) {
-  if (subtitle.url && !isObjectUrl(subtitle.url)) {
-    if (subtitle.format === "vtt" || subtitle.relativePath.toLowerCase().endsWith(".vtt")) return subtitle.url;
-    const response = await fetch(subtitle.url, { headers: { Accept: "text/plain,text/vtt,*/*" } });
-    if (!response.ok) throw new Error("Subtitle file is unavailable.");
-    const normalizedText = normalizeSubtitleText(await response.text());
-    const vtt = normalizedText.startsWith("WEBVTT") ? stripVttStyleBlocks(normalizedText) : srtToVtt(normalizedText);
-    return URL.createObjectURL(new Blob([vtt], { type: "text/vtt" }));
-  }
-  const rawText = subtitle.rawText ?? (subtitle.file ? await subtitle.file.text() : "");
-  if (rawText) {
-    const normalizedText = normalizeSubtitleText(rawText);
-    const vtt =
-      subtitle.format === "vtt" || normalizedText.startsWith("WEBVTT")
-        ? stripVttStyleBlocks(normalizedText)
-        : srtToVtt(normalizedText);
-    return URL.createObjectURL(new Blob([vtt], { type: "text/vtt" }));
-  }
-  if (!subtitle.file) throw new Error("Subtitle file is unavailable.");
-  return URL.createObjectURL(subtitle.file);
-}
-
-async function readSubtitleText(subtitle: SubtitleItem) {
-  if (subtitle.rawText) return normalizeSubtitleText(subtitle.rawText);
-  if (subtitle.url && !isObjectUrl(subtitle.url)) {
-    const response = await fetch(subtitle.url, { headers: { Accept: "text/plain,text/vtt,*/*" } });
-    if (!response.ok) return "";
-    return normalizeSubtitleText(await response.text());
-  }
-  if (!subtitle.file) return "";
-  return normalizeSubtitleText(await subtitle.file.text());
-}
-
-async function restoreCachedEmbeddedSubtitles(
-  persistedSubtitles: PlayerDataStore["embeddedSubtitles"],
-  videos: VideoItem[],
-  fallbackRootId: string | null,
-) {
-  const videosById = new Map(videos.map((video) => [video.id, video]));
-  const restored = await Promise.all(
-    persistedSubtitles.map(async (persisted) => {
-      const video = videosById.get(persisted.videoId);
-      const relativePath = video?.relativePath ?? persisted.relativePath.split("#subtitle-")[0];
-      const rootId = video?.mediaRootId ?? fallbackRootId;
-      if (!rootId || !relativePath || !persisted.embeddedTrack) return null;
-
-      try {
-        const payload = await fetchJson<ExtractedEmbeddedSubtitle>("/api/subtitles/embedded/cached", {
-          method: "POST",
-          body: JSON.stringify({
-            rootId,
-            relativePath,
-            streamIndex: persisted.embeddedTrack.streamIndex,
-          }),
-        });
-        if (!payload.text.trim()) return null;
-        const subtitle: SubtitleItem = {
-          ...persisted,
-          source: "embedded",
-          rawText: payload.text,
-          format: payload.format,
-          url: "",
-          videoId: video?.id ?? persisted.videoId,
-        };
-        return {
-          ...subtitle,
-          url: await createSubtitleUrl(subtitle),
-        };
-      } catch {
-        return null;
-      }
-    }),
-  );
-
-  return restored.filter((subtitle): subtitle is SubtitleItem => Boolean(subtitle));
-}
 
 function formatLibrarySearchProgressLabel(card: HomeVideoCard) {
   if (card.progress?.completed) return "已看完";
@@ -3595,7 +3515,7 @@ export default function App() {
       metadata: cache.metadata,
     });
 
-    const restoredEmbeddedSubtitles = await restoreCachedEmbeddedSubtitles(nextDataStore.embeddedSubtitles, nextVideos, null);
+    const restoredEmbeddedSubtitles = await restoreCachedEmbeddedSubtitles(nextDataStore.embeddedSubtitles, nextVideos, null, fetchJson);
     if (restoredEmbeddedSubtitles.length) {
       const restoredIds = new Set(restoredEmbeddedSubtitles.map((subtitle) => subtitle.id));
       const mergedSubtitles = [
@@ -3653,7 +3573,7 @@ export default function App() {
       setSubtitles(nextSubtitles);
       applyPlayerDataStore(nextDataStore);
 
-      const restoredEmbeddedSubtitles = await restoreCachedEmbeddedSubtitles(nextDataStore.embeddedSubtitles, nextVideos, null);
+      const restoredEmbeddedSubtitles = await restoreCachedEmbeddedSubtitles(nextDataStore.embeddedSubtitles, nextVideos, null, fetchJson);
       if (restoredEmbeddedSubtitles.length) {
         const restoredIds = new Set(restoredEmbeddedSubtitles.map((subtitle) => subtitle.id));
         const mergedSubtitles = [
@@ -6106,6 +6026,7 @@ export default function App() {
           nextDataStore.embeddedSubtitles,
           mergedVideos,
           nextMediaRootId,
+          fetchJson,
         );
         if (restoredEmbeddedSubtitles.length) {
           const restoredIds = new Set(restoredEmbeddedSubtitles.map((subtitle) => subtitle.id));
