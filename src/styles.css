@@ -1969,6 +1969,7 @@ button {
 
 .watch-activity-calendar {
   display: grid;
+  align-items: start;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
   min-width: 0;
@@ -1976,6 +1977,7 @@ button {
 
 .watch-activity-month {
   display: grid;
+  align-content: start;
   min-width: 0;
   gap: 7px;
   padding: 10px;
