@@ -1709,7 +1709,6 @@ export default function App() {
     endTime: number;
     highlightId?: string;
     tagInput: string;
-    descriptionInput: string;
   } | null>(null);
   const [, setTagMergeDecisions] = useState<TagMergeDecisionStore>({});
   const [isTagDialogOpen, setIsTagDialogOpen] = useState(false);
@@ -5533,7 +5532,6 @@ export default function App() {
       startTime,
       endTime,
       tagInput: "",
-      descriptionInput: "",
     });
     setMessage(`已选择高能片段 ${formatTime(startTime)} - ${formatTime(endTime)}，请填写标签。`);
   }, [currentTime, currentVideo, duration, pendingHighEnergyStart]);
@@ -5541,7 +5539,6 @@ export default function App() {
   const saveHighEnergyTagPrompt = useCallback(() => {
     if (!highEnergyTagPrompt) return;
     const tag = highEnergyTagPrompt.tagInput.trim().slice(0, 40);
-    const description = highEnergyTagPrompt.descriptionInput.trim().slice(0, 500);
     if (!tag) {
       setMessage("请输入高能片段标签。");
       return;
@@ -5552,7 +5549,6 @@ export default function App() {
       startTime: highEnergyTagPrompt.startTime,
       endTime: highEnergyTagPrompt.endTime,
       tag,
-      ...(description ? { description } : {}),
       updatedAt,
     };
     const currentHighlights = videoHighlightsRef.current[highEnergyTagPrompt.videoId] ?? [];
@@ -5581,7 +5577,6 @@ export default function App() {
       endTime: highlight.endTime,
       highlightId: highlight.id,
       tagInput: highlight.tag ?? "",
-      descriptionInput: highlight.description ?? "",
     });
   }, [currentVideo]);
 
@@ -10556,10 +10551,9 @@ export default function App() {
                       <span className="highlight-chip" key={highlight.id}>
                         <button type="button" onClick={() => seekTo(highlight.startTime)}>
                           {highlight.tag ? <strong>{highlight.tag}</strong> : null}
-                          {highlight.description ? <span className="highlight-description">{highlight.description}</span> : null}
                           <span>{formatTime(highlight.startTime)} - {formatTime(highlight.endTime)}</span>
                         </button>
-                        <button type="button" onClick={() => editCurrentHighEnergySegment(highlight)} aria-label="修改高能片段描述">
+                        <button type="button" onClick={() => editCurrentHighEnergySegment(highlight)} aria-label="修改高能片段标签">
                           <Pencil size={13} />
                         </button>
                         <button type="button" onClick={() => removeCurrentHighEnergySegment(highlight.id)} aria-label="删除高能标记">
@@ -11314,16 +11308,6 @@ export default function App() {
               value={highEnergyTagPrompt.tagInput}
               onChange={(event) => setHighEnergyTagPrompt((prompt) => prompt ? { ...prompt, tagInput: event.target.value } : prompt)}
               placeholder="例如：名场面"
-            />
-          </label>
-          <label className="high-energy-tag-field">
-            <span>描述</span>
-            <textarea
-              maxLength={500}
-              value={highEnergyTagPrompt.descriptionInput}
-              onChange={(event) => setHighEnergyTagPrompt((prompt) => prompt ? { ...prompt, descriptionInput: event.target.value } : prompt)}
-              placeholder="补充这段高能片段的说明"
-              rows={4}
             />
           </label>
           <div className="dialog-actions">

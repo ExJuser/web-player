@@ -221,7 +221,6 @@ export function parseVideoHighlights(source: unknown): VideoHighlightStore {
         startTime: highlight.startTime,
         endTime: highlight.endTime,
         ...(typeof highlight.tag === "string" && highlight.tag.trim() ? { tag: highlight.tag.trim().slice(0, 40) } : {}),
-        ...(typeof highlight.description === "string" && highlight.description.trim() ? { description: highlight.description.trim().slice(0, 500) } : {}),
         updatedAt: highlight.updatedAt,
       }];
     });
