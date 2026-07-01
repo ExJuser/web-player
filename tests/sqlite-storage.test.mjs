@@ -132,7 +132,7 @@ test("sqlite incremental writes keep unrelated player data", async () => {
     context.store.upsertProgress("global", "video1", { currentTime: 5, duration: 10, completed: false, updatedAt: 2000 });
     context.store.setVideoRating("global", "video1", 9);
     context.store.replaceVideoTags("global", "video1", ["New"]);
-    context.store.replaceVideoHighlights("global", "video1", [{ id: "h1", startTime: 8, endTime: 15, tag: " 高能 ", updatedAt: 2200 }]);
+    context.store.replaceVideoHighlights("global", "video1", [{ id: "h1", startTime: 8, endTime: 15, tag: " 高能 ", description: " 爆点说明 ", updatedAt: 2200 }]);
     context.store.upsertWatchActivity("global", {
       date: "2026-06-29",
       videoId: "video1",
@@ -149,7 +149,7 @@ test("sqlite incremental writes keep unrelated player data", async () => {
     assert.equal(store.items.video1.currentTime, 5);
     assert.deepEqual(store.videoRatings, { video1: 9 });
     assert.deepEqual(store.videoTags.video1, ["New"]);
-    assert.deepEqual(store.videoHighlights.video1, [{ id: "h1", startTime: 8, endTime: 15, tag: "高能", updatedAt: 2200 }]);
+    assert.deepEqual(store.videoHighlights.video1, [{ id: "h1", startTime: 8, endTime: 15, tag: "高能", description: "爆点说明", updatedAt: 2200 }]);
     assert.deepEqual(store.watchActivity["2026-06-29::video1"], {
       date: "2026-06-29",
       videoId: "video1",
@@ -294,11 +294,11 @@ test("sqlite initialization migrates high energy highlight tags into existing da
 
     await context.store.initialize();
     context.store.replaceVideoHighlights("global", "video1", [
-      { id: "h1", startTime: 8, endTime: 15, tag: "名场面", updatedAt: 2200 },
+      { id: "h1", startTime: 8, endTime: 15, tag: "名场面", description: "补充说明", updatedAt: 2200 },
     ]);
 
     assert.deepEqual(context.store.loadPlayerDataStore("global").videoHighlights.video1, [
-      { id: "h1", startTime: 8, endTime: 15, tag: "名场面", updatedAt: 2200 },
+      { id: "h1", startTime: 8, endTime: 15, tag: "名场面", description: "补充说明", updatedAt: 2200 },
     ]);
   } finally {
     context.store.close();

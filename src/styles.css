@@ -3563,7 +3563,12 @@ button {
   font-weight: 700;
 }
 
-.highlight-chip button:last-child {
+.highlight-description {
+  max-width: 140px;
+  color: #dce2ec;
+}
+
+.highlight-chip button:not(:first-child) {
   padding: 5px 8px 5px 4px;
   color: #8e97a5;
 }
@@ -4685,11 +4690,10 @@ button {
   font-size: 13px;
 }
 
-.high-energy-tag-field input {
+.high-energy-tag-field input,
+.high-energy-tag-field textarea {
   width: 100%;
-  height: 40px;
   min-width: 0;
-  padding: 0 12px;
   border: 1px solid #303743;
   border-radius: 8px;
   background: #20252d;
@@ -4697,7 +4701,20 @@ button {
   outline: none;
 }
 
-.high-energy-tag-field input:focus {
+.high-energy-tag-field input {
+  height: 40px;
+  padding: 0 12px;
+}
+
+.high-energy-tag-field textarea {
+  min-height: 96px;
+  resize: vertical;
+  padding: 10px 12px;
+  line-height: 1.5;
+}
+
+.high-energy-tag-field input:focus,
+.high-energy-tag-field textarea:focus {
   border-color: #00a1d6;
   box-shadow: 0 0 0 3px rgba(0, 161, 214, 0.16);
 }
@@ -7072,8 +7089,8 @@ button {
 :root[data-theme="light"] .duplicate-video-group-header span,
 .app-shell.theme-light .duplicate-video-list small,
 :root[data-theme="light"] .duplicate-video-list small,
-.app-shell.theme-light .highlight-chip button:last-child,
-:root[data-theme="light"] .highlight-chip button:last-child {
+.app-shell.theme-light .highlight-chip button:not(:first-child),
+:root[data-theme="light"] .highlight-chip button:not(:first-child) {
   color: #5d6a79;
 }
 
@@ -7158,13 +7175,20 @@ button {
   color: #9a6510;
 }
 
+.app-shell.theme-light .highlight-description,
+:root[data-theme="light"] .highlight-description {
+  color: #344258;
+}
+
 .app-shell.theme-light .high-energy-tag-field span,
 :root[data-theme="light"] .high-energy-tag-field span {
   color: #243044;
 }
 
 .app-shell.theme-light .high-energy-tag-field input,
-:root[data-theme="light"] .high-energy-tag-field input {
+:root[data-theme="light"] .high-energy-tag-field input,
+.app-shell.theme-light .high-energy-tag-field textarea,
+:root[data-theme="light"] .high-energy-tag-field textarea {
   border-color: #cfd8e3;
   background: #ffffff;
   color: #243044;

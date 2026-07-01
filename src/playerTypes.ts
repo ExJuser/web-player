@@ -168,6 +168,7 @@ export type VideoHighlightSegment = {
   startTime: number;
   endTime: number;
   tag?: string;
+  description?: string;
   updatedAt: number;
 };
 export type VideoHighlightStore = Record<string, VideoHighlightSegment[]>;

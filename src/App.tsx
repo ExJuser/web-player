@@ -21,6 +21,7 @@ import {
   LocateFixed,
   Maximize,
   Pause,
+  Pencil,
   PictureInPicture2,
   Play,
   RotateCcw,
@@ -1706,7 +1707,9 @@ export default function App() {
     videoName: string;
     startTime: number;
     endTime: number;
+    highlightId?: string;
     tagInput: string;
+    descriptionInput: string;
   } | null>(null);
   const [, setTagMergeDecisions] = useState<TagMergeDecisionStore>({});
   const [isTagDialogOpen, setIsTagDialogOpen] = useState(false);
@@ -5530,6 +5533,7 @@ export default function App() {
       startTime,
       endTime,
       tagInput: "",
+      descriptionInput: "",
     });
     setMessage(`已选择高能片段 ${formatTime(startTime)} - ${formatTime(endTime)}，请填写标签。`);
   }, [currentTime, currentVideo, duration, pendingHighEnergyStart]);
@@ -5537,29 +5541,49 @@ export default function App() {
   const saveHighEnergyTagPrompt = useCallback(() => {
     if (!highEnergyTagPrompt) return;
     const tag = highEnergyTagPrompt.tagInput.trim().slice(0, 40);
+    const description = highEnergyTagPrompt.descriptionInput.trim().slice(0, 500);
     if (!tag) {
       setMessage("请输入高能片段标签。");
       return;
     }
+    const updatedAt = Date.now();
     const nextHighlight: VideoHighlightSegment = {
-      id: `${Math.round(highEnergyTagPrompt.startTime * 10)}-${Math.round(highEnergyTagPrompt.endTime * 10)}-${Date.now().toString(36)}`,
+      id: highEnergyTagPrompt.highlightId ?? `${Math.round(highEnergyTagPrompt.startTime * 10)}-${Math.round(highEnergyTagPrompt.endTime * 10)}-${updatedAt.toString(36)}`,
       startTime: highEnergyTagPrompt.startTime,
       endTime: highEnergyTagPrompt.endTime,
       tag,
-      updatedAt: Date.now(),
+      ...(description ? { description } : {}),
+      updatedAt,
     };
+    const currentHighlights = videoHighlightsRef.current[highEnergyTagPrompt.videoId] ?? [];
+    const nextVideoHighlights = highEnergyTagPrompt.highlightId
+      ? currentHighlights.map((highlight) => highlight.id === highEnergyTagPrompt.highlightId ? nextHighlight : highlight)
+      : [...currentHighlights, nextHighlight];
     const nextHighlights = {
       ...videoHighlightsRef.current,
-      [highEnergyTagPrompt.videoId]: [...(videoHighlightsRef.current[highEnergyTagPrompt.videoId] ?? []), nextHighlight].sort((a, b) => a.startTime - b.startTime),
+      [highEnergyTagPrompt.videoId]: nextVideoHighlights.sort((a, b) => a.startTime - b.startTime),
     };
     videoHighlightsRef.current = nextHighlights;
     setVideoHighlights(nextHighlights);
     setHighEnergyTagPrompt(null);
-    setMessage(`已标记高能片段 ${formatTime(highEnergyTagPrompt.startTime)} - ${formatTime(highEnergyTagPrompt.endTime)}：${tag}`);
+    setMessage(highEnergyTagPrompt.highlightId ? "已更新高能片段描述。" : `已标记高能片段 ${formatTime(highEnergyTagPrompt.startTime)} - ${formatTime(highEnergyTagPrompt.endTime)}：${tag}`);
     void savePlayerVideoHighlights(highEnergyTagPrompt.videoId, nextHighlights[highEnergyTagPrompt.videoId]).catch(() => {
       setMessage("高能标记保存失败。");
     });
   }, [highEnergyTagPrompt]);
+
+  const editCurrentHighEnergySegment = useCallback((highlight: VideoHighlightSegment) => {
+    if (!currentVideo) return;
+    setHighEnergyTagPrompt({
+      videoId: currentVideo.id,
+      videoName: currentVideo.name,
+      startTime: highlight.startTime,
+      endTime: highlight.endTime,
+      highlightId: highlight.id,
+      tagInput: highlight.tag ?? "",
+      descriptionInput: highlight.description ?? "",
+    });
+  }, [currentVideo]);
 
   const removeCurrentHighEnergySegment = useCallback((highlightId: string) => {
     if (!currentVideo) return;
@@ -10532,7 +10556,11 @@ export default function App() {
                       <span className="highlight-chip" key={highlight.id}>
                         <button type="button" onClick={() => seekTo(highlight.startTime)}>
                           {highlight.tag ? <strong>{highlight.tag}</strong> : null}
+                          {highlight.description ? <span className="highlight-description">{highlight.description}</span> : null}
                           <span>{formatTime(highlight.startTime)} - {formatTime(highlight.endTime)}</span>
+                        </button>
+                        <button type="button" onClick={() => editCurrentHighEnergySegment(highlight)} aria-label="修改高能片段描述">
+                          <Pencil size={13} />
                         </button>
                         <button type="button" onClick={() => removeCurrentHighEnergySegment(highlight.id)} aria-label="删除高能标记">
                           <X size={13} />
@@ -11273,7 +11301,7 @@ export default function App() {
             <Sparkles size={28} />
           </div>
           <div className="dialog-copy">
-            <h2 id="high-energy-tag-title">高能片段标签</h2>
+            <h2 id="high-energy-tag-title">{highEnergyTagPrompt.highlightId ? "编辑高能片段" : "高能片段标签"}</h2>
             <p>
               {formatTime(highEnergyTagPrompt.startTime)} - {formatTime(highEnergyTagPrompt.endTime)} · {highEnergyTagPrompt.videoName}
             </p>
@@ -11286,6 +11314,16 @@ export default function App() {
               value={highEnergyTagPrompt.tagInput}
               onChange={(event) => setHighEnergyTagPrompt((prompt) => prompt ? { ...prompt, tagInput: event.target.value } : prompt)}
               placeholder="例如：名场面"
+            />
+          </label>
+          <label className="high-energy-tag-field">
+            <span>描述</span>
+            <textarea
+              maxLength={500}
+              value={highEnergyTagPrompt.descriptionInput}
+              onChange={(event) => setHighEnergyTagPrompt((prompt) => prompt ? { ...prompt, descriptionInput: event.target.value } : prompt)}
+              placeholder="补充这段高能片段的说明"
+              rows={4}
             />
           </label>
           <div className="dialog-actions">
