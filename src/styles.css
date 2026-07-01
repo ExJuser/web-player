@@ -1218,8 +1218,17 @@ button {
   flex-wrap: wrap;
 }
 
-.rating-operator-filter button {
-  min-width: 32px;
+.playlist-filter.rating-operator-filter button {
+  min-width: 34px;
+  height: 30px;
+  border-radius: 5px;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.playlist-filter.rating-operator-filter button:not(.active):hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #f5f7fb;
 }
 
 .rating-threshold-input {
@@ -1228,19 +1237,35 @@ button {
   gap: 6px;
   min-width: 0;
   height: 34px;
-  padding: 0 8px;
+  padding: 0 9px;
   border: 1px solid #303743;
   border-radius: 6px;
   background: #191d23;
 }
 
+.rating-threshold-input:focus-within {
+  border-color: rgba(0, 161, 214, 0.72);
+  box-shadow: 0 0 0 2px rgba(0, 161, 214, 0.18);
+}
+
 .rating-threshold-input input {
-  width: 58px;
+  width: 34px;
   border: 0;
   outline: 0;
   background: transparent;
   color: #f5f7fb;
   font: inherit;
+  font-weight: 700;
+  text-align: center;
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.rating-threshold-input input::-webkit-outer-spin-button,
+.rating-threshold-input input::-webkit-inner-spin-button {
+  margin: 0;
+  appearance: none;
+  -webkit-appearance: none;
 }
 
 .rating-filter-actions .duplicate-detection-button {
@@ -7069,6 +7094,18 @@ button {
 :root[data-theme="light"] .rating-threshold-input {
   border-color: #c8d3df;
   background: #f7fbff;
+}
+
+.app-shell.theme-light .playlist-filter.rating-operator-filter button:not(.active):hover,
+:root[data-theme="light"] .playlist-filter.rating-operator-filter button:not(.active):hover {
+  background: rgba(26, 75, 110, 0.08);
+  color: #142033;
+}
+
+.app-shell.theme-light .rating-threshold-input:focus-within,
+:root[data-theme="light"] .rating-threshold-input:focus-within {
+  border-color: rgba(0, 133, 178, 0.64);
+  box-shadow: 0 0 0 2px rgba(0, 133, 178, 0.14);
 }
 
 .app-shell.theme-light .rating-threshold-input input,
