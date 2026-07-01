@@ -5830,7 +5830,8 @@ button {
   opacity: 0.72;
 }
 
-.auto-tag-button.loading .lucide-refresh-cw {
+.auto-tag-button.loading .lucide-refresh-cw,
+.auto-tag-button:disabled .lucide-refresh-cw {
   animation: tag-query-spin 0.9s linear infinite;
 }
 
