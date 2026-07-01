@@ -1701,6 +1701,7 @@ export default function App() {
   const [isTagDialogOpen, setIsTagDialogOpen] = useState(false);
   const [ratingDialogVideoId, setRatingDialogVideoId] = useState<string | null>(null);
   const [ratingInput, setRatingInput] = useState("");
+  const [ratingHoverValue, setRatingHoverValue] = useState<number | null>(null);
   const [ratingMessage, setRatingMessage] = useState("");
   const [tagInput, setTagInput] = useState("");
   const [activeTagSuggestionIndex, setActiveTagSuggestionIndex] = useState(0);
@@ -4150,6 +4151,7 @@ export default function App() {
     const rating = videoRatingsRef.current[video.id];
     setRatingDialogVideoId(video.id);
     setRatingInput(typeof rating === "number" ? String(rating) : "");
+    setRatingHoverValue(null);
     setRatingMessage("");
   }, []);
 
@@ -11794,34 +11796,63 @@ export default function App() {
               saveRatingDialogValue();
             }}
           >
-            <input
-              autoFocus
-              type="number"
-              min="0"
-              max="10"
-              step="0.5"
-              value={ratingInput}
-              placeholder="0-10，留空清除"
-              onChange={(event) => setRatingInput(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Escape") setRatingDialogVideoId(null);
-              }}
-            />
-            <button className="primary-button" type="submit">
-              保存
-            </button>
-            <button
-              className="secondary-button"
-              type="button"
-              onClick={() => {
-                setRatingInput("");
-                const video = videosRef.current.find((item) => item.id === ratingDialogVideoId);
-                if (video) replaceVideoRating(video, null);
-                setRatingMessage("已清除评分。");
-              }}
+            <div
+              className="rating-star-picker"
+              role="radiogroup"
+              aria-label="视频评分"
+              onMouseLeave={() => setRatingHoverValue(null)}
             >
-              清除
-            </button>
+              {Array.from({ length: 10 }, (_, index) => {
+                const value = index + 1;
+                const selectedRating = ratingHoverValue ?? (Number(ratingInput) || 0);
+                const isActive = value <= selectedRating;
+                return (
+                  <button
+                    autoFocus={index === 0}
+                    className={isActive ? "active" : ""}
+                    key={value}
+                    type="button"
+                    role="radio"
+                    aria-checked={Number(ratingInput) === value}
+                    aria-label={`${value} 分`}
+                    title={`${value} 分`}
+                    onClick={() => {
+                      setRatingInput(String(value));
+                      setRatingMessage("");
+                    }}
+                    onFocus={() => setRatingHoverValue(value)}
+                    onBlur={() => setRatingHoverValue(null)}
+                    onMouseEnter={() => setRatingHoverValue(value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Escape") setRatingDialogVideoId(null);
+                    }}
+                  >
+                    <Star size={24} fill={isActive ? "currentColor" : "currentColor"} />
+                  </button>
+                );
+              })}
+            </div>
+            <div className="rating-editor-status">
+              {ratingInput ? `${ratingInput} / 10` : "未评分"}
+            </div>
+            <div className="rating-editor-actions">
+              <button className="primary-button" type="submit">
+                保存
+              </button>
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={() => {
+                  setRatingInput("");
+                  setRatingHoverValue(null);
+                  const video = videosRef.current.find((item) => item.id === ratingDialogVideoId);
+                  if (video) replaceVideoRating(video, null);
+                  setRatingMessage("已清除评分。");
+                }}
+              >
+                清除
+              </button>
+            </div>
           </form>
 
           {ratingMessage ? <div className="ai-empty-state">{ratingMessage}</div> : null}
