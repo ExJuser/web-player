@@ -246,7 +246,6 @@ const photoViewerWarmRadius = 4;
 const photoViewerDecodeRadius = 2;
 const photoObjectUrlCacheLimit = 48;
 const photoAlbumScanCacheStaleMs = 24 * 60 * 60 * 1000;
-const danmakuPlaybackClockIntervalMs = 250;
 const duplicateFingerprintSampleSize = 1024 * 1024;
 let hasStartedLegacyThumbnailMigration = false;
 const photoAlbumSortOptions: Array<{ value: PhotoAlbumSortMode; label: string }> = [
@@ -1450,7 +1449,7 @@ export default function App() {
   const controlBarRef = useRef<HTMLDivElement | null>(null);
   const playlistRef = useRef<HTMLDivElement | null>(null);
   const currentVideoIdRef = useRef<string | null>(null);
-  const playbackClockTimerRef = useRef<number | null>(null);
+  const playbackClockFrameRef = useRef<number | null>(null);
   const saveTimerRef = useRef<number | null>(null);
   const saveTimerVideoIdRef = useRef<string | null>(null);
   const playlistAutoScrollTimerRef = useRef<number | null>(null);
@@ -6486,16 +6485,16 @@ export default function App() {
   }, [currentVideo?.id]);
 
   useEffect(() => {
-    if (playbackClockTimerRef.current) {
-      window.clearTimeout(playbackClockTimerRef.current);
-      playbackClockTimerRef.current = null;
+    if (playbackClockFrameRef.current) {
+      window.cancelAnimationFrame(playbackClockFrameRef.current);
+      playbackClockFrameRef.current = null;
     }
     if (!isPlaying || !currentVideo || !shouldUseDanmakuPlaybackClock) return;
 
     const syncPlaybackClock = () => {
       const element = videoRef.current;
       if (!element || element.paused || element.ended) {
-        playbackClockTimerRef.current = null;
+        playbackClockFrameRef.current = null;
         return;
       }
 
@@ -6504,14 +6503,14 @@ export default function App() {
       setDuration((previousDuration) =>
         Math.abs(previousDuration - nextDuration) > 0.05 ? nextDuration : previousDuration,
       );
-      playbackClockTimerRef.current = window.setTimeout(syncPlaybackClock, danmakuPlaybackClockIntervalMs);
+      playbackClockFrameRef.current = window.requestAnimationFrame(syncPlaybackClock);
     };
 
-    playbackClockTimerRef.current = window.setTimeout(syncPlaybackClock, danmakuPlaybackClockIntervalMs);
+    playbackClockFrameRef.current = window.requestAnimationFrame(syncPlaybackClock);
     return () => {
-      if (playbackClockTimerRef.current) {
-        window.clearTimeout(playbackClockTimerRef.current);
-        playbackClockTimerRef.current = null;
+      if (playbackClockFrameRef.current) {
+        window.cancelAnimationFrame(playbackClockFrameRef.current);
+        playbackClockFrameRef.current = null;
       }
     };
   }, [currentVideo?.duration, currentVideo?.id, isPlaying, shouldUseDanmakuPlaybackClock]);
