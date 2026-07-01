@@ -4442,9 +4442,8 @@ button {
 }
 
 .playlist-item .tag-chip-row {
-  max-height: 44px;
-  flex-wrap: wrap;
-  align-content: flex-start;
+  max-height: 20px;
+  flex-wrap: nowrap;
   overflow: hidden;
 }
 

@@ -15,6 +15,7 @@ import {
   FolderOpen,
   EyeOff,
   HardDrive,
+  Heart,
   Images,
   Keyboard,
   LocateFixed,
@@ -10826,7 +10827,7 @@ export default function App() {
                     title={isFavorite ? "取消收藏" : "收藏/稍后看"}
                     aria-label={isFavorite ? "取消收藏" : "收藏/稍后看"}
                   >
-                    <Star size={15} fill={isFavorite ? "currentColor" : "none"} />
+                    <Heart size={15} fill={isFavorite ? "currentColor" : "none"} />
                   </button>
                   <button
                     className={`episode-action-button rating ${typeof rating === "number" ? "active" : ""}`}
@@ -11820,7 +11821,6 @@ export default function App() {
                       setRatingInput(String(value));
                       setRatingMessage("");
                     }}
-                    onFocus={() => setRatingHoverValue(value)}
                     onBlur={() => setRatingHoverValue(null)}
                     onMouseEnter={() => setRatingHoverValue(value)}
                     onKeyDown={(event) => {
