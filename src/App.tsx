@@ -267,6 +267,17 @@ import {
   restoreCachedEmbeddedSubtitles,
   type ExtractedEmbeddedSubtitle,
 } from "./subtitleMedia";
+import {
+  alignCachedMediaRootScanWithConfig,
+  createCachedMediaRootScan,
+  type LocalConfig,
+  type LocalMediaRoot,
+  type MediaRootsScanResponse,
+  type ScannedServerSubtitle,
+  type ScannedServerVideo,
+  type UpdateMediaRootLocalPathResponse,
+  type UpsertMediaRootResponse,
+} from "./mediaRootScanCache";
 
 
 const photoAlbumPageSize = 20;
@@ -342,7 +353,6 @@ import {
   loadLegacyPlayerDataStore,
   loadGlobalPlayerDataStore,
   loadPlayerDataStore,
-  mediaRootScanCacheVersion,
   migrateLegacyCachedThumbnailsToLocalData,
   readPhotoAlbumFolderHandle,
   readCachedThumbnail,
@@ -476,111 +486,6 @@ async function* collectVideos(directory: FileSystemDirectoryHandle, rootId?: str
     yield createBatch();
   }
 }
-
-function createCachedMediaRootScan(scan: MediaRootsScanResponse, videos: VideoItem[], subtitles: SubtitleItem[]): CachedMediaRootScan {
-  const updatedAt = Date.now();
-  return {
-    version: mediaRootScanCacheVersion,
-    videos,
-    subtitles: subtitles.filter((subtitle) => !subtitle.source || subtitle.source === "external"),
-    scannedFiles: scan.scannedFiles,
-    filteredSmallVideos: scan.filteredSmallVideos,
-    metadata: {
-      ...scan.metadata,
-      updatedAt,
-    },
-    updatedAt,
-  };
-}
-
-function alignCachedMediaRootScanWithConfig(cache: CachedMediaRootScan, config: LocalConfig): CachedMediaRootScan {
-  const configuredRootIds = new Set(config.mediaRoots.map((root) => root.id));
-  const cachedStatusesById = new Map(cache.metadata.mediaRoots.map((status) => [status.id, status]));
-  const mediaRoots = config.mediaRoots.map((root) => {
-    const cachedStatus = cachedStatusesById.get(root.id);
-    return cachedStatus
-      ? {
-          ...cachedStatus,
-          label: root.label,
-          source: root.source,
-        }
-      : {
-          id: root.id,
-          label: root.label,
-          source: root.source,
-          status: "needsAccess" as const,
-          videoCount: 0,
-          scannedFiles: 0,
-          updatedAt: cache.updatedAt,
-          error: "这个媒体库尚未刷新到缓存。",
-        };
-  });
-  const videos = cache.videos.filter((video) => video.mediaRootId && configuredRootIds.has(video.mediaRootId));
-  const subtitles = cache.subtitles.filter((subtitle) => subtitle.mediaRootId && configuredRootIds.has(subtitle.mediaRootId));
-  return {
-    ...cache,
-    videos,
-    subtitles,
-    scannedFiles: mediaRoots.reduce((sum, status) => sum + status.scannedFiles, 0),
-    metadata: {
-      ...cache.metadata,
-      videoCount: videos.length,
-      scannedFiles: mediaRoots.reduce((sum, status) => sum + status.scannedFiles, 0),
-      mediaRoots,
-    },
-  };
-}
-
-type LocalMediaRoot = {
-  id: string;
-  label: string;
-  basename: string;
-  path: string;
-  source?: "browser" | "local";
-  localPath?: string;
-};
-
-type LocalConfig = {
-  mediaRoots: LocalMediaRoot[];
-  ffmpeg: { ffmpeg: boolean; ffprobe: boolean };
-  ai: { configured: boolean; model: string };
-  bangumi: { configured: boolean; proxyConfigured: boolean };
-};
-
-type ScannedServerVideo = VideoItem & {
-  legacyId?: string;
-};
-
-type ScannedServerSubtitle = SubtitleItem & {
-  legacyId?: string;
-  size?: number;
-  lastModified?: number;
-};
-
-type MediaRootScanResult = {
-  root: LocalMediaRoot;
-  status: PlayerMediaRootStatus;
-  videos: ScannedServerVideo[];
-  subtitles: ScannedServerSubtitle[];
-  filteredSmallVideos: number;
-};
-
-type MediaRootsScanResponse = {
-  roots: MediaRootScanResult[];
-  videos: ScannedServerVideo[];
-  subtitles: ScannedServerSubtitle[];
-  scannedFiles: number;
-  filteredSmallVideos: number;
-  metadata: PlayerGlobalMetadata;
-};
-
-type UpsertMediaRootResponse = LocalConfig & {
-  mediaRoot: LocalMediaRoot;
-};
-
-type UpdateMediaRootLocalPathResponse = LocalConfig & {
-  mediaRoot: LocalMediaRoot;
-};
 
 type PhotoAlbumViewFilter = "all" | "favorites";
 
