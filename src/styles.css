@@ -5616,6 +5616,7 @@ button {
 }
 
 .tag-editor-field {
+  position: relative;
   min-width: 0;
 }
 
@@ -5631,12 +5632,20 @@ button {
 }
 
 .tag-input-suggestions {
-  display: flex;
-  max-height: 82px;
-  margin-top: 8px;
-  gap: 6px;
-  flex-wrap: wrap;
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  left: 0;
+  z-index: 50;
+  display: grid;
+  max-height: 188px;
+  padding: 6px;
+  gap: 4px;
   overflow: auto;
+  border: 1px solid rgba(121, 223, 255, 0.18);
+  border-radius: 8px;
+  background: rgba(32, 37, 45, 0.98);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.34);
   scrollbar-width: thin;
   scrollbar-color: rgba(121, 223, 255, 0.42) rgba(255, 255, 255, 0.06);
 }
@@ -5651,21 +5660,24 @@ button {
 }
 
 .tag-input-suggestions button {
-  max-width: 150px;
-  min-height: 28px;
-  padding: 0 9px;
-  border: 1px solid rgba(121, 223, 255, 0.24);
+  display: block;
+  width: 100%;
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid transparent;
   border-radius: 6px;
-  background: rgba(121, 223, 255, 0.08);
+  background: transparent;
   color: #dff8ff;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-align: left;
   cursor: pointer;
 }
 
 .tag-input-suggestions button:hover,
-.tag-input-suggestions button:focus-visible {
+.tag-input-suggestions button:focus-visible,
+.tag-input-suggestions button.active {
   border-color: rgba(121, 223, 255, 0.44);
   background: rgba(0, 161, 214, 0.18);
 }
@@ -6567,6 +6579,9 @@ button {
 }
 
 .app-shell.theme-light .tag-input-suggestions {
+  border-color: #d7e0ea;
+  background: rgba(248, 250, 252, 0.98);
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.14);
   scrollbar-color: rgba(0, 161, 214, 0.36) #eef2f6;
 }
 
@@ -6575,13 +6590,14 @@ button {
 }
 
 .app-shell.theme-light .tag-input-suggestions button {
-  border-color: rgba(0, 161, 214, 0.22);
-  background: #eef7fb;
+  border-color: transparent;
+  background: transparent;
   color: #0077a8;
 }
 
 .app-shell.theme-light .tag-input-suggestions button:hover,
-.app-shell.theme-light .tag-input-suggestions button:focus-visible {
+.app-shell.theme-light .tag-input-suggestions button:focus-visible,
+.app-shell.theme-light .tag-input-suggestions button.active {
   border-color: rgba(0, 161, 214, 0.4);
   background: #dff3fb;
   color: #005f86;
@@ -7181,6 +7197,9 @@ button {
 }
 
 :root[data-theme="light"] .tag-input-suggestions {
+  border-color: #d7e0ea;
+  background: rgba(248, 250, 252, 0.98);
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.14);
   scrollbar-color: rgba(0, 161, 214, 0.36) #eef2f6;
 }
 
@@ -7189,13 +7208,14 @@ button {
 }
 
 :root[data-theme="light"] .tag-input-suggestions button {
-  border-color: rgba(0, 161, 214, 0.22);
-  background: #eef7fb;
+  border-color: transparent;
+  background: transparent;
   color: #0077a8;
 }
 
 :root[data-theme="light"] .tag-input-suggestions button:hover,
-:root[data-theme="light"] .tag-input-suggestions button:focus-visible {
+:root[data-theme="light"] .tag-input-suggestions button:focus-visible,
+:root[data-theme="light"] .tag-input-suggestions button.active {
   border-color: rgba(0, 161, 214, 0.4);
   background: #dff3fb;
   color: #005f86;

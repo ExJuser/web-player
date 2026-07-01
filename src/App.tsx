@@ -1662,6 +1662,7 @@ export default function App() {
   const [, setTagMergeDecisions] = useState<TagMergeDecisionStore>({});
   const [isTagDialogOpen, setIsTagDialogOpen] = useState(false);
   const [tagInput, setTagInput] = useState("");
+  const [activeTagSuggestionIndex, setActiveTagSuggestionIndex] = useState(0);
   const [tagMessage, setTagMessage] = useState("");
   const [isTagSuggestionLoading, setIsTagSuggestionLoading] = useState(false);
   const [tagMergePrompt, setTagMergePrompt] = useState<TagMergePrompt | null>(null);
@@ -2260,6 +2261,10 @@ export default function App() {
       })
       .slice(0, 8);
   }, [activeTagInputSegment, currentVideo, currentVideoTags, isTagDialogOpen, videoTags]);
+  const resolvedActiveTagSuggestionIndex = tagInputSuggestions.length
+    ? Math.min(activeTagSuggestionIndex, tagInputSuggestions.length - 1)
+    : 0;
+  const activeTagSuggestionId = tagInputSuggestions.length ? `tag-input-suggestion-${resolvedActiveTagSuggestionIndex}` : undefined;
   const currentVideoMediaRootLabel = useMemo(() => {
     if (!currentVideo) return "";
     const mediaRoot = localConfig?.mediaRoots.find((root) => root.id === currentVideo.mediaRootId);
@@ -4156,6 +4161,10 @@ export default function App() {
   const applyTagInputSuggestion = useCallback((tag: string) => {
     setTagInput((input) => `${input.replace(/[^\s,，、;；|]*$/u, tag)} `);
   }, []);
+
+  useEffect(() => {
+    setActiveTagSuggestionIndex(0);
+  }, [activeTagInputSegment, tagInputSuggestions.length]);
 
   const generateAutoTagsForCurrentVideo = useCallback(async () => {
     setAutoTagSuggestions([]);
@@ -11679,15 +11688,44 @@ export default function App() {
                 placeholder="输入标签，可用空格、逗号、顿号分隔"
                 onChange={(event) => setTagInput(event.target.value)}
                 onKeyDown={(event) => {
+                  if (tagInputSuggestions.length && event.key === "ArrowDown") {
+                    event.preventDefault();
+                    setActiveTagSuggestionIndex((index) => (index + 1) % tagInputSuggestions.length);
+                    return;
+                  }
+                  if (tagInputSuggestions.length && event.key === "ArrowUp") {
+                    event.preventDefault();
+                    setActiveTagSuggestionIndex((index) => (index - 1 + tagInputSuggestions.length) % tagInputSuggestions.length);
+                    return;
+                  }
+                  if (tagInputSuggestions.length && event.key === "Enter") {
+                    event.preventDefault();
+                    applyTagInputSuggestion(tagInputSuggestions[resolvedActiveTagSuggestionIndex] ?? tagInputSuggestions[0]);
+                    return;
+                  }
                   if (event.key === "Escape") setIsTagDialogOpen(false);
                 }}
                 disabled={!currentVideo}
-                aria-describedby={tagInputSuggestions.length ? "tag-input-suggestions" : undefined}
+                role="combobox"
+                aria-autocomplete="list"
+                aria-expanded={Boolean(tagInputSuggestions.length)}
+                aria-controls={tagInputSuggestions.length ? "tag-input-suggestions" : undefined}
+                aria-activedescendant={activeTagSuggestionId}
               />
               {tagInputSuggestions.length ? (
-                <div className="tag-input-suggestions" id="tag-input-suggestions" aria-label="已有标签候选">
-                  {tagInputSuggestions.map((tag) => (
-                    <button key={tag} type="button" onClick={() => applyTagInputSuggestion(tag)}>
+                <div className="tag-input-suggestions" id="tag-input-suggestions" role="listbox" aria-label="已有标签候选">
+                  {tagInputSuggestions.map((tag, index) => (
+                    <button
+                      className={index === resolvedActiveTagSuggestionIndex ? "active" : ""}
+                      id={`tag-input-suggestion-${index}`}
+                      key={tag}
+                      type="button"
+                      role="option"
+                      aria-selected={index === resolvedActiveTagSuggestionIndex}
+                      onMouseDown={(event) => event.preventDefault()}
+                      onMouseEnter={() => setActiveTagSuggestionIndex(index)}
+                      onClick={() => applyTagInputSuggestion(tag)}
+                    >
                       {tag}
                     </button>
                   ))}
