@@ -4262,8 +4262,9 @@ export default function App() {
 
   const submitTagInputSuggestion = useCallback((tag: string) => {
     if (isTagSuggestionLoading) return;
-    void addTagsToCurrentVideo([tag]);
-  }, [addTagsToCurrentVideo, isTagSuggestionLoading]);
+    const resolvedInput = tagInput.replace(/[^\s,，、;；|]*$/u, tag);
+    void addTagsToCurrentVideo(parseTagInput(resolvedInput));
+  }, [addTagsToCurrentVideo, isTagSuggestionLoading, tagInput]);
 
   useEffect(() => {
     setActiveTagSuggestionIndex(0);
