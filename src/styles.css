@@ -5126,7 +5126,7 @@ button {
 
 .cache-status-overview {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(180px, 1.25fr);
   gap: 1px;
   min-height: 96px;
   overflow: hidden;
@@ -5159,6 +5159,11 @@ button {
   color: #f5f7fb;
   font-size: 18px;
   line-height: 24px;
+}
+
+.cache-status-overview div:last-child strong {
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .cache-status-overview span {
