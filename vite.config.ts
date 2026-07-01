@@ -44,6 +44,7 @@ import {
 } from "./server/bangumiMatchUtils.mjs";
 import { requestBangumiJson } from "./server/bangumiClient.mjs";
 import { createBilibiliDanmakuService } from "./server/bilibiliDanmaku.mjs";
+import { createBahamutDanmakuService } from "./server/bahamutDanmaku.mjs";
 import { clearLocalCacheItems, createCacheStatus as createLocalCacheStatus, createDanmakuSourcesStats } from "./server/cacheStatus.mjs";
 import { callDeepSeek, chunkText, streamDeepSeek } from "./server/deepSeekClient.mjs";
 import { createEmbeddedSubtitleService } from "./server/embeddedSubtitles.mjs";
@@ -77,6 +78,12 @@ const bilibiliDanmaku = createBilibiliDanmakuService({
   formatRemoteFetchError,
   requestExternalJson,
   requestExternalText,
+});
+const bahamutDanmaku = createBahamutDanmakuService({
+  createDanmakuComment,
+  dedupeDanmakuComments,
+  formatRemoteFetchError,
+  requestExternalJson,
 });
 const embeddedSubtitles = createEmbeddedSubtitleService({
   cacheRoot: embeddedSubtitlesRoot,
@@ -325,6 +332,17 @@ async function writeDanmakuSource(record) {
     return selected;
   }, "unknown");
   const translatedCount = record.comments.filter((comment) => comment.simplifiedText && comment.simplifiedText !== comment.text).length;
+  const sourceBreakdown =
+    record.sourceBreakdown ||
+    [
+      {
+        provider: record.provider,
+        label: record.provider === "bilibili" ? "Bilibili" : record.title,
+        sourceUrl: record.sourceUrl,
+        commentCount: record.comments.length,
+        translatedCount,
+      },
+    ];
   const source = {
     id: createDanmakuSourceId(record.provider, `${record.sourceUrl}|${record.title}|${record.comments.length}`),
     provider: record.provider,
@@ -334,10 +352,45 @@ async function writeDanmakuSource(record) {
     commentCount: record.comments.length,
     translatedCount,
     updatedAt: Date.now(),
+    sourceBreakdown,
   };
   const payload = { source, comments: record.comments };
   await writeJsonFile(createDanmakuSourcePath(source.id), payload);
   return payload;
+}
+
+function createDanmakuRecordFromPayload(payload) {
+  return {
+    provider: payload.source.provider,
+    title: payload.source.title,
+    sourceUrl: payload.source.sourceUrl,
+    comments: payload.comments,
+    sourceBreakdown:
+      payload.source.sourceBreakdown ||
+      [
+        {
+          provider: payload.source.provider,
+          label: payload.source.provider === "bilibili" ? "Bilibili" : payload.source.title,
+          sourceUrl: payload.source.sourceUrl,
+          commentCount: payload.source.commentCount,
+          translatedCount: payload.source.translatedCount,
+        },
+      ],
+  };
+}
+
+function mergeDanmakuRecords(currentRecord, nextRecord) {
+  const nextSourceUrls = new Set((nextRecord.sourceBreakdown || []).map((source) => source.sourceUrl).filter(Boolean));
+  const currentBreakdown = (currentRecord.sourceBreakdown || []).filter((source) => !source.sourceUrl || !nextSourceUrls.has(source.sourceUrl));
+  const sourceBreakdown = [...currentBreakdown, ...(nextRecord.sourceBreakdown || [])];
+  const comments = dedupeDanmakuComments([...currentRecord.comments, ...nextRecord.comments]);
+  return {
+    provider: sourceBreakdown.length > 1 ? "combined" : nextRecord.provider,
+    title: sourceBreakdown.length > 1 ? "多来源弹幕" : nextRecord.title,
+    sourceUrl: sourceBreakdown.map((source) => source.sourceUrl).filter(Boolean).join(" | ") || nextRecord.sourceUrl,
+    comments,
+    sourceBreakdown,
+  };
 }
 
 async function readDanmakuSource(sourceId) {
@@ -353,15 +406,24 @@ async function readDanmakuSource(sourceId) {
 async function fetchDanmakuSource(payload) {
   const manualUrl = typeof payload?.url === "string" ? payload.url.trim() : "";
   const parsed = parseDanmakuUrl(manualUrl);
-  if (!parsed) throw new Error("请输入支持的 Bilibili 弹幕链接。");
+  if (!parsed) throw new Error("请输入支持的 Bilibili 或巴哈姆特动画疯弹幕链接。");
 
   const record =
     parsed.provider === "bilibili"
       ? await bilibiliDanmaku.fetchBilibiliDanmaku(parsed)
+      : parsed.provider === "bahamut"
+        ? await bahamutDanmaku.fetchBahamutDanmaku(parsed)
       : null;
   if (!record) throw new Error("Unsupported danmaku provider.");
   if (!record.comments.length) throw new Error("没有解析到弹幕。");
-  return writeDanmakuSource(record);
+  const mergeSourceId = typeof payload?.mergeSourceId === "string" ? payload.mergeSourceId : "";
+  if (!mergeSourceId) return writeDanmakuSource(record);
+  try {
+    const currentPayload = await readDanmakuSource(mergeSourceId);
+    return writeDanmakuSource(mergeDanmakuRecords(createDanmakuRecordFromPayload(currentPayload), record));
+  } catch {
+    return writeDanmakuSource(record);
+  }
 }
 
 async function streamSubtitleSummary(env, payload, response) {

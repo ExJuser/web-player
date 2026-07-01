@@ -96,6 +96,7 @@ import type {
   DanmakuPreferences,
   DanmakuSelectionStore,
   DanmakuSource,
+  DanmakuSourceBreakdown,
   DataTransferItemWithHandle,
   EmbeddedSubtitleTrack,
   FileSystemDirectoryHandle,
@@ -966,6 +967,38 @@ type DanmakuSourcePayload = {
   requested?: number;
 };
 
+function formatDanmakuProviderLabel(provider: DanmakuSource["provider"]) {
+  if (provider === "bilibili") return "Bilibili";
+  if (provider === "bahamut") return "巴哈姆特动画疯";
+  if (provider === "combined") return "多来源";
+  return "手动";
+}
+
+function getDanmakuSourceBreakdown(source: DanmakuSource | null): DanmakuSourceBreakdown[] {
+  if (!source) return [];
+  return source.sourceBreakdown?.length
+    ? source.sourceBreakdown
+    : [
+        {
+          provider: source.provider,
+          label: formatDanmakuProviderLabel(source.provider),
+          sourceUrl: source.sourceUrl,
+          commentCount: source.commentCount,
+          translatedCount: source.translatedCount,
+        },
+      ];
+}
+
+function getDanmakuBreakdownTotal(sources: DanmakuSourceBreakdown[]) {
+  return sources.reduce((sum, source) => sum + source.commentCount, 0);
+}
+
+function formatDanmakuLoadedMessage(source: DanmakuSource, comments: DanmakuComment[], action = "已加载") {
+  const sources = getDanmakuSourceBreakdown(source);
+  const total = getDanmakuBreakdownTotal(sources) || comments.length;
+  return `${action} ${total} 条弹幕，来自 ${Math.max(1, sources.length)} 个来源。`;
+}
+
 type AiTagMergeSuggestionResponse = {
   existingTag?: string;
   newTag?: string;
@@ -1553,6 +1586,7 @@ export default function App() {
   const [currentDanmakuSource, setCurrentDanmakuSource] = useState<DanmakuSource | null>(null);
   const [danmakuManualUrl, setDanmakuManualUrl] = useState("");
   const [danmakuMessage, setDanmakuMessage] = useState("");
+  const [isDanmakuSourceDetailOpen, setIsDanmakuSourceDetailOpen] = useState(false);
   const [danmakuLayerHeight, setDanmakuLayerHeight] = useState(0);
   const [isDanmakuDialogOpen, setIsDanmakuDialogOpen] = useState(false);
   const [isDanmakuLoading, setIsDanmakuLoading] = useState(false);
@@ -3146,6 +3180,8 @@ export default function App() {
   );
   const currentMediaRootId = currentVideo?.mediaRootId ?? mediaRootId;
   const isDanmakuAvailable = Boolean(currentVideo && homeMediaMode === "anime" && isSeriesMode);
+  const danmakuSourceBreakdown = useMemo(() => getDanmakuSourceBreakdown(currentDanmakuSource), [currentDanmakuSource]);
+  const danmakuSourceTotalCount = useMemo(() => getDanmakuBreakdownTotal(danmakuSourceBreakdown) || danmakuComments.length, [danmakuComments.length, danmakuSourceBreakdown]);
   const shouldUseDanmakuPlaybackClock =
     danmakuPreferences.enabled && isDanmakuAvailable && danmakuComments.length > 0 && !isPrivacyMode;
   const activeDanmakuComments = useMemo(() => {
@@ -7222,7 +7258,7 @@ export default function App() {
       const nextComments = payload.comments.map((comment) => createDanmakuComment(comment)).filter((comment): comment is DanmakuComment => Boolean(comment));
       setCurrentDanmakuSource(payload.source);
       setDanmakuComments(nextComments);
-      setDanmakuMessage(options?.message ?? `已加载 ${nextComments.length} 条弹幕。`);
+      setDanmakuMessage(options?.message ?? formatDanmakuLoadedMessage(payload.source, nextComments));
 
       if (options?.persist && currentVideo) {
         const nextSelections = {
@@ -7254,7 +7290,8 @@ export default function App() {
           method: "POST",
           body: JSON.stringify({ sourceId }),
         });
-        applyDanmakuSourcePayload(payload, { message: `已恢复 ${payload.comments.length} 条弹幕。` });
+        const nextComments = payload.comments.map((comment) => createDanmakuComment(comment)).filter((comment): comment is DanmakuComment => Boolean(comment));
+        applyDanmakuSourcePayload(payload, { message: formatDanmakuLoadedMessage(payload.source, nextComments, "已恢复") });
       } catch (error) {
         setCurrentDanmakuSource(null);
         setDanmakuComments([]);
@@ -7270,12 +7307,14 @@ export default function App() {
     if (!currentVideo) {
       setCurrentDanmakuSource(null);
       setDanmakuComments([]);
+      setIsDanmakuSourceDetailOpen(false);
       return;
     }
     const selection = danmakuSelectionsRef.current[currentVideo.id];
     if (!selection) {
       setCurrentDanmakuSource(null);
       setDanmakuComments([]);
+      setIsDanmakuSourceDetailOpen(false);
       return;
     }
     void loadDanmakuSource(selection.sourceId, { silent: true });
@@ -7292,16 +7331,17 @@ export default function App() {
       try {
         const payload = await fetchJson<DanmakuSourcePayload>("/api/danmaku/fetch", {
           method: "POST",
-          body: JSON.stringify({ url: url.trim() }),
+          body: JSON.stringify({ url: url.trim(), mergeSourceId: currentDanmakuSource?.id }),
         });
-        applyDanmakuSourcePayload(payload, { persist: true, message: `已加载 ${payload.comments.length} 条弹幕。` });
+        const nextComments = payload.comments.map((comment) => createDanmakuComment(comment)).filter((comment): comment is DanmakuComment => Boolean(comment));
+        applyDanmakuSourcePayload(payload, { persist: true, message: formatDanmakuLoadedMessage(payload.source, nextComments) });
       } catch (error) {
         setDanmakuMessage(error instanceof Error ? error.message : "弹幕拉取失败。");
       } finally {
         setIsDanmakuLoading(false);
       }
     },
-    [applyDanmakuSourcePayload, currentVideo],
+    [applyDanmakuSourcePayload, currentDanmakuSource?.id, currentVideo],
   );
 
   const removeDanmakuMatch = useCallback(() => {
@@ -7312,6 +7352,7 @@ export default function App() {
     setDanmakuSelections(nextSelections);
     setCurrentDanmakuSource(null);
     setDanmakuComments([]);
+    setIsDanmakuSourceDetailOpen(false);
     setDanmakuMessage("已删除弹幕匹配。");
     void saveDanmakuSelection(currentVideo.id, null).catch(() => undefined);
   }, [currentVideo]);
@@ -11850,39 +11891,69 @@ export default function App() {
             <div className="danmaku-dialog-grid">
               <section className="danmaku-panel">
                 <div className="danmaku-source-card-list">
-                  {currentDanmakuSource ? (
-                    <article className="danmaku-source-card">
-                      <div className="danmaku-source-card-main">
-                        <strong>{currentDanmakuSource.title}</strong>
-                        <span>
-                          {currentDanmakuSource.provider === "bilibili" ? "Bilibili" : "手动"} · {currentDanmakuSource.commentCount} 条
-                        </span>
-                      </div>
-                      <button
-                        className="icon-button danmaku-source-delete"
-                        type="button"
-                        onClick={removeDanmakuMatch}
-                        disabled={isDanmakuLoading}
-                        aria-label={`删除弹幕匹配：${currentDanmakuSource.title}`}
-                        title="删除弹幕匹配"
-                      >
-                        <Trash2 size={15} />
-                      </button>
-                    </article>
+                  {currentDanmakuSource && danmakuSourceBreakdown.length ? (
+                    danmakuSourceBreakdown.map((source, index) => (
+                      <article className="danmaku-source-card" key={`${source.provider}:${source.sourceUrl || source.label}`}>
+                        <div className="danmaku-source-card-main">
+                          <strong>{source.label}</strong>
+                          <span>
+                            {formatDanmakuProviderLabel(source.provider)} · {source.commentCount} 条
+                          </span>
+                        </div>
+                        {index === 0 ? (
+                          <button
+                            className="icon-button danmaku-source-delete"
+                            type="button"
+                            onClick={removeDanmakuMatch}
+                            disabled={isDanmakuLoading}
+                            aria-label="删除全部弹幕匹配"
+                            title="删除全部弹幕匹配"
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        ) : null}
+                      </article>
+                    ))
                   ) : (
                     <div className="danmaku-source-empty">
                       <strong>未加载弹幕</strong>
                       <span>{currentVideo?.name ?? "未选择视频"}</span>
                     </div>
                   )}
+                  {currentDanmakuSource ? (
+                    <div className="danmaku-source-summary">
+                      <span>共 {danmakuSourceTotalCount} 条弹幕</span>
+                      <button className="secondary-button compact" type="button" onClick={() => setIsDanmakuSourceDetailOpen((open) => !open)}>
+                        {isDanmakuSourceDetailOpen ? "收起来源详情" : "查看来源详情"}
+                      </button>
+                    </div>
+                  ) : null}
+                  {currentDanmakuSource && isDanmakuSourceDetailOpen ? (
+                    <div className="danmaku-source-detail-list">
+                      {danmakuSourceBreakdown.map((source) => (
+                        <div className="danmaku-source-detail" key={`detail:${source.provider}:${source.sourceUrl || source.label}`}>
+                          <strong>{source.label}</strong>
+                          <span>{source.commentCount} 条{source.translatedCount ? ` · ${source.translatedCount} 条可简体显示` : ""}</span>
+                          {source.sourceUrl ? <span className="danmaku-source-url">{source.sourceUrl}</span> : null}
+                          {source.children?.length ? (
+                            <div className="danmaku-source-child-list">
+                              {source.children.map((child) => (
+                                <span key={`${child.label}:${child.commentCount}`}>{child.label}：{child.commentCount} 条</span>
+                              ))}
+                            </div>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
                 <div className="danmaku-manual-source">
                   <label className="danmaku-field">
-                    <span>Bilibili 链接</span>
+                    <span>弹幕链接</span>
                     <input
                       value={danmakuManualUrl}
                       onChange={(event) => setDanmakuManualUrl(event.target.value)}
-                      placeholder="https://www.bilibili.com/video/BV..."
+                      placeholder="https://www.bilibili.com/video/BV... 或 https://ani.gamer.com.tw/animeVideo.php?sn=..."
                       disabled={isDanmakuLoading}
                     />
                   </label>
@@ -11964,7 +12035,7 @@ export default function App() {
               </section>
             </div>
 
-            <span className={isDanmakuLoading ? "ai-loading" : "ai-empty-state"}>{danmakuMessage || "匹配或拉取 Bilibili 弹幕后显示在视频上方。"}</span>
+            <span className={isDanmakuLoading ? "ai-loading" : "ai-empty-state"}>{danmakuMessage || "匹配或拉取 Bilibili / 巴哈姆特动画疯弹幕后显示在视频上方。"}</span>
           </section>
         </div>
       ) : null}

@@ -9,7 +9,8 @@ export type ParsedDanmakuUrl =
   | { provider: "bilibili"; kind: "bvid"; value: string; url: string }
   | { provider: "bilibili"; kind: "aid"; value: string; url: string }
   | { provider: "bilibili"; kind: "cid"; value: string; url: string }
-  | { provider: "bilibili"; kind: "ep"; value: string; url: string };
+  | { provider: "bilibili"; kind: "ep"; value: string; url: string }
+  | { provider: "bahamut"; kind: "sn"; value: string; url: string };
 
 export function stableHash(value: string) {
   let hash = 2166136261;
@@ -124,6 +125,12 @@ export function parseDanmakuUrl(rawUrl: string): ParsedDanmakuUrl | null {
     if (ep) return { provider: "bilibili", kind: "ep", value: ep, url: value };
     const cid = url.searchParams.get("cid");
     if (cid && /^\d+$/.test(cid)) return { provider: "bilibili", kind: "cid", value: cid, url: value };
+  }
+  if (host === "ani.gamer.com.tw" || host === "ani.gamer.com.hk") {
+    const sn = url.searchParams.get("sn");
+    if (url.pathname.endsWith("/animeVideo.php") && sn && /^\d+$/.test(sn)) {
+      return { provider: "bahamut", kind: "sn", value: sn, url: value };
+    }
   }
 
   return null;

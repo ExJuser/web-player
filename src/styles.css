@@ -5376,6 +5376,63 @@ button {
   color: #fecaca;
 }
 
+.danmaku-source-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  padding: 4px 0;
+  color: #8e97a5;
+  font-size: 12px;
+}
+
+.danmaku-source-summary .compact {
+  min-height: 30px;
+  padding: 5px 10px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.danmaku-source-detail-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid rgba(142, 151, 165, 0.2);
+  border-radius: 8px;
+  background: rgba(19, 26, 38, 0.62);
+}
+
+.danmaku-source-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.danmaku-source-detail strong {
+  overflow-wrap: anywhere;
+}
+
+.danmaku-source-detail span {
+  color: #8e97a5;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.danmaku-source-url {
+  overflow-wrap: anywhere;
+}
+
+.danmaku-source-child-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  min-width: 0;
+}
+
 .danmaku-manual-source {
   display: flex;
   flex-direction: column;
@@ -7732,10 +7789,12 @@ button {
 .app-shell.theme-light .danmaku-field textarea,
 .app-shell.theme-light .danmaku-source-card,
 .app-shell.theme-light .danmaku-source-empty,
+.app-shell.theme-light .danmaku-source-detail-list,
 :root[data-theme="light"] .danmaku-field input,
 :root[data-theme="light"] .danmaku-field textarea,
 :root[data-theme="light"] .danmaku-source-card,
-:root[data-theme="light"] .danmaku-source-empty {
+:root[data-theme="light"] .danmaku-source-empty,
+:root[data-theme="light"] .danmaku-source-detail-list {
   border-color: #cfd8e3;
   background: #ffffff;
   color: #172033;
@@ -7744,8 +7803,12 @@ button {
 .app-shell.theme-light .danmaku-panel-header span,
 .app-shell.theme-light .danmaku-source-card span,
 .app-shell.theme-light .danmaku-source-empty span,
+.app-shell.theme-light .danmaku-source-summary,
+.app-shell.theme-light .danmaku-source-detail span,
 :root[data-theme="light"] .danmaku-panel-header span,
 :root[data-theme="light"] .danmaku-source-card span,
-:root[data-theme="light"] .danmaku-source-empty span {
+:root[data-theme="light"] .danmaku-source-empty span,
+:root[data-theme="light"] .danmaku-source-summary,
+:root[data-theme="light"] .danmaku-source-detail span {
   color: #667085;
 }

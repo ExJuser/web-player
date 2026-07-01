@@ -98,7 +98,7 @@ export type PersistedEmbeddedSubtitle = {
   embeddedTrack: EmbeddedSubtitleTrack;
 };
 
-export type DanmakuProvider = "bilibili" | "manual";
+export type DanmakuProvider = "bilibili" | "bahamut" | "combined" | "manual";
 
 export type DanmakuCommentMode = "scroll" | "top" | "bottom";
 
@@ -122,8 +122,18 @@ export type DanmakuSource = {
   commentCount: number;
   translatedCount: number;
   updatedAt: number;
+  sourceBreakdown?: DanmakuSourceBreakdown[];
   requiresCredential?: boolean;
   error?: string;
+};
+
+export type DanmakuSourceBreakdown = {
+  provider: DanmakuProvider;
+  label: string;
+  sourceUrl?: string;
+  commentCount: number;
+  translatedCount?: number;
+  children?: DanmakuSourceBreakdown[];
 };
 
 export type DanmakuPreferences = {

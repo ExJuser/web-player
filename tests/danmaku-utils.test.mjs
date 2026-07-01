@@ -19,7 +19,12 @@ test("danmaku url parser recognizes supported providers", () => {
     value: "98765",
     url: "cid:98765",
   });
-  assert.equal(danmaku.parseDanmakuUrl("https://ani.gamer.com.tw/animeVideo.php?sn=24680"), null);
+  assert.deepEqual(danmaku.parseDanmakuUrl("https://ani.gamer.com.tw/animeVideo.php?sn=24680"), {
+    provider: "bahamut",
+    kind: "sn",
+    value: "24680",
+    url: "https://ani.gamer.com.tw/animeVideo.php?sn=24680",
+  });
 });
 
 test("danmaku comments normalize text, language and duplicates", () => {
