@@ -9280,6 +9280,17 @@ export default function App() {
           <div className="top-actions">
             {!isPrivacyMode && !isPhotoAlbumViewVisible ? (
               <button
+                className="secondary-button top-cache-status-button"
+                type="button"
+                onClick={openCacheStatusDialog}
+                title="查看本地缓存"
+              >
+                <HardDrive size={17} />
+                本地缓存
+              </button>
+            ) : null}
+            {!isPrivacyMode && !isPhotoAlbumViewVisible ? (
+              <button
                 className="primary-button top-add-library-button"
                 type="button"
                 onClick={requestAddMediaLibrary}
@@ -9920,23 +9931,6 @@ export default function App() {
                 ) : isHomeLibrarySearchSurface && librarySearchMode === "empty" ? (
                   <div className="empty-list compact">没有找到匹配{homeLibrarySearchEmptyTarget}</div>
                 ) : null}
-              </section>
-
-              <section className="home-section cache-status-card">
-                <div className="home-section-header">
-                  <h2>本地缓存</h2>
-                  <span>{cacheStatus ? `${cacheStatus.totalFiles} 个文件` : "未检查"}</span>
-                </div>
-                <div className="cache-status-summary">
-                  <HardDrive size={28} />
-                  <div>
-                    <strong>{cacheStatus ? formatFileSize(cacheStatus.totalBytes) : "待检查"}</strong>
-                    <span>{cacheStatus?.updatedAt ? `更新于 ${formatModifiedTime(cacheStatus.updatedAt)}` : "暂无缓存状态"}</span>
-                  </div>
-                </div>
-                <button className="secondary-button cache-status-button" type="button" onClick={openCacheStatusDialog}>
-                  查看详情
-                </button>
               </section>
 
               <section className="home-section duplicate-video-card">
