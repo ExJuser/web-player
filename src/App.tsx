@@ -1770,6 +1770,7 @@ export default function App() {
   );
   const [playlistPageSize, setPlaylistPageSize] = useState(defaultPlayerPreferences.playlistPageSize);
   const [playlistPage, setPlaylistPage] = useState(1);
+  const [playlistPageInput, setPlaylistPageInput] = useState("1");
   const [shortcuts, setShortcuts] = useState<ShortcutMap>(defaultPlayerPreferences.shortcuts);
   const [homeMediaMode, setHomeMediaMode] = useState<HomeMediaMode>(defaultPlayerPreferences.homeMediaMode);
   const [isSeriesMode, setIsSeriesMode] = useState(defaultPlayerPreferences.isSeriesMode);
@@ -2528,6 +2529,19 @@ export default function App() {
   );
   const playlistPageStartLabel = visibleVideos.length ? pagedPlaylistStartIndex + 1 : 0;
   const playlistPageEndLabel = Math.min(pagedPlaylistStartIndex + pagedPlaylistVideos.length, visibleVideos.length);
+  const syncPlaylistPageInput = useCallback((page: number) => {
+    const nextPage = Math.min(Math.max(page, 1), playlistPageCount);
+    setPlaylistPage(nextPage);
+    setPlaylistPageInput(String(nextPage));
+  }, [playlistPageCount]);
+  const commitPlaylistPageInput = useCallback(() => {
+    const parsedPage = Number.parseInt(playlistPageInput, 10);
+    if (!Number.isFinite(parsedPage)) {
+      setPlaylistPageInput(String(visiblePlaylistPage));
+      return;
+    }
+    syncPlaylistPageInput(parsedPage);
+  }, [playlistPageInput, syncPlaylistPageInput, visiblePlaylistPage]);
   const playlistVisibleCountLabel =
     visibleVideos.length > playlistPageSize
       ? `${playlistPageStartLabel}-${playlistPageEndLabel} / ${visibleVideos.length}`
@@ -2569,6 +2583,9 @@ export default function App() {
   useEffect(() => {
     setPlaylistPage((page) => Math.min(Math.max(page, 1), playlistPageCount));
   }, [playlistPageCount]);
+  useEffect(() => {
+    setPlaylistPageInput(String(visiblePlaylistPage));
+  }, [visiblePlaylistPage]);
   useEffect(() => {
     if (isDuplicatePlaylistActive && !duplicatePlaylistVideos.length) {
       setIsDuplicatePlaylistActive(false);
@@ -11302,7 +11319,20 @@ export default function App() {
               className="playlist-page-button"
               type="button"
               onClick={() => {
-                setPlaylistPage((page) => Math.max(1, page - 1));
+                syncPlaylistPageInput(visiblePlaylistPage - 5);
+                scrollPlaylistToTop("auto");
+              }}
+              disabled={visiblePlaylistPage <= 1}
+              title="向前 5 页"
+              aria-label="向前 5 页"
+            >
+              <SkipForward className="playlist-page-skip-back" size={16} />
+            </button>
+            <button
+              className="playlist-page-button"
+              type="button"
+              onClick={() => {
+                syncPlaylistPageInput(visiblePlaylistPage - 1);
                 scrollPlaylistToTop("auto");
               }}
               disabled={visiblePlaylistPage <= 1}
@@ -11319,7 +11349,7 @@ export default function App() {
               className="playlist-page-button"
               type="button"
               onClick={() => {
-                setPlaylistPage((page) => Math.min(playlistPageCount, page + 1));
+                syncPlaylistPageInput(visiblePlaylistPage + 1);
                 scrollPlaylistToTop("auto");
               }}
               disabled={visiblePlaylistPage >= playlistPageCount}
@@ -11328,6 +11358,44 @@ export default function App() {
             >
               <ChevronRight size={16} />
             </button>
+            <button
+              className="playlist-page-button"
+              type="button"
+              onClick={() => {
+                syncPlaylistPageInput(visiblePlaylistPage + 5);
+                scrollPlaylistToTop("auto");
+              }}
+              disabled={visiblePlaylistPage >= playlistPageCount}
+              title="向后 5 页"
+              aria-label="向后 5 页"
+            >
+              <SkipForward className="playlist-page-skip-forward" size={16} />
+            </button>
+            <label className="playlist-page-jump" aria-label="跳转页数">
+              <span>跳转</span>
+              <input
+                className="playlist-page-jump-input"
+                type="number"
+                min={1}
+                max={playlistPageCount}
+                step={1}
+                inputMode="numeric"
+                value={playlistPageInput}
+                onChange={(event) => setPlaylistPageInput(event.target.value)}
+                onBlur={() => {
+                  commitPlaylistPageInput();
+                  scrollPlaylistToTop("auto");
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    commitPlaylistPageInput();
+                    scrollPlaylistToTop("auto");
+                  }
+                }}
+                aria-label="输入页码跳转"
+              />
+            </label>
             <ControlSelect
               label="每页"
               ariaLabel="播放列表每页数量"
