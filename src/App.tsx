@@ -11809,7 +11809,7 @@ export default function App() {
                 const isActive = value <= selectedRating;
                 return (
                   <button
-                    autoFocus={index === 0}
+                    autoFocus={value === Math.max(1, Math.min(10, Math.round(selectedRating || 1)))}
                     className={isActive ? "active" : ""}
                     key={value}
                     type="button"
