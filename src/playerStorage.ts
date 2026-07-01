@@ -837,6 +837,7 @@ function createPersistedPlayerDataPayload(store: PlayerDataStore) {
     videoComments: parseVideoComments(store.videoComments),
     videoTags: parseVideoTags(store.videoTags),
     videoStats: parseVideoStats(store.videoStats),
+    watchActivity: parseWatchActivity(store.watchActivity),
     videoHighlights: parseVideoHighlights(store.videoHighlights),
     tagMergeDecisions: parseTagMergeDecisions(store.tagMergeDecisions),
     embeddedSubtitles: parsePersistedEmbeddedSubtitles(store.embeddedSubtitles),

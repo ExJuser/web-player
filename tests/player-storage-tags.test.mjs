@@ -189,6 +189,62 @@ test("player data stores parse valid tags, stats, and merge decisions", () => {
   });
 });
 
+test("player data store saves watch activity in full payload", async () => {
+  const originalFetch = globalThis.fetch;
+  let savedPayload = null;
+  try {
+    globalThis.fetch = async (_url, init) => {
+      savedPayload = JSON.parse(init.body);
+      return new Response("{}", { status: 200 });
+    };
+
+    await storage.saveGlobalPlayerDataStore({
+      version: 5,
+      progress: {},
+      favorites: [],
+      videoRatings: {},
+      videoComments: {},
+      videoTags: {},
+      videoStats: {},
+      watchActivity: {
+        "2026-06-29::video-1": {
+          date: "2026-06-29",
+          videoId: "video-1",
+          watchedSeconds: 120,
+          playCount: 1,
+          completedCount: 0,
+          emissionCount: 0,
+          updatedAt: 1780000000000,
+        },
+      },
+      videoHighlights: {},
+      tagMergeDecisions: {},
+      embeddedSubtitles: [],
+      danmakuSelections: {},
+      danmakuPreferences: {},
+      preferences: storage.defaultPlayerPreferences,
+      settings: storage.defaultPlayerSettings,
+      duplicateDetection: null,
+      duplicateDetections: {},
+      metadata: undefined,
+    });
+
+    assert.deepEqual(savedPayload.watchActivity, {
+      "2026-06-29::video-1": {
+        date: "2026-06-29",
+        videoId: "video-1",
+        watchedSeconds: 120,
+        playCount: 1,
+        completedCount: 0,
+        emissionCount: 0,
+        updatedAt: 1780000000000,
+      },
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("player data stores parse danmaku selections and bounded preferences", () => {
   const parsed = storage.parsePlayerDataStore(JSON.stringify({
     version: 5,
