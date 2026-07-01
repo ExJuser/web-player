@@ -4448,6 +4448,12 @@ button {
   overflow: hidden;
 }
 
+.playlist-item .rating-chip {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .episode-progress {
   display: inline-flex;
   align-items: center;
