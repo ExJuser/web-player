@@ -3937,8 +3937,10 @@ export default function App() {
       const nextVideos = previous.map((video) => {
         if (video.id !== videoId) return video;
         didChange = true;
-        const nextThumbnailUrl = url ?? video.thumbnailUrl;
+        const nextThumbnailUrl = url ?? (status === "failed" || status === "idle" ? undefined : video.thumbnailUrl);
         if (url && video.thumbnailUrl && video.thumbnailUrl !== url) {
+          URL.revokeObjectURL(video.thumbnailUrl);
+        } else if (!url && nextThumbnailUrl !== video.thumbnailUrl && video.thumbnailUrl) {
           URL.revokeObjectURL(video.thumbnailUrl);
         }
         return { ...video, thumbnailStatus: status, thumbnailUrl: nextThumbnailUrl };
@@ -10790,7 +10792,12 @@ export default function App() {
                 >
                   <span className={`episode-thumbnail ${video.thumbnailUrl ? "has-image" : ""}`} aria-hidden="true">
                     {video.thumbnailUrl ? (
-                      <img src={video.thumbnailUrl} alt="" draggable={false} />
+                      <img
+                        src={video.thumbnailUrl}
+                        alt=""
+                        draggable={false}
+                        onError={() => setVideoThumbnailState(video.id, "failed")}
+                      />
                     ) : (
                       <span>{String(playlistIndex + 1).padStart(2, "0")}</span>
                     )}
