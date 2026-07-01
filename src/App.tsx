@@ -252,6 +252,7 @@ import {
   type DuplicateNameSimilarityCacheEntry,
   type DuplicateNameSimilarityResponse,
 } from "./playerDuplicateRuntime";
+import { prunePhotoObjectUrlCache } from "./photoObjectUrlCache";
 
 
 const photoAlbumPageSize = 20;
@@ -259,7 +260,6 @@ const cacheStatusPageSize = 10;
 const photoThumbnailWindowSize = 24;
 const photoViewerWarmRadius = 4;
 const photoViewerDecodeRadius = 2;
-const photoObjectUrlCacheLimit = 48;
 const photoAlbumScanCacheStaleMs = 24 * 60 * 60 * 1000;
 let hasStartedLegacyThumbnailMigration = false;
 const photoAlbumSortOptions: Array<{ value: PhotoAlbumSortMode; label: string }> = [
@@ -280,33 +280,6 @@ type RatingPlaylistMode = "numeric" | "unrated";
 
 function isPlayerGlobalMetadata(metadata: PlayerDataStore["metadata"] | null | undefined): metadata is PlayerGlobalMetadata {
   return Boolean(metadata && "mediaRoots" in metadata && Array.isArray(metadata.mediaRoots));
-}
-
-function prunePhotoObjectUrlCache(
-  urls: Record<string, string>,
-  accessTimes: Record<string, number>,
-  protectedIds: Set<string>,
-  decodedImageIds?: Set<string>,
-) {
-  let cachedUrlCount = Object.keys(urls).length;
-  if (cachedUrlCount <= photoObjectUrlCacheLimit) return urls;
-
-  const nextUrls = { ...urls };
-  const evictableEntries = Object.keys(nextUrls)
-    .filter((id) => !protectedIds.has(id))
-    .sort((a, b) => (accessTimes[a] ?? 0) - (accessTimes[b] ?? 0));
-
-  while (cachedUrlCount > photoObjectUrlCacheLimit && evictableEntries.length) {
-    const id = evictableEntries.shift();
-    if (!id) break;
-    URL.revokeObjectURL(nextUrls[id]);
-    delete nextUrls[id];
-    delete accessTimes[id];
-    decodedImageIds?.delete(id);
-    cachedUrlCount -= 1;
-  }
-
-  return nextUrls;
 }
 
 function supportsServerFileAccess(root: LocalMediaRoot | null | undefined) {
