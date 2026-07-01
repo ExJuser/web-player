@@ -5029,6 +5029,21 @@ export default function App() {
       setWatchActivityRevision((revision) => revision + 1);
       setDanmakuSelections(nextDanmakuSelections);
       setFavoriteVideoIds(nextFavorites);
+      setLibrarySearchResults((previous) =>
+        previous.flatMap((result) => {
+          if (result.kind === "video") return result.representativeVideo.id === video.id ? [] : [result];
+          const nextResultVideos = result.videos.filter((entry) => entry.video.id !== video.id);
+          if (!nextResultVideos.length) return [];
+          return [
+            {
+              ...result,
+              videos: nextResultVideos,
+              representativeVideo:
+                result.representativeVideo.id === video.id ? nextResultVideos[0].video : result.representativeVideo,
+            },
+          ];
+        }),
+      );
       setPlaybackSourceChoices((previous) => {
         if (!(video.id in previous)) return previous;
         const nextChoices = { ...previous };
@@ -5117,6 +5132,12 @@ export default function App() {
   const confirmDeleteVideo = useCallback(async () => {
     if (!videoDeleteCandidate || isVideoDeletePending) return;
     const video = videoDeleteCandidate;
+    if (!videosRef.current.some((item) => item.id === video.id)) {
+      setVideoDeleteCandidate(null);
+      setVideoDeleteError("");
+      setMessage(`《${video.name}》已从播放列表移除`);
+      return;
+    }
     const root = video.mediaRootId ? localConfigRef.current?.mediaRoots.find((item) => item.id === video.mediaRootId) : null;
     const shouldUseBrowserDelete = video.playbackSource === "browser" || (root?.source === "browser" && !root.localPath);
     const currentVisibleIndex = visibleVideos.findIndex((item) => item.id === video.id);

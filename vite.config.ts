@@ -298,7 +298,12 @@ async function deleteMediaVideo(config, payload) {
   }
 
   const videoPath = resolveVideoPathFromConfig(config, payload?.rootId, payload?.relativePath);
-  await ensureFileExists(videoPath);
+  try {
+    await ensureFileExists(videoPath);
+  } catch (error) {
+    if (error?.code === "ENOENT") return { deleted: false, missing: true };
+    throw error;
+  }
   await rm(videoPath, { force: false });
   return { deleted: true };
 }
