@@ -84,6 +84,7 @@ const bahamutDanmaku = createBahamutDanmakuService({
   dedupeDanmakuComments,
   formatRemoteFetchError,
   requestExternalJson,
+  requestExternalText,
 });
 const embeddedSubtitles = createEmbeddedSubtitleService({
   cacheRoot: embeddedSubtitlesRoot,

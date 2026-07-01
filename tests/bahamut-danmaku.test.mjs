@@ -15,6 +15,9 @@ function createTestService(overrides = {}) {
     requestExternalJson: async () => {
       throw new Error("unexpected json request");
     },
+    requestExternalText: async () => {
+      throw new Error("unexpected text request");
+    },
     ...overrides,
   });
 }
@@ -80,4 +83,39 @@ test("fetchBahamutDanmaku merges TW and HK source details", async () => {
       { provider: "bahamut", label: "香港站", sourceUrl: "https://ani.gamer.com.tw/animeVideo.php?sn=44108", commentCount: 1 },
     ] },
   ]);
+});
+
+test("fetchBahamutDanmaku falls back to AJAX danmuGet endpoint", async () => {
+  const calls = [];
+  const service = createTestService({
+    requestExternalJson: async () => {
+      throw new Error("api timeout");
+    },
+    requestExternalText: async (url, options) => {
+      calls.push({ url, options });
+      return JSON.stringify({
+        data: {
+          totalCount: 1,
+          danmu: [{ sn: 31, time: 3, position: 1, color: "#FFFFFF", text: "ajax" }],
+        },
+      });
+    },
+  });
+
+  const record = await service.fetchBahamutDanmaku({
+    provider: "bahamut",
+    kind: "sn",
+    value: "44108",
+    url: "https://ani.gamer.com.tw/animeVideo.php?sn=44108",
+  });
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, "https://ani.gamer.com.tw/ajax/danmuGet.php");
+  assert.equal(calls[0].options.method, "POST");
+  assert.equal(calls[0].options.body, "sn=44108");
+  assert.equal(calls[0].options.headers.Origin, "https://ani.gamer.com.tw");
+  assert.equal(calls[0].options.headers["X-Requested-With"], "XMLHttpRequest");
+  assert.equal(record.comments.length, 1);
+  assert.equal(record.comments[0].id, "bahamut:ajax:31");
+  assert.equal(record.sourceBreakdown[0].label, "巴哈姆特动画疯 AJAX");
 });

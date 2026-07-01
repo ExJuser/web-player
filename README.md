@@ -213,6 +213,13 @@ Remote danmaku fetching can reuse the same proxy. You can also use the app-speci
 LOCAL_WEB_PLAYER_PROXY=http://127.0.0.1:7897
 ```
 
+Bahamut Anime Crazy may require the same browser identity that passed Cloudflare. If danmaku fetching still fails, copy the browser User-Agent and `cf_clearance` cookie from `ani.gamer.com.tw` into local environment variables before starting the server:
+
+```text
+BAHAMUT_USER_AGENT=your_browser_user_agent
+BAHAMUT_COOKIE=cf_clearance=...
+```
+
 ## Build
 
 Create a production build:
