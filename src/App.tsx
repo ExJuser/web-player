@@ -11087,13 +11087,18 @@ export default function App() {
                 <button
                   className="playlist-select"
                   type="button"
-                  onClick={() =>
-                    isDuplicatePlaylistActive
-                      ? openDuplicateVideo(video, { keepDuplicatePlaylist: true })
-                      : isRatingPlaylistActive
-                        ? selectVideo(video.id, { keepRatingPlaylist: true, syncSeriesMode: false })
-                      : selectVideo(video.id)
-                  }
+                  onClick={() => {
+                    if (isActive) return;
+                    if (isDuplicatePlaylistActive) {
+                      openDuplicateVideo(video, { keepDuplicatePlaylist: true });
+                      return;
+                    }
+                    if (isRatingPlaylistActive) {
+                      selectVideo(video.id, { keepRatingPlaylist: true, syncSeriesMode: false });
+                      return;
+                    }
+                    selectVideo(video.id);
+                  }}
                 >
                   <span className={`episode-thumbnail ${video.thumbnailUrl ? "has-image" : ""}`} aria-hidden="true">
                     {video.thumbnailUrl ? (
