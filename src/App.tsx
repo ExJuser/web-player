@@ -9766,7 +9766,7 @@ export default function App() {
                         onClick={() => setRatingFilterOperator("gt")}
                         aria-pressed={ratingFilterOperator === "gt"}
                       >
-                        &gt;
+                        大于
                       </button>
                       <button
                         className={ratingFilterOperator === "lt" ? "active" : ""}
@@ -9774,7 +9774,7 @@ export default function App() {
                         onClick={() => setRatingFilterOperator("lt")}
                         aria-pressed={ratingFilterOperator === "lt"}
                       >
-                        &lt;
+                        小于
                       </button>
                       <button
                         className={ratingFilterOperator === "eq" ? "active" : ""}
@@ -9782,7 +9782,7 @@ export default function App() {
                         onClick={() => setRatingFilterOperator("eq")}
                         aria-pressed={ratingFilterOperator === "eq"}
                       >
-                        =
+                        等于
                       </button>
                     </div>
                     <label className="rating-threshold-input">
