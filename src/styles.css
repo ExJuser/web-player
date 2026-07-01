@@ -4429,6 +4429,7 @@ button {
   display: inline-flex;
   align-items: center;
   width: fit-content;
+  max-width: 100%;
   min-height: 20px;
   margin-top: 3px;
   padding: 0 6px;
@@ -4438,6 +4439,8 @@ button {
   color: #ffd57a;
   font-size: 11px;
   line-height: 18px;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 

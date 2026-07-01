@@ -1691,7 +1691,7 @@ export default function App() {
   const [progressStore, setProgressStore] = useState<ProgressStore>({});
   const [favoriteVideoIds, setFavoriteVideoIds] = useState<Set<string>>(() => new Set());
   const [videoRatings, setVideoRatings] = useState<VideoRatingStore>({});
-  const [, setVideoComments] = useState<VideoCommentStore>({});
+  const [videoComments, setVideoComments] = useState<VideoCommentStore>({});
   const [videoTags, setVideoTags] = useState<VideoTagStore>({});
   const [videoHighlights, setVideoHighlights] = useState<VideoHighlightStore>({});
   const [pendingHighEnergyStart, setPendingHighEnergyStart] = useState<{ videoId: string; time: number } | null>(null);
@@ -2504,9 +2504,10 @@ export default function App() {
         mediaRootLabel: mediaRoot?.label ?? fallbackMediaRootLabelForVideo(video),
         tags: videoTags[video.id] ?? [],
         rating: videoRatings[video.id],
+        ratingComment: videoComments[video.id],
       };
     },
-    [localConfig, progressStore, seriesTitleByVideoId, videoRatings, videoTags],
+    [localConfig, progressStore, seriesTitleByVideoId, videoComments, videoRatings, videoTags],
   );
   const homeLibrarySearchContext = useMemo(
     () => ({
@@ -8705,9 +8706,12 @@ export default function App() {
       </span>
     );
   };
-  const renderRatingChip = (rating?: number) => (
-    typeof rating === "number" ? <span className="rating-chip">评分 {rating}/10</span> : null
-  );
+  const renderRatingChip = (rating?: number, comment?: string) => {
+    const trimmedComment = comment?.trim();
+    if (typeof rating !== "number" && !trimmedComment) return null;
+    const ratingLabel = typeof rating === "number" ? `评分 ${rating}/10` : "评价";
+    return <span className="rating-chip">{trimmedComment ? `${ratingLabel} · ${trimmedComment}` : ratingLabel}</span>;
+  };
   const specialInsightTabOptions: Array<{ value: SpecialInsightTab; label: string; icon: React.ReactNode }> = [
     { value: "played", label: "播放最久", icon: <Clock3 size={14} /> },
     { value: "count", label: "次数最多", icon: <BarChart3 size={14} /> },
@@ -8744,6 +8748,7 @@ export default function App() {
         <strong>{insight.video.name}</strong>
         <small>{formatSpecialInsightVideoMetric(insight)}</small>
         {renderTagChips(insight.tags, { limit: 10, compact: true })}
+        {renderRatingChip(videoRatings[insight.video.id], videoComments[insight.video.id])}
       </span>
     </button>
   );
@@ -8940,7 +8945,7 @@ export default function App() {
         <strong>{card.video.name}</strong>
         <small>{formatHomeMeta(card)}</small>
         {renderTagChips(card.tags ?? [], { limit: 10, compact: true })}
-        {renderRatingChip(card.rating)}
+        {renderRatingChip(card.rating, card.ratingComment)}
       </span>
     </button>
   );
@@ -10850,6 +10855,7 @@ export default function App() {
             const duplicateMeta = isDuplicatePlaylistActive ? duplicatePlaylistMetaByVideoId.get(video.id) : null;
             const tags = videoTags[video.id] ?? [];
             const rating = videoRatings[video.id];
+            const ratingComment = videoComments[video.id];
             return (
               <div
                 key={video.id}
@@ -10888,7 +10894,7 @@ export default function App() {
                     ) : null}
                     {seriesTitle ? <small className="episode-series">{seriesTitle}</small> : null}
                     {renderTagChips(tags, { compact: true })}
-                    {renderRatingChip(rating)}
+                    {renderRatingChip(rating, ratingComment)}
                     {isCompleted ? (
                       <span className="episode-progress compact">
                         <CheckCircle2 size={15} />

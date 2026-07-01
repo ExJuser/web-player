@@ -327,6 +327,7 @@ export type HomeVideoCard = {
   mediaRootLabel?: string;
   tags?: string[];
   rating?: number;
+  ratingComment?: string;
 };
 
 export type MediaCollection = {
