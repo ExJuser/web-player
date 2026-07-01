@@ -207,6 +207,12 @@ BANGUMI_LENS_PROXY=http://127.0.0.1:7897
 
 Keep `BANGUMI_ACCESS_TOKEN` in local environment files only. The app exposes only Bangumi configuration status to the browser, not the token or request headers.
 
+Remote danmaku fetching can reuse the same proxy. You can also use the app-specific alias:
+
+```text
+LOCAL_WEB_PLAYER_PROXY=http://127.0.0.1:7897
+```
+
 ## Build
 
 Create a production build:

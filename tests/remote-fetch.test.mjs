@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { formatRemoteFetchError, requestExternalJson, requestExternalText } from "../server/remoteFetch.mjs";
+import {
+  formatRemoteFetchError,
+  getExternalProxyUrl,
+  requestExternalJson,
+  requestExternalText,
+  requestExternalTextViaHttpProxy,
+} from "../server/remoteFetch.mjs";
 
 test("requestExternalText sends default headers and returns response text", async () => {
   const calls = [];
@@ -83,4 +89,21 @@ test("formatRemoteFetchError returns stable messages for unknown errors", () => 
   assert.equal(formatRemoteFetchError(new Error("network down")), "network down");
   assert.equal(formatRemoteFetchError("plain"), "plain");
   assert.equal(formatRemoteFetchError(null), "远端请求失败。");
+});
+
+test("getExternalProxyUrl prefers local proxy and keeps Bangumi proxy compatibility", () => {
+  assert.equal(getExternalProxyUrl({ LOCAL_WEB_PLAYER_PROXY: " http://127.0.0.1:7897 ", BANGUMI_LENS_PROXY: "http://old" }), "http://127.0.0.1:7897");
+  assert.equal(getExternalProxyUrl({ BANGUMI_LENS_PROXY: " http://127.0.0.1:7897 " }), "http://127.0.0.1:7897");
+  assert.equal(getExternalProxyUrl({}), "");
+});
+
+test("requestExternalTextViaHttpProxy rejects unsupported schemes before opening sockets", () => {
+  assert.throws(
+    () => requestExternalTextViaHttpProxy("http://api.example.test/path", { proxyUrl: "http://proxy.test", headers: {} }),
+    /只支持 HTTPS/,
+  );
+  assert.throws(
+    () => requestExternalTextViaHttpProxy("https://api.example.test/path", { proxyUrl: "https://proxy.test", headers: {} }),
+    /http:\/\//,
+  );
 });
