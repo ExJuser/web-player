@@ -5612,6 +5612,11 @@ button {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;
+  align-items: start;
+}
+
+.tag-editor-field {
+  min-width: 0;
 }
 
 .tag-editor-form input {
@@ -5623,6 +5628,46 @@ button {
   border-radius: 6px;
   background: #20252d;
   color: #f5f7fb;
+}
+
+.tag-input-suggestions {
+  display: flex;
+  max-height: 82px;
+  margin-top: 8px;
+  gap: 6px;
+  flex-wrap: wrap;
+  overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(121, 223, 255, 0.42) rgba(255, 255, 255, 0.06);
+}
+
+.tag-input-suggestions::-webkit-scrollbar {
+  width: 6px;
+}
+
+.tag-input-suggestions::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(121, 223, 255, 0.42);
+}
+
+.tag-input-suggestions button {
+  max-width: 150px;
+  min-height: 28px;
+  padding: 0 9px;
+  border: 1px solid rgba(121, 223, 255, 0.24);
+  border-radius: 6px;
+  background: rgba(121, 223, 255, 0.08);
+  color: #dff8ff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.tag-input-suggestions button:hover,
+.tag-input-suggestions button:focus-visible {
+  border-color: rgba(121, 223, 255, 0.44);
+  background: rgba(0, 161, 214, 0.18);
 }
 
 .tag-editor-form .primary-button {
@@ -6521,6 +6566,27 @@ button {
   color: #172033;
 }
 
+.app-shell.theme-light .tag-input-suggestions {
+  scrollbar-color: rgba(0, 161, 214, 0.36) #eef2f6;
+}
+
+.app-shell.theme-light .tag-input-suggestions::-webkit-scrollbar-thumb {
+  background: rgba(0, 161, 214, 0.36);
+}
+
+.app-shell.theme-light .tag-input-suggestions button {
+  border-color: rgba(0, 161, 214, 0.22);
+  background: #eef7fb;
+  color: #0077a8;
+}
+
+.app-shell.theme-light .tag-input-suggestions button:hover,
+.app-shell.theme-light .tag-input-suggestions button:focus-visible {
+  border-color: rgba(0, 161, 214, 0.4);
+  background: #dff3fb;
+  color: #005f86;
+}
+
 .app-shell.theme-light .media-root-label-field {
   color: #172033;
 }
@@ -7111,6 +7177,27 @@ button {
 :root[data-theme="light"] .tag-editor-chip:hover {
   border-color: rgba(0, 161, 214, 0.42);
   background: #c9effc;
+  color: #005f86;
+}
+
+:root[data-theme="light"] .tag-input-suggestions {
+  scrollbar-color: rgba(0, 161, 214, 0.36) #eef2f6;
+}
+
+:root[data-theme="light"] .tag-input-suggestions::-webkit-scrollbar-thumb {
+  background: rgba(0, 161, 214, 0.36);
+}
+
+:root[data-theme="light"] .tag-input-suggestions button {
+  border-color: rgba(0, 161, 214, 0.22);
+  background: #eef7fb;
+  color: #0077a8;
+}
+
+:root[data-theme="light"] .tag-input-suggestions button:hover,
+:root[data-theme="light"] .tag-input-suggestions button:focus-visible {
+  border-color: rgba(0, 161, 214, 0.4);
+  background: #dff3fb;
   color: #005f86;
 }
 

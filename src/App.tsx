@@ -2237,6 +2237,30 @@ export default function App() {
   const currentVideoPlaybackUrl = currentVideo ? getPlayableVideoUrl(currentVideo, currentVideoSourceChoice) : "";
   const currentVideoHasCompatibleMedia = Boolean(currentVideo?.playability?.compatibleUrl);
   const currentVideoTags = currentVideo ? videoTags[currentVideo.id] ?? [] : [];
+  const activeTagInputSegment = useMemo(() => tagInput.match(/(?:^|[\s,，、;；|])([^\s,，、;；|]*)$/u)?.[1]?.trim() ?? "", [tagInput]);
+  const tagInputSuggestions = useMemo(() => {
+    if (!isTagDialogOpen || !currentVideo || !activeTagInputSegment) return [];
+    const queryKey = normalizeTagKey(activeTagInputSegment);
+    const currentTagKeys = new Set(currentVideoTags.map(normalizeTagKey).filter(Boolean));
+    const seen = new Set<string>();
+    return Object.values(videoTags)
+      .flat()
+      .filter((tag) => {
+        const key = normalizeTagKey(tag);
+        if (!key || seen.has(key) || currentTagKeys.has(key)) return false;
+        if (!key.includes(queryKey) && getTagSearchScore(activeTagInputSegment, [tag]) <= 0) return false;
+        seen.add(key);
+        return true;
+      })
+      .sort((a, b) => {
+        const aKey = normalizeTagKey(a);
+        const bKey = normalizeTagKey(b);
+        const aPrefix = aKey.startsWith(queryKey) ? 0 : 1;
+        const bPrefix = bKey.startsWith(queryKey) ? 0 : 1;
+        return aPrefix - bPrefix || a.localeCompare(b, "zh-Hans-CN", { numeric: true });
+      })
+      .slice(0, 8);
+  }, [activeTagInputSegment, currentVideo, currentVideoTags, isTagDialogOpen, videoTags]);
   const currentVideoMediaRootLabel = useMemo(() => {
     if (!currentVideo) return "";
     const mediaRoot = localConfig?.mediaRoots.find((root) => root.id === currentVideo.mediaRootId);
@@ -4129,6 +4153,10 @@ export default function App() {
     if (isTagSuggestionLoading) return;
     void addTagsToCurrentVideo(parseTagInput(tagInput));
   }, [addTagsToCurrentVideo, isTagSuggestionLoading, tagInput]);
+
+  const applyTagInputSuggestion = useCallback((tag: string) => {
+    setTagInput((input) => `${input.replace(/[^\s,，、;；|]*$/u, tag)} `);
+  }, []);
 
   const generateAutoTagsForCurrentVideo = useCallback(async () => {
     setAutoTagSuggestions([]);
@@ -11645,16 +11673,28 @@ export default function App() {
               submitTagInput();
             }}
           >
-            <input
-              autoFocus
-              value={tagInput}
-              placeholder="输入标签，可用空格、逗号、顿号分隔"
-              onChange={(event) => setTagInput(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Escape") setIsTagDialogOpen(false);
-              }}
-              disabled={!currentVideo}
-            />
+            <div className="tag-editor-field">
+              <input
+                autoFocus
+                value={tagInput}
+                placeholder="输入标签，可用空格、逗号、顿号分隔"
+                onChange={(event) => setTagInput(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") setIsTagDialogOpen(false);
+                }}
+                disabled={!currentVideo}
+                aria-describedby={tagInputSuggestions.length ? "tag-input-suggestions" : undefined}
+              />
+              {tagInputSuggestions.length ? (
+                <div className="tag-input-suggestions" id="tag-input-suggestions" aria-label="已有标签候选">
+                  {tagInputSuggestions.map((tag) => (
+                    <button key={tag} type="button" onClick={() => applyTagInputSuggestion(tag)}>
+                      {tag}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
             <button
               className={`primary-button tag-query-button${isTagSuggestionLoading ? " loading" : ""}`}
               type="submit"
