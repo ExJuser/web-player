@@ -3,6 +3,11 @@ const bahamutGeoSources = [
   { geo: "HK", label: "香港站" },
 ];
 
+const bahamutRequestHeaders = {
+  Origin: "https://ani.gamer.com.tw",
+  "X-Requested-With": "XMLHttpRequest",
+};
+
 function normalizeBahamutMode(value) {
   if (value === 1 || value === "1") return 5;
   if (value === 2 || value === "2") return 4;
@@ -48,7 +53,9 @@ export function createBahamutDanmakuService({
         const payload = await requestExternalJson(endpoint, {
           accept: "application/json,text/plain,*/*",
           referer: parsed.url,
-          userAgent: "Mozilla/5.0 local-web-player/0.1",
+          userAgent:
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
+          headers: bahamutRequestHeaders,
         });
         const parsedPayload = parseBahamutDanmakuPayload(payload, source.geo);
         comments.push(...parsedPayload.comments);

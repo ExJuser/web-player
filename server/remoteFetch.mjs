@@ -28,7 +28,15 @@ export async function requestExternalText(url, options = {}) {
 }
 
 export function formatRemoteFetchError(error) {
-  return error instanceof Error ? error.message : String(error || "远端请求失败。");
+  if (!(error instanceof Error)) return String(error || "远端请求失败。");
+  const cause = error.cause;
+  if (cause instanceof Error && cause.message && cause.message !== error.message) {
+    return `${error.message}（${cause.message}）`;
+  }
+  if (cause && typeof cause === "object" && "code" in cause) {
+    return `${error.message}（${cause.code}）`;
+  }
+  return error.message;
 }
 
 export async function requestExternalJson(url, options = {}) {

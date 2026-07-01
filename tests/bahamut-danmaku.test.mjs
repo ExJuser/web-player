@@ -69,6 +69,8 @@ test("fetchBahamutDanmaku merges TW and HK source details", async () => {
   assert.equal(calls.length, 2);
   assert.equal(calls[0].url, "https://api.gamer.com.tw/anime/v1/danmu.php?videoSn=44108&geo=TW");
   assert.equal(calls[0].options.referer, "https://ani.gamer.com.tw/animeVideo.php?sn=44108");
+  assert.equal(calls[0].options.headers.Origin, "https://ani.gamer.com.tw");
+  assert.equal(calls[0].options.headers["X-Requested-With"], "XMLHttpRequest");
   assert.equal(record.provider, "bahamut");
   assert.equal(record.title, "巴哈姆特动画疯 SN 44108");
   assert.equal(record.comments.length, 2);
