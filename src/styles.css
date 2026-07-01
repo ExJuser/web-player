@@ -5628,13 +5628,16 @@ button {
 .rating-comment-input {
   width: 100%;
   min-width: 0;
-  height: 38px;
-  padding: 0 12px;
+  min-height: 82px;
+  max-height: 180px;
+  padding: 9px 12px;
   border: 1px solid rgba(148, 163, 184, 0.24);
   border-radius: 6px;
   background: rgba(15, 23, 42, 0.45);
   color: #f8fafc;
+  line-height: 1.45;
   outline: none;
+  resize: vertical;
 }
 
 .rating-comment-input:focus {
@@ -6447,6 +6450,7 @@ button {
 .app-shell.theme-light .ai-question-input,
 .app-shell.theme-light .tag-editor-form input,
 .app-shell.theme-light .rating-editor-form input,
+.app-shell.theme-light .rating-comment-input,
 .app-shell.theme-light .tag-merge-prompt,
 .app-shell.theme-light .media-root-label-field input,
 .app-shell.theme-light .media-root-path-preview,
@@ -7293,7 +7297,8 @@ button {
 :root[data-theme="light"] .photo-search-row,
 :root[data-theme="light"] .photo-search-row input,
 :root[data-theme="light"] .tag-editor-form input,
-:root[data-theme="light"] .rating-editor-form input {
+:root[data-theme="light"] .rating-editor-form input,
+:root[data-theme="light"] .rating-comment-input {
   color: #172033;
 }
 
@@ -7362,6 +7367,7 @@ button {
 :root[data-theme="light"] .ai-question-input,
 :root[data-theme="light"] .tag-editor-form input,
 :root[data-theme="light"] .rating-editor-form input,
+:root[data-theme="light"] .rating-comment-input,
 :root[data-theme="light"] .tag-merge-prompt {
   border-color: #d7e0ea;
   background: #f8fafc;

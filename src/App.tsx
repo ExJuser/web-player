@@ -11925,9 +11925,9 @@ export default function App() {
             <div className="rating-editor-status">
               {ratingInput ? `${ratingInput} / 10` : "未评分"}
             </div>
-            <input
+            <textarea
               className="rating-comment-input"
-              type="text"
+              rows={3}
               value={ratingCommentInput}
               placeholder="输入评价"
               onChange={(event) => setRatingCommentInput(event.currentTarget.value)}
