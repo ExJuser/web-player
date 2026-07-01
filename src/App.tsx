@@ -4993,6 +4993,8 @@ export default function App() {
       const nextVideos = videosRef.current.filter((item) => item.id !== video.id);
       const nextProgress = { ...progressStoreRef.current };
       const nextVideoTags = { ...videoTagsRef.current };
+      const nextVideoRatings = { ...videoRatingsRef.current };
+      const nextVideoComments = { ...videoCommentsRef.current };
       const nextVideoStats = { ...videoStatsRef.current };
       const nextWatchActivity = Object.fromEntries(
         Object.entries(watchActivityRef.current).filter(([, activity]) => activity.videoId !== video.id),
@@ -5004,6 +5006,8 @@ export default function App() {
 
       delete nextProgress[video.id];
       delete nextVideoTags[video.id];
+      delete nextVideoRatings[video.id];
+      delete nextVideoComments[video.id];
       delete nextVideoStats[createVideoStatsKey(video)];
       delete nextVideoHighlights[video.id];
       delete nextDanmakuSelections[video.id];
@@ -5015,6 +5019,8 @@ export default function App() {
       videosRef.current = nextVideos;
       progressStoreRef.current = nextProgress;
       videoTagsRef.current = nextVideoTags;
+      videoRatingsRef.current = nextVideoRatings;
+      videoCommentsRef.current = nextVideoComments;
       videoStatsRef.current = nextVideoStats;
       watchActivityRef.current = nextWatchActivity;
       videoHighlightsRef.current = nextVideoHighlights;
@@ -5025,6 +5031,8 @@ export default function App() {
       setVideos(nextVideos);
       setProgressStore(nextProgress);
       setVideoTags(nextVideoTags);
+      setVideoRatings(nextVideoRatings);
+      setVideoComments(nextVideoComments);
       setVideoHighlights(nextVideoHighlights);
       setVideoStatsRevision((revision) => revision + 1);
       setWatchActivityRevision((revision) => revision + 1);
@@ -5097,6 +5105,8 @@ export default function App() {
           progress: nextProgress,
           favorites: Array.from(nextFavorites),
           videoTags: nextVideoTags,
+          videoRatings: nextVideoRatings,
+          videoComments: nextVideoComments,
           videoStats: nextVideoStats,
           watchActivity: nextWatchActivity,
           videoHighlights: nextVideoHighlights,

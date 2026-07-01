@@ -478,7 +478,7 @@ export class LocalDataSqliteStore {
       if (videoId && Number.isFinite(rating)) ratingInsert.run(libraryId, videoId, Math.min(10, Math.max(0, rating)), timestamp);
     }
 
-    const commentInsert = this.db.prepare("INSERT INTO video_comments (library_id, video_id, comment_text, updated_at) VALUES (?, ?, ?, ?)");
+    const commentInsert = this.db.prepare("INSERT INTO video_comments (library_id, video_id, comment_text, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(library_id, video_id) DO UPDATE SET comment_text = excluded.comment_text, updated_at = excluded.updated_at");
     for (const [videoId, commentValue] of Object.entries(asObject(store.videoComments))) {
       const comment = String(commentValue ?? "").trim();
       if (videoId && comment) commentInsert.run(libraryId, videoId, comment, timestamp);
