@@ -8659,7 +8659,12 @@ export default function App() {
   const homeCardThumbnail = (card: HomeVideoCard, fallbackIndex?: number) => (
     <span className={`home-card-thumbnail ${card.video.thumbnailUrl ? "has-image" : ""}`} aria-hidden="true">
       {card.video.thumbnailUrl ? (
-        <img src={card.video.thumbnailUrl} alt="" draggable={false} />
+        <img
+          src={card.video.thumbnailUrl}
+          alt=""
+          draggable={false}
+          onError={() => setVideoThumbnailState(card.video.id, "failed")}
+        />
       ) : (
         <span>{typeof fallbackIndex === "number" ? String(fallbackIndex + 1).padStart(2, "0") : <Play size={24} />}</span>
       )}
@@ -8843,7 +8848,14 @@ export default function App() {
                 className={`watch-activity-day-slide ${index === carouselActiveIndex ? "active" : ""} ${card.video.thumbnailUrl ? "has-image" : ""}`}
                 key={card.video.id}
               >
-                {card.video.thumbnailUrl ? <img src={card.video.thumbnailUrl} alt="" draggable={false} /> : null}
+                {card.video.thumbnailUrl ? (
+                  <img
+                    src={card.video.thumbnailUrl}
+                    alt=""
+                    draggable={false}
+                    onError={() => setVideoThumbnailState(card.video.id, "failed")}
+                  />
+                ) : null}
               </span>
             ))}
           </span>
