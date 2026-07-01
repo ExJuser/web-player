@@ -729,6 +729,7 @@ function playerDataApiPlugin(env) {
     const favoriteMatch = url.pathname.match(/^\/api\/player-data\/favorites\/(.+)$/);
     const tagsMatch = url.pathname.match(/^\/api\/player-data\/tags\/(.+)$/);
     const ratingMatch = url.pathname.match(/^\/api\/player-data\/ratings\/(.+)$/);
+    const commentMatch = url.pathname.match(/^\/api\/player-data\/comments\/(.+)$/);
     const statsMatch = url.pathname.match(/^\/api\/player-data\/stats\/(.+)$/);
     const highlightsMatch = url.pathname.match(/^\/api\/player-data\/highlights\/(.+)$/);
     const preferenceMatch = url.pathname.match(/^\/api\/player-data\/preferences\/([^/]+)$/);
@@ -983,6 +984,21 @@ function playerDataApiPlugin(env) {
         }
         if (request.method === "DELETE") {
           store.setVideoRating("global", videoId, null);
+          sendJson(response, 200, { ok: true });
+          return;
+        }
+      }
+
+      if (commentMatch) {
+        const videoId = decodeURIComponent(commentMatch[1]);
+        if (request.method === "PUT") {
+          const payload = await parseJsonBody(request);
+          store.setVideoComment("global", videoId, payload?.comment ?? payload);
+          sendJson(response, 200, { ok: true });
+          return;
+        }
+        if (request.method === "DELETE") {
+          store.setVideoComment("global", videoId, "");
           sendJson(response, 200, { ok: true });
           return;
         }

@@ -155,6 +155,14 @@ export class LocalDataSqliteStore {
         PRIMARY KEY (library_id, video_id)
       );
 
+      CREATE TABLE IF NOT EXISTS video_comments (
+        library_id TEXT NOT NULL,
+        video_id TEXT NOT NULL,
+        comment_text TEXT NOT NULL,
+        updated_at INTEGER NOT NULL,
+        PRIMARY KEY (library_id, video_id)
+      );
+
       CREATE TABLE IF NOT EXISTS video_stats (
         library_id TEXT NOT NULL,
         video_id TEXT NOT NULL,
@@ -470,6 +478,12 @@ export class LocalDataSqliteStore {
       if (videoId && Number.isFinite(rating)) ratingInsert.run(libraryId, videoId, Math.min(10, Math.max(0, rating)), timestamp);
     }
 
+    const commentInsert = this.db.prepare("INSERT INTO video_comments (library_id, video_id, comment_text, updated_at) VALUES (?, ?, ?, ?)");
+    for (const [videoId, commentValue] of Object.entries(asObject(store.videoComments))) {
+      const comment = String(commentValue ?? "").trim();
+      if (videoId && comment) commentInsert.run(libraryId, videoId, comment, timestamp);
+    }
+
     const statsInsert = this.db.prepare(`
       INSERT INTO video_stats (library_id, video_id, total_played_seconds, play_count, duration_seconds, emission_count, last_emission_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -633,6 +647,11 @@ export class LocalDataSqliteStore {
       videoRatings[row.video_id] = row.rating;
     }
 
+    const videoComments = {};
+    for (const row of allRows(this.db.prepare("SELECT video_id, comment_text FROM video_comments WHERE library_id = ?"), libraryId)) {
+      videoComments[row.video_id] = row.comment_text;
+    }
+
     const videoStats = {};
     for (const row of allRows(this.db.prepare("SELECT * FROM video_stats WHERE library_id = ?"), libraryId)) {
       videoStats[row.video_id] = {
@@ -704,6 +723,7 @@ export class LocalDataSqliteStore {
       items: progress,
       favorites,
       videoRatings,
+      videoComments,
       videoTags,
       videoStats,
       watchActivity,
@@ -833,6 +853,19 @@ export class LocalDataSqliteStore {
       this.db
         .prepare("INSERT INTO video_ratings (library_id, video_id, rating, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(library_id, video_id) DO UPDATE SET rating = excluded.rating, updated_at = excluded.updated_at")
         .run(libraryId, videoId, Math.min(10, Math.max(0, numericRating)), now());
+    });
+  }
+
+  setVideoComment(libraryId, videoId, comment) {
+    return this.transaction(() => {
+      const text = String(comment ?? "").trim();
+      if (!text) {
+        this.db.prepare("DELETE FROM video_comments WHERE library_id = ? AND video_id = ?").run(libraryId, videoId);
+        return;
+      }
+      this.db
+        .prepare("INSERT INTO video_comments (library_id, video_id, comment_text, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(library_id, video_id) DO UPDATE SET comment_text = excluded.comment_text, updated_at = excluded.updated_at")
+        .run(libraryId, videoId, text, now());
     });
   }
 

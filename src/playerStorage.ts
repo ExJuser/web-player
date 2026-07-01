@@ -20,6 +20,7 @@ import type {
   VideoItem,
   VideoHighlightSegment,
   VideoHighlightStore,
+  VideoCommentStore,
   VideoRatingStore,
   VideoStatsStore,
   VideoTagStore,
@@ -100,6 +101,18 @@ export function parseVideoRatings(source: unknown): VideoRatingStore {
     const rating = typeof value === "number" ? value : Number(value);
     if (!videoId || !Number.isFinite(rating)) continue;
     store[videoId] = Math.min(10, Math.max(0, rating));
+  }
+  return store;
+}
+
+export function parseVideoComments(source: unknown): VideoCommentStore {
+  if (!source || typeof source !== "object" || Array.isArray(source)) return {};
+
+  const store: VideoCommentStore = {};
+  for (const [videoId, value] of Object.entries(source)) {
+    if (!videoId || typeof value !== "string") continue;
+    const comment = value.trim();
+    if (comment) store[videoId] = comment;
   }
   return store;
 }
@@ -505,6 +518,7 @@ export function parsePlayerDataStore(raw: string): PlayerDataStore {
     settings?: unknown;
     videoTags?: unknown;
     videoRatings?: unknown;
+    videoComments?: unknown;
     videoStats?: unknown;
     watchActivity?: unknown;
     videoHighlights?: unknown;
@@ -527,6 +541,7 @@ export function parsePlayerDataStore(raw: string): PlayerDataStore {
     progress: parseProgressItems(progressSource),
     favorites,
     videoRatings: parseVideoRatings(parsed?.videoRatings),
+    videoComments: parseVideoComments(parsed?.videoComments),
     videoTags: parseVideoTags(parsed?.videoTags),
     videoStats: parseVideoStats(parsed?.videoStats),
     watchActivity: parseWatchActivity(parsed?.watchActivity),
@@ -552,6 +567,7 @@ export function createDefaultPlayerDataStore(metadata?: PlayerDataStore["metadat
     progress: {},
     favorites: [],
     videoRatings: {},
+    videoComments: {},
     videoTags: {},
     videoStats: {},
     watchActivity: {},
@@ -818,6 +834,7 @@ function createPersistedPlayerDataPayload(store: PlayerDataStore) {
     items: store.progress,
     favorites: store.favorites,
     videoRatings: parseVideoRatings(store.videoRatings),
+    videoComments: parseVideoComments(store.videoComments),
     videoTags: parseVideoTags(store.videoTags),
     videoStats: parseVideoStats(store.videoStats),
     videoHighlights: parseVideoHighlights(store.videoHighlights),
@@ -984,6 +1001,19 @@ export async function savePlayerVideoRating(videoId: string, rating: number | nu
       Accept: "application/json",
     },
     ...(rating === null ? {} : { body: JSON.stringify({ rating }) }),
+  });
+  if (!response.ok) throw new Error(await readApiError(response));
+}
+
+export async function savePlayerVideoComment(videoId: string, comment: string) {
+  const trimmed = comment.trim();
+  const response = await fetch(createApiUrl(`comments/${encodeURIComponent(videoId)}`), {
+    method: trimmed ? "PUT" : "DELETE",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    ...(trimmed ? { body: JSON.stringify({ comment: trimmed }) } : {}),
   });
   if (!response.ok) throw new Error(await readApiError(response));
 }

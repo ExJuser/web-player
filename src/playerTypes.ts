@@ -173,6 +173,7 @@ export type VideoHighlightSegment = {
 export type VideoHighlightStore = Record<string, VideoHighlightSegment[]>;
 export type VideoTagStore = Record<string, string[]>;
 export type VideoRatingStore = Record<string, number>;
+export type VideoCommentStore = Record<string, string>;
 export type VideoStats = {
   totalPlayedSeconds: number;
   playCount: number;
@@ -256,6 +257,7 @@ export type PlayerDataStore = {
   progress: ProgressStore;
   favorites: string[];
   videoRatings: VideoRatingStore;
+  videoComments: VideoCommentStore;
   videoTags: VideoTagStore;
   videoStats: VideoStatsStore;
   watchActivity: WatchActivityStore;

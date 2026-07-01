@@ -5622,6 +5622,22 @@ button {
   line-height: 1.35;
 }
 
+.rating-comment-input {
+  width: 100%;
+  min-width: 0;
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.45);
+  color: #f8fafc;
+  outline: none;
+}
+
+.rating-comment-input:focus {
+  border-color: rgba(0, 161, 214, 0.65);
+}
+
 .rating-editor-actions {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -6702,6 +6718,12 @@ button {
   color: #cfd6df;
 }
 
+.app-shell.theme-light .rating-comment-input {
+  border-color: #d7e0ea;
+  background: #ffffff;
+  color: #172033;
+}
+
 .app-shell.theme-light .rating-star-picker button.active,
 .app-shell.theme-light .rating-star-picker button:hover,
 .app-shell.theme-light .rating-star-picker button:focus-visible {
@@ -7369,6 +7391,12 @@ button {
 
 :root[data-theme="light"] .rating-star-picker button {
   color: #cfd6df;
+}
+
+:root[data-theme="light"] .rating-comment-input {
+  border-color: #d7e0ea;
+  background: #ffffff;
+  color: #172033;
 }
 
 :root[data-theme="light"] .rating-star-picker button.active,

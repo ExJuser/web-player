@@ -131,6 +131,7 @@ import type {
   VideoItem,
   VideoPlayability,
   VideoMetadata,
+  VideoCommentStore,
   VideoRatingStore,
   VideoStatsStore,
   VideoTagStore,
@@ -488,6 +489,7 @@ import {
   savePlayerFavorite,
   savePlayerPreference,
   savePlayerProgress,
+  savePlayerVideoComment,
   savePlayerVideoRating,
   savePlayerSetting,
   saveTagMergeDecisions,
@@ -1512,6 +1514,7 @@ export default function App() {
   const hasLoadedPlayerDataStoreRef = useRef(false);
   const favoriteVideoIdsRef = useRef(new Set<string>());
   const videoRatingsRef = useRef<VideoRatingStore>({});
+  const videoCommentsRef = useRef<VideoCommentStore>({});
   const videoTagsRef = useRef<VideoTagStore>({});
   const videoStatsRef = useRef<VideoStatsStore>({});
   const watchActivityRef = useRef<WatchActivityStore>({});
@@ -1688,6 +1691,7 @@ export default function App() {
   const [progressStore, setProgressStore] = useState<ProgressStore>({});
   const [favoriteVideoIds, setFavoriteVideoIds] = useState<Set<string>>(() => new Set());
   const [videoRatings, setVideoRatings] = useState<VideoRatingStore>({});
+  const [, setVideoComments] = useState<VideoCommentStore>({});
   const [videoTags, setVideoTags] = useState<VideoTagStore>({});
   const [videoHighlights, setVideoHighlights] = useState<VideoHighlightStore>({});
   const [pendingHighEnergyStart, setPendingHighEnergyStart] = useState<{ videoId: string; time: number } | null>(null);
@@ -1702,6 +1706,7 @@ export default function App() {
   const [isTagDialogOpen, setIsTagDialogOpen] = useState(false);
   const [ratingDialogVideoId, setRatingDialogVideoId] = useState<string | null>(null);
   const [ratingInput, setRatingInput] = useState("");
+  const [ratingCommentInput, setRatingCommentInput] = useState("");
   const [ratingHoverValue, setRatingHoverValue] = useState<number | null>(null);
   const [ratingMessage, setRatingMessage] = useState("");
   const [tagInput, setTagInput] = useState("");
@@ -1922,6 +1927,7 @@ export default function App() {
       progress: progressStoreRef.current,
       favorites: Array.from(favoriteVideoIdsRef.current),
       videoRatings: videoRatingsRef.current,
+      videoComments: videoCommentsRef.current,
       videoTags: videoTagsRef.current,
       videoStats: videoStatsRef.current,
       watchActivity: watchActivityRef.current,
@@ -2002,6 +2008,7 @@ export default function App() {
     playerSettingsRef.current = nextDataStore.settings;
     favoriteVideoIdsRef.current = new Set(nextDataStore.favorites);
     videoRatingsRef.current = nextDataStore.videoRatings;
+    videoCommentsRef.current = nextDataStore.videoComments;
     videoTagsRef.current = nextDataStore.videoTags;
     videoStatsRef.current = nextDataStore.videoStats;
     watchActivityRef.current = nextDataStore.watchActivity;
@@ -2029,6 +2036,7 @@ export default function App() {
     setSkipFolderAccessPrompt(nextDataStore.settings.skipFolderAccessPrompt);
     setFavoriteVideoIds(new Set(nextDataStore.favorites));
     setVideoRatings(nextDataStore.videoRatings);
+    setVideoComments(nextDataStore.videoComments);
     setVideoTags(nextDataStore.videoTags);
     setVideoHighlights(nextDataStore.videoHighlights);
     setWatchActivityRevision((revision) => revision + 1);
@@ -3750,6 +3758,15 @@ export default function App() {
         }
       });
 
+      const nextVideoComments = { ...baseStore.videoComments };
+      Object.entries(legacyStore.videoComments).forEach(([legacyId, comment]) => {
+        const globalId = legacyToGlobalId.get(legacyId);
+        if (globalId && !nextVideoComments[globalId]) {
+          nextVideoComments[globalId] = comment;
+          didImport = true;
+        }
+      });
+
       const nextVideoStats = { ...baseStore.videoStats };
       Object.entries(legacyStore.videoStats).forEach(([statsKey, stats]) => {
         if (!nextVideoStats[statsKey]) {
@@ -3789,6 +3806,7 @@ export default function App() {
             progress: nextProgress,
             favorites: Array.from(favoriteIds),
             videoRatings: nextVideoRatings,
+            videoComments: nextVideoComments,
             videoTags: nextVideoTags,
             videoStats: nextVideoStats,
             watchActivity: nextWatchActivity,
@@ -4150,10 +4168,26 @@ export default function App() {
     });
   }, []);
 
+  const replaceVideoComment = useCallback((video: VideoItem, comment: string) => {
+    const trimmed = comment.trim();
+    const nextVideoComments = { ...videoCommentsRef.current };
+    if (trimmed) {
+      nextVideoComments[video.id] = trimmed;
+    } else {
+      delete nextVideoComments[video.id];
+    }
+    videoCommentsRef.current = nextVideoComments;
+    setVideoComments(nextVideoComments);
+    savePlayerVideoComment(video.id, trimmed).catch(() => {
+      setRatingMessage("无法写入项目数据目录，请确认通过 npm run dev 或 npm run preview 启动。");
+    });
+  }, []);
+
   const openVideoRatingDialog = useCallback((video: VideoItem) => {
     const rating = videoRatingsRef.current[video.id];
     setRatingDialogVideoId(video.id);
     setRatingInput(typeof rating === "number" ? String(rating) : "");
+    setRatingCommentInput(videoCommentsRef.current[video.id] ?? "");
     setRatingHoverValue(null);
     setRatingMessage("");
   }, []);
@@ -4165,7 +4199,8 @@ export default function App() {
     const trimmed = ratingInput.trim();
     if (!trimmed) {
       replaceVideoRating(video, null);
-      setRatingMessage("已清除评分。");
+      replaceVideoComment(video, ratingCommentInput);
+      setRatingMessage(ratingCommentInput.trim() ? "已保存评价并清除评分。" : "已清除评分。");
       return;
     }
     const rating = Number(trimmed);
@@ -4174,8 +4209,9 @@ export default function App() {
       return;
     }
     replaceVideoRating(video, rating);
-    setRatingMessage(`已保存 ${rating} 分。`);
-  }, [ratingDialogVideoId, ratingInput, replaceVideoRating]);
+    replaceVideoComment(video, ratingCommentInput);
+    setRatingMessage(ratingCommentInput.trim() ? `已保存 ${rating} 分和评价。` : `已保存 ${rating} 分。`);
+  }, [ratingCommentInput, ratingDialogVideoId, ratingInput, replaceVideoComment, replaceVideoRating]);
 
   const replaceTagMergeDecisions = useCallback((nextDecisions: TagMergeDecisionStore) => {
     tagMergeDecisionsRef.current = nextDecisions;
@@ -4475,6 +4511,7 @@ export default function App() {
     progressStoreRef.current = {};
     favoriteVideoIdsRef.current = new Set();
     videoRatingsRef.current = {};
+    videoCommentsRef.current = {};
     videoTagsRef.current = {};
     videoStatsRef.current = {};
     watchActivityRef.current = {};
@@ -4485,6 +4522,7 @@ export default function App() {
     setProgressStore({});
     setFavoriteVideoIds(new Set());
     setVideoRatings({});
+    setVideoComments({});
     setVideoTags({});
     setWatchActivityRevision((revision) => revision + 1);
     setTagMergeDecisions({});
@@ -6132,7 +6170,12 @@ export default function App() {
             const globalId = legacyToGlobalId.get(legacyId);
             if (globalId && nextVideoRatings[globalId] === undefined) nextVideoRatings[globalId] = rating;
           });
-          nextDataStore = { ...nextDataStore, progress: nextProgress, videoRatings: nextVideoRatings };
+          const nextVideoComments = { ...nextDataStore.videoComments };
+          Object.entries(legacyDataStore.videoComments).forEach(([legacyId, comment]) => {
+            const globalId = legacyToGlobalId.get(legacyId);
+            if (globalId && !nextVideoComments[globalId]) nextVideoComments[globalId] = comment;
+          });
+          nextDataStore = { ...nextDataStore, progress: nextProgress, videoRatings: nextVideoRatings, videoComments: nextVideoComments };
           try {
             await deleteLegacyPlayerDataStore(directory);
           } catch {
@@ -11843,6 +11886,13 @@ export default function App() {
             <div className="rating-editor-status">
               {ratingInput ? `${ratingInput} / 10` : "未评分"}
             </div>
+            <input
+              className="rating-comment-input"
+              type="text"
+              value={ratingCommentInput}
+              placeholder="输入评价"
+              onChange={(event) => setRatingCommentInput(event.currentTarget.value)}
+            />
             <div className="rating-editor-actions">
               <button className="primary-button" type="submit">
                 保存
@@ -11852,10 +11902,14 @@ export default function App() {
                 type="button"
                 onClick={() => {
                   setRatingInput("");
+                  setRatingCommentInput("");
                   setRatingHoverValue(null);
                   const video = videosRef.current.find((item) => item.id === ratingDialogVideoId);
-                  if (video) replaceVideoRating(video, null);
-                  setRatingMessage("已清除评分。");
+                  if (video) {
+                    replaceVideoRating(video, null);
+                    replaceVideoComment(video, "");
+                  }
+                  setRatingMessage("已清除评分和评价。");
                 }}
               >
                 清除
