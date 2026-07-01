@@ -1178,6 +1178,75 @@ button {
   white-space: nowrap;
 }
 
+.rating-filter-card {
+  gap: 12px;
+}
+
+.rating-filter-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.rating-filter-stats div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.rating-filter-stats strong {
+  color: #f5f7fb;
+  font-size: 1.15rem;
+  line-height: 1;
+}
+
+.rating-filter-stats span,
+.rating-threshold-input span {
+  color: #8e97a5;
+  font-size: 0.78rem;
+}
+
+.rating-filter-builder {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.rating-operator-filter button {
+  min-width: 32px;
+}
+
+.rating-threshold-input {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  height: 34px;
+  padding: 0 8px;
+  border: 1px solid #303743;
+  border-radius: 6px;
+  background: #191d23;
+}
+
+.rating-threshold-input input {
+  width: 58px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #f5f7fb;
+  font: inherit;
+}
+
+.rating-filter-actions .duplicate-detection-button {
+  flex-basis: 120px;
+}
+
 .episode-duplicate-meta {
   display: inline-flex;
   align-items: center;
@@ -6976,6 +7045,35 @@ button {
 :root[data-theme="light"] .duplicate-video-group {
   border-color: rgba(20, 45, 70, 0.12);
   background: rgba(26, 75, 110, 0.05);
+}
+
+.app-shell.theme-light .rating-filter-stats div,
+:root[data-theme="light"] .rating-filter-stats div {
+  border-color: rgba(20, 45, 70, 0.12);
+  background: rgba(26, 75, 110, 0.05);
+}
+
+.app-shell.theme-light .rating-filter-stats strong,
+:root[data-theme="light"] .rating-filter-stats strong {
+  color: #142033;
+}
+
+.app-shell.theme-light .rating-filter-stats span,
+:root[data-theme="light"] .rating-filter-stats span,
+.app-shell.theme-light .rating-threshold-input span,
+:root[data-theme="light"] .rating-threshold-input span {
+  color: #5d6a79;
+}
+
+.app-shell.theme-light .rating-threshold-input,
+:root[data-theme="light"] .rating-threshold-input {
+  border-color: #c8d3df;
+  background: #f7fbff;
+}
+
+.app-shell.theme-light .rating-threshold-input input,
+:root[data-theme="light"] .rating-threshold-input input {
+  color: #142033;
 }
 
 .app-shell.theme-light .duplicate-video-list button,

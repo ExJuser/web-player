@@ -280,6 +280,9 @@ type DuplicatePlaylistVideoMeta = {
   reasons: string[];
 };
 
+type RatingFilterOperator = "gt" | "lt" | "eq";
+type RatingPlaylistMode = "numeric" | "unrated";
+
 function createPersistedDuplicateDetectionResult(
   mode: HomeMediaMode,
   groups: DuplicateVideoGroup[],
@@ -1655,6 +1658,9 @@ export default function App() {
   const [duplicateDetectionResultScopeKey, setDuplicateDetectionResultScopeKey] = useState("");
   const [isDuplicateDetectionRunning, setIsDuplicateDetectionRunning] = useState(false);
   const [isDuplicatePlaylistActive, setIsDuplicatePlaylistActive] = useState(false);
+  const [ratingFilterOperator, setRatingFilterOperator] = useState<RatingFilterOperator>("gt");
+  const [ratingFilterThreshold, setRatingFilterThreshold] = useState(8);
+  const [ratingPlaylistMode, setRatingPlaylistMode] = useState<RatingPlaylistMode | null>(null);
   const [bangumiMatchesBySeriesKey, setBangumiMatchesBySeriesKey] = useState<Record<string, BangumiSeriesMatch>>({});
   const [cacheStatus, setCacheStatus] = useState<CacheStatus | null>(null);
   const [cacheStatusMessage, setCacheStatusMessage] = useState("");
@@ -1876,6 +1882,7 @@ export default function App() {
       setDuplicateDetectionProgress(null);
       setPlaylistPage(1);
       setIsDuplicatePlaylistActive(false);
+      setRatingPlaylistMode(null);
       setDuplicateDetectionMessage("尚未检测重复视频。");
       return;
     }
@@ -1900,6 +1907,7 @@ export default function App() {
       setDuplicateDetectionProgress(null);
       setPlaylistPage(1);
       setIsDuplicatePlaylistActive(false);
+      setRatingPlaylistMode(null);
       setDuplicateDetectionMessage("尚未检测重复视频。");
       return;
     }
@@ -1918,6 +1926,7 @@ export default function App() {
     setDuplicateDetectionProgress(null);
     setPlaylistPage(1);
     setIsDuplicatePlaylistActive(false);
+    setRatingPlaylistMode(null);
     setDuplicateDetectionMessage(message);
   }, [getVideosForHomeMode]);
 
@@ -2253,6 +2262,49 @@ export default function App() {
       ),
     [isPlaylistSortReversed, isSeriesMode, modeFilteredVideos, playlistSortMode, videoStatsRevision],
   );
+  const ratingFilterSymbol = ratingFilterOperator === "gt" ? ">" : ratingFilterOperator === "lt" ? "<" : "=";
+  const ratingFilterLabel = `评分 ${ratingFilterSymbol} ${ratingFilterThreshold}`;
+  const ratingStats = useMemo(() => {
+    let rated = 0;
+    let high = 0;
+    let low = 0;
+    modeFilteredVideos.forEach((video) => {
+      const rating = videoRatings[video.id];
+      if (typeof rating !== "number") return;
+      rated += 1;
+      if (rating > 8) high += 1;
+      if (rating < 6) low += 1;
+    });
+    return {
+      rated,
+      unrated: Math.max(modeFilteredVideos.length - rated, 0),
+      high,
+      low,
+    };
+  }, [modeFilteredVideos, videoRatings]);
+  const ratingPlaylistVideos = useMemo(() => {
+    if (ratingPlaylistMode === "unrated") {
+      return playlistVideos.filter((video) => typeof videoRatings[video.id] !== "number");
+    }
+    return playlistVideos.filter((video) => {
+      const rating = videoRatings[video.id];
+      if (typeof rating !== "number") return false;
+      if (ratingFilterOperator === "gt") return rating > ratingFilterThreshold;
+      if (ratingFilterOperator === "lt") return rating < ratingFilterThreshold;
+      return rating === ratingFilterThreshold;
+    });
+  }, [playlistVideos, ratingFilterOperator, ratingFilterThreshold, ratingPlaylistMode, videoRatings]);
+  const numericRatingPlaylistCount = useMemo(
+    () =>
+      playlistVideos.filter((video) => {
+        const rating = videoRatings[video.id];
+        if (typeof rating !== "number") return false;
+        if (ratingFilterOperator === "gt") return rating > ratingFilterThreshold;
+        if (ratingFilterOperator === "lt") return rating < ratingFilterThreshold;
+        return rating === ratingFilterThreshold;
+      }).length,
+    [playlistVideos, ratingFilterOperator, ratingFilterThreshold, videoRatings],
+  );
   const seriesOptions = useMemo(() => {
     const seriesByKey = new Map<string, { key: string; title: string; count: number; mediaRootLabel?: string }>();
     playlistVideos.forEach((video) => {
@@ -2387,15 +2439,19 @@ export default function App() {
     () =>
       isDuplicatePlaylistActive
         ? duplicatePlaylistVideos
+        : ratingPlaylistMode
+          ? ratingPlaylistVideos
         : playlistFilter === "favorites"
           ? favoritePlaylistVideos
           : seriesFilteredVideos,
-    [duplicatePlaylistVideos, favoritePlaylistVideos, isDuplicatePlaylistActive, playlistFilter, seriesFilteredVideos],
+    [duplicatePlaylistVideos, favoritePlaylistVideos, isDuplicatePlaylistActive, playlistFilter, ratingPlaylistMode, ratingPlaylistVideos, seriesFilteredVideos],
   );
-  const isPlaylistSeriesMode = isSeriesMode && !isDuplicatePlaylistActive;
+  const isRatingPlaylistActive = Boolean(ratingPlaylistMode);
+  const activeRatingPlaylistLabel = ratingPlaylistMode === "unrated" ? "未评分" : ratingFilterLabel;
+  const isPlaylistSeriesMode = isSeriesMode && !isDuplicatePlaylistActive && !isRatingPlaylistActive;
   const isAnimePlaylistSearchScope = homeMediaMode === "anime" && isPlaylistSeriesMode;
   const homeLibrarySearchVideos = modeFilteredVideos;
-  const playerLibrarySearchVideos = isDuplicatePlaylistActive || isAnimePlaylistSearchScope ? visibleVideos : modeFilteredVideos;
+  const playerLibrarySearchVideos = isDuplicatePlaylistActive || isRatingPlaylistActive || isAnimePlaylistSearchScope ? visibleVideos : modeFilteredVideos;
   const librarySearchScopeKey = useMemo(
     () =>
       [
@@ -2424,10 +2480,10 @@ export default function App() {
   const shouldShowPlayerLibrarySearchStatus = Boolean(isPlayerLibrarySearchLoading || playerLibrarySearchMessage || defaultLibrarySearchStatus);
   const playlistIndexById = useMemo(() => {
     const indexes = new Map<string, number>();
-    const sourceVideos = isDuplicatePlaylistActive ? duplicatePlaylistVideos : playlistVideos;
+    const sourceVideos = isDuplicatePlaylistActive ? duplicatePlaylistVideos : isRatingPlaylistActive ? ratingPlaylistVideos : playlistVideos;
     sourceVideos.forEach((video, index) => indexes.set(video.id, index));
     return indexes;
-  }, [duplicatePlaylistVideos, isDuplicatePlaylistActive, playlistVideos]);
+  }, [duplicatePlaylistVideos, isDuplicatePlaylistActive, isRatingPlaylistActive, playlistVideos, ratingPlaylistVideos]);
   const visibleVideoIndexById = useMemo(() => {
     const indexes = new Map<string, number>();
     visibleVideos.forEach((video, index) => indexes.set(video.id, index));
@@ -2488,6 +2544,11 @@ export default function App() {
       setIsDuplicatePlaylistActive(false);
     }
   }, [duplicatePlaylistVideos.length, isDuplicatePlaylistActive]);
+  useEffect(() => {
+    if (ratingPlaylistMode && !ratingPlaylistVideos.length) {
+      setRatingPlaylistMode(null);
+    }
+  }, [ratingPlaylistMode, ratingPlaylistVideos.length]);
   const createHomeVideoCard = useCallback(
     (video: VideoItem): HomeVideoCard => {
       const progress = progressStore[video.id];
@@ -2821,6 +2882,7 @@ export default function App() {
       setDuplicateDetectionResultScopeKey(targetMode);
       setPlaylistPage(1);
       setIsDuplicatePlaylistActive(false);
+      setRatingPlaylistMode(null);
       setDuplicateDetectionMessage(nextMessage);
       void saveCurrentPlayerDataStore({
         duplicateDetection: null,
@@ -4955,7 +5017,7 @@ export default function App() {
   );
 
   const selectVideo = useCallback(
-    (videoId: string, options?: { syncSeriesMode?: boolean; keepDuplicatePlaylist?: boolean }) => {
+    (videoId: string, options?: { syncSeriesMode?: boolean; keepDuplicatePlaylist?: boolean; keepRatingPlaylist?: boolean }) => {
       cancelAutoNextPrompt();
       persistCurrentProgress();
       resetHoldSpeedState();
@@ -4963,6 +5025,9 @@ export default function App() {
       if (!options?.keepDuplicatePlaylist) {
         setPlaylistPage(1);
         setIsDuplicatePlaylistActive(false);
+      }
+      if (!options?.keepRatingPlaylist) {
+        setRatingPlaylistMode(null);
       }
       setActiveView("player");
       pendingAutoPlayVideoIdRef.current = videoId;
@@ -5247,6 +5312,7 @@ export default function App() {
     (video: VideoItem, options?: { keepDuplicatePlaylist?: boolean }) => {
       selectVideo(video.id, {
         keepDuplicatePlaylist: options?.keepDuplicatePlaylist,
+        keepRatingPlaylist: false,
         syncSeriesMode: false,
       });
     },
@@ -5258,10 +5324,36 @@ export default function App() {
     if (!firstVideo) return;
     setPlaylistPage(1);
     setIsDuplicatePlaylistActive(true);
+    setRatingPlaylistMode(null);
     setPlaylistFilter("all");
     setIsSeriesMenuOpen(false);
     selectVideo(firstVideo.id, { keepDuplicatePlaylist: true, syncSeriesMode: false });
   }, [duplicatePlaylistVideos, selectVideo]);
+
+  const openRatingPlaylist = useCallback((
+    mode: RatingPlaylistMode = "numeric",
+    filterOperator = ratingFilterOperator,
+    filterThreshold = ratingFilterThreshold,
+  ) => {
+    const nextVideos =
+      mode === "unrated"
+        ? playlistVideos.filter((video) => typeof videoRatings[video.id] !== "number")
+        : playlistVideos.filter((video) => {
+            const rating = videoRatings[video.id];
+            if (typeof rating !== "number") return false;
+            if (filterOperator === "gt") return rating > filterThreshold;
+            if (filterOperator === "lt") return rating < filterThreshold;
+            return rating === filterThreshold;
+          });
+    const firstVideo = nextVideos[0];
+    if (!firstVideo) return;
+    setPlaylistPage(1);
+    setRatingPlaylistMode(mode);
+    setIsDuplicatePlaylistActive(false);
+    setPlaylistFilter("all");
+    setIsSeriesMenuOpen(false);
+    selectVideo(firstVideo.id, { keepRatingPlaylist: true, syncSeriesMode: false });
+  }, [playlistVideos, ratingFilterOperator, ratingFilterThreshold, selectVideo, videoRatings]);
 
   const openLibraryFolderFromSearch = useCallback(
     (result: LibrarySearchResult) => {
@@ -9600,6 +9692,117 @@ export default function App() {
                 ) : null}
               </section>
 
+              <section className="home-section rating-filter-card">
+                <div className="home-section-header">
+                  <h2>评分筛选</h2>
+                  <span>{ratingStats.rated} 个已评分</span>
+                </div>
+                <div className="rating-filter-stats" aria-label="评分统计">
+                  <div>
+                    <strong>{ratingStats.high}</strong>
+                    <span>&gt; 8</span>
+                  </div>
+                  <div>
+                    <strong>{ratingStats.low}</strong>
+                    <span>&lt; 6</span>
+                  </div>
+                  <div>
+                    <strong>{ratingStats.unrated}</strong>
+                    <span>未评分</span>
+                  </div>
+                </div>
+                <div className="rating-filter-builder">
+                  <div className="playlist-filter rating-operator-filter" role="group" aria-label="评分筛选条件">
+                    <button
+                      className={ratingFilterOperator === "gt" ? "active" : ""}
+                      type="button"
+                      onClick={() => setRatingFilterOperator("gt")}
+                      aria-pressed={ratingFilterOperator === "gt"}
+                    >
+                      &gt;
+                    </button>
+                    <button
+                      className={ratingFilterOperator === "lt" ? "active" : ""}
+                      type="button"
+                      onClick={() => setRatingFilterOperator("lt")}
+                      aria-pressed={ratingFilterOperator === "lt"}
+                    >
+                      &lt;
+                    </button>
+                    <button
+                      className={ratingFilterOperator === "eq" ? "active" : ""}
+                      type="button"
+                      onClick={() => setRatingFilterOperator("eq")}
+                      aria-pressed={ratingFilterOperator === "eq"}
+                    >
+                      =
+                    </button>
+                  </div>
+                  <label className="rating-threshold-input">
+                    <span>分数</span>
+                    <input
+                      type="number"
+                      min="0"
+                      max="10"
+                      step="0.5"
+                      value={ratingFilterThreshold}
+                      onChange={(event) => {
+                        const nextValue = Number(event.target.value);
+                        if (!Number.isFinite(nextValue)) return;
+                        setRatingFilterThreshold(clamp(nextValue, 0, 10));
+                      }}
+                    />
+                  </label>
+                </div>
+                <div className="duplicate-video-actions rating-filter-actions">
+                  <button
+                    className="secondary-button duplicate-detection-button"
+                    type="button"
+                    onClick={() => {
+                      setRatingFilterOperator("gt");
+                      setRatingFilterThreshold(8);
+                      openRatingPlaylist("numeric", "gt", 8);
+                    }}
+                    disabled={!ratingStats.high}
+                  >
+                    <Star size={16} />
+                    高分 &gt; 8
+                  </button>
+                  <button
+                    className="secondary-button duplicate-detection-button"
+                    type="button"
+                    onClick={() => {
+                      setRatingFilterOperator("lt");
+                      setRatingFilterThreshold(6);
+                      openRatingPlaylist("numeric", "lt", 6);
+                    }}
+                    disabled={!ratingStats.low}
+                  >
+                    <Star size={16} />
+                    低分 &lt; 6
+                  </button>
+                  <button
+                    className="secondary-button duplicate-detection-button"
+                    type="button"
+                    onClick={() => openRatingPlaylist("unrated")}
+                    disabled={!ratingStats.unrated}
+                  >
+                    <Star size={16} />
+                    未评分
+                  </button>
+                  <button
+                    className="primary-button duplicate-detection-button"
+                    type="button"
+                    onClick={() => openRatingPlaylist("numeric")}
+                    disabled={!numericRatingPlaylistCount}
+                    title={numericRatingPlaylistCount ? `进入${ratingFilterLabel}的临时列表` : "当前条件没有匹配视频"}
+                  >
+                    <Play size={16} />
+                    进入评分列表
+                  </button>
+                </div>
+              </section>
+
               {shouldShowHomeRecap ? (
                 <section className="home-section home-recap-card">
                   <div className="home-section-header">
@@ -10620,12 +10823,14 @@ export default function App() {
       </section>
 
       {!isNonPlayerViewVisible && !isPrivacyMode && !isCinemaMode ? (
-      <aside className="playlist-panel" aria-label={isDuplicatePlaylistActive ? "重复视频列表" : isPlaylistSeriesMode ? "追番列表" : "播放列表"}>
+      <aside className="playlist-panel" aria-label={isDuplicatePlaylistActive ? "重复视频列表" : isRatingPlaylistActive ? "评分视频列表" : isPlaylistSeriesMode ? "追番列表" : "播放列表"}>
         <div className="playlist-header">
           <div className="playlist-title-row">
             <span>
               {isDuplicatePlaylistActive
                 ? `重复列表 · ${playlistVisibleCountLabel} 个视频 · ${activeDuplicateVideoGroups.length} 组`
+                : isRatingPlaylistActive
+                  ? `评分列表 · ${playlistVisibleCountLabel} 个视频 · ${activeRatingPlaylistLabel}`
                 : modeFilteredVideos.length
                 ? playlistFilter === "favorites"
                   ? `${playlistVisibleCountLabel} / ${modeFilteredVideos.length} 个收藏`
@@ -10641,7 +10846,7 @@ export default function App() {
           </div>
           <div className={`playlist-tools ${isPlaylistSeriesMode ? "series-mode" : ""}`}>
             <span className={`player-mode-indicator mode-${homeMediaMode}`} title={`当前播放模式：${playerMediaModeLabel}`}>
-              {isDuplicatePlaylistActive ? "重复" : playerMediaModeLabel}
+              {isDuplicatePlaylistActive ? "重复" : isRatingPlaylistActive ? "评分" : playerMediaModeLabel}
             </span>
             {isPlaylistSeriesMode ? (
               <div className="series-menu">
@@ -10713,13 +10918,13 @@ export default function App() {
               options={playlistSortOptions}
               onChange={updatePlaylistSortMode}
               className="playlist-sort-control"
-              disabled={isDuplicatePlaylistActive || !modeFilteredVideos.length}
+              disabled={isDuplicatePlaylistActive || isRatingPlaylistActive || !modeFilteredVideos.length}
             />
             <button
               className={`playlist-order-button ${isPlaylistSortReversed ? "active" : ""}`}
               type="button"
               onClick={togglePlaylistSortDirection}
-              disabled={isDuplicatePlaylistActive || !modeFilteredVideos.length}
+              disabled={isDuplicatePlaylistActive || isRatingPlaylistActive || !modeFilteredVideos.length}
               title={isPlaylistSortReversed ? "切换为正序" : "切换为倒序"}
               aria-label={isPlaylistSortReversed ? "切换为正序" : "切换为倒序"}
             >
@@ -10754,6 +10959,18 @@ export default function App() {
                   setIsDuplicatePlaylistActive(false);
                 }}
                 title="退出重复列表"
+              >
+                退出
+              </button>
+            ) : isRatingPlaylistActive ? (
+              <button
+                className="playlist-clear-button"
+                type="button"
+                onClick={() => {
+                  setPlaylistPage(1);
+                  setRatingPlaylistMode(null);
+                }}
+                title="退出评分列表"
               >
                 退出
               </button>
@@ -10879,6 +11096,8 @@ export default function App() {
                   onClick={() =>
                     isDuplicatePlaylistActive
                       ? openDuplicateVideo(video, { keepDuplicatePlaylist: true })
+                      : isRatingPlaylistActive
+                        ? selectVideo(video.id, { keepRatingPlaylist: true, syncSeriesMode: false })
                       : selectVideo(video.id)
                   }
                 >
@@ -10963,8 +11182,9 @@ export default function App() {
           })}
           {!videos.length ? <div className="empty-list">{message}</div> : null}
           {videos.length && isDuplicatePlaylistActive && !visibleVideos.length ? <div className="empty-list">重复列表已清空</div> : null}
-          {videos.length && !isDuplicatePlaylistActive && !modeFilteredVideos.length ? <div className="empty-list">当前{homeMediaModeLabel}没有视频</div> : null}
-          {modeFilteredVideos.length && !isDuplicatePlaylistActive && !visibleVideos.length ? <div className="empty-list">还没有收藏的视频</div> : null}
+          {videos.length && isRatingPlaylistActive && !visibleVideos.length ? <div className="empty-list">评分列表已清空</div> : null}
+          {videos.length && !isDuplicatePlaylistActive && !isRatingPlaylistActive && !modeFilteredVideos.length ? <div className="empty-list">当前{homeMediaModeLabel}没有视频</div> : null}
+          {modeFilteredVideos.length && !isDuplicatePlaylistActive && !isRatingPlaylistActive && !visibleVideos.length ? <div className="empty-list">还没有收藏的视频</div> : null}
         </div>
         {visibleVideos.length ? (
           <div className="playlist-pagination" aria-label="播放列表分页">
