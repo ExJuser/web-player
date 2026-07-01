@@ -102,7 +102,6 @@ import type {
   FileSystemFileHandle,
   HomeVideoCard,
   MediaCollection,
-  MediaScanBatch,
   PlaybackMode,
   PlaybackProgress,
   PlayerDataStore,
@@ -186,14 +185,11 @@ import { directoryPartsOf, fallbackMediaRootLabelForVideo } from "./mediaPathUti
 import {
   basePathOf,
   createLibraryMetadata,
-  createGlobalVideoId,
   createLegacyVideoId,
   hasStoredData,
   isObjectUrl,
   isSubtitleFile,
-  isVideoFile,
   migrateMovedVideoData,
-  shouldFilterLocalVideoFile,
 } from "./playerLibraryUtils";
 import {
   inferSeriesTitle,
@@ -223,7 +219,6 @@ import {
   mergeMediaBatch,
   mergeVideoRuntimeState,
   rebuildDuplicateVideoGroups,
-  shouldFlushMediaScan,
   sortMediaCollection,
   type DuplicateDetectionProgress,
   type DuplicateNameSimilarityPair,
@@ -251,6 +246,7 @@ import {
 } from "./photoAlbumScan";
 import {
   browserVideoFileExists,
+  collectVideos,
   collectVideosFromFiles,
   ensureDirectoryReadPermission,
   hasDirectoryReadPermission,
@@ -416,75 +412,6 @@ function blurClickedButton(target: EventTarget | null) {
       button.blur();
     }
   }, 0);
-}
-
-async function* collectVideos(directory: FileSystemDirectoryHandle, rootId?: string | null): AsyncGenerator<MediaScanBatch> {
-  let pendingVideos: VideoItem[] = [];
-  let pendingSubtitles: SubtitleItem[] = [];
-  let scannedFiles = 0;
-  let filteredSmallVideos = 0;
-  let lastFlushAt = Date.now();
-
-  function createBatch() {
-    const batch = {
-      videos: pendingVideos,
-      subtitles: pendingSubtitles,
-      scannedFiles,
-      filteredSmallVideos,
-    };
-    pendingVideos = [];
-    pendingSubtitles = [];
-    lastFlushAt = Date.now();
-    return batch;
-  }
-
-  async function* walk(handle: FileSystemDirectoryHandle, segments: string[]): AsyncGenerator<MediaScanBatch> {
-    for await (const entry of handle.values()) {
-      if (entry.kind === "directory") {
-        yield* walk(entry, [...segments, entry.name]);
-      } else if (isVideoFile(entry.name)) {
-        scannedFiles += 1;
-        const file = await entry.getFile();
-        if (shouldFilterLocalVideoFile(entry.name, file.size)) {
-          filteredSmallVideos += 1;
-        } else {
-          const relativePath = [...segments, entry.name].join("/");
-          pendingVideos.push({
-            id: rootId ? createGlobalVideoId(rootId, relativePath, file) : createLegacyVideoId(relativePath, file),
-            name: entry.name,
-            relativePath,
-            file,
-            url: URL.createObjectURL(file),
-            size: file.size,
-            lastModified: file.lastModified,
-            parentDirectory: handle,
-            playbackSource: "browser",
-          });
-        }
-      } else if (isSubtitleFile(entry.name)) {
-        scannedFiles += 1;
-        const file = await entry.getFile();
-        const relativePath = [...segments, entry.name].join("/");
-        pendingSubtitles.push({
-          id: rootId ? createGlobalVideoId(rootId, relativePath, file) : createLegacyVideoId(relativePath, file),
-          name: entry.name,
-          relativePath,
-          file,
-          url: "",
-          mediaRootId: rootId ?? undefined,
-        });
-      }
-
-      if (shouldFlushMediaScan(lastFlushAt, pendingVideos, pendingSubtitles)) {
-        yield createBatch();
-      }
-    }
-  }
-
-  yield* walk(directory, []);
-  if (pendingVideos.length || pendingSubtitles.length || scannedFiles || filteredSmallVideos) {
-    yield createBatch();
-  }
 }
 
 type PhotoAlbumViewFilter = "all" | "favorites";

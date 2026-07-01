@@ -13,6 +13,22 @@ const createFile = (overrides = {}) => ({
   ...overrides,
 });
 
+const createFileEntry = (name, fileOverrides = {}) => ({
+  kind: "file",
+  name,
+  async getFile() {
+    return createFile({ name, ...fileOverrides });
+  },
+});
+
+const createDirectoryEntry = (name, entries) => ({
+  kind: "directory",
+  name,
+  async *values() {
+    yield* entries;
+  },
+});
+
 test("collects dropped browser videos and subtitles", () => {
   const originalCreateObjectUrl = URL.createObjectURL;
   URL.createObjectURL = (file) => `blob:${file.name}`;
@@ -48,4 +64,36 @@ test("resolves browser video parent directories", async () => {
   const parent = await browserMediaScan.resolveBrowserVideoParentDirectory(root, "Season 1/Episode 01.mp4");
 
   assert.equal(parent, leaf);
+});
+
+test("collects videos from browser directories in batches", async () => {
+  const originalCreateObjectUrl = URL.createObjectURL;
+  URL.createObjectURL = (file) => `blob:${file.name}`;
+
+  try {
+    const directory = createDirectoryEntry("Root", [
+      createDirectoryEntry("Season 1", [
+        createFileEntry("Episode 01.mp4", { size: 100 * 1024 * 1024, lastModified: 10 }),
+        createFileEntry("Episode 01.srt", { size: 200, lastModified: 11 }),
+        createFileEntry("tiny.mp4", { size: 1024, lastModified: 12 }),
+      ]),
+      createFileEntry("cover.jpg", { size: 1024 }),
+    ]);
+    const batches = [];
+
+    for await (const batch of browserMediaScan.collectVideos(directory, "root-a")) {
+      batches.push(batch);
+    }
+
+    assert.equal(batches.length, 1);
+    assert.equal(batches[0].scannedFiles, 3);
+    assert.equal(batches[0].filteredSmallVideos, 1);
+    assert.deepEqual(batches[0].videos.map((video) => video.relativePath), ["Season 1/Episode 01.mp4"]);
+    assert.deepEqual(batches[0].subtitles.map((subtitle) => subtitle.relativePath), ["Season 1/Episode 01.srt"]);
+    assert.equal(batches[0].videos[0].id, "root-a|Season 1/Episode 01.mp4|104857600|10");
+    assert.equal(batches[0].videos[0].url, "blob:Episode 01.mp4");
+    assert.equal(batches[0].subtitles[0].mediaRootId, "root-a");
+  } finally {
+    URL.createObjectURL = originalCreateObjectUrl;
+  }
 });
