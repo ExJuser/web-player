@@ -145,7 +145,7 @@ export function buildWatchActivityInsights(
     tagLimit?: number;
   } = {},
 ): WatchActivityInsights {
-  const rangeDays = options.rangeDays ?? 90;
+  const rangeDays = options.rangeDays ?? 30;
   const metric = options.metric ?? "watched";
   const today = options.today && isValidWatchActivityDate(options.today) ? options.today : createLocalDateKey();
   const tagLimit = options.tagLimit ?? 8;

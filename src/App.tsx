@@ -1679,7 +1679,7 @@ export default function App() {
   );
   const [videoStatsRevision, setVideoStatsRevision] = useState(0);
   const [watchActivityRevision, setWatchActivityRevision] = useState(0);
-  const [watchActivityRange, setWatchActivityRange] = useState<WatchActivityRange>(90);
+  const [watchActivityRange, setWatchActivityRange] = useState<WatchActivityRange>(30);
   const [watchActivityMetric, setWatchActivityMetric] = useState<WatchActivityMetric>("watched");
   const [selectedWatchActivityDate, setSelectedWatchActivityDate] = useState<string | null>(null);
   const [watchActivityCarouselTick, setWatchActivityCarouselTick] = useState(0);
