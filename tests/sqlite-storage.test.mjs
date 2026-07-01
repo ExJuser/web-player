@@ -34,6 +34,7 @@ test("sqlite store imports legacy player and photo album json once", async () =>
           video1: { currentTime: 12, duration: 30, completed: false, updatedAt: 1000 },
         },
         favorites: ["video1"],
+        videoRatings: { video1: 8.5 },
         videoTags: { video1: ["Tag A"] },
         videoStats: {},
         watchActivity: {
@@ -79,6 +80,7 @@ test("sqlite store imports legacy player and photo album json once", async () =>
 
     assert.equal(playerStore.items.video1.currentTime, 12);
     assert.deepEqual(playerStore.favorites, ["video1"]);
+    assert.deepEqual(playerStore.videoRatings, { video1: 8.5 });
     assert.deepEqual(playerStore.videoTags.video1, ["Tag A"]);
     assert.equal(playerStore.watchActivity["2026-06-29::video1"].watchedSeconds, 90);
     assert.deepEqual(playerStore.videoHighlights.video1, [{ id: "mark-1", startTime: 12, endTime: 18, tag: "名场面", updatedAt: 1200 }]);
@@ -114,6 +116,7 @@ test("sqlite incremental writes keep unrelated player data", async () => {
         video1: { currentTime: 1, duration: 10, completed: false, updatedAt: 1000 },
       },
       favorites: [],
+      videoRatings: { video1: 4 },
       videoTags: { video1: ["Old"] },
       videoStats: {},
       watchActivity: {},
@@ -127,6 +130,7 @@ test("sqlite incremental writes keep unrelated player data", async () => {
     });
 
     context.store.upsertProgress("global", "video1", { currentTime: 5, duration: 10, completed: false, updatedAt: 2000 });
+    context.store.setVideoRating("global", "video1", 9);
     context.store.replaceVideoTags("global", "video1", ["New"]);
     context.store.replaceVideoHighlights("global", "video1", [{ id: "h1", startTime: 8, endTime: 15, tag: " 高能 ", updatedAt: 2200 }]);
     context.store.upsertWatchActivity("global", {
@@ -143,6 +147,7 @@ test("sqlite incremental writes keep unrelated player data", async () => {
 
     const store = context.store.loadPlayerDataStore("global");
     assert.equal(store.items.video1.currentTime, 5);
+    assert.deepEqual(store.videoRatings, { video1: 9 });
     assert.deepEqual(store.videoTags.video1, ["New"]);
     assert.deepEqual(store.videoHighlights.video1, [{ id: "h1", startTime: 8, endTime: 15, tag: "高能", updatedAt: 2200 }]);
     assert.deepEqual(store.watchActivity["2026-06-29::video1"], {

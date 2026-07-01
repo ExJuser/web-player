@@ -728,6 +728,7 @@ function playerDataApiPlugin(env) {
     const progressMatch = url.pathname.match(/^\/api\/player-data\/progress\/(.+)$/);
     const favoriteMatch = url.pathname.match(/^\/api\/player-data\/favorites\/(.+)$/);
     const tagsMatch = url.pathname.match(/^\/api\/player-data\/tags\/(.+)$/);
+    const ratingMatch = url.pathname.match(/^\/api\/player-data\/ratings\/(.+)$/);
     const statsMatch = url.pathname.match(/^\/api\/player-data\/stats\/(.+)$/);
     const highlightsMatch = url.pathname.match(/^\/api\/player-data\/highlights\/(.+)$/);
     const preferenceMatch = url.pathname.match(/^\/api\/player-data\/preferences\/([^/]+)$/);
@@ -970,6 +971,21 @@ function playerDataApiPlugin(env) {
         store.replaceVideoTags("global", videoId, payload?.tags ?? payload);
         sendJson(response, 200, { ok: true });
         return;
+      }
+
+      if (ratingMatch) {
+        const videoId = decodeURIComponent(ratingMatch[1]);
+        if (request.method === "PUT") {
+          const payload = await parseJsonBody(request);
+          store.setVideoRating("global", videoId, payload?.rating ?? payload);
+          sendJson(response, 200, { ok: true });
+          return;
+        }
+        if (request.method === "DELETE") {
+          store.setVideoRating("global", videoId, null);
+          sendJson(response, 200, { ok: true });
+          return;
+        }
       }
 
       if (url.pathname === "/api/player-data/tag-merge-decisions" && request.method === "PUT") {

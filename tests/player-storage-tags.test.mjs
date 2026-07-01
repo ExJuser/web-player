@@ -13,6 +13,7 @@ test("old player data stores load with empty video tags and merge decisions", ()
   }));
 
   assert.deepEqual(parsed.videoTags, {});
+  assert.deepEqual(parsed.videoRatings, {});
   assert.deepEqual(parsed.videoStats, {});
   assert.deepEqual(parsed.watchActivity, {});
   assert.deepEqual(parsed.tagMergeDecisions, {});
@@ -105,6 +106,11 @@ test("player data stores parse valid tags, stats, and merge decisions", () => {
       "video-1": ["美腿", "剧情", "", 42],
       "video-2": "invalid",
     },
+    videoRatings: {
+      "video-1": 8.5,
+      "video-2": 12,
+      "video-3": "bad",
+    },
     videoStats: {
       "movie.mp4|1024|1700000000000": {
         totalPlayedSeconds: 120.5,
@@ -151,6 +157,10 @@ test("player data stores parse valid tags, stats, and merge decisions", () => {
 
   assert.deepEqual(parsed.videoTags, {
     "video-1": ["美腿", "剧情"],
+  });
+  assert.deepEqual(parsed.videoRatings, {
+    "video-1": 8.5,
+    "video-2": 10,
   });
   assert.deepEqual(parsed.videoStats, {
     "movie.mp4|1024|1700000000000": {
@@ -293,6 +303,7 @@ test("default player data store contains tag containers", () => {
 
   assert.equal(store.version, 5);
   assert.deepEqual(store.videoTags, {});
+  assert.deepEqual(store.videoRatings, {});
   assert.deepEqual(store.videoStats, {});
   assert.deepEqual(store.tagMergeDecisions, {});
   assert.deepEqual(store.videoHighlights, {});

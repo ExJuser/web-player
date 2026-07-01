@@ -107,6 +107,7 @@ export function hasStoredData(store: PlayerDataStore) {
   return Boolean(
     Object.keys(store.progress).length ||
       store.favorites.length ||
+      Object.keys(store.videoRatings).length ||
       Object.keys(store.videoTags).length ||
       Object.keys(store.videoStats).length ||
       Object.keys(store.watchActivity).length ||
@@ -229,6 +230,15 @@ export function migrateMovedVideoData(store: PlayerDataStore, targetVideos: Vide
     }
   });
 
+  const nextVideoRatings = { ...store.videoRatings };
+  Object.entries(store.videoRatings).forEach(([videoId, rating]) => {
+    const nextVideoId = resolveMovedVideoId(videoId, mapping);
+    if (nextVideoId && nextVideoRatings[nextVideoId] === undefined) {
+      nextVideoRatings[nextVideoId] = rating;
+      didMigrate = true;
+    }
+  });
+
   const nextWatchActivity = { ...store.watchActivity };
   Object.values(store.watchActivity).forEach((activity) => {
     const nextVideoId = resolveMovedVideoId(activity.videoId, mapping);
@@ -259,6 +269,7 @@ export function migrateMovedVideoData(store: PlayerDataStore, targetVideos: Vide
         ...store,
         progress: nextProgress,
         favorites: Array.from(favoriteIds),
+        videoRatings: nextVideoRatings,
         videoTags: nextVideoTags,
         watchActivity: nextWatchActivity,
         embeddedSubtitles: nextEmbeddedSubtitles,

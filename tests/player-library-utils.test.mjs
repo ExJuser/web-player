@@ -130,6 +130,9 @@ test("migrates video data when the same file moves to another media root", () =>
       [oldId]: { currentTime: 120, duration: 1500, completed: false, updatedAt: 1700000001000 },
     },
     favorites: [oldId],
+    videoRatings: {
+      [oldId]: 8,
+    },
     videoTags: {
       [oldId]: ["剧情", "AI字幕"],
     },
@@ -174,6 +177,7 @@ test("migrates video data when the same file moves to another media root", () =>
   ]);
 
   assert.equal(migrated.progress[newId], store.progress[oldId]);
+  assert.equal(migrated.videoRatings[newId], 8);
   assert.equal(migrated.videoTags[newId], store.videoTags[oldId]);
   assert.deepEqual(migrated.watchActivity[`2026-06-29::${newId}`], {
     ...store.watchActivity[`2026-06-29::${oldId}`],

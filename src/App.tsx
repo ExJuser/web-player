@@ -130,6 +130,7 @@ import type {
   VideoItem,
   VideoPlayability,
   VideoMetadata,
+  VideoRatingStore,
   VideoStatsStore,
   VideoTagStore,
   WatchActivityStore
@@ -486,6 +487,7 @@ import {
   savePlayerFavorite,
   savePlayerPreference,
   savePlayerProgress,
+  savePlayerVideoRating,
   savePlayerSetting,
   saveTagMergeDecisions,
   savePlayerWatchActivity,
@@ -1508,6 +1510,7 @@ export default function App() {
   });
   const hasLoadedPlayerDataStoreRef = useRef(false);
   const favoriteVideoIdsRef = useRef(new Set<string>());
+  const videoRatingsRef = useRef<VideoRatingStore>({});
   const videoTagsRef = useRef<VideoTagStore>({});
   const videoStatsRef = useRef<VideoStatsStore>({});
   const watchActivityRef = useRef<WatchActivityStore>({});
@@ -1683,6 +1686,7 @@ export default function App() {
   const [selectedSubtitleId, setSelectedSubtitleId] = useState<string>("off");
   const [progressStore, setProgressStore] = useState<ProgressStore>({});
   const [favoriteVideoIds, setFavoriteVideoIds] = useState<Set<string>>(() => new Set());
+  const [videoRatings, setVideoRatings] = useState<VideoRatingStore>({});
   const [videoTags, setVideoTags] = useState<VideoTagStore>({});
   const [videoHighlights, setVideoHighlights] = useState<VideoHighlightStore>({});
   const [pendingHighEnergyStart, setPendingHighEnergyStart] = useState<{ videoId: string; time: number } | null>(null);
@@ -1695,6 +1699,9 @@ export default function App() {
   } | null>(null);
   const [, setTagMergeDecisions] = useState<TagMergeDecisionStore>({});
   const [isTagDialogOpen, setIsTagDialogOpen] = useState(false);
+  const [ratingDialogVideoId, setRatingDialogVideoId] = useState<string | null>(null);
+  const [ratingInput, setRatingInput] = useState("");
+  const [ratingMessage, setRatingMessage] = useState("");
   const [tagInput, setTagInput] = useState("");
   const [activeTagSuggestionIndex, setActiveTagSuggestionIndex] = useState(0);
   const [tagMessage, setTagMessage] = useState("");
@@ -1912,6 +1919,7 @@ export default function App() {
       version: 5,
       progress: progressStoreRef.current,
       favorites: Array.from(favoriteVideoIdsRef.current),
+      videoRatings: videoRatingsRef.current,
       videoTags: videoTagsRef.current,
       videoStats: videoStatsRef.current,
       watchActivity: watchActivityRef.current,
@@ -1991,6 +1999,7 @@ export default function App() {
     playerPreferencesRef.current = nextDataStore.preferences;
     playerSettingsRef.current = nextDataStore.settings;
     favoriteVideoIdsRef.current = new Set(nextDataStore.favorites);
+    videoRatingsRef.current = nextDataStore.videoRatings;
     videoTagsRef.current = nextDataStore.videoTags;
     videoStatsRef.current = nextDataStore.videoStats;
     watchActivityRef.current = nextDataStore.watchActivity;
@@ -2017,6 +2026,7 @@ export default function App() {
     }
     setSkipFolderAccessPrompt(nextDataStore.settings.skipFolderAccessPrompt);
     setFavoriteVideoIds(new Set(nextDataStore.favorites));
+    setVideoRatings(nextDataStore.videoRatings);
     setVideoTags(nextDataStore.videoTags);
     setVideoHighlights(nextDataStore.videoHighlights);
     setWatchActivityRevision((revision) => revision + 1);
@@ -2271,6 +2281,7 @@ export default function App() {
   const currentVideoPlaybackUrl = currentVideo ? getPlayableVideoUrl(currentVideo, currentVideoSourceChoice) : "";
   const currentVideoHasCompatibleMedia = Boolean(currentVideo?.playability?.compatibleUrl);
   const currentVideoTags = currentVideo ? videoTags[currentVideo.id] ?? [] : [];
+  const currentVideoRating = currentVideo ? videoRatings[currentVideo.id] : undefined;
   const activeTagInputSegment = useMemo(() => tagInput.match(/(?:^|[\s,，、;；|])([^\s,，、;；|]*)$/u)?.[1]?.trim() ?? "", [tagInput]);
   const tagInputSuggestions = useMemo(() => {
     if (!isTagDialogOpen || !currentVideo || !activeTagInputSegment) return [];
@@ -2482,9 +2493,10 @@ export default function App() {
         seriesTitle: seriesTitleByVideoId.get(video.id) ?? inferSeriesTitle(video),
         mediaRootLabel: mediaRoot?.label ?? fallbackMediaRootLabelForVideo(video),
         tags: videoTags[video.id] ?? [],
+        rating: videoRatings[video.id],
       };
     },
-    [localConfig, progressStore, seriesTitleByVideoId, videoTags],
+    [localConfig, progressStore, seriesTitleByVideoId, videoRatings, videoTags],
   );
   const homeLibrarySearchContext = useMemo(
     () => ({
@@ -2494,8 +2506,9 @@ export default function App() {
       favoriteVideoIds,
       isResumableProgress,
       videoTags,
+      videoRatings,
     }),
-    [favoriteVideoIds, homeMediaMode, localConfig, progressStore, videoTags],
+    [favoriteVideoIds, homeMediaMode, localConfig, progressStore, videoRatings, videoTags],
   );
   const playerLibrarySearchContext = useMemo(
     () => ({
@@ -3726,6 +3739,15 @@ export default function App() {
         }
       });
 
+      const nextVideoRatings = { ...baseStore.videoRatings };
+      Object.entries(legacyStore.videoRatings).forEach(([legacyId, rating]) => {
+        const globalId = legacyToGlobalId.get(legacyId);
+        if (globalId && nextVideoRatings[globalId] === undefined) {
+          nextVideoRatings[globalId] = rating;
+          didImport = true;
+        }
+      });
+
       const nextVideoStats = { ...baseStore.videoStats };
       Object.entries(legacyStore.videoStats).forEach(([statsKey, stats]) => {
         if (!nextVideoStats[statsKey]) {
@@ -3764,6 +3786,7 @@ export default function App() {
             ...baseStore,
             progress: nextProgress,
             favorites: Array.from(favoriteIds),
+            videoRatings: nextVideoRatings,
             videoTags: nextVideoTags,
             videoStats: nextVideoStats,
             watchActivity: nextWatchActivity,
@@ -4109,6 +4132,46 @@ export default function App() {
       });
   }, []);
 
+  const replaceVideoRating = useCallback((video: VideoItem, rating: number | null) => {
+    const nextVideoRatings = { ...videoRatingsRef.current };
+    if (rating === null) {
+      delete nextVideoRatings[video.id];
+    } else {
+      nextVideoRatings[video.id] = Math.min(10, Math.max(0, rating));
+    }
+    videoRatingsRef.current = nextVideoRatings;
+    setVideoRatings(nextVideoRatings);
+    savePlayerVideoRating(video.id, rating).catch(() => {
+      setRatingMessage("无法写入项目数据目录，请确认通过 npm run dev 或 npm run preview 启动。");
+    });
+  }, []);
+
+  const openVideoRatingDialog = useCallback((video: VideoItem) => {
+    const rating = videoRatingsRef.current[video.id];
+    setRatingDialogVideoId(video.id);
+    setRatingInput(typeof rating === "number" ? String(rating) : "");
+    setRatingMessage("");
+  }, []);
+
+  const saveRatingDialogValue = useCallback(() => {
+    if (!ratingDialogVideoId) return;
+    const video = videosRef.current.find((item) => item.id === ratingDialogVideoId);
+    if (!video) return;
+    const trimmed = ratingInput.trim();
+    if (!trimmed) {
+      replaceVideoRating(video, null);
+      setRatingMessage("已清除评分。");
+      return;
+    }
+    const rating = Number(trimmed);
+    if (!Number.isFinite(rating) || rating < 0 || rating > 10) {
+      setRatingMessage("评分必须是 0 到 10。");
+      return;
+    }
+    replaceVideoRating(video, rating);
+    setRatingMessage(`已保存 ${rating} 分。`);
+  }, [ratingDialogVideoId, ratingInput, replaceVideoRating]);
+
   const replaceTagMergeDecisions = useCallback((nextDecisions: TagMergeDecisionStore) => {
     tagMergeDecisionsRef.current = nextDecisions;
     setTagMergeDecisions(nextDecisions);
@@ -4405,6 +4468,7 @@ export default function App() {
   const clearCurrentLibraryRuntimeData = useCallback(() => {
     progressStoreRef.current = {};
     favoriteVideoIdsRef.current = new Set();
+    videoRatingsRef.current = {};
     videoTagsRef.current = {};
     videoStatsRef.current = {};
     watchActivityRef.current = {};
@@ -4414,6 +4478,7 @@ export default function App() {
     playbackActivitySessionRef.current = null;
     setProgressStore({});
     setFavoriteVideoIds(new Set());
+    setVideoRatings({});
     setVideoTags({});
     setWatchActivityRevision((revision) => revision + 1);
     setTagMergeDecisions({});
@@ -6056,7 +6121,12 @@ export default function App() {
             const globalId = legacyToGlobalId.get(legacyId);
             if (globalId && !nextProgress[globalId]) nextProgress[globalId] = progress;
           });
-          nextDataStore = { ...nextDataStore, progress: nextProgress };
+          const nextVideoRatings = { ...nextDataStore.videoRatings };
+          Object.entries(legacyDataStore.videoRatings).forEach(([legacyId, rating]) => {
+            const globalId = legacyToGlobalId.get(legacyId);
+            if (globalId && nextVideoRatings[globalId] === undefined) nextVideoRatings[globalId] = rating;
+          });
+          nextDataStore = { ...nextDataStore, progress: nextProgress, videoRatings: nextVideoRatings };
           try {
             await deleteLegacyPlayerDataStore(directory);
           } catch {
@@ -8560,6 +8630,9 @@ export default function App() {
       </span>
     );
   };
+  const renderRatingChip = (rating?: number) => (
+    typeof rating === "number" ? <span className="rating-chip">评分 {rating}/10</span> : null
+  );
   const specialInsightTabOptions: Array<{ value: SpecialInsightTab; label: string; icon: React.ReactNode }> = [
     { value: "played", label: "播放最久", icon: <Clock3 size={14} /> },
     { value: "count", label: "次数最多", icon: <BarChart3 size={14} /> },
@@ -8785,6 +8858,7 @@ export default function App() {
         <strong>{card.video.name}</strong>
         <small>{formatHomeMeta(card)}</small>
         {renderTagChips(card.tags ?? [], { limit: 10, compact: true })}
+        {renderRatingChip(card.rating)}
       </span>
     </button>
   );
@@ -8812,6 +8886,7 @@ export default function App() {
               <small>{[result.mediaRootLabel, directoryLabel].filter(Boolean).join(" · ")}</small>
             ) : null}
             {renderTagChips(videoTags[video.id] ?? [], { limit: 3, compact: true })}
+            {renderRatingChip(videoRatings[video.id])}
           </span>
         </button>
       );
@@ -8841,6 +8916,7 @@ export default function App() {
           {result.path || result.mediaRootLabel ? (
             <small>{[result.mediaRootLabel, result.path].filter(Boolean).join(" · ")}</small>
           ) : null}
+          {renderRatingChip(videoRatings[result.representativeVideo.id])}
         </span>
       </button>
     );
@@ -10323,6 +10399,16 @@ export default function App() {
                 <Tags size={18} />
               </button>
               <button
+                className={`icon-button ${typeof currentVideoRating === "number" ? "active" : ""}`}
+                type="button"
+                onClick={() => currentVideo && openVideoRatingDialog(currentVideo)}
+                disabled={!currentVideo}
+                title={typeof currentVideoRating === "number" ? `当前评分 ${currentVideoRating}/10` : "给视频评分"}
+                aria-label="给视频评分"
+              >
+                <Star size={18} fill={typeof currentVideoRating === "number" ? "currentColor" : "none"} />
+              </button>
+              <button
                 className={`icon-button highlight-mark-button ${pendingHighEnergyStart?.videoId === currentVideo?.id ? "active" : ""}`}
                 type="button"
                 onClick={markCurrentHighEnergySegment}
@@ -10681,6 +10767,7 @@ export default function App() {
             const seriesTitle = isPlaylistSeriesMode ? seriesTitleByVideoId.get(video.id) : "";
             const duplicateMeta = isDuplicatePlaylistActive ? duplicatePlaylistMetaByVideoId.get(video.id) : null;
             const tags = videoTags[video.id] ?? [];
+            const rating = videoRatings[video.id];
             return (
               <div
                 key={video.id}
@@ -10714,6 +10801,7 @@ export default function App() {
                     ) : null}
                     {seriesTitle ? <small className="episode-series">{seriesTitle}</small> : null}
                     {renderTagChips(tags, { compact: true })}
+                    {renderRatingChip(rating)}
                     {isCompleted ? (
                       <span className="episode-progress compact">
                         <CheckCircle2 size={15} />
@@ -10737,6 +10825,15 @@ export default function App() {
                     aria-label={isFavorite ? "取消收藏" : "收藏/稍后看"}
                   >
                     <Star size={15} fill={isFavorite ? "currentColor" : "none"} />
+                  </button>
+                  <button
+                    className={`episode-action-button rating ${typeof rating === "number" ? "active" : ""}`}
+                    type="button"
+                    onClick={() => openVideoRatingDialog(video)}
+                    title={typeof rating === "number" ? `当前评分 ${rating}/10` : "给视频评分"}
+                    aria-label="给视频评分"
+                  >
+                    <Star size={15} fill={typeof rating === "number" ? "currentColor" : "none"} />
                   </button>
                   <button
                     className="episode-action-button"
@@ -11665,6 +11762,69 @@ export default function App() {
               {isClearingCache ? "正在清除..." : "确认清除"}
             </button>
           </div>
+        </section>
+      </div>
+    ) : null}
+    {ratingDialogVideoId ? (
+      <div className="modal-backdrop tag-dialog-backdrop" role="presentation" onMouseDown={() => setRatingDialogVideoId(null)}>
+        <section
+          aria-labelledby="rating-dialog-title"
+          aria-modal="true"
+          className="tag-dialog rating-dialog"
+          role="dialog"
+          onMouseDown={(event) => event.stopPropagation()}
+        >
+          <button aria-label="关闭" className="dialog-close" type="button" onClick={() => setRatingDialogVideoId(null)}>
+            <X size={18} />
+          </button>
+          <div className="tag-dialog-header rating-dialog-header">
+            <div className="dialog-icon">
+              <Star size={28} />
+            </div>
+            <div className="dialog-copy">
+              <h2 id="rating-dialog-title">视频评分</h2>
+              <p>{videosRef.current.find((video) => video.id === ratingDialogVideoId)?.name ?? "未选择视频"}</p>
+            </div>
+          </div>
+
+          <form
+            className="rating-editor-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              saveRatingDialogValue();
+            }}
+          >
+            <input
+              autoFocus
+              type="number"
+              min="0"
+              max="10"
+              step="0.5"
+              value={ratingInput}
+              placeholder="0-10，留空清除"
+              onChange={(event) => setRatingInput(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") setRatingDialogVideoId(null);
+              }}
+            />
+            <button className="primary-button" type="submit">
+              保存
+            </button>
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={() => {
+                setRatingInput("");
+                const video = videosRef.current.find((item) => item.id === ratingDialogVideoId);
+                if (video) replaceVideoRating(video, null);
+                setRatingMessage("已清除评分。");
+              }}
+            >
+              清除
+            </button>
+          </form>
+
+          {ratingMessage ? <div className="ai-empty-state">{ratingMessage}</div> : null}
         </section>
       </div>
     ) : null}

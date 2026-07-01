@@ -4425,6 +4425,22 @@ button {
   background: rgba(255, 255, 255, 0.07);
 }
 
+.rating-chip {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  min-height: 20px;
+  margin-top: 3px;
+  padding: 0 6px;
+  border: 1px solid rgba(255, 196, 87, 0.34);
+  border-radius: 5px;
+  background: rgba(255, 196, 87, 0.12);
+  color: #ffd57a;
+  font-size: 11px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
 .playlist-item .tag-chip-row {
   max-height: 44px;
   flex-wrap: wrap;
@@ -4476,6 +4492,11 @@ button {
 }
 
 .episode-action-button.favorite.active {
+  background: rgba(255, 196, 87, 0.14);
+  color: #ffc457;
+}
+
+.episode-action-button.rating.active {
   background: rgba(255, 196, 87, 0.14);
   color: #ffc457;
 }
@@ -5541,6 +5562,33 @@ button {
   cursor: grabbing;
 }
 
+.rating-dialog {
+  width: min(460px, calc(100vw - 32px));
+}
+
+.rating-dialog-header {
+  cursor: default;
+  touch-action: auto;
+}
+
+.rating-editor-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.rating-editor-form input {
+  width: 100%;
+  min-width: 0;
+  height: 38px;
+  padding: 0 11px;
+  border: 1px solid #303743;
+  border-radius: 6px;
+  background: #20252d;
+  color: #f5f7fb;
+}
+
 .auto-tag-button svg {
   flex: 0 0 auto;
 }
@@ -6332,6 +6380,7 @@ button {
 .app-shell.theme-light .ai-loading,
 .app-shell.theme-light .ai-question-input,
 .app-shell.theme-light .tag-editor-form input,
+.app-shell.theme-light .rating-editor-form input,
 .app-shell.theme-light .tag-merge-prompt,
 .app-shell.theme-light .media-root-label-field input,
 .app-shell.theme-light .media-root-path-preview,
@@ -6594,6 +6643,12 @@ button {
   border-color: rgba(0, 161, 214, 0.28);
   background: #e1f5fd;
   color: #0077a8;
+}
+
+.app-shell.theme-light .rating-chip {
+  border-color: rgba(180, 118, 18, 0.3);
+  background: #fff4d6;
+  color: #8a5a0a;
 }
 
 .app-shell.theme-light .tag-editor-chip:hover {
@@ -7155,7 +7210,8 @@ button {
 :root[data-theme="light"] .ai-question-input,
 :root[data-theme="light"] .photo-search-row,
 :root[data-theme="light"] .photo-search-row input,
-:root[data-theme="light"] .tag-editor-form input {
+:root[data-theme="light"] .tag-editor-form input,
+:root[data-theme="light"] .rating-editor-form input {
   color: #172033;
 }
 
@@ -7223,6 +7279,7 @@ button {
 :root[data-theme="light"] .ai-loading,
 :root[data-theme="light"] .ai-question-input,
 :root[data-theme="light"] .tag-editor-form input,
+:root[data-theme="light"] .rating-editor-form input,
 :root[data-theme="light"] .tag-merge-prompt {
   border-color: #d7e0ea;
   background: #f8fafc;
@@ -7245,6 +7302,12 @@ button {
   border-color: rgba(0, 161, 214, 0.28);
   background: #e1f5fd;
   color: #0077a8;
+}
+
+:root[data-theme="light"] .rating-chip {
+  border-color: rgba(180, 118, 18, 0.3);
+  background: #fff4d6;
+  color: #8a5a0a;
 }
 
 :root[data-theme="light"] .tag-editor-chip:hover {

@@ -21,7 +21,9 @@ export type LibrarySearchContext<Progress = unknown> = {
   isResumableProgress?: (progress: Progress | undefined) => boolean;
   tagFilters?: string[];
   excludedTagFilters?: string[];
+  minimumRating?: number;
   videoTags?: Record<string, string[] | undefined>;
+  videoRatings?: Record<string, number | undefined>;
 };
 
 export type LibrarySearchEntryVideo<Video extends LibrarySearchVideo, Progress = unknown> = {
@@ -58,14 +60,23 @@ export function createLibrarySearchSignature(query: string) {
   return query.trim();
 }
 
-export function parseLibrarySearchQuery(query: string) {
+export function parseLibrarySearchQuery(query: string, allowExcludedTags = true) {
   const excludedTagFilters: string[] = [];
   const seenExcludedTagKeys = new Set<string>();
+  let minimumRating: number | undefined;
   const queryParts = query.split(/([\s,，、;；|]+)/u);
   const textQuery = queryParts
     .map((part) => {
       if (!part || /^[\s,，、;；|]+$/u.test(part)) return part;
-      if (!part.startsWith("-")) return part;
+      const ratingMatch = part.match(/^\+(\d+(?:\.\d+)?)$/u);
+      if (ratingMatch) {
+        const rating = Number(ratingMatch[1]);
+        if (Number.isFinite(rating) && rating >= 0 && rating <= 10) {
+          minimumRating = minimumRating === undefined ? rating : Math.max(minimumRating, rating);
+          return "";
+        }
+      }
+      if (!allowExcludedTags || !part.startsWith("-")) return part;
       const excludedTag = part.slice(1).trim();
       const excludedTagKey = normalizeTagKey(excludedTag);
       if (!excludedTagKey) return part;
@@ -79,7 +90,11 @@ export function parseLibrarySearchQuery(query: string) {
     .replace(/[\s,，、;；|]+/gu, " ")
     .trim();
 
-  return { textQuery, excludedTagFilters };
+  return {
+    textQuery,
+    excludedTagFilters,
+    ...(minimumRating === undefined ? {} : { minimumRating }),
+  };
 }
 
 export function libraryFolderTitleForVideo(video: LibrarySearchVideo) {
@@ -238,6 +253,7 @@ function scoreVideo<Video extends LibrarySearchVideo, Progress>(
   const tokenVariants = createLibrarySearchTokenVariants(query);
   const searchable = getSearchableFields(video, context);
   const tags = context.videoTags?.[video.id] ?? [];
+  const rating = context.videoRatings?.[video.id];
   const hasTagFilters = Boolean(context.tagFilters?.length);
   if (hasTagFilters && !doTagsSatisfyAllFilters(tags, context.tagFilters ?? [])) {
     return { score: 0, reason: "标签筛选" };
@@ -246,9 +262,21 @@ function scoreVideo<Video extends LibrarySearchVideo, Progress>(
   if (hasExcludedTagFilters && (context.excludedTagFilters ?? []).some((tag) => doTagsSatisfyAllFilters(tags, [tag]))) {
     return { score: 0, reason: "排除标签" };
   }
+  const hasRatingFilter = typeof context.minimumRating === "number";
+  if (hasRatingFilter && (typeof rating !== "number" || rating < (context.minimumRating ?? 0))) {
+    return { score: 0, reason: "评分筛选" };
+  }
 
-  let score = normalizedQuery ? 0 : hasTagFilters || hasExcludedTagFilters ? 30 : 0;
-  const reasons: string[] = normalizedQuery ? [] : hasTagFilters ? ["标签筛选"] : hasExcludedTagFilters ? ["排除标签"] : [];
+  let score = normalizedQuery ? 0 : hasTagFilters || hasExcludedTagFilters || hasRatingFilter ? 30 : 0;
+  const reasons: string[] = normalizedQuery
+    ? []
+    : hasTagFilters
+      ? ["标签筛选"]
+      : hasExcludedTagFilters
+        ? ["排除标签"]
+        : hasRatingFilter
+          ? ["评分筛选"]
+          : [];
 
   if (context.mode === "special" && normalizedQuery && !matchesRequiredSpecialTerms(searchable, query, tags)) {
     return { score: 0, reason: "关键词匹配" };
@@ -322,6 +350,7 @@ function scoreVideo<Video extends LibrarySearchVideo, Progress>(
     });
 
   if (context.favoriteVideoIds?.has(video.id)) score += 1;
+  if (typeof rating === "number") score += Math.min(10, Math.max(0, rating)) / 10;
   if (context.isResumableProgress?.(getProgress(video, context))) score += 1;
   return { score, reason: reasons[0] ?? "关键词匹配" };
 }
@@ -388,17 +417,22 @@ export function searchLibraryEntries<Video extends LibrarySearchVideo, Progress>
   context: LibrarySearchContext<Progress>,
   limit?: number,
 ) {
-  const parsedQuery = context.mode === "special" ? parseLibrarySearchQuery(query) : { textQuery: query, excludedTagFilters: [] };
+  const parsedQuery = parseLibrarySearchQuery(query, context.mode === "special");
   const searchContext =
-    context.mode === "special" && parsedQuery.excludedTagFilters.length
+    (context.mode === "special" && parsedQuery.excludedTagFilters.length) || typeof parsedQuery.minimumRating === "number"
       ? {
           ...context,
-          excludedTagFilters: [...(context.excludedTagFilters ?? []), ...parsedQuery.excludedTagFilters],
+          excludedTagFilters:
+            context.mode === "special"
+              ? [...(context.excludedTagFilters ?? []), ...parsedQuery.excludedTagFilters]
+              : context.excludedTagFilters,
+          minimumRating: parsedQuery.minimumRating,
         }
       : context;
   const hasTagFilters = Boolean(searchContext.tagFilters?.length);
   const hasExcludedTagFilters = Boolean(searchContext.excludedTagFilters?.length);
-  if (!normalizeLibrarySearchText(parsedQuery.textQuery) && !hasTagFilters && !hasExcludedTagFilters) return [];
+  const hasRatingFilter = typeof searchContext.minimumRating === "number";
+  if (!normalizeLibrarySearchText(parsedQuery.textQuery) && !hasTagFilters && !hasExcludedTagFilters && !hasRatingFilter) return [];
   const folderVideosByKey = groupVideosByLibraryFolderKey(videos);
   const scoredVideos = videos
     .map((video) => ({ video, ...scoreVideo(video, parsedQuery.textQuery, searchContext) }))

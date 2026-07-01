@@ -147,6 +147,14 @@ export class LocalDataSqliteStore {
         PRIMARY KEY (library_id, video_id, tag_key)
       );
 
+      CREATE TABLE IF NOT EXISTS video_ratings (
+        library_id TEXT NOT NULL,
+        video_id TEXT NOT NULL,
+        rating REAL NOT NULL,
+        updated_at INTEGER NOT NULL,
+        PRIMARY KEY (library_id, video_id)
+      );
+
       CREATE TABLE IF NOT EXISTS video_stats (
         library_id TEXT NOT NULL,
         video_id TEXT NOT NULL,
@@ -416,6 +424,7 @@ export class LocalDataSqliteStore {
       "video_progress",
       "video_favorites",
       "video_tags",
+      "video_ratings",
       "video_stats",
       "watch_activity",
       "video_highlights",
@@ -453,6 +462,12 @@ export class LocalDataSqliteStore {
         const key = normalizeTagKey(label);
         if (label && key) tagInsert.run(libraryId, videoId, key, label, timestamp);
       }
+    }
+
+    const ratingInsert = this.db.prepare("INSERT INTO video_ratings (library_id, video_id, rating, updated_at) VALUES (?, ?, ?, ?)");
+    for (const [videoId, ratingValue] of Object.entries(asObject(store.videoRatings))) {
+      const rating = Number(ratingValue);
+      if (videoId && Number.isFinite(rating)) ratingInsert.run(libraryId, videoId, Math.min(10, Math.max(0, rating)), timestamp);
     }
 
     const statsInsert = this.db.prepare(`
@@ -588,6 +603,7 @@ export class LocalDataSqliteStore {
     const metadataRow = this.db.prepare("SELECT metadata_json FROM library_metadata WHERE library_id = ?").get(libraryId);
     const hasData = Boolean(metadataRow)
       || Boolean(this.db.prepare("SELECT 1 FROM video_progress WHERE library_id = ? LIMIT 1").get(libraryId))
+      || Boolean(this.db.prepare("SELECT 1 FROM video_ratings WHERE library_id = ? LIMIT 1").get(libraryId))
       || Boolean(this.db.prepare("SELECT 1 FROM watch_activity WHERE library_id = ? LIMIT 1").get(libraryId))
       || Boolean(this.db.prepare("SELECT 1 FROM video_highlights WHERE library_id = ? LIMIT 1").get(libraryId))
       || Boolean(this.db.prepare("SELECT 1 FROM duplicate_detections WHERE library_id = ? LIMIT 1").get(libraryId))
@@ -610,6 +626,11 @@ export class LocalDataSqliteStore {
     for (const row of allRows(this.db.prepare("SELECT video_id, tag_label FROM video_tags WHERE library_id = ? ORDER BY created_at, tag_label"), libraryId)) {
       videoTags[row.video_id] ??= [];
       videoTags[row.video_id].push(row.tag_label);
+    }
+
+    const videoRatings = {};
+    for (const row of allRows(this.db.prepare("SELECT video_id, rating FROM video_ratings WHERE library_id = ?"), libraryId)) {
+      videoRatings[row.video_id] = row.rating;
     }
 
     const videoStats = {};
@@ -682,6 +703,7 @@ export class LocalDataSqliteStore {
       version: playerStoreVersion,
       items: progress,
       favorites,
+      videoRatings,
       videoTags,
       videoStats,
       watchActivity,
@@ -798,6 +820,19 @@ export class LocalDataSqliteStore {
           if (label && key) insert.run(libraryId, videoId, key, label, now());
         }
       }
+    });
+  }
+
+  setVideoRating(libraryId, videoId, rating) {
+    return this.transaction(() => {
+      const numericRating = Number(rating);
+      if (!Number.isFinite(numericRating)) {
+        this.db.prepare("DELETE FROM video_ratings WHERE library_id = ? AND video_id = ?").run(libraryId, videoId);
+        return;
+      }
+      this.db
+        .prepare("INSERT INTO video_ratings (library_id, video_id, rating, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(library_id, video_id) DO UPDATE SET rating = excluded.rating, updated_at = excluded.updated_at")
+        .run(libraryId, videoId, Math.min(10, Math.max(0, numericRating)), now());
     });
   }
 

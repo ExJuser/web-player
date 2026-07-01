@@ -20,6 +20,7 @@ import type {
   VideoItem,
   VideoHighlightSegment,
   VideoHighlightStore,
+  VideoRatingStore,
   VideoStatsStore,
   VideoTagStore,
   WatchActivityItem,
@@ -87,6 +88,18 @@ export function parseVideoTags(source: unknown): VideoTagStore {
       .map((tag) => tag.trim())
       .filter(Boolean);
     if (tags.length) store[videoId] = tags;
+  }
+  return store;
+}
+
+export function parseVideoRatings(source: unknown): VideoRatingStore {
+  if (!source || typeof source !== "object" || Array.isArray(source)) return {};
+
+  const store: VideoRatingStore = {};
+  for (const [videoId, value] of Object.entries(source)) {
+    const rating = typeof value === "number" ? value : Number(value);
+    if (!videoId || !Number.isFinite(rating)) continue;
+    store[videoId] = Math.min(10, Math.max(0, rating));
   }
   return store;
 }
@@ -491,6 +504,7 @@ export function parsePlayerDataStore(raw: string): PlayerDataStore {
     preferences?: unknown;
     settings?: unknown;
     videoTags?: unknown;
+    videoRatings?: unknown;
     videoStats?: unknown;
     watchActivity?: unknown;
     videoHighlights?: unknown;
@@ -512,6 +526,7 @@ export function parsePlayerDataStore(raw: string): PlayerDataStore {
     version: typeof parsed?.version === "number" ? parsed.version : undefined,
     progress: parseProgressItems(progressSource),
     favorites,
+    videoRatings: parseVideoRatings(parsed?.videoRatings),
     videoTags: parseVideoTags(parsed?.videoTags),
     videoStats: parseVideoStats(parsed?.videoStats),
     watchActivity: parseWatchActivity(parsed?.watchActivity),
@@ -536,6 +551,7 @@ export function createDefaultPlayerDataStore(metadata?: PlayerDataStore["metadat
     version: 5,
     progress: {},
     favorites: [],
+    videoRatings: {},
     videoTags: {},
     videoStats: {},
     watchActivity: {},
@@ -801,6 +817,7 @@ function createPersistedPlayerDataPayload(store: PlayerDataStore) {
     version: 5,
     items: store.progress,
     favorites: store.favorites,
+    videoRatings: parseVideoRatings(store.videoRatings),
     videoTags: parseVideoTags(store.videoTags),
     videoStats: parseVideoStats(store.videoStats),
     videoHighlights: parseVideoHighlights(store.videoHighlights),
@@ -955,6 +972,18 @@ export async function savePlayerVideoTags(videoId: string, tags: string[]) {
       Accept: "application/json",
     },
     body: JSON.stringify({ tags }),
+  });
+  if (!response.ok) throw new Error(await readApiError(response));
+}
+
+export async function savePlayerVideoRating(videoId: string, rating: number | null) {
+  const response = await fetch(createApiUrl(`ratings/${encodeURIComponent(videoId)}`), {
+    method: rating === null ? "DELETE" : "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    ...(rating === null ? {} : { body: JSON.stringify({ rating }) }),
   });
   if (!response.ok) throw new Error(await readApiError(response));
 }

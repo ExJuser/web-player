@@ -207,6 +207,29 @@ test("special mode can use only negative tag filters", () => {
   );
 });
 
+test("library search filters by minimum video rating", () => {
+  const videos = [
+    createVideo({ id: "root-anime|show/01.mp4|100|1", name: "第一集.mp4", relativePath: "show/第一集.mp4", mediaRootId: "root-anime" }),
+    createVideo({ id: "root-anime|show/02.mp4|100|2", name: "第二集.mp4", relativePath: "show/第二集.mp4", mediaRootId: "root-anime", lastModified: 2 }),
+  ];
+
+  const results = librarySearchUtils.searchLibraryEntries("+7", videos, {
+    mode: "anime",
+    resultKind: "video",
+    ...createSearchContext({
+      videoRatings: {
+        [videos[0].id]: 6.5,
+        [videos[1].id]: 7,
+      },
+    }),
+  });
+
+  assert.deepEqual(
+    results.map((result) => ({ videoId: result.representativeVideo.id, reason: result.reason })),
+    [{ videoId: videos[1].id, reason: "评分筛选" }],
+  );
+});
+
 test("all and anime modes keep folder-level library search results", () => {
   const videos = [
     createVideo({ id: "root-anime|show/01.mp4|100|1", name: "01.mp4", relativePath: "show/01.mp4", mediaRootId: "root-anime" }),
