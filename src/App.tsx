@@ -404,6 +404,7 @@ import { PlayerLibrarySearchSection } from "./PlayerLibrarySearchSection";
 import { PlayerMediaActionControls } from "./PlayerMediaActionControls";
 import { PlayerOptionControls } from "./PlayerOptionControls";
 import { PlayerPlaybackControls } from "./PlayerPlaybackControls";
+import { PlayerTimelineControls } from "./PlayerTimelineControls";
 import { PlayerViewControls } from "./PlayerViewControls";
 import { RatingFilterCard } from "./RatingFilterCard";
 import { RatingDialog } from "./RatingDialog";
@@ -8603,86 +8604,23 @@ export default function App() {
               keepControlsVisible();
             }}
           >
-            <div className="timeline-row">
-              <span>{formatTime(currentTime)}</span>
-              <div
-                className={`timeline-track ${timelinePreview.isVisible ? "preview-visible" : ""}`}
-                style={
-                  {
-                    "--preview-left": `${timelinePreview.left}%`,
-                  } as React.CSSProperties
-                }
-              >
-                <output className="timeline-preview">
-                  <span className="timeline-preview-frame">
-                    {timelinePreview.imageUrl ? (
-                      <img src={timelinePreview.imageUrl} alt="" draggable={false} />
-                    ) : (
-                      <span className="timeline-preview-placeholder">
-                        {timelinePreview.isLoadingFrame ? "" : formatTime(timelinePreview.time)}
-                      </span>
-                    )}
-                  </span>
-                  <span className="timeline-preview-time">{formatTime(timelinePreview.time)}</span>
-                </output>
-                {duration && currentVideoHighlights.length ? (
-                  <div className="timeline-highlights" aria-hidden="true">
-                    {currentVideoHighlights.map((highlight) => (
-                      <span
-                        key={highlight.id}
-                        style={{
-                          left: `${clamp((highlight.startTime / duration) * 100, 0, 100)}%`,
-                          width: `${clamp(((highlight.endTime - highlight.startTime) / duration) * 100, 0.5, 100)}%`,
-                        }}
-                      />
-                    ))}
-                  </div>
-                ) : null}
-                <input
-                  ref={timelineRef}
-                aria-label="播放进度"
-                className="timeline"
-                type="range"
-                min={0}
-                max={duration || 0}
-                step={0.1}
-                  value={duration ? currentTime : 0}
-                  onChange={(event) => {
-                    if (isPrivacyMode) return;
-                    const nextTime = Number(event.target.value);
-                    seekTo(nextTime);
-                    updateTimelinePreviewFromTime(nextTime, timelinePreview.isDragging);
-                  }}
-                  onPointerDown={(event) => {
-                    if (isPrivacyMode) return;
-                    event.currentTarget.setPointerCapture(event.pointerId);
-                    updateTimelinePreview(event.clientX, true);
-                  }}
-                  onPointerMove={(event) => {
-                    if (isPrivacyMode) return;
-                    updateTimelinePreview(event.clientX, timelinePreview.isDragging);
-                  }}
-                  onPointerUp={(event) => {
-                    if (isPrivacyMode) return;
-                    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-                      event.currentTarget.releasePointerCapture(event.pointerId);
-                    }
-                    stopTimelineDragPreview();
-                    returnFocusToPlayer();
-                  }}
-                  onPointerCancel={() => {
-                    stopTimelineDragPreview();
-                    returnFocusToPlayer();
-                  }}
-                  onPointerLeave={() => {
-                    if (!isPrivacyMode) hideTimelinePreview();
-                  }}
-                style={{ "--progress": `${progressPercent}%` } as React.CSSProperties}
-                  disabled={!currentVideo || isPrivacyMode}
-                />
-              </div>
-              <span>{formatTime(duration)}</span>
-            </div>
+            <PlayerTimelineControls
+              currentTime={currentTime}
+              duration={duration}
+              formatTime={formatTime}
+              hasCurrentVideo={Boolean(currentVideo)}
+              highlights={currentVideoHighlights}
+              isPrivacyMode={isPrivacyMode}
+              progressPercent={progressPercent}
+              timelinePreview={timelinePreview}
+              timelineRef={timelineRef}
+              onHideTimelinePreview={hideTimelinePreview}
+              onReturnFocusToPlayer={returnFocusToPlayer}
+              onSeek={seekTo}
+              onStopTimelineDragPreview={stopTimelineDragPreview}
+              onUpdateTimelinePreview={updateTimelinePreview}
+              onUpdateTimelinePreviewFromTime={updateTimelinePreviewFromTime}
+            />
 
             {currentVideo ? (
               <PlayerHighlightControls
