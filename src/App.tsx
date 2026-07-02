@@ -6,7 +6,6 @@ import {
   FolderOpen,
   HardDrive,
   Images,
-  Pencil,
   Play,
   RotateCcw,
   Rocket,
@@ -15,7 +14,6 @@ import {
   RefreshCw,
   Moon,
   Sun,
-  X,
 } from "lucide-react";
 import {
   useCallback,
@@ -401,6 +399,7 @@ import { PlaylistEmptyState } from "./PlaylistEmptyState";
 import { PlaylistItemCard } from "./PlaylistItemCard";
 import { PlaylistPagination } from "./PlaylistPagination";
 import { PlaylistTools } from "./PlaylistTools";
+import { PlayerHighlightControls } from "./PlayerHighlightControls";
 import { PlayerLibrarySearchSection } from "./PlayerLibrarySearchSection";
 import { PlayerMediaActionControls } from "./PlayerMediaActionControls";
 import { PlayerOptionControls } from "./PlayerOptionControls";
@@ -8685,30 +8684,15 @@ export default function App() {
               <span>{formatTime(duration)}</span>
             </div>
 
-            {currentVideo && (currentVideoHighlights.length || pendingHighEnergyStart?.videoId === currentVideo.id) ? (
-              <div className="highlight-control-row">
-                {pendingHighEnergyStart?.videoId === currentVideo.id ? (
-                  <span className="highlight-pending-chip">起点 {formatTime(pendingHighEnergyStart.time)}</span>
-                ) : null}
-                {currentVideoHighlights.length ? (
-                  <div className="highlight-chip-list" aria-label="高能片段">
-                    {currentVideoHighlights.map((highlight) => (
-                      <span className="highlight-chip" key={highlight.id}>
-                        <button type="button" onClick={() => seekTo(highlight.startTime)}>
-                          {highlight.tag ? <strong>{highlight.tag}</strong> : null}
-                          <span>{formatTime(highlight.startTime)} - {formatTime(highlight.endTime)}</span>
-                        </button>
-                        <button type="button" onClick={() => editCurrentHighEnergySegment(highlight)} aria-label="修改高能片段标签">
-                          <Pencil size={13} />
-                        </button>
-                        <button type="button" onClick={() => removeCurrentHighEnergySegment(highlight.id)} aria-label="删除高能标记">
-                          <X size={13} />
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
+            {currentVideo ? (
+              <PlayerHighlightControls
+                highlights={currentVideoHighlights}
+                pendingStartTime={pendingHighEnergyStart?.videoId === currentVideo.id ? pendingHighEnergyStart.time : null}
+                formatTime={formatTime}
+                onEditHighlight={editCurrentHighEnergySegment}
+                onRemoveHighlight={removeCurrentHighEnergySegment}
+                onSeekToHighlight={seekTo}
+              />
             ) : null}
 
             <div className="control-row">
