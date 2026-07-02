@@ -1,4 +1,5 @@
 import type { HomeVideoCard } from "./playerTypes";
+import type { WatchActivityMetric } from "./watchActivityInsights";
 
 export function formatTime(seconds: number) {
   if (!Number.isFinite(seconds)) return "00:00";
@@ -58,6 +59,11 @@ export function formatCumulativeDuration(seconds: number) {
   const minutes = Math.floor((value % 3600) / 60);
   if (hours > 0) return minutes > 0 ? `${hours}小时${minutes}分` : `${hours}小时`;
   return `${Math.max(1, minutes)} 分钟`;
+}
+
+export function formatWatchActivityMetric(value: number, metric: WatchActivityMetric) {
+  if (metric === "watched") return formatCumulativeDuration(value);
+  return `${Math.round(value)} 次`;
 }
 
 export function formatResolution(width?: number, height?: number) {

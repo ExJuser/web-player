@@ -114,6 +114,14 @@ test("groups activity days into Monday-first calendar months", () => {
   );
 });
 
+test("exports watch activity labels and formats dates", () => {
+  assert.deepEqual(activityInsights.watchActivityRangeOptions.map((option) => option.value), [30, 90, 365]);
+  assert.deepEqual(activityInsights.watchActivityMetricOptions.map((option) => option.value), ["watched", "plays", "completed", "emission"]);
+  assert.deepEqual(activityInsights.watchActivityWeekdayLabels, ["一", "二", "三", "四", "五", "六", "日"]);
+  assert.equal(activityInsights.formatWatchActivityDate("not-a-date"), "not-a-date");
+  assert.match(activityInsights.formatWatchActivityDate("2026-06-29"), /6.*29/);
+});
+
 test("orders daily video ids by watched seconds for thumbnail carousels", () => {
   const videos = [
     createVideo({ id: "video-a", name: "a.mp4" }),

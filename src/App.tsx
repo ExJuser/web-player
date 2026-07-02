@@ -79,8 +79,12 @@ import {
   buildWatchActivityInsights,
   createLocalDateKey,
   createWatchActivityKey,
+  formatWatchActivityDate,
   getWatchActivityMetricValue,
   groupWatchActivityDaysByMonth,
+  watchActivityMetricOptions,
+  watchActivityRangeOptions,
+  watchActivityWeekdayLabels,
   type WatchActivityMetric,
   type WatchActivityRange,
   type WatchActivityTagInsight,
@@ -216,6 +220,7 @@ import {
   formatModifiedTime,
   formatRelativeTime,
   formatTime,
+  formatWatchActivityMetric,
 } from "./playerFormatUtils";
 import {
   compareNaturalRelativePath,
@@ -7933,27 +7938,6 @@ export default function App() {
         </div>
       </div>
     );
-  };
-  const watchActivityRangeOptions: Array<{ value: WatchActivityRange; label: string }> = [
-    { value: 30, label: "30 天" },
-    { value: 90, label: "90 天" },
-    { value: 365, label: "365 天" },
-  ];
-  const watchActivityMetricOptions: Array<{ value: WatchActivityMetric; label: string }> = [
-    { value: "watched", label: "时长" },
-    { value: "plays", label: "次数" },
-    { value: "completed", label: "完成" },
-    { value: "emission", label: "发射" },
-  ];
-  const watchActivityWeekdayLabels = ["一", "二", "三", "四", "五", "六", "日"];
-  const formatWatchActivityDate = (date: string) => {
-    const parsed = new Date(`${date}T00:00:00`);
-    if (Number.isNaN(parsed.getTime())) return date;
-    return parsed.toLocaleDateString("zh-Hans-CN", { month: "numeric", day: "numeric", weekday: "short" });
-  };
-  const formatWatchActivityMetric = (value: number, metric: WatchActivityMetric) => {
-    if (metric === "watched") return formatCumulativeDuration(value);
-    return `${Math.round(value)} 次`;
   };
   const renderWatchActivityDay = (day: typeof watchActivityInsights.days[number]) => {
     const metricValue = getWatchActivityMetricValue(day, watchActivityMetric);

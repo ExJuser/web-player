@@ -57,6 +57,12 @@ test("formats cumulative durations and resolution", () => {
   assert.equal(formatUtils.formatResolution(1920, 1080), "1920 x 1080");
 });
 
+test("formats watch activity metric labels", () => {
+  assert.equal(formatUtils.formatWatchActivityMetric(125 * 60, "watched"), "2小时5分");
+  assert.equal(formatUtils.formatWatchActivityMetric(2.4, "plays"), "2 次");
+  assert.equal(formatUtils.formatWatchActivityMetric(2.6, "emission"), "3 次");
+});
+
 test("formats home and library search progress labels", () => {
   const card = {
     video: { id: "video-1", name: "01.mp4", relativePath: "Show/01.mp4", url: "", size: 1, lastModified: 1, duration: 120 },

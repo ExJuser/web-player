@@ -43,6 +43,21 @@ export type WatchActivityMonthGroup = {
   days: WatchActivityDayInsight[];
 };
 
+export const watchActivityRangeOptions: Array<{ value: WatchActivityRange; label: string }> = [
+  { value: 30, label: "30 天" },
+  { value: 90, label: "90 天" },
+  { value: 365, label: "365 天" },
+];
+
+export const watchActivityMetricOptions: Array<{ value: WatchActivityMetric; label: string }> = [
+  { value: "watched", label: "时长" },
+  { value: "plays", label: "次数" },
+  { value: "completed", label: "完成" },
+  { value: "emission", label: "发射" },
+];
+
+export const watchActivityWeekdayLabels = ["一", "二", "三", "四", "五", "六", "日"];
+
 const dateKeyPattern = /^\d{4}-\d{2}-\d{2}$/;
 
 function padDatePart(value: number) {
@@ -67,6 +82,12 @@ export function getWatchActivityMetricValue(day: WatchActivityDayInsight, metric
   if (metric === "completed") return day.completedCount;
   if (metric === "emission") return day.emissionCount;
   return day.watchedSeconds;
+}
+
+export function formatWatchActivityDate(date: string) {
+  const parsed = new Date(`${date}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return date;
+  return parsed.toLocaleDateString("zh-Hans-CN", { month: "numeric", day: "numeric", weekday: "short" });
 }
 
 function hasWatchActivity(day: WatchActivityDayInsight) {
