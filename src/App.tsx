@@ -396,10 +396,9 @@ import { PhotoRootStatusCard } from "./PhotoRootStatusCard";
 import { PhotoViewerFilmstrip } from "./PhotoViewerFilmstrip";
 import { PhotoViewerHeader } from "./PhotoViewerHeader";
 import { PhotoViewerStage } from "./PhotoViewerStage";
-import { PlaylistEmptyState } from "./PlaylistEmptyState";
-import { PlaylistItemCard } from "./PlaylistItemCard";
 import { PlaylistPagination } from "./PlaylistPagination";
 import { PlaylistTools } from "./PlaylistTools";
+import { PlaylistVideoList } from "./PlaylistVideoList";
 import { PlayerDanmakuLayer } from "./PlayerDanmakuLayer";
 import { PlayerFeedbackOverlays } from "./PlayerFeedbackOverlays";
 import { PlayerHighlightControls } from "./PlayerHighlightControls";
@@ -8767,68 +8766,47 @@ export default function App() {
           onSubmit={() => void runLibrarySearch("player")}
         />
 
-        <div
-          className="playlist"
-          ref={playlistRef}
+        <PlaylistVideoList
+          currentVideoId={currentVideoId}
+          duplicatePlaylistMetaByVideoId={duplicatePlaylistMetaByVideoId}
+          favoriteVideoIds={favoriteVideoIds}
+          homeMediaModeLabel={homeMediaModeLabel}
+          isDuplicatePlaylistActive={isDuplicatePlaylistActive}
+          isRatingPlaylistActive={isRatingPlaylistActive}
+          isPlaylistSeriesMode={isPlaylistSeriesMode}
+          isVideoDeletePending={isVideoDeletePending}
+          message={message}
+          modeFilteredVideoCount={modeFilteredVideos.length}
+          pagedPlaylistVideos={pagedPlaylistVideos}
+          playlistIndexById={playlistIndexById}
+          playlistRef={playlistRef}
+          progressStore={progressStore}
+          seriesTitleByVideoId={seriesTitleByVideoId}
+          totalVideoCount={videos.length}
+          videoComments={videoComments}
+          videoRatings={videoRatings}
+          videoTags={videoTags}
+          visibleVideoCount={visibleVideos.length}
+          createVideoTitle={createVideoMetadataTitle}
+          onDelete={requestDeleteVideo}
+          onFavoriteToggle={toggleFavorite}
+          onOpenRating={openVideoRatingDialog}
+          onResetProgress={resetVideoProgress}
           onScroll={markPlaylistUserScroll}
-        >
-          {pagedPlaylistVideos.map((video) => {
-            const isActive = video.id === currentVideoId;
-            const progress = progressStore[video.id];
-            const isCompleted = Boolean(progress?.completed);
-            const playlistIndex = playlistIndexById.get(video.id) ?? 0;
-            const isFavorite = favoriteVideoIds.has(video.id);
-            const seriesTitle = isPlaylistSeriesMode ? seriesTitleByVideoId.get(video.id) : "";
-            const duplicateMeta = isDuplicatePlaylistActive ? duplicatePlaylistMetaByVideoId.get(video.id) : null;
-            const tags = videoTags[video.id] ?? [];
-            const rating = videoRatings[video.id];
-            const ratingComment = videoComments[video.id];
-            return (
-              <PlaylistItemCard
-                key={video.id}
-                duplicateMeta={duplicateMeta}
-                hasProgress={Boolean(progress)}
-                isActive={isActive}
-                isCompleted={isCompleted}
-                isDeletePending={isVideoDeletePending}
-                isFavorite={isFavorite}
-                playlistIndex={playlistIndex}
-                rating={rating}
-                ratingComment={ratingComment}
-                seriesTitle={seriesTitle}
-                tags={tags}
-                title={createVideoMetadataTitle(video)}
-                video={video}
-                onDelete={requestDeleteVideo}
-                onFavoriteToggle={toggleFavorite}
-                onOpenRating={openVideoRatingDialog}
-                onResetProgress={resetVideoProgress}
-                onSelect={(selectedVideo) => {
-                    if (isActive) return;
-                    if (isDuplicatePlaylistActive) {
-                      openDuplicateVideo(selectedVideo, { keepDuplicatePlaylist: true });
-                      return;
-                    }
-                    if (isRatingPlaylistActive) {
-                      selectVideo(selectedVideo.id, { keepRatingPlaylist: true, syncSeriesMode: false });
-                      return;
-                    }
-                    selectVideo(selectedVideo.id);
-                  }}
-                onThumbnailError={(videoId) => setVideoThumbnailState(videoId, "failed")}
-              />
-            );
-          })}
-          <PlaylistEmptyState
-            homeMediaModeLabel={homeMediaModeLabel}
-            isDuplicatePlaylistActive={isDuplicatePlaylistActive}
-            isRatingPlaylistActive={isRatingPlaylistActive}
-            message={message}
-            modeFilteredVideoCount={modeFilteredVideos.length}
-            totalVideoCount={videos.length}
-            visibleVideoCount={visibleVideos.length}
-          />
-        </div>
+          onSelect={(selectedVideo, isActive) => {
+            if (isActive) return;
+            if (isDuplicatePlaylistActive) {
+              openDuplicateVideo(selectedVideo, { keepDuplicatePlaylist: true });
+              return;
+            }
+            if (isRatingPlaylistActive) {
+              selectVideo(selectedVideo.id, { keepRatingPlaylist: true, syncSeriesMode: false });
+              return;
+            }
+            selectVideo(selectedVideo.id);
+          }}
+          onThumbnailError={(videoId) => setVideoThumbnailState(videoId, "failed")}
+        />
         <PlaylistPagination
           endLabel={playlistPageEndLabel}
           page={visiblePlaylistPage}
