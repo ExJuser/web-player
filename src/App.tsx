@@ -406,6 +406,7 @@ import { PlayerLibrarySearchSection } from "./PlayerLibrarySearchSection";
 import { PlayerMediaActionControls } from "./PlayerMediaActionControls";
 import { PlayerOptionControls } from "./PlayerOptionControls";
 import { PlayerPlaybackControls } from "./PlayerPlaybackControls";
+import { PlayerStagePlaceholders } from "./PlayerStagePlaceholders";
 import { PlayerTimelineControls } from "./PlayerTimelineControls";
 import { PlayerViewControls } from "./PlayerViewControls";
 import { RatingFilterCard } from "./RatingFilterCard";
@@ -415,6 +416,7 @@ import { ShortcutDialog } from "./ShortcutDialog";
 import { SpecialInsightsCard } from "./SpecialInsightsCard";
 import { SpecialStatsControl } from "./SpecialStatsControl";
 import { TagDialog } from "./TagDialog";
+import { TimelinePreviewTargets } from "./TimelinePreviewTargets";
 import { WatchActivityMonth, WatchActivityTagButton } from "./WatchActivityCalendar";
 
 type LibrarySearchMode = "idle" | "local" | "ai" | "empty";
@@ -8481,18 +8483,9 @@ export default function App() {
                   <track key={selectedSubtitle.id} src={selectedSubtitle.url} kind="subtitles" label={selectedSubtitle.name} default />
                 ) : null}
               </video>
-            ) : !isPrivacyMode ? (
-              <div className="empty-player">
-                <FolderOpen size={40} />
-                <span>{message}</span>
-              </div>
             ) : null}
 
-            {isPrivacyMode ? (
-              <div className="privacy-cover" role="status" aria-live="polite">
-                <Play size={58} />
-              </div>
-            ) : null}
+            <PlayerStagePlaceholders isPrivacyMode={isPrivacyMode} message={message} showEmptyState={!currentVideo} />
 
             {isDanmakuAvailable ? (
               <PlayerDanmakuLayer
@@ -8510,19 +8503,7 @@ export default function App() {
 
             {launchEffectKey ? <RocketLaunchEffect effectKey={launchEffectKey} /> : null}
 
-            {currentVideo ? (
-              <>
-              <video
-                ref={previewVideoRef}
-                className="timeline-preview-video"
-                muted
-                preload="metadata"
-                playsInline
-                tabIndex={-1}
-              />
-              <canvas ref={previewCanvasRef} className="timeline-preview-canvas" width={192} height={108} />
-              </>
-            ) : null}
+            {currentVideo ? <TimelinePreviewTargets previewCanvasRef={previewCanvasRef} previewVideoRef={previewVideoRef} /> : null}
           </div>
 
           <PlayerFeedbackOverlays doubleClickFeedback={doubleClickFeedback} playerOverlayFeedback={playerOverlayFeedback} />
