@@ -410,6 +410,7 @@ import { ExistingMediaRootDialog, MediaRootLabelDialog, MediaRootLocalPathDialog
 import { LibrarySearchResultItem } from "./LibrarySearchResultItem";
 import { RatingChip, TagChips } from "./MetadataChips";
 import { PhotoAlbumCard } from "./PhotoAlbumCard";
+import { PhotoAlbumStats } from "./PhotoAlbumStats";
 import { PhotoAlbumTagDialog } from "./PhotoAlbumTagDialog";
 import { RatingFilterCard } from "./RatingFilterCard";
 import { RatingDialog } from "./RatingDialog";
@@ -8448,24 +8449,7 @@ export default function App() {
               ) : null}
             </section>
 
-            <section className="home-stats photo-stats">
-              <div>
-                <strong>{photoAlbumStats.total}</strong>
-                <span>相册</span>
-              </div>
-              <div>
-                <strong>{photoAlbumStats.images}</strong>
-                <span>图片</span>
-              </div>
-              <div>
-                <strong>{photoAlbumStats.completed}</strong>
-                <span>已读完</span>
-              </div>
-              <div>
-                <strong>{photoAlbumStats.favorites}</strong>
-                <span>收藏</span>
-              </div>
-            </section>
+            <PhotoAlbumStats stats={photoAlbumStats} />
 
             {photoRootStatuses.some((status) => status.status !== "ready") ? (
               <section className="home-section photo-root-status">
