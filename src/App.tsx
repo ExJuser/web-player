@@ -2219,6 +2219,18 @@ export default function App() {
     if (rates.includes(effectivePlaybackRate)) return rates;
     return [...rates, effectivePlaybackRate].sort((a, b) => a - b);
   }, [effectivePlaybackRate]);
+  const playbackRateSelectOptions = useMemo(
+    () => playbackRateOptions.map((rate) => ({ value: rate, label: `${rate}x` })),
+    [playbackRateOptions],
+  );
+  const holdRateSelectOptions = useMemo(
+    () => holdRates.map((rate) => ({ value: rate, label: `${rate}x` })),
+    [],
+  );
+  const seekStepSelectOptions = useMemo(
+    () => seekSteps.map((step) => ({ value: step, label: `${step}s` })),
+    [],
+  );
   const shellStyle = useMemo(
     () =>
       ({
@@ -8550,7 +8562,7 @@ export default function App() {
                 isMuted={isMuted}
                 isPlaying={isPlaying}
                 playbackRate={effectivePlaybackRate}
-                playbackRateOptions={playbackRateOptions.map((rate) => ({ value: rate, label: `${rate}x` }))}
+                playbackRateOptions={playbackRateSelectOptions}
                 volume={volume}
                 onChangePlaybackRate={setPlaybackRate}
                 onChangeVolume={changeVolume}
@@ -8563,12 +8575,12 @@ export default function App() {
                 hasCompatibleMedia={currentVideoHasCompatibleMedia}
                 hasCurrentVideo={Boolean(currentVideo)}
                 holdPlaybackRate={holdPlaybackRate}
-                holdRateOptions={holdRates.map((rate) => ({ value: rate, label: `${rate}x` }))}
+                holdRateOptions={holdRateSelectOptions}
                 isDeletingCompatibleMedia={isDeletingCompatibleMedia}
                 playbackMode={playbackMode}
                 playbackModeOptions={playbackModeOptions}
                 seekStep={seekStep}
-                seekStepOptions={seekSteps.map((step) => ({ value: step, label: `${step}s` }))}
+                seekStepOptions={seekStepSelectOptions}
                 showPlaybackMode={!isSeriesMode}
                 sourceChoice={currentVideoSourceChoice}
                 onChangeHoldPlaybackRate={setHoldPlaybackRate}
