@@ -1,11 +1,5 @@
 import {
   FolderOpen,
-  HardDrive,
-  Images,
-  ShieldCheck,
-  RefreshCw,
-  Moon,
-  Sun,
 } from "lucide-react";
 import {
   useCallback,
@@ -397,6 +391,7 @@ import { PlayerOptionControls } from "./PlayerOptionControls";
 import { PlayerPlaybackControls } from "./PlayerPlaybackControls";
 import { PlayerStagePlaceholders } from "./PlayerStagePlaceholders";
 import { PlayerTimelineControls } from "./PlayerTimelineControls";
+import { PlayerTopBar } from "./PlayerTopBar";
 import { PlayerVideoElement } from "./PlayerVideoElement";
 import { PlayerViewControls } from "./PlayerViewControls";
 import { RatingFilterCard } from "./RatingFilterCard";
@@ -7930,6 +7925,20 @@ export default function App() {
       : duplicateDetectionMessage;
   const currentPhoto = selectedPhotoAlbum?.images[currentPhotoIndex] ?? null;
   const currentPhotoUrl = getPhotoImageUrl(currentPhoto);
+  const currentVideoMetadataRows = currentVideo ? createVideoMetadataRows(currentVideo) : [];
+  const currentVideoSummaryFallbackText = isPrivacyMode
+    ? "正在播放：推荐视频"
+    : isPhotoAlbumViewVisible
+      ? activeView === "photoViewer" && selectedPhotoAlbum
+        ? selectedPhotoAlbum.title
+        : "看图"
+      : currentVideo
+        ? currentVideo.relativePath
+        : message;
+  const currentVideoPlayabilityMessage =
+    currentVideo?.playability?.performanceWarning ??
+    currentVideo?.playability?.reason ??
+    "当前视频尚未探测播放兼容性。";
 
   return (
     <>
@@ -7948,99 +7957,33 @@ export default function App() {
         </div>
       ) : null}
       <section className="player-column" ref={playerColumnRef}>
-        <header className="top-bar" ref={topBarRef}>
-          <div className="video-summary">
-            {currentVideo && !isPrivacyMode && !isNonPlayerViewVisible ? (
-              <>
-                <dl className="current-video-meta">
-                  {createVideoMetadataRows(currentVideo).map(([label, value]) => (
-                    <div key={label} className={label === "文件名" ? "current-video-file-chip" : undefined}>
-                      <dt>{label}</dt>
-                      <dd>{value}</dd>
-                    </div>
-                  ))}
-                </dl>
-                {compatibleMediaAction.visible || mediaProbeVideoId === currentVideo.id ? (
-                  <div className="compatible-media-status">
-                    <span>
-                      {mediaProbeVideoId === currentVideo.id
-                        ? "正在探测媒体兼容性..."
-                        : currentVideo.playability?.performanceWarning ?? currentVideo.playability?.reason ?? "当前视频尚未探测播放兼容性。"}
-                    </span>
-                    {canCreateCompatibleMedia ? (
-                      <button
-                        className="secondary-button"
-                        type="button"
-                        onClick={openCompatibleMediaConfirm}
-                        disabled={compatibleMediaVideoId === currentVideo.id}
-                      >
-                        <RefreshCw size={15} className={compatibleMediaVideoId === currentVideo.id ? "spin-icon" : undefined} />
-                        {compatibleMediaVideoId === currentVideo.id ? "生成中" : compatibleMediaAction.label}
-                      </button>
-                    ) : null}
-                    {compatibleMediaMessage ? <small>{compatibleMediaMessage}</small> : null}
-                  </div>
-                ) : null}
-              </>
-            ) : isHomeViewVisible ? null : (
-              <p className="current-video-title">
-                {isPrivacyMode
-                  ? "正在播放：推荐视频"
-                  : isPhotoAlbumViewVisible
-                    ? activeView === "photoViewer" && selectedPhotoAlbum
-                      ? selectedPhotoAlbum.title
-                      : "看图"
-                    : currentVideo
-                      ? currentVideo.relativePath
-                      : message}
-              </p>
-            )}
-          </div>
-          <div className="top-actions">
-            {!isPrivacyMode && !isPhotoAlbumViewVisible ? (
-              <button
-                className="secondary-button top-cache-status-button"
-                type="button"
-                onClick={openCacheStatusDialog}
-                title="查看本地缓存"
-              >
-                <HardDrive size={17} />
-                本地缓存
-              </button>
-            ) : null}
-            {!isPrivacyMode && !isPhotoAlbumViewVisible ? (
-              <button
-                className="primary-button top-add-library-button"
-                type="button"
-                onClick={requestAddMediaLibrary}
-                disabled={isScanning}
-              >
-                <FolderOpen size={18} />
-                {isScanning ? "扫描中" : "新增媒体库"}
-              </button>
-            ) : null}
-            {!isPrivacyMode && videos.length && !isHomeViewVisible ? (
-              <button className="secondary-button top-home-button" type="button" onClick={showHomeView}>
-                首页
-              </button>
-            ) : null}
-            {!isPrivacyMode && activeView !== "photos" && activeView !== "photoViewer" ? (
-              <button className="secondary-button top-home-button" type="button" onClick={showPhotoAlbumsView}>
-                <Images size={17} />
-                看图
-              </button>
-            ) : null}
-            <button
-              className="icon-button theme-toggle"
-              type="button"
-              onClick={toggleTheme}
-              title={theme === "dark" ? "切换到白天模式" : "切换到黑夜模式"}
-              aria-label={theme === "dark" ? "切换到白天模式" : "切换到黑夜模式"}
-            >
-              {theme === "dark" ? <Sun size={17} /> : <Moon size={17} />}
-            </button>
-          </div>
-        </header>
+        <PlayerTopBar
+          ref={topBarRef}
+          activeView={activeView}
+          canCreateCompatibleMedia={canCreateCompatibleMedia}
+          compatibleMediaActionLabel={compatibleMediaAction.label}
+          compatibleMediaActionVisible={compatibleMediaAction.visible}
+          compatibleMediaMessage={compatibleMediaMessage}
+          compatibleMediaVideoId={compatibleMediaVideoId}
+          currentVideoId={currentVideo?.id ?? null}
+          isHomeViewVisible={isHomeViewVisible}
+          isNonPlayerViewVisible={isNonPlayerViewVisible}
+          isPhotoAlbumViewVisible={isPhotoAlbumViewVisible}
+          isPrivacyMode={isPrivacyMode}
+          isScanning={isScanning}
+          mediaProbeVideoId={mediaProbeVideoId}
+          metadataRows={currentVideoMetadataRows}
+          playabilityMessage={currentVideoPlayabilityMessage}
+          summaryFallbackText={currentVideoSummaryFallbackText}
+          theme={theme}
+          videoCount={videos.length}
+          onAddMediaLibrary={requestAddMediaLibrary}
+          onOpenCacheStatus={openCacheStatusDialog}
+          onOpenCompatibleMediaConfirm={openCompatibleMediaConfirm}
+          onShowHome={showHomeView}
+          onShowPhotoAlbums={showPhotoAlbumsView}
+          onToggleTheme={toggleTheme}
+        />
 
         {isHomeViewVisible ? (
           <section className="home-dashboard" aria-label="继续观看首页">
