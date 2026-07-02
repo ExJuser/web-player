@@ -53,7 +53,6 @@ import {
   type CSSProperties,
   type FocusEvent as ReactFocusEvent,
   type PointerEvent as ReactPointerEvent,
-  type ReactNode,
 } from "react";
 
 import { fetchLocalJson as fetchJson, readLocalApiStream } from "./localApiClient";
@@ -72,7 +71,6 @@ import {
 import {
   buildSpecialModeInsights,
   type SpecialInsightTab,
-  type SpecialModeTagInsight,
   type SpecialModeVideoInsight,
 } from "./specialInsights";
 import {
@@ -411,6 +409,7 @@ import { RatingChip, TagChips } from "./MetadataChips";
 import { PhotoAlbumTagDialog } from "./PhotoAlbumTagDialog";
 import { RatingDialog } from "./RatingDialog";
 import { ShortcutDialog } from "./ShortcutDialog";
+import { SpecialInsightsCard } from "./SpecialInsightsCard";
 import { TagDialog } from "./TagDialog";
 import { WatchActivityMonth, WatchActivityTagButton } from "./WatchActivityCalendar";
 
@@ -7807,99 +7806,6 @@ export default function App() {
     if (specialInsightTab === "emission") return `${insight.stats.emissionCount} 次发射`;
     return formatRelativeTime(insight.activeAt);
   };
-  const renderSpecialInsightVideoRow = (insight: SpecialModeVideoInsight, index: number) => (
-    <button
-      className="special-insight-video-row"
-      key={`${specialInsightTab}-${insight.video.id}`}
-      type="button"
-      onClick={() => openVideoFromHome(insight.video)}
-      title={insight.video.relativePath || insight.video.name}
-    >
-      <span className="special-insight-rank">{index + 1}</span>
-      <span className="special-insight-row-copy">
-        <strong>{insight.video.name}</strong>
-        <small>{formatSpecialInsightVideoMetric(insight)}</small>
-        <TagChips tags={insight.tags} limit={10} compact />
-        <RatingChip rating={videoRatings[insight.video.id]} comment={videoComments[insight.video.id]} />
-      </span>
-    </button>
-  );
-  const renderSpecialTagInsightButton = (
-    insight: SpecialModeTagInsight,
-    metric: "videoCount" | "played" | "emission",
-    maxValue: number,
-    index: number,
-  ) => {
-    const metricValue =
-      metric === "videoCount"
-        ? insight.videoCount
-        : metric === "played"
-          ? insight.totalPlayedSeconds
-          : insight.emissionCount;
-    const valueLabel =
-      metric === "videoCount"
-        ? `${insight.videoCount} 个`
-        : metric === "played"
-          ? formatCumulativeDuration(insight.totalPlayedSeconds)
-          : `${insight.emissionCount} 次`;
-    const share = maxValue > 0 ? Math.max(8, Math.round((metricValue / maxValue) * 100)) : 0;
-    return (
-      <button
-        className="special-tag-insight"
-        key={`${metric}-${insight.key}`}
-        type="button"
-        onClick={() => runSpecialInsightTagSearch(insight.tag)}
-        style={{
-          "--tag-share": `${share}%`,
-        } as CSSProperties}
-        title={`筛选标签：${insight.tag}`}
-      >
-        <span className="special-tag-insight-meter" aria-hidden="true">
-          <span />
-        </span>
-        <span className="special-tag-insight-rank">{index + 1}</span>
-        <span className="special-tag-insight-copy">
-          <span>{insight.tag}</span>
-          <small>{insight.videoCount} 个视频</small>
-        </span>
-        <strong>{valueLabel}</strong>
-      </button>
-    );
-  };
-  const renderSpecialTagChartGroup = (
-    label: string,
-    icon: ReactNode,
-    insights: SpecialModeTagInsight[],
-    metric: "videoCount" | "played" | "emission",
-    emptyText: string,
-  ) => {
-    const maxValue = insights.reduce((max, insight) => {
-      const value =
-        metric === "videoCount"
-          ? insight.videoCount
-          : metric === "played"
-            ? insight.totalPlayedSeconds
-            : insight.emissionCount;
-      return Math.max(max, value);
-    }, 0);
-    return (
-      <div className={`special-tag-group special-tag-chart-${metric}`}>
-        <span>
-          {icon}
-          {label}
-        </span>
-        <div className="special-tag-chart" role="list" aria-label={label}>
-          {insights.length ? (
-            insights.map((insight, index) =>
-              renderSpecialTagInsightButton(insight, metric, maxValue, index),
-            )
-          ) : (
-            <small>{emptyText}</small>
-          )}
-        </div>
-      </div>
-    );
-  };
   const renderWatchActivityMonth = (month: typeof watchActivityMonthGroups[number]) => (
     <WatchActivityMonth
       carouselCardsByDate={watchActivityCarouselCardsByDate}
@@ -8393,81 +8299,25 @@ export default function App() {
               ) : null}
 
               {specialModeInsights && specialModeInsights.summary.totalVideos ? (
-                <section className="home-section special-insights-card">
-                  <div className="home-section-header">
-                    <h2>特殊模式洞察</h2>
-                    <span>{specialModeInsights.summary.taggedVideos} 个已打标签</span>
-                  </div>
-                  <div className="special-insight-summary">
-                    <div>
-                      <strong>{formatCumulativeDuration(specialModeInsights.summary.totalPlayedSeconds)}</strong>
-                      <span>累计播放</span>
-                    </div>
-                    <div>
-                      <strong>{specialModeInsights.summary.playCount}</strong>
-                      <span>播放次数</span>
-                    </div>
-                    <div>
-                      <strong>{specialModeInsights.summary.emissionCount}</strong>
-                      <span>发射次数</span>
-                    </div>
-                    <div>
-                      <strong>{Math.round(specialModeInsights.summary.tagCoverage * 100)}%</strong>
-                      <span>标签覆盖</span>
-                    </div>
-                  </div>
-                  <div className="special-insight-subtle">
-                    最近发射：
-                    {specialModeInsights.summary.lastEmissionAt
-                      ? formatRelativeTime(specialModeInsights.summary.lastEmissionAt)
-                      : "暂无记录"}
-                  </div>
-                  <div className="special-insight-tabs" role="tablist" aria-label="特殊模式视频榜单">
-                    {specialInsightTabOptions.map((option) => (
-                      <button
-                        className={specialInsightTab === option.value ? "active" : ""}
-                        key={option.value}
-                        type="button"
-                        role="tab"
-                        aria-selected={specialInsightTab === option.value}
-                        onClick={() => setSpecialInsightTab(option.value)}
-                      >
-                        {option.icon}
-                        {option.label}
-                      </button>
-                    ))}
-                  </div>
-                  {specialInsightRankingVideos.length ? (
-                    <div className="special-insight-list">
-                      {specialInsightRankingVideos.map(renderSpecialInsightVideoRow)}
-                    </div>
-                  ) : (
-                    <div className="empty-list compact">当前榜单暂无统计记录。</div>
-                  )}
-                  <div className="special-tag-groups">
-                    {renderSpecialTagChartGroup(
-                      "热门标签",
-                      <Tags size={14} />,
-                      specialModeInsights.tagsByVideoCount,
-                      "videoCount",
-                      "暂无标签",
-                    )}
-                    {renderSpecialTagChartGroup(
-                      "播放标签",
-                      <Clock3 size={14} />,
-                      specialModeInsights.tagsByPlayedDuration,
-                      "played",
-                      "暂无播放统计",
-                    )}
-                    {renderSpecialTagChartGroup(
-                      "发射标签",
-                      <Rocket size={14} />,
-                      specialModeInsights.tagsByEmissionCount,
-                      "emission",
-                      "暂无发射统计",
-                    )}
-                  </div>
-                </section>
+                <SpecialInsightsCard
+                  activeTab={specialInsightTab}
+                  formatDuration={formatCumulativeDuration}
+                  formatRelativeTime={formatRelativeTime}
+                  formatVideoMetric={formatSpecialInsightVideoMetric}
+                  insights={specialModeInsights}
+                  onOpenVideo={openVideoFromHome}
+                  onSelectTag={runSpecialInsightTagSearch}
+                  onTabChange={setSpecialInsightTab}
+                  rankingVideos={specialInsightRankingVideos}
+                  tagGroupIcons={{
+                    videoCount: <Tags size={14} />,
+                    played: <Clock3 size={14} />,
+                    emission: <Rocket size={14} />,
+                  }}
+                  tabOptions={specialInsightTabOptions}
+                  videoComments={videoComments}
+                  videoRatings={videoRatings}
+                />
               ) : null}
             </div>
 
