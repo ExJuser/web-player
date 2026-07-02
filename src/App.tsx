@@ -6,8 +6,6 @@ import {
   FolderOpen,
   HardDrive,
   Images,
-  Play,
-  RotateCcw,
   Rocket,
   ShieldCheck,
   Tags,
@@ -381,6 +379,7 @@ import { HomeLibrarySearchSection } from "./HomeLibrarySearchSection";
 import { HomeMediaLibraryCard } from "./HomeMediaLibraryCard";
 import { HomeModeCard } from "./HomeModeCard";
 import { HomeRecapCard } from "./HomeRecapCard";
+import { HomeResumeSection } from "./HomeResumeSection";
 import { HomeCardThumbnail, HomeListCard } from "./HomeVideoCards";
 import { ExistingMediaRootDialog, MediaRootLabelDialog, MediaRootLocalPathDialogView } from "./MediaRootPromptDialogs";
 import { LibrarySearchResultItem } from "./LibrarySearchResultItem";
@@ -8042,54 +8041,19 @@ export default function App() {
         {isHomeViewVisible ? (
           <section className="home-dashboard" aria-label="继续观看首页">
             <div className="home-primary-column">
-              <section className={`home-resume-card ${primaryHomeCard ? "" : "empty"}`}>
-                {primaryHomeCard ? (
-                  <>
-                    <HomeCardThumbnail card={primaryHomeCard} onThumbnailError={markVideoThumbnailFailed} />
-                    <div className="home-resume-copy">
-                      <span className="home-section-eyebrow">{primaryHomeTitle}</span>
-                      <h2>{primaryHomeCard.video.name}</h2>
-                      <p>{primaryHomeCard.seriesTitle}</p>
-                      <span>{primaryHomeCard.mediaRootLabel}</span>
-                      <span>{primaryHomeCard.video.relativePath}</span>
-                      <div className="home-progress" aria-label={formatHomeProgressLabel(primaryHomeCard)}>
-                        <span style={{ width: `${primaryHomeCard.progressPercent}%` }} />
-                      </div>
-                      <small>{formatHomeMeta(primaryHomeCard)}</small>
-                      <div className="home-resume-actions">
-                        <button className="primary-button" type="button" onClick={() => openVideoFromHome(primaryHomeCard.video)}>
-                          <Play size={18} />
-                          {primaryHomeAction}
-                        </button>
-                        <button
-                          className="secondary-button"
-                          type="button"
-                          onClick={() => openVideoFromHome(primaryHomeCard.video, { fromBeginning: true })}
-                        >
-                          <RotateCcw size={17} />
-                          从头播放
-                        </button>
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <div className="home-empty-state">
-                    <FolderOpen size={42} />
-                    <h2>{videos.length ? `当前${homeMediaModeLabel}没有可播放视频` : "新增一个媒体库开始播放"}</h2>
-                    <p>
-                      {videos.length
-                        ? "切换到全部模式，或确认对应媒体库已完成扫描。"
-                        : "播放器会把你选择的目录加入全局媒体库，扫描视频、匹配字幕并保存观看进度。"}
-                    </p>
-                    {!videos.length ? (
-                      <button className="primary-button" type="button" onClick={requestAddMediaLibrary} disabled={isScanning}>
-                        <FolderOpen size={18} />
-                        {isScanning ? "扫描中" : "新增媒体库"}
-                      </button>
-                    ) : null}
-                  </div>
-                )}
-              </section>
+              <HomeResumeSection
+                actionLabel={primaryHomeAction}
+                card={primaryHomeCard}
+                homeMediaModeLabel={homeMediaModeLabel}
+                isScanning={isScanning}
+                title={primaryHomeTitle}
+                videoCount={videos.length}
+                formatHomeMeta={formatHomeMeta}
+                formatProgressLabel={formatHomeProgressLabel}
+                onAddMediaLibrary={requestAddMediaLibrary}
+                onOpenVideo={openVideoFromHome}
+                onThumbnailError={markVideoThumbnailFailed}
+              />
 
               {nextEpisodeCard ? (
                 <section className="home-section">
