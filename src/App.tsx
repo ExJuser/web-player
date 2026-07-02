@@ -409,6 +409,7 @@ import { LibrarySearchResultItem } from "./LibrarySearchResultItem";
 import { RatingChip, TagChips } from "./MetadataChips";
 import { PhotoAlbumCard } from "./PhotoAlbumCard";
 import { PhotoAlbumTagDialog } from "./PhotoAlbumTagDialog";
+import { RatingFilterCard } from "./RatingFilterCard";
 import { RatingDialog } from "./RatingDialog";
 import { ShortcutDialog } from "./ShortcutDialog";
 import { SpecialInsightsCard } from "./SpecialInsightsCard";
@@ -8342,116 +8343,27 @@ export default function App() {
               </section>
 
               {isRatingFilterEnabled ? (
-                <section className="home-section rating-filter-card">
-                  <div className="home-section-header">
-                    <h2>评分筛选</h2>
-                    <span>{ratingStats.rated} 个已评分</span>
-                  </div>
-                  <div className="rating-filter-stats" aria-label="评分统计">
-                    <div>
-                      <strong>{ratingStats.high}</strong>
-                      <span>&gt; 8</span>
-                    </div>
-                    <div>
-                      <strong>{ratingStats.low}</strong>
-                      <span>&lt; 6</span>
-                    </div>
-                    <div>
-                      <strong>{ratingStats.unrated}</strong>
-                      <span>未评分</span>
-                    </div>
-                  </div>
-                  <div className="rating-filter-builder">
-                    <div className="playlist-filter rating-operator-filter" role="group" aria-label="评分筛选条件">
-                      <button
-                        className={ratingFilterOperator === "gt" ? "active" : ""}
-                        type="button"
-                        onClick={() => setRatingFilterOperator("gt")}
-                        aria-pressed={ratingFilterOperator === "gt"}
-                      >
-                        大于
-                      </button>
-                      <button
-                        className={ratingFilterOperator === "lt" ? "active" : ""}
-                        type="button"
-                        onClick={() => setRatingFilterOperator("lt")}
-                        aria-pressed={ratingFilterOperator === "lt"}
-                      >
-                        小于
-                      </button>
-                      <button
-                        className={ratingFilterOperator === "eq" ? "active" : ""}
-                        type="button"
-                        onClick={() => setRatingFilterOperator("eq")}
-                        aria-pressed={ratingFilterOperator === "eq"}
-                      >
-                        等于
-                      </button>
-                    </div>
-                    <label className="rating-threshold-input">
-                      <span>分数</span>
-                      <input
-                        type="number"
-                        min="0"
-                        max="10"
-                        step="0.5"
-                        value={ratingFilterThreshold}
-                        onChange={(event) => {
-                          const nextValue = Number(event.target.value);
-                          if (!Number.isFinite(nextValue)) return;
-                          setRatingFilterThreshold(clamp(nextValue, 0, 10));
-                        }}
-                      />
-                    </label>
-                  </div>
-                  <div className="duplicate-video-actions rating-filter-actions">
-                    <button
-                      className="secondary-button duplicate-detection-button"
-                      type="button"
-                      onClick={() => {
-                        setRatingFilterOperator("gt");
-                        setRatingFilterThreshold(8);
-                        openRatingPlaylist("numeric", "gt", 8);
-                      }}
-                      disabled={!ratingStats.high}
-                    >
-                      <Star size={16} />
-                      高分 &gt; 8
-                    </button>
-                    <button
-                      className="secondary-button duplicate-detection-button"
-                      type="button"
-                      onClick={() => {
-                        setRatingFilterOperator("lt");
-                        setRatingFilterThreshold(6);
-                        openRatingPlaylist("numeric", "lt", 6);
-                      }}
-                      disabled={!ratingStats.low}
-                    >
-                      <Star size={16} />
-                      低分 &lt; 6
-                    </button>
-                    <button
-                      className="secondary-button duplicate-detection-button"
-                      type="button"
-                      onClick={() => openRatingPlaylist("unrated")}
-                      disabled={!ratingStats.unrated}
-                    >
-                      <Star size={16} />
-                      未评分
-                    </button>
-                    <button
-                      className="primary-button duplicate-detection-button"
-                      type="button"
-                      onClick={() => openRatingPlaylist("numeric")}
-                      disabled={!numericRatingPlaylistCount}
-                      title={numericRatingPlaylistCount ? `进入${ratingFilterLabel}的临时列表` : "当前条件没有匹配视频"}
-                    >
-                      <Play size={16} />
-                      进入评分列表
-                    </button>
-                  </div>
-                </section>
+                <RatingFilterCard
+                  numericRatingPlaylistCount={numericRatingPlaylistCount}
+                  onOpenHigh={() => {
+                    setRatingFilterOperator("gt");
+                    setRatingFilterThreshold(8);
+                    openRatingPlaylist("numeric", "gt", 8);
+                  }}
+                  onOpenLow={() => {
+                    setRatingFilterOperator("lt");
+                    setRatingFilterThreshold(6);
+                    openRatingPlaylist("numeric", "lt", 6);
+                  }}
+                  onOpenNumeric={() => openRatingPlaylist("numeric")}
+                  onOpenUnrated={() => openRatingPlaylist("unrated")}
+                  onOperatorChange={setRatingFilterOperator}
+                  onThresholdChange={(threshold) => setRatingFilterThreshold(clamp(threshold, 0, 10))}
+                  ratingFilterLabel={ratingFilterLabel}
+                  ratingFilterOperator={ratingFilterOperator}
+                  ratingFilterThreshold={ratingFilterThreshold}
+                  ratingStats={ratingStats}
+                />
               ) : null}
 
               {shouldShowHomeRecap ? (
