@@ -409,6 +409,7 @@ import { ExistingMediaRootDialog, MediaRootLabelDialog, MediaRootLocalPathDialog
 import { LibrarySearchResultItem } from "./LibrarySearchResultItem";
 import { RatingChip, TagChips } from "./MetadataChips";
 import { PhotoAlbumCard } from "./PhotoAlbumCard";
+import { PhotoAlbumEmptyState } from "./PhotoAlbumEmptyState";
 import { PhotoAlbumPagination } from "./PhotoAlbumPagination";
 import { PhotoAlbumSearchRow } from "./PhotoAlbumSearchRow";
 import { PhotoAlbumStats } from "./PhotoAlbumStats";
@@ -8429,21 +8430,12 @@ export default function App() {
                 />
               </>
             ) : (
-              <section className="home-section photo-empty-state">
-                <Images size={42} />
-                <h2>{isPhotoAlbumsLoading ? "正在扫描看图文件夹" : "还没有可显示的图集"}</h2>
-                <p>
-                  {photoAlbumSearchQuery.trim()
-                    ? "没有匹配当前搜索的图集。"
-                    : photoAlbumFilter === "favorites"
-                      ? "收藏图集后会出现在这里。"
-                      : "手动选择文件夹后，会把其中包含图片的文件夹识别为图集。"}
-                </p>
-                <button className="primary-button" type="button" onClick={() => void choosePhotoAlbumDirectory()} disabled={isPhotoAlbumsLoading}>
-                  <FolderOpen size={18} />
-                  {isPhotoAlbumsLoading ? "扫描中" : "选择看图文件夹"}
-                </button>
-              </section>
+              <PhotoAlbumEmptyState
+                filter={photoAlbumFilter}
+                isLoading={isPhotoAlbumsLoading}
+                searchQuery={photoAlbumSearchQuery}
+                onChooseDirectory={() => void choosePhotoAlbumDirectory()}
+              />
             )}
           </section>
         ) : null}
