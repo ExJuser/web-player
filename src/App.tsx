@@ -398,6 +398,7 @@ import {
   type ClearCacheResponse,
 } from "./cacheStatusUtils";
 import { CacheStatusDialog } from "./CacheStatusDialog";
+import { RatingDialog } from "./RatingDialog";
 
 type PhotoAlbumViewFilter = "all" | "favorites";
 
@@ -10960,108 +10961,31 @@ export default function App() {
       formatFileSize={formatFileSize}
       formatModifiedTime={formatModifiedTime}
     />
-    {ratingDialogVideoId ? (
-      <div className="modal-backdrop tag-dialog-backdrop" role="presentation" onMouseDown={() => setRatingDialogVideoId(null)}>
-        <section
-          aria-labelledby="rating-dialog-title"
-          aria-modal="true"
-          className="tag-dialog rating-dialog"
-          role="dialog"
-          onMouseDown={(event) => event.stopPropagation()}
-        >
-          <button aria-label="关闭" className="dialog-close" type="button" onClick={() => setRatingDialogVideoId(null)}>
-            <X size={18} />
-          </button>
-          <div className="tag-dialog-header rating-dialog-header">
-            <div className="dialog-icon">
-              <Star size={28} />
-            </div>
-            <div className="dialog-copy">
-              <h2 id="rating-dialog-title">视频评分</h2>
-              <p>{videosRef.current.find((video) => video.id === ratingDialogVideoId)?.name ?? "未选择视频"}</p>
-            </div>
-          </div>
-
-          <form
-            className="rating-editor-form"
-            onSubmit={(event) => {
-              event.preventDefault();
-              saveRatingDialogValue();
-            }}
-          >
-            <div
-              className="rating-star-picker"
-              role="radiogroup"
-              aria-label="视频评分"
-              onMouseLeave={() => setRatingHoverValue(null)}
-            >
-              {Array.from({ length: 10 }, (_, index) => {
-                const value = index + 1;
-                const selectedRating = ratingHoverValue ?? (Number(ratingInput) || 0);
-                const isActive = value <= selectedRating;
-                return (
-                  <button
-                    autoFocus={value === Math.max(1, Math.min(10, Math.round(selectedRating || 1)))}
-                    className={isActive ? "active" : ""}
-                    key={value}
-                    type="button"
-                    role="radio"
-                    aria-checked={Number(ratingInput) === value}
-                    aria-label={`${value} 分`}
-                    title={`${value} 分`}
-                    onClick={() => {
-                      setRatingInput(String(value));
-                      setRatingMessage("");
-                    }}
-                    onBlur={() => setRatingHoverValue(null)}
-                    onMouseEnter={() => setRatingHoverValue(value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Escape") setRatingDialogVideoId(null);
-                    }}
-                  >
-                    <Star size={24} fill={isActive ? "currentColor" : "currentColor"} />
-                  </button>
-                );
-              })}
-            </div>
-            <div className="rating-editor-status">
-              {ratingInput ? `${ratingInput} / 10` : "未评分"}
-            </div>
-            <textarea
-              className="rating-comment-input"
-              rows={3}
-              value={ratingCommentInput}
-              placeholder="输入评价"
-              onChange={(event) => setRatingCommentInput(event.currentTarget.value)}
-            />
-            <div className="rating-editor-actions">
-              <button className="primary-button" type="submit">
-                保存
-              </button>
-              <button
-                className="secondary-button"
-                type="button"
-                onClick={() => {
-                  setRatingInput("");
-                  setRatingCommentInput("");
-                  setRatingHoverValue(null);
-                  const video = videosRef.current.find((item) => item.id === ratingDialogVideoId);
-                  if (video) {
-                    replaceVideoRating(video, null);
-                    replaceVideoComment(video, "");
-                  }
-                  setRatingMessage("已清除评分和评价。");
-                }}
-              >
-                清除
-              </button>
-            </div>
-          </form>
-
-          {ratingMessage ? <div className="ai-empty-state">{ratingMessage}</div> : null}
-        </section>
-      </div>
-    ) : null}
+    <RatingDialog
+      isOpen={Boolean(ratingDialogVideoId)}
+      videoName={videosRef.current.find((video) => video.id === ratingDialogVideoId)?.name ?? "未选择视频"}
+      ratingInput={ratingInput}
+      ratingCommentInput={ratingCommentInput}
+      ratingHoverValue={ratingHoverValue}
+      ratingMessage={ratingMessage}
+      onClose={() => setRatingDialogVideoId(null)}
+      onSave={saveRatingDialogValue}
+      onClear={() => {
+        setRatingInput("");
+        setRatingCommentInput("");
+        setRatingHoverValue(null);
+        const video = videosRef.current.find((item) => item.id === ratingDialogVideoId);
+        if (video) {
+          replaceVideoRating(video, null);
+          replaceVideoComment(video, "");
+        }
+        setRatingMessage("已清除评分和评价。");
+      }}
+      onRatingInputChange={setRatingInput}
+      onRatingCommentInputChange={setRatingCommentInput}
+      onRatingHoverValueChange={setRatingHoverValue}
+      onRatingMessageChange={setRatingMessage}
+    />
     {isTagDialogOpen ? (
       <div className="modal-backdrop tag-dialog-backdrop" role="presentation" onMouseDown={() => setIsTagDialogOpen(false)}>
         <section
