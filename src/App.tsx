@@ -1,6 +1,4 @@
 import {
-  ArrowDownUp,
-  ArrowUp,
   Activity,
   BarChart3,
   CalendarDays,
@@ -8,7 +6,6 @@ import {
   FolderOpen,
   HardDrive,
   Images,
-  LocateFixed,
   Pencil,
   Play,
   RotateCcw,
@@ -367,7 +364,6 @@ import {
 import { AiSubtitleDialog, type AiSubtitleTab } from "./AiSubtitleDialog";
 import { DanmakuDialog } from "./DanmakuDialog";
 import { CacheStatusDialog } from "./CacheStatusDialog";
-import { BangumiLinkButton } from "./BangumiLinkButton";
 import {
   CompatibleMediaDialogs,
   type CompatibleMediaConfirmState,
@@ -402,9 +398,9 @@ import { PhotoViewerFilmstrip } from "./PhotoViewerFilmstrip";
 import { PhotoViewerHeader } from "./PhotoViewerHeader";
 import { PhotoViewerStage } from "./PhotoViewerStage";
 import { PlaylistEmptyState } from "./PlaylistEmptyState";
-import { PlaylistFilterControl } from "./PlaylistFilterControl";
 import { PlaylistItemCard } from "./PlaylistItemCard";
 import { PlaylistPagination } from "./PlaylistPagination";
+import { PlaylistTools } from "./PlaylistTools";
 import { PlayerMediaActionControls } from "./PlayerMediaActionControls";
 import { PlayerOptionControls } from "./PlayerOptionControls";
 import { PlayerPlaybackControls } from "./PlayerPlaybackControls";
@@ -412,7 +408,6 @@ import { PlayerViewControls } from "./PlayerViewControls";
 import { RatingFilterCard } from "./RatingFilterCard";
 import { RatingDialog } from "./RatingDialog";
 import { ShortcutDialog } from "./ShortcutDialog";
-import { SeriesMenu } from "./SeriesMenu";
 import { SpecialInsightsCard } from "./SpecialInsightsCard";
 import { SpecialStatsControl } from "./SpecialStatsControl";
 import { TagDialog } from "./TagDialog";
@@ -8841,101 +8836,46 @@ export default function App() {
                   : "等待新增媒体库"}
             </span>
           </div>
-          <div className={`playlist-tools ${isPlaylistSeriesMode ? "series-mode" : ""}`}>
-            <span className={`player-mode-indicator mode-${homeMediaMode}`} title={`当前播放模式：${playerMediaModeLabel}`}>
-              {isDuplicatePlaylistActive ? "重复" : isRatingPlaylistActive ? "评分" : playerMediaModeLabel}
-            </span>
-            {isPlaylistSeriesMode ? (
-              <SeriesMenu
-                isOpen={isSeriesMenuOpen}
-                options={seriesOptions}
-                selectedSeriesKey={selectedSeriesKey}
-                onSelectSeries={updateSelectedSeries}
-                onToggleOpen={() => setIsSeriesMenuOpen((isOpen) => !isOpen)}
-              />
-            ) : null}
-            {isPlaylistSeriesMode ? (
-              <BangumiLinkButton
-                canOpen={canOpenBangumiSubject}
-                isLoading={activeBangumiMatch?.status === "loading"}
-                title={bangumiButtonTitle}
-                onOpen={openBangumiSubject}
-              />
-            ) : null}
-            <ControlSelect
-              label="排序"
-              ariaLabel="播放列表排序方式"
-              value={playlistSortMode}
-              options={playlistSortOptions}
-              onChange={updatePlaylistSortMode}
-              className="playlist-sort-control"
-              disabled={isDuplicatePlaylistActive || isRatingPlaylistActive || !modeFilteredVideos.length}
-            />
-            <button
-              className={`playlist-order-button ${isPlaylistSortReversed ? "active" : ""}`}
-              type="button"
-              onClick={togglePlaylistSortDirection}
-              disabled={isDuplicatePlaylistActive || isRatingPlaylistActive || !modeFilteredVideos.length}
-              title={isPlaylistSortReversed ? "切换为正序" : "切换为倒序"}
-              aria-label={isPlaylistSortReversed ? "切换为正序" : "切换为倒序"}
-            >
-              <ArrowDownUp size={16} />
-            </button>
-            <button
-              className="playlist-top-button"
-              type="button"
-              onClick={() => scrollPlaylistToTop()}
-              disabled={!visibleVideos.length || playlistViewport.scrollTop <= 0}
-              title="回到顶部"
-              aria-label="回到顶部"
-            >
-              <ArrowUp size={16} />
-            </button>
-            <button
-              className="playlist-locate-button"
-              type="button"
-              onClick={() => scrollToCurrentPlaylistItem()}
-              disabled={!isCurrentVideoVisible}
-              title={isCurrentVideoVisible ? "回到当前播放" : "当前播放不在列表筛选结果中"}
-              aria-label={isCurrentVideoVisible ? "回到当前播放" : "当前播放不在列表筛选结果中"}
-            >
-              <LocateFixed size={16} />
-            </button>
-            {isDuplicatePlaylistActive ? (
-              <button
-                className="playlist-clear-button"
-                type="button"
-                onClick={() => {
-                  setPlaylistPage(1);
-                  setIsDuplicatePlaylistActive(false);
-                }}
-                title="退出重复列表"
-              >
-                退出
-              </button>
-            ) : isRatingPlaylistActive ? (
-              <button
-                className="playlist-clear-button"
-                type="button"
-                onClick={() => {
-                  setPlaylistPage(1);
-                  setRatingPlaylistMode(null);
-                }}
-                title="退出评分列表"
-              >
-                退出
-              </button>
-            ) : !isPlaylistSeriesMode ? (
-              <PlaylistFilterControl
-                disabled={!modeFilteredVideos.length}
-                filter={playlistFilter}
-                onChange={(nextFilter) => {
-                  setPlaylistPage(1);
-                  setPlaylistFilter(nextFilter);
-                }}
-              />
-            ) : null}
-          </div>
+          <PlaylistTools
+            bangumiButtonTitle={bangumiButtonTitle}
+            canOpenBangumiSubject={canOpenBangumiSubject}
+            hasModeFilteredVideos={Boolean(modeFilteredVideos.length)}
+            hasVisibleVideos={Boolean(visibleVideos.length)}
+            homeMediaMode={homeMediaMode}
+            isBangumiLoading={activeBangumiMatch?.status === "loading"}
+            isCurrentVideoVisible={isCurrentVideoVisible}
+            isDuplicatePlaylistActive={isDuplicatePlaylistActive}
+            isPlaylistSeriesMode={isPlaylistSeriesMode}
+            isPlaylistSortReversed={isPlaylistSortReversed}
+            isRatingPlaylistActive={isRatingPlaylistActive}
+            isSeriesMenuOpen={isSeriesMenuOpen}
+            playerMediaModeLabel={playerMediaModeLabel}
+            playlistFilter={playlistFilter}
+            playlistScrollTop={playlistViewport.scrollTop}
+            playlistSortMode={playlistSortMode}
+            playlistSortOptions={playlistSortOptions}
+            selectedSeriesKey={selectedSeriesKey}
+            seriesOptions={seriesOptions}
+            onChangePlaylistFilter={(nextFilter) => {
+              setPlaylistPage(1);
+              setPlaylistFilter(nextFilter);
+            }}
+            onChangePlaylistSortMode={updatePlaylistSortMode}
+            onClearDuplicatePlaylist={() => {
+              setPlaylistPage(1);
+              setIsDuplicatePlaylistActive(false);
+            }}
+            onClearRatingPlaylist={() => {
+              setPlaylistPage(1);
+              setRatingPlaylistMode(null);
+            }}
+            onOpenBangumiSubject={openBangumiSubject}
+            onScrollPlaylistToCurrent={() => scrollToCurrentPlaylistItem()}
+            onScrollPlaylistToTop={() => scrollPlaylistToTop()}
+            onSelectSeries={updateSelectedSeries}
+            onTogglePlaylistSortDirection={togglePlaylistSortDirection}
+            onToggleSeriesMenu={() => setIsSeriesMenuOpen((isOpen) => !isOpen)}
+          />
         </div>
 
         <section className="player-library-search library-search-card" aria-label="播放器片库搜索">
