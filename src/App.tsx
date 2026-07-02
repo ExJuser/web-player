@@ -378,6 +378,8 @@ import { HomeLibraryStats } from "./HomeLibraryStats";
 import { HomeLibrarySearchSection } from "./HomeLibrarySearchSection";
 import { HomeMediaLibraryCard } from "./HomeMediaLibraryCard";
 import { HomeModeCard } from "./HomeModeCard";
+import { HomeNextEpisodeSection } from "./HomeNextEpisodeSection";
+import { HomeRecentSection } from "./HomeRecentSection";
 import { HomeRecapCard } from "./HomeRecapCard";
 import { HomeResumeSection } from "./HomeResumeSection";
 import { HomeCardThumbnail, HomeListCard } from "./HomeVideoCards";
@@ -8056,33 +8058,14 @@ export default function App() {
               />
 
               {nextEpisodeCard ? (
-                <section className="home-section">
-                  <div className="home-section-header">
-                    <h2>下一集</h2>
-                    <span>{nextEpisodeCard.seriesTitle}</span>
-                  </div>
-                  <div className="home-next-card">
-                    <HomeCardThumbnail card={nextEpisodeCard} onThumbnailError={markVideoThumbnailFailed} />
-                    <div>
-                      <strong>{nextEpisodeCard.video.name}</strong>
-                      <small>{nextEpisodeCard.mediaRootLabel} · {nextEpisodeCard.video.relativePath}</small>
-                    </div>
-                    <button className="secondary-button" type="button" onClick={() => openVideoFromHome(nextEpisodeCard.video)}>
-                      播放
-                    </button>
-                  </div>
-                </section>
+                <HomeNextEpisodeSection
+                  card={nextEpisodeCard}
+                  onOpenVideo={openVideoFromHome}
+                  onThumbnailError={markVideoThumbnailFailed}
+                />
               ) : null}
 
-              {recentHomeCards.length ? (
-                <section className="home-section">
-                  <div className="home-section-header">
-                    <h2>最近观看</h2>
-                    <span>{recentHomeCards.length} 个记录</span>
-                  </div>
-                  <div className="home-list-grid">{recentHomeCards.map(renderHomeListCard)}</div>
-                </section>
-              ) : null}
+              <HomeRecentSection cards={recentHomeCards} renderCard={renderHomeListCard} />
 
               {isRatingFilterEnabled ? (
                 <section className="home-section watch-activity-card">
