@@ -406,6 +406,7 @@ import { EmbeddedSubtitleDialog } from "./EmbeddedSubtitleDialog";
 import { FolderAccessDialog } from "./FolderAccessDialog";
 import { HighEnergyTagDialog, type HighEnergyTagPrompt } from "./HighEnergyTagDialog";
 import { ExistingMediaRootDialog, MediaRootLabelDialog, MediaRootLocalPathDialogView } from "./MediaRootPromptDialogs";
+import { RatingChip, TagChips } from "./MetadataChips";
 import { PhotoAlbumTagDialog } from "./PhotoAlbumTagDialog";
 import { RatingDialog } from "./RatingDialog";
 import { ShortcutDialog } from "./ShortcutDialog";
@@ -7794,26 +7795,6 @@ export default function App() {
       )}
     </span>
   );
-  const renderTagChips = (tags: string[], options?: { limit?: number; compact?: boolean }) => {
-    const visibleTags = typeof options?.limit === "number" ? tags.slice(0, options.limit) : tags;
-    if (!visibleTags.length) return null;
-    return (
-      <span className={`tag-chip-row ${options?.compact ? "compact" : ""}`}>
-        {visibleTags.map((tag) => (
-          <span className="tag-chip" key={tag}>
-            {tag}
-          </span>
-        ))}
-        {tags.length > visibleTags.length ? <span className="tag-chip more">+{tags.length - visibleTags.length}</span> : null}
-      </span>
-    );
-  };
-  const renderRatingChip = (rating?: number, comment?: string) => {
-    const trimmedComment = comment?.trim();
-    if (typeof rating !== "number" && !trimmedComment) return null;
-    const ratingLabel = typeof rating === "number" ? `评分 ${rating}/10` : "评价";
-    return <span className="rating-chip">{trimmedComment ? `${ratingLabel} · ${trimmedComment}` : ratingLabel}</span>;
-  };
   const specialInsightTabOptions: Array<{ value: SpecialInsightTab; label: string; icon: React.ReactNode }> = [
     { value: "played", label: "播放最久", icon: <Clock3 size={14} /> },
     { value: "count", label: "次数最多", icon: <BarChart3 size={14} /> },
@@ -7849,8 +7830,8 @@ export default function App() {
       <span className="special-insight-row-copy">
         <strong>{insight.video.name}</strong>
         <small>{formatSpecialInsightVideoMetric(insight)}</small>
-        {renderTagChips(insight.tags, { limit: 10, compact: true })}
-        {renderRatingChip(videoRatings[insight.video.id], videoComments[insight.video.id])}
+        <TagChips tags={insight.tags} limit={10} compact />
+        <RatingChip rating={videoRatings[insight.video.id]} comment={videoComments[insight.video.id]} />
       </span>
     </button>
   );
@@ -8025,8 +8006,8 @@ export default function App() {
       <span className="home-list-copy">
         <strong>{card.video.name}</strong>
         <small>{formatHomeMeta(card)}</small>
-        {renderTagChips(card.tags ?? [], { limit: 10, compact: true })}
-        {renderRatingChip(card.rating, card.ratingComment)}
+        <TagChips tags={card.tags ?? []} limit={10} compact />
+        <RatingChip rating={card.rating} comment={card.ratingComment} />
       </span>
     </button>
   );
@@ -8053,8 +8034,8 @@ export default function App() {
             {directoryLabel || result.mediaRootLabel ? (
               <small>{[result.mediaRootLabel, directoryLabel].filter(Boolean).join(" · ")}</small>
             ) : null}
-            {renderTagChips(videoTags[video.id] ?? [], { limit: 3, compact: true })}
-            {renderRatingChip(videoRatings[video.id])}
+            <TagChips tags={videoTags[video.id] ?? []} limit={3} compact />
+            <RatingChip rating={videoRatings[video.id]} />
           </span>
         </button>
       );
@@ -8084,7 +8065,7 @@ export default function App() {
           {result.path || result.mediaRootLabel ? (
             <small>{[result.mediaRootLabel, result.path].filter(Boolean).join(" · ")}</small>
           ) : null}
-          {renderRatingChip(videoRatings[result.representativeVideo.id])}
+          <RatingChip rating={videoRatings[result.representativeVideo.id]} />
         </span>
       </button>
     );
@@ -10101,8 +10082,8 @@ export default function App() {
                       </small>
                     ) : null}
                     {seriesTitle ? <small className="episode-series">{seriesTitle}</small> : null}
-                    {renderTagChips(tags, { compact: true })}
-                    {renderRatingChip(rating, ratingComment)}
+                    <TagChips tags={tags} compact />
+                    <RatingChip rating={rating} comment={ratingComment} />
                     {isCompleted ? (
                       <span className="episode-progress compact">
                         <CheckCircle2 size={15} />
