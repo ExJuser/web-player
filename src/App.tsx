@@ -393,6 +393,7 @@ import { DeleteConfirmDialog } from "./DeleteConfirmDialog";
 import { DuplicateVideoGroupCard } from "./DuplicateVideoGroupCard";
 import { DuplicateVideoSummaryCard } from "./DuplicateVideoSummaryCard";
 import { EmbeddedSubtitleDialog } from "./EmbeddedSubtitleDialog";
+import { FavoriteHomeSection } from "./FavoriteHomeSection";
 import { FolderAccessDialog } from "./FolderAccessDialog";
 import { HighEnergyTagDialog, type HighEnergyTagPrompt } from "./HighEnergyTagDialog";
 import { HomeLibraryStats } from "./HomeLibraryStats";
@@ -8352,15 +8353,7 @@ export default function App() {
                 totalVideoCount={modeFilteredVideos.length}
               />
 
-              {favoriteHomeCards.length ? (
-                <section className="home-section">
-                  <div className="home-section-header">
-                    <h2>收藏 / 稍后看</h2>
-                    <span>{favoriteHomeCards.length} 个</span>
-                  </div>
-                  <div className="home-compact-list">{favoriteHomeCards.map(renderHomeListCard)}</div>
-                </section>
-              ) : null}
+              <FavoriteHomeSection cards={favoriteHomeCards} renderCard={renderHomeListCard} />
             </aside>
           </section>
         ) : null}
