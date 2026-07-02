@@ -354,7 +354,7 @@ import {
   type CompatibleMediaDeleteConfirmState,
   type CompatibleMediaTaskState,
 } from "./CompatibleMediaDialogs";
-import { DeleteConfirmDialog } from "./DeleteConfirmDialog";
+import { DeletionDialogs } from "./DeletionDialogs";
 import { DuplicateVideoGroupCard } from "./DuplicateVideoGroupCard";
 import { EmbeddedSubtitleDialog } from "./EmbeddedSubtitleDialog";
 import { FolderAccessDialog } from "./FolderAccessDialog";
@@ -8500,56 +8500,56 @@ export default function App() {
       onPromptChange={setHighEnergyTagPrompt}
       formatTime={formatTime}
     />
-    <DeleteConfirmDialog
-      isOpen={Boolean(videoDeleteCandidate)}
-      titleId="delete-video-title"
-      title="删除视频文件？"
-      description="这个操作会直接从磁盘删除视频文件，删除后无法在播放器内恢复。"
-      primaryText="删除文件"
-      pendingText="删除中..."
-      isPending={isVideoDeletePending}
-      previewTitle={videoDeleteCandidate?.name ?? ""}
-      previewMeta={videoDeleteError || videoDeleteCandidate?.relativePath || ""}
-      onClose={() => {
-        setVideoDeleteCandidate(null);
-        setVideoDeleteError("");
+    <DeletionDialogs
+      video={{
+        isOpen: Boolean(videoDeleteCandidate),
+        titleId: "delete-video-title",
+        title: "删除视频文件？",
+        description: "这个操作会直接从磁盘删除视频文件，删除后无法在播放器内恢复。",
+        primaryText: "删除文件",
+        pendingText: "删除中...",
+        isPending: isVideoDeletePending,
+        previewTitle: videoDeleteCandidate?.name ?? "",
+        previewMeta: videoDeleteError || videoDeleteCandidate?.relativePath || "",
+        onClose: () => {
+          setVideoDeleteCandidate(null);
+          setVideoDeleteError("");
+        },
+        onConfirm: () => void confirmDeleteVideo(),
       }}
-      onConfirm={() => void confirmDeleteVideo()}
-    />
-    <DeleteConfirmDialog
-      isOpen={Boolean(photoDeleteCandidate)}
-      titleId="delete-photo-title"
-      title="删除图片？"
-      description="这个操作会直接从本地磁盘删除图片文件，删除后无法在播放器内恢复。"
-      primaryText="删除图片"
-      pendingText="删除中"
-      isPending={isPhotoDeletePending}
-      previewTitle={photoDeleteCandidate?.name ?? ""}
-      previewMeta={photoDeleteCandidate?.relativePath || photoDeleteCandidate?.albumTitle || ""}
-      error={photoDeleteError}
-      onClose={() => setPhotoDeleteCandidate(null)}
-      onConfirm={() => void confirmDeleteCurrentPhoto()}
-    />
-    <DeleteConfirmDialog
-      isOpen={Boolean(photoAlbumDeleteCandidate)}
-      titleId="delete-photo-album-title"
-      title="删除整个图集？"
-      description="这个操作会直接从本地磁盘删除这个图集中的图片文件，删除后无法在播放器内恢复。"
-      primaryText="删除整本"
-      pendingText="删除中"
-      isPending={isPhotoDeletePending}
-      previewTitle={photoAlbumDeleteCandidate?.title ?? ""}
-      previewMeta={
-        photoAlbumDeleteCandidate
+      photo={{
+        isOpen: Boolean(photoDeleteCandidate),
+        titleId: "delete-photo-title",
+        title: "删除图片？",
+        description: "这个操作会直接从本地磁盘删除图片文件，删除后无法在播放器内恢复。",
+        primaryText: "删除图片",
+        pendingText: "删除中",
+        isPending: isPhotoDeletePending,
+        previewTitle: photoDeleteCandidate?.name ?? "",
+        previewMeta: photoDeleteCandidate?.relativePath || photoDeleteCandidate?.albumTitle || "",
+        error: photoDeleteError,
+        onClose: () => setPhotoDeleteCandidate(null),
+        onConfirm: () => void confirmDeleteCurrentPhoto(),
+      }}
+      photoAlbum={{
+        isOpen: Boolean(photoAlbumDeleteCandidate),
+        titleId: "delete-photo-album-title",
+        title: "删除整个图集？",
+        description: "这个操作会直接从本地磁盘删除这个图集中的图片文件，删除后无法在播放器内恢复。",
+        primaryText: "删除整本",
+        pendingText: "删除中",
+        isPending: isPhotoDeletePending,
+        previewTitle: photoAlbumDeleteCandidate?.title ?? "",
+        previewMeta: photoAlbumDeleteCandidate
           ? `${photoAlbumDeleteCandidate.relativePath || "根目录"} · ${photoAlbumDeleteCandidate.imageCount} 张 · ${formatFileSize(photoAlbumDeleteCandidate.totalSize)}`
-          : ""
-      }
-      error={photoDeleteError}
-      onClose={() => {
-        setPhotoAlbumDeleteCandidate(null);
-        setPhotoDeleteError("");
+          : "",
+        error: photoDeleteError,
+        onClose: () => {
+          setPhotoAlbumDeleteCandidate(null);
+          setPhotoDeleteError("");
+        },
+        onConfirm: () => void confirmDeletePhotoAlbum(),
       }}
-      onConfirm={() => void confirmDeletePhotoAlbum()}
     />
     <PhotoAlbumTagDialog
       album={photoAlbumTagEditorAlbum}
