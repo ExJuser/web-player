@@ -360,6 +360,7 @@ import {
   type ClearCacheResponse,
 } from "./cacheStatusUtils";
 import { AiSubtitleDialog, type AiSubtitleTab } from "./AiSubtitleDialog";
+import { AutoNextPromptCard } from "./AutoNextPromptCard";
 import { DanmakuDialog } from "./DanmakuDialog";
 import { CacheStatusDialog } from "./CacheStatusDialog";
 import {
@@ -8576,21 +8577,7 @@ export default function App() {
           ) : null}
 
           {autoNextPrompt ? (
-            <div className="auto-next-prompt" role="status" aria-live="polite">
-              <div className="auto-next-countdown">{autoNextPrompt.remainingSeconds}</div>
-              <div className="auto-next-copy">
-                <span>即将播放下一集</span>
-                <strong>{autoNextPrompt.nextVideoName}</strong>
-              </div>
-              <div className="auto-next-actions">
-                <button type="button" onClick={() => confirmAutoNext(autoNextPrompt.nextVideoId)}>
-                  立即播放
-                </button>
-                <button type="button" onClick={cancelAutoNextPrompt}>
-                  取消
-                </button>
-              </div>
-            </div>
+            <AutoNextPromptCard prompt={autoNextPrompt} onCancel={cancelAutoNextPrompt} onConfirm={confirmAutoNext} />
           ) : null}
 
           <div
