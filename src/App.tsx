@@ -298,7 +298,6 @@ import {
   countRatingFilterMatches,
   filterVideosBySeries,
   filterRatingPlaylistVideos,
-  formatMediaRootStatus,
   formatPhotoRootStatus,
   getActiveSeriesOption,
   getCompatibleMediaAction,
@@ -308,7 +307,6 @@ import {
   getPlayableVideoUrl,
   createSubtitleControlOptions,
   createVideoStatsKey,
-  getMediaRootLocalPathAction,
   isMediaRootInHomeMode,
   resolvePlayerEntrySeriesMode,
   resolveRestoredEmbeddedSubtitleSelection,
@@ -404,6 +402,7 @@ import { EmbeddedSubtitleDialog } from "./EmbeddedSubtitleDialog";
 import { FolderAccessDialog } from "./FolderAccessDialog";
 import { HighEnergyTagDialog, type HighEnergyTagPrompt } from "./HighEnergyTagDialog";
 import { HomeLibraryStats } from "./HomeLibraryStats";
+import { HomeMediaLibraryCard } from "./HomeMediaLibraryCard";
 import { HomeModeCard } from "./HomeModeCard";
 import { HomeRecapCard } from "./HomeRecapCard";
 import { HomeCardThumbnail, HomeListCard } from "./HomeVideoCards";
@@ -8239,64 +8238,18 @@ export default function App() {
 
               <HomeLibraryStats stats={libraryStats} />
 
-              <section className="home-section media-library-card">
-                <button
-                  className="media-library-toggle"
-                  type="button"
-                  aria-expanded={isMediaLibraryPanelOpen}
-                  aria-controls="home-media-library-panel"
-                  onClick={() => setIsMediaLibraryPanelOpen((isOpen) => !isOpen)}
-                >
-                  <span>{homeMediaMode === "all" ? "全局媒体库" : `${homeMediaModeLabel}媒体库`}</span>
-                  <span>{`${modeFilteredMediaRootStatuses.filter((status) => status.status === "ready").length} / ${homeModeMediaRoots.length} 可用`}</span>
-                  <ChevronDown className="media-library-toggle-chevron" size={16} aria-hidden="true" />
-                </button>
-                <button
-                  className="secondary-button media-library-refresh-button"
-                  type="button"
-                  onClick={() => void loadGlobalMediaLibrary()}
-                  disabled={isScanning || !localConfig?.mediaRoots.length}
-                  title={!localConfig?.mediaRoots.length ? "还没有可扫描的媒体库" : "重新扫描全局媒体库"}
-                >
-                  <RefreshCw size={16} className={isScanning ? "spin-icon" : undefined} />
-                  {isScanning ? "扫描中" : "刷新媒体库"}
-                </button>
-                {isMediaLibraryPanelOpen ? (
-                  <div id="home-media-library-panel" className="media-library-panel">
-                    {homeModeMediaRoots.length ? (
-                      <div className={`media-library-list${homeModeMediaRoots.length > 2 ? " media-library-list-scrollable" : ""}`}>
-                        {homeModeMediaRoots.map((root) => {
-                          const action = getMediaRootLocalPathAction(root);
-                          const status = modeFilteredMediaRootStatuses.find((item) => item.id === root.id);
-                          return (
-                            <div className="media-library-row" key={root.id}>
-                              <strong>{root.label}</strong>
-                              <code>{formatMediaRootStatus(status)}</code>
-                              <code>{root.source === "browser" ? `浏览器：${root.path}` : root.path}</code>
-                              {root.source === "browser" ? (
-                                <code>{root.localPath ? `本机：${root.localPath}` : "本机：未配置"}</code>
-                              ) : null}
-                              {action.visible ? (
-                                <button
-                                  className="secondary-button media-library-path-button"
-                                  type="button"
-                                  disabled={action.disabled}
-                                  onClick={() => openMediaRootLocalPathDialog(root)}
-                                >
-                                  <HardDrive size={16} />
-                                  {action.label}
-                                </button>
-                              ) : null}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <div className="empty-list compact">当前模式没有匹配的媒体库。</div>
-                    )}
-                  </div>
-                ) : null}
-              </section>
+              <HomeMediaLibraryCard
+                homeMediaMode={homeMediaMode}
+                homeMediaModeLabel={homeMediaModeLabel}
+                isOpen={isMediaLibraryPanelOpen}
+                isScanning={isScanning}
+                mediaRootCount={localConfig?.mediaRoots.length ?? 0}
+                mediaRoots={homeModeMediaRoots}
+                mediaRootStatuses={modeFilteredMediaRootStatuses}
+                onConfigureLocalPath={openMediaRootLocalPathDialog}
+                onRefresh={() => void loadGlobalMediaLibrary()}
+                onToggle={() => setIsMediaLibraryPanelOpen((isOpen) => !isOpen)}
+              />
 
               {isRatingFilterEnabled ? (
                 <RatingFilterCard
