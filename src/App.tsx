@@ -385,13 +385,9 @@ import { HomeCardThumbnail, HomeListCard } from "./HomeVideoCards";
 import { ExistingMediaRootDialog, MediaRootLabelDialog, MediaRootLocalPathDialogView } from "./MediaRootPromptDialogs";
 import { LibrarySearchResultItem } from "./LibrarySearchResultItem";
 import { PhotoAlbumCard } from "./PhotoAlbumCard";
-import { PhotoAlbumEmptyState } from "./PhotoAlbumEmptyState";
-import { PhotoAlbumPagination } from "./PhotoAlbumPagination";
-import { PhotoAlbumSearchRow } from "./PhotoAlbumSearchRow";
-import { PhotoAlbumStats } from "./PhotoAlbumStats";
 import { PhotoAlbumTagDialog } from "./PhotoAlbumTagDialog";
-import { PhotoAlbumToolbar, type PhotoAlbumViewFilter } from "./PhotoAlbumToolbar";
-import { PhotoRootStatusCard } from "./PhotoRootStatusCard";
+import type { PhotoAlbumViewFilter } from "./PhotoAlbumToolbar";
+import { PhotoDashboardSection } from "./PhotoDashboardSection";
 import { PhotoViewerFilmstrip } from "./PhotoViewerFilmstrip";
 import { PhotoViewerHeader } from "./PhotoViewerHeader";
 import { PhotoViewerStage } from "./PhotoViewerStage";
@@ -8368,52 +8364,32 @@ export default function App() {
         ) : null}
 
         {isPhotoAlbumViewVisible && activeView === "photos" ? (
-          <section className="photo-dashboard" aria-label="看图">
-            <PhotoAlbumToolbar
-              filter={photoAlbumFilter}
-              isLoading={isPhotoAlbumsLoading}
-              message={photoAlbumMessage}
-              sortMode={photoAlbumSortMode}
-              sortOptions={photoAlbumSortOptions}
-              onFilterChange={updatePhotoAlbumFilter}
-              onRefresh={() => void refreshPhotoAlbumDirectory()}
-              onSortModeChange={updatePhotoAlbumSortMode}
-            />
-
-            <PhotoAlbumSearchRow
-              query={photoAlbumSearchQuery}
-              onChange={setPhotoAlbumSearchQuery}
-              onClear={() => setPhotoAlbumSearchQuery("")}
-            />
-
-            <PhotoAlbumStats stats={photoAlbumStats} />
-
-            <PhotoRootStatusCard statuses={photoRootStatuses} />
-
-            {visiblePhotoAlbums.length ? (
-              <>
-                <section className={`photo-album-grid ${isPhotoAlbumGridCompact ? "photo-album-grid-compact" : ""}`.trim()}>
-                  {pagedPhotoAlbums.map(renderPhotoAlbumCard)}
-                </section>
-                <PhotoAlbumPagination
-                  currentPage={photoAlbumPage}
-                  end={photoAlbumPageEnd}
-                  pageCount={photoAlbumPageCount}
-                  start={photoAlbumPageStart}
-                  total={visiblePhotoAlbums.length}
-                  onNext={() => setPhotoAlbumPage((page) => Math.min(page + 1, photoAlbumPageCount))}
-                  onPrevious={() => setPhotoAlbumPage((page) => Math.max(page - 1, 1))}
-                />
-              </>
-            ) : (
-              <PhotoAlbumEmptyState
-                filter={photoAlbumFilter}
-                isLoading={isPhotoAlbumsLoading}
-                searchQuery={photoAlbumSearchQuery}
-                onChooseDirectory={() => void choosePhotoAlbumDirectory()}
-              />
-            )}
-          </section>
+          <PhotoDashboardSection
+            currentPage={photoAlbumPage}
+            end={photoAlbumPageEnd}
+            filter={photoAlbumFilter}
+            isGridCompact={isPhotoAlbumGridCompact}
+            isLoading={isPhotoAlbumsLoading}
+            message={photoAlbumMessage}
+            pageCount={photoAlbumPageCount}
+            pagedPhotoAlbums={pagedPhotoAlbums}
+            photoRootStatuses={photoRootStatuses}
+            searchQuery={photoAlbumSearchQuery}
+            sortMode={photoAlbumSortMode}
+            sortOptions={photoAlbumSortOptions}
+            start={photoAlbumPageStart}
+            stats={photoAlbumStats}
+            totalVisibleAlbums={visiblePhotoAlbums.length}
+            onChooseDirectory={() => void choosePhotoAlbumDirectory()}
+            onFilterChange={updatePhotoAlbumFilter}
+            onNextPage={() => setPhotoAlbumPage((page) => Math.min(page + 1, photoAlbumPageCount))}
+            onPreviousPage={() => setPhotoAlbumPage((page) => Math.max(page - 1, 1))}
+            onRefresh={() => void refreshPhotoAlbumDirectory()}
+            onRenderAlbum={renderPhotoAlbumCard}
+            onSearchChange={setPhotoAlbumSearchQuery}
+            onSearchClear={() => setPhotoAlbumSearchQuery("")}
+            onSortModeChange={updatePhotoAlbumSortMode}
+          />
         ) : null}
 
         {isPhotoAlbumViewVisible && activeView === "photoViewer" && selectedPhotoAlbum ? (
