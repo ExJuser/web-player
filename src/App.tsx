@@ -17,7 +17,6 @@ import {
   Star,
   Subtitles,
   Tags,
-  Trash2,
   RefreshCw,
   Moon,
   Sun,
@@ -409,6 +408,7 @@ import { PlaylistEmptyState } from "./PlaylistEmptyState";
 import { PlaylistFilterControl } from "./PlaylistFilterControl";
 import { PlaylistItemCard } from "./PlaylistItemCard";
 import { PlaylistPagination } from "./PlaylistPagination";
+import { PlayerOptionControls } from "./PlayerOptionControls";
 import { PlayerPlaybackControls } from "./PlayerPlaybackControls";
 import { PlayerViewControls } from "./PlayerViewControls";
 import { RatingFilterCard } from "./RatingFilterCard";
@@ -8733,60 +8733,26 @@ export default function App() {
                 onTogglePlay={togglePlay}
               />
 
-              {currentVideoHasCompatibleMedia ? (
-                <>
-                  <ControlSelect
-                    label="片源"
-                    ariaLabel="播放源"
-                    value={currentVideoSourceChoice}
-                    options={[
-                      { value: "compatible", label: "修复版" },
-                      { value: "original", label: "原版" },
-                    ]}
-                    onChange={(value) => {
-                      if (!currentVideo) return;
-                      setPlaybackSourceChoices((previous) => ({ ...previous, [currentVideo.id]: value }));
-                    }}
-                    className="source-control"
-                    disabled={!currentVideo}
-                  />
-                  <button
-                    className="icon-button"
-                    type="button"
-                    onClick={openCompatibleMediaDeleteConfirm}
-                    disabled={!currentVideo || isDeletingCompatibleMedia}
-                    title="删除修复版"
-                    aria-label="删除修复版"
-                  >
-                    <Trash2 size={18} />
-                  </button>
-                </>
-              ) : null}
-
-              {!isSeriesMode ? (
-                <ControlSelect
-                  label="播放模式"
-                  ariaLabel="播放模式"
-                  value={playbackMode}
-                  options={playbackModeOptions}
-                  onChange={setPlaybackMode}
-                />
-              ) : null}
-
-              <ControlSelect
-                label="快进/快退"
-                ariaLabel="快进/快退时间"
-                value={seekStep}
-                options={seekSteps.map((step) => ({ value: step, label: `${step}s` }))}
-                onChange={setSeekStep}
-              />
-
-              <ControlSelect
-                label="长按右方向"
-                ariaLabel="长按右方向键倍速"
-                value={holdPlaybackRate}
-                options={holdRates.map((rate) => ({ value: rate, label: `${rate}x` }))}
-                onChange={setHoldPlaybackRate}
+              <PlayerOptionControls
+                hasCompatibleMedia={currentVideoHasCompatibleMedia}
+                hasCurrentVideo={Boolean(currentVideo)}
+                holdPlaybackRate={holdPlaybackRate}
+                holdRateOptions={holdRates.map((rate) => ({ value: rate, label: `${rate}x` }))}
+                isDeletingCompatibleMedia={isDeletingCompatibleMedia}
+                playbackMode={playbackMode}
+                playbackModeOptions={playbackModeOptions}
+                seekStep={seekStep}
+                seekStepOptions={seekSteps.map((step) => ({ value: step, label: `${step}s` }))}
+                showPlaybackMode={!isSeriesMode}
+                sourceChoice={currentVideoSourceChoice}
+                onChangeHoldPlaybackRate={setHoldPlaybackRate}
+                onChangePlaybackMode={setPlaybackMode}
+                onChangeSeekStep={setSeekStep}
+                onChangeSourceChoice={(value) => {
+                  if (!currentVideo) return;
+                  setPlaybackSourceChoices((previous) => ({ ...previous, [currentVideo.id]: value }));
+                }}
+                onDeleteCompatibleMedia={openCompatibleMediaDeleteConfirm}
               />
 
               {homeMediaMode !== "special" ? (
