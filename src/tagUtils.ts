@@ -54,6 +54,10 @@ export function parseTagInput(input: string) {
   return tags;
 }
 
+export function getActiveTagInputSegment(input: string) {
+  return input.match(/(?:^|[\s,，、;；|])([^\s,，、;；|]*)$/u)?.[1]?.trim() ?? "";
+}
+
 export function createTagPairKey(a: string, b: string) {
   return [normalizeTagKey(a), normalizeTagKey(b)].sort().join("::");
 }
@@ -236,4 +240,34 @@ export function getTagSearchScore(query: string, tags: string[]) {
     }
   }
   return bestScore;
+}
+
+export function createTagInputSuggestions(input: {
+  query: string;
+  allVideoTags: Record<string, string[] | undefined>;
+  currentTags: string[];
+  limit?: number;
+}) {
+  const queryKey = normalizeTagKey(input.query);
+  if (!queryKey) return [];
+
+  const currentTagKeys = new Set(input.currentTags.map(normalizeTagKey).filter(Boolean));
+  const seen = new Set<string>();
+  return Object.values(input.allVideoTags)
+    .flatMap((tags) => tags ?? [])
+    .filter((tag) => {
+      const key = normalizeTagKey(tag);
+      if (!key || seen.has(key) || currentTagKeys.has(key)) return false;
+      if (!key.includes(queryKey) && getTagSearchScore(input.query, [tag]) <= 0) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort((a, b) => {
+      const aKey = normalizeTagKey(a);
+      const bKey = normalizeTagKey(b);
+      const aPrefix = aKey.startsWith(queryKey) ? 0 : 1;
+      const bPrefix = bKey.startsWith(queryKey) ? 0 : 1;
+      return aPrefix - bPrefix || a.localeCompare(b, "zh-Hans-CN", { numeric: true });
+    })
+    .slice(0, input.limit ?? 8);
 }

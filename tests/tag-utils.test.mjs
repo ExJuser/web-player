@@ -12,6 +12,11 @@ test("splits multiple tags from common separators and removes normalized duplica
   );
 });
 
+test("extracts the active tag input segment", () => {
+  assert.equal(tagUtils.getActiveTagInputSegment("剧情, 美"), "美");
+  assert.equal(tagUtils.getActiveTagInputSegment("剧情 美腿 "), "");
+});
+
 test("normalizes tags for stable matching without replacing display text", () => {
   assert.equal(tagUtils.normalizeTagKey("  ＡＩ-字幕  "), "ai字幕");
   assert.equal(tagUtils.normalizeTagKey("美 腿"), "美腿");
@@ -62,6 +67,21 @@ test("scores tag search matches higher than loose text matches", () => {
   assert.equal(tagUtils.getTagSearchScore("腿玩年", ["美腿"]), 28);
   assert.equal(tagUtils.getTagSearchScore("长镜", ["长镜头"]), 20);
   assert.equal(tagUtils.getTagSearchScore("悬疑", ["美腿"]), 0);
+});
+
+test("creates tag input suggestions from existing video tags", () => {
+  assert.deepEqual(
+    tagUtils.createTagInputSuggestions({
+      query: "腿玩年",
+      allVideoTags: {
+        a: ["美腿", "剧情"],
+        b: ["美女", "美腿", "腿玩年"],
+        c: ["AI-字幕"],
+      },
+      currentTags: ["美女"],
+    }),
+    ["腿玩年", "美腿"],
+  );
 });
 
 test("requires every selected tag filter to match by normalized key", () => {

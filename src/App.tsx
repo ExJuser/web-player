@@ -328,7 +328,9 @@ import {
 } from "./playerUiState";
 import {
   createTagPairKey,
+  createTagInputSuggestions,
   findTagMergeSuggestion,
+  getActiveTagInputSegment,
   getTagSearchScore,
   mergeTags,
   normalizeTagKey,
@@ -1346,29 +1348,14 @@ export default function App() {
   const currentVideoHasCompatibleMedia = Boolean(currentVideo?.playability?.compatibleUrl);
   const currentVideoTags = currentVideo ? videoTags[currentVideo.id] ?? [] : [];
   const currentVideoRating = currentVideo ? videoRatings[currentVideo.id] : undefined;
-  const activeTagInputSegment = useMemo(() => tagInput.match(/(?:^|[\s,，、;；|])([^\s,，、;；|]*)$/u)?.[1]?.trim() ?? "", [tagInput]);
+  const activeTagInputSegment = useMemo(() => getActiveTagInputSegment(tagInput), [tagInput]);
   const tagInputSuggestions = useMemo(() => {
     if (!isTagDialogOpen || !currentVideo || !activeTagInputSegment) return [];
-    const queryKey = normalizeTagKey(activeTagInputSegment);
-    const currentTagKeys = new Set(currentVideoTags.map(normalizeTagKey).filter(Boolean));
-    const seen = new Set<string>();
-    return Object.values(videoTags)
-      .flat()
-      .filter((tag) => {
-        const key = normalizeTagKey(tag);
-        if (!key || seen.has(key) || currentTagKeys.has(key)) return false;
-        if (!key.includes(queryKey) && getTagSearchScore(activeTagInputSegment, [tag]) <= 0) return false;
-        seen.add(key);
-        return true;
-      })
-      .sort((a, b) => {
-        const aKey = normalizeTagKey(a);
-        const bKey = normalizeTagKey(b);
-        const aPrefix = aKey.startsWith(queryKey) ? 0 : 1;
-        const bPrefix = bKey.startsWith(queryKey) ? 0 : 1;
-        return aPrefix - bPrefix || a.localeCompare(b, "zh-Hans-CN", { numeric: true });
-      })
-      .slice(0, 8);
+    return createTagInputSuggestions({
+      query: activeTagInputSegment,
+      allVideoTags: videoTags,
+      currentTags: currentVideoTags,
+    });
   }, [activeTagInputSegment, currentVideo, currentVideoTags, isTagDialogOpen, videoTags]);
   const resolvedActiveTagSuggestionIndex = tagInputSuggestions.length
     ? Math.min(activeTagSuggestionIndex, tagInputSuggestions.length - 1)
