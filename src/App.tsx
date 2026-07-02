@@ -6,18 +6,13 @@ import {
   CalendarDays,
   Clock3,
   FolderOpen,
-  EyeOff,
   HardDrive,
   Images,
-  Keyboard,
   LocateFixed,
-  Maximize,
   Pause,
   Pencil,
-  PictureInPicture2,
   Play,
   RotateCcw,
-  RotateCw,
   Rocket,
   ShieldCheck,
   SkipForward,
@@ -418,6 +413,7 @@ import { PlaylistEmptyState } from "./PlaylistEmptyState";
 import { PlaylistFilterControl } from "./PlaylistFilterControl";
 import { PlaylistItemCard } from "./PlaylistItemCard";
 import { PlaylistPagination } from "./PlaylistPagination";
+import { PlayerViewControls } from "./PlayerViewControls";
 import { RatingFilterCard } from "./RatingFilterCard";
 import { RatingDialog } from "./RatingDialog";
 import { ShortcutDialog } from "./ShortcutDialog";
@@ -8921,56 +8917,20 @@ export default function App() {
 
               <span className="control-spacer" />
 
-              <label className={`control-toggle ${startFromHighEnergy ? "active" : ""}`} title="播放视频默认从高能片段开始">
-                <input
-                  type="checkbox"
-                  checked={startFromHighEnergy}
-                  onChange={toggleStartFromHighEnergy}
-                  aria-label="播放视频默认从高能时刻开始"
-                />
-                <Zap size={16} aria-hidden="true" />
-                <span>高能开播</span>
-              </label>
-
-              <button className="icon-button" type="button" onClick={togglePictureInPicture} disabled={!currentVideo} title="画中画">
-                <PictureInPicture2 size={20} />
-              </button>
-              <button
-                className={`icon-button ${normalizedVideoRotation ? "active" : ""}`}
-                type="button"
-                onClick={rotateVideoClockwise}
-                disabled={!currentVideo}
-                title={`旋转视频${normalizedVideoRotation ? ` (${normalizedVideoRotation}deg)` : ""}`}
-                aria-label={`旋转视频${normalizedVideoRotation ? `, 当前 ${normalizedVideoRotation} 度` : ""}`}
-                aria-pressed={normalizedVideoRotation !== 0}
-              >
-                <RotateCw size={20} />
-              </button>
-              <button className="icon-button" type="button" onClick={toggleShortcutDialog} title="快捷键帮助">
-                <Keyboard size={20} />
-              </button>
-              <button
-                className={`icon-button privacy-toggle ${isPrivacyMode ? "active" : ""}`}
-                type="button"
-                onClick={togglePrivacyMode}
-                title="隐私模式 / 快速清屏 (P)"
-                aria-pressed={isPrivacyMode}
-              >
-                <EyeOff size={20} />
-              </button>
-              <button
-                className={`icon-button cinema-toggle ${isCinemaMode ? "active" : ""}`}
-                type="button"
-                onClick={toggleCinemaMode}
-                disabled={!currentVideo}
-                title="影院模式"
-                aria-pressed={isCinemaMode}
-              >
-                T
-              </button>
-              <button className="icon-button" type="button" onClick={toggleFullscreen} disabled={!currentVideo} title="全屏">
-                <Maximize size={20} />
-              </button>
+              <PlayerViewControls
+                hasCurrentVideo={Boolean(currentVideo)}
+                isCinemaMode={isCinemaMode}
+                isPrivacyMode={isPrivacyMode}
+                normalizedVideoRotation={normalizedVideoRotation}
+                startFromHighEnergy={startFromHighEnergy}
+                onRotateVideo={rotateVideoClockwise}
+                onToggleCinemaMode={toggleCinemaMode}
+                onToggleFullscreen={toggleFullscreen}
+                onTogglePictureInPicture={togglePictureInPicture}
+                onTogglePrivacyMode={togglePrivacyMode}
+                onToggleShortcutDialog={toggleShortcutDialog}
+                onToggleStartFromHighEnergy={toggleStartFromHighEnergy}
+              />
             </div>
           </div>
         </div>
