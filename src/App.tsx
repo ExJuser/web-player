@@ -5,7 +5,6 @@ import {
   BarChart3,
   CalendarDays,
   CheckCircle2,
-  ChevronDown,
   Clock3,
   ExternalLink,
   FolderOpen,
@@ -421,6 +420,7 @@ import { PlaylistPagination } from "./PlaylistPagination";
 import { RatingFilterCard } from "./RatingFilterCard";
 import { RatingDialog } from "./RatingDialog";
 import { ShortcutDialog } from "./ShortcutDialog";
+import { SeriesMenu } from "./SeriesMenu";
 import { SpecialInsightsCard } from "./SpecialInsightsCard";
 import { SpecialStatsControl } from "./SpecialStatsControl";
 import { TagDialog } from "./TagDialog";
@@ -9041,55 +9041,13 @@ export default function App() {
               {isDuplicatePlaylistActive ? "重复" : isRatingPlaylistActive ? "评分" : playerMediaModeLabel}
             </span>
             {isPlaylistSeriesMode ? (
-              <div className="series-menu">
-                <button
-                  className="series-menu-trigger"
-                  type="button"
-                  onClick={() => setIsSeriesMenuOpen((isOpen) => !isOpen)}
-                  disabled={!seriesOptions.length}
-                  aria-haspopup="listbox"
-                  aria-expanded={isSeriesMenuOpen}
-                  aria-label="选择系列"
-                  title="选择系列"
-                >
-                  <span>
-                    {selectedSeriesKey === "all"
-                      ? "全部系列"
-                      : (() => {
-                          const selectedSeries = seriesOptions.find((series) => series.key === selectedSeriesKey);
-                          return selectedSeries
-                            ? [selectedSeries.title, selectedSeries.mediaRootLabel].filter(Boolean).join(" · ")
-                            : "全部系列";
-                        })()}
-                  </span>
-                  <ChevronDown className="series-menu-chevron" size={15} aria-hidden="true" />
-                </button>
-                {isSeriesMenuOpen ? (
-                  <div className="series-menu-list" role="listbox" aria-label="选择系列">
-                    <button
-                      className={selectedSeriesKey === "all" ? "active" : ""}
-                      type="button"
-                      role="option"
-                      aria-selected={selectedSeriesKey === "all"}
-                      onClick={() => updateSelectedSeries("all")}
-                    >
-                      全部系列
-                    </button>
-                    {seriesOptions.map((series) => (
-                      <button
-                        key={series.key}
-                        className={selectedSeriesKey === series.key ? "active" : ""}
-                        type="button"
-                        role="option"
-                        aria-selected={selectedSeriesKey === series.key}
-                        onClick={() => updateSelectedSeries(series.key)}
-                      >
-                        {[series.title, series.mediaRootLabel].filter(Boolean).join(" · ")} ({series.count})
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
+              <SeriesMenu
+                isOpen={isSeriesMenuOpen}
+                options={seriesOptions}
+                selectedSeriesKey={selectedSeriesKey}
+                onSelectSeries={updateSelectedSeries}
+                onToggleOpen={() => setIsSeriesMenuOpen((isOpen) => !isOpen)}
+              />
             ) : null}
             {isPlaylistSeriesMode ? (
               <button
