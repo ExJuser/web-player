@@ -405,6 +405,7 @@ import {
   type CompatibleMediaTaskState,
 } from "./CompatibleMediaDialogs";
 import { DeleteConfirmDialog } from "./DeleteConfirmDialog";
+import { EmbeddedSubtitleDialog } from "./EmbeddedSubtitleDialog";
 import { FolderAccessDialog } from "./FolderAccessDialog";
 import { HighEnergyTagDialog, type HighEnergyTagPrompt } from "./HighEnergyTagDialog";
 import { ExistingMediaRootDialog, MediaRootLabelDialog, MediaRootLocalPathDialogView } from "./MediaRootPromptDialogs";
@@ -10380,47 +10381,14 @@ export default function App() {
       onCloseDeleteConfirm={() => setCompatibleMediaDeleteConfirm(null)}
       onDelete={() => void deleteCompatibleMedia()}
     />
-    {isEmbeddedSubtitleDialogOpen ? (
-      <div className="modal-backdrop" role="presentation" onMouseDown={() => setIsEmbeddedSubtitleDialogOpen(false)}>
-        <section
-          aria-labelledby="embedded-subtitle-title"
-          aria-modal="true"
-          className="embedded-subtitle-dialog"
-          role="dialog"
-          onMouseDown={(event) => event.stopPropagation()}
-        >
-          <button
-            aria-label="关闭"
-            className="dialog-close"
-            type="button"
-            onClick={() => setIsEmbeddedSubtitleDialogOpen(false)}
-          >
-            <X size={18} />
-          </button>
-          <div className="dialog-copy">
-            <h2 id="embedded-subtitle-title">内封字幕</h2>
-            <p>{embeddedSubtitleMessage || "选择一条文本字幕轨，播放器会提取为 WebVTT 并缓存到本地项目数据目录。"}</p>
-          </div>
-          <div className="embedded-subtitle-list">
-            {embeddedSubtitleTracks.map((track) => (
-              <button
-                key={track.streamIndex}
-                className="embedded-subtitle-track"
-                type="button"
-                onClick={() => void extractEmbeddedSubtitle(track)}
-                disabled={!track.extractable || isEmbeddedSubtitleLoading}
-              >
-                <strong>
-                  #{track.streamIndex} {track.language || "und"} {track.title || ""}
-                </strong>
-                <span>{track.codec}{track.extractable ? "" : ` · ${track.reason || "暂不支持"}`}</span>
-              </button>
-            ))}
-            {!embeddedSubtitleTracks.length ? <div className="ai-empty-state">没有可用的内封字幕轨。</div> : null}
-          </div>
-        </section>
-      </div>
-    ) : null}
+    <EmbeddedSubtitleDialog
+      isOpen={isEmbeddedSubtitleDialogOpen}
+      tracks={embeddedSubtitleTracks}
+      message={embeddedSubtitleMessage}
+      isLoading={isEmbeddedSubtitleLoading}
+      onClose={() => setIsEmbeddedSubtitleDialogOpen(false)}
+      onExtract={(track) => void extractEmbeddedSubtitle(track)}
+    />
     <CacheStatusDialog
       isOpen={isCacheStatusDialogOpen}
       isClearConfirmOpen={isClearCacheConfirmOpen}
