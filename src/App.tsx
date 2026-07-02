@@ -1,6 +1,5 @@
 import {
   ArrowDownUp,
-  ArrowLeft,
   ArrowUp,
   Activity,
   BarChart3,
@@ -416,6 +415,7 @@ import { PhotoAlbumStats } from "./PhotoAlbumStats";
 import { PhotoAlbumTagDialog } from "./PhotoAlbumTagDialog";
 import { PhotoAlbumToolbar, type PhotoAlbumViewFilter } from "./PhotoAlbumToolbar";
 import { PhotoRootStatusCard } from "./PhotoRootStatusCard";
+import { PhotoViewerHeader } from "./PhotoViewerHeader";
 import { RatingFilterCard } from "./RatingFilterCard";
 import { RatingDialog } from "./RatingDialog";
 import { ShortcutDialog } from "./ShortcutDialog";
@@ -8442,54 +8442,19 @@ export default function App() {
 
         {isPhotoAlbumViewVisible && activeView === "photoViewer" && selectedPhotoAlbum ? (
           <section className="photo-viewer" aria-label={`阅读 ${selectedPhotoAlbum.title}`}>
-            <header className="photo-viewer-header">
-              <button className="secondary-button" type="button" onClick={showPhotoAlbumList}>
-                <ArrowLeft size={17} />
-                返回
-              </button>
-              <div className="photo-viewer-actions">
-                <button
-                  className={`secondary-button ${favoritePhotoAlbumIds.has(selectedPhotoAlbum.id) ? "active" : ""}`}
-                  type="button"
-                  onClick={() => togglePhotoAlbumFavorite(selectedPhotoAlbum)}
-                >
-                  <Star size={16} fill={favoritePhotoAlbumIds.has(selectedPhotoAlbum.id) ? "currentColor" : "none"} />
-                  {favoritePhotoAlbumIds.has(selectedPhotoAlbum.id) ? "已收藏" : "收藏"}
-                </button>
-                <button className="secondary-button" type="button" onClick={markSelectedPhotoAlbumCompleted}>
-                  <CheckCircle2 size={16} />
-                  标记已读
-                </button>
-                <button className="secondary-button" type="button" onClick={resetSelectedPhotoAlbumProgress}>
-                  <RotateCcw size={16} />
-                  重读
-                </button>
-                <button className="secondary-button" type="button" onClick={() => openPhotoAlbumTagEditor(selectedPhotoAlbum)}>
-                  <Tags size={16} />
-                  标签
-                </button>
-                {currentPhoto ? (
-                  <button
-                    className={`secondary-button ${photoAlbumCoverPreferences[selectedPhotoAlbum.id] === currentPhoto.id ? "active" : ""}`}
-                    type="button"
-                    onClick={() => setPhotoAlbumCover(selectedPhotoAlbum, currentPhoto)}
-                  >
-                    <Images size={16} />
-                    {photoAlbumCoverPreferences[selectedPhotoAlbum.id] === currentPhoto.id ? "当前封面" : "设为封面"}
-                  </button>
-                ) : null}
-                <button
-                  className="danger-button photo-delete-button"
-                  type="button"
-                  onClick={requestDeleteCurrentPhoto}
-                  disabled={!currentPhoto}
-                  title={currentPhoto ? "删除当前图片" : "当前没有可删除的图片"}
-                >
-                  <Trash2 size={16} />
-                  删除
-                </button>
-              </div>
-            </header>
+            <PhotoViewerHeader
+              album={selectedPhotoAlbum}
+              currentPhoto={currentPhoto}
+              isCoverCurrent={Boolean(currentPhoto && photoAlbumCoverPreferences[selectedPhotoAlbum.id] === currentPhoto.id)}
+              isFavorite={favoritePhotoAlbumIds.has(selectedPhotoAlbum.id)}
+              onBack={showPhotoAlbumList}
+              onDeleteCurrentPhoto={requestDeleteCurrentPhoto}
+              onEditTags={openPhotoAlbumTagEditor}
+              onMarkCompleted={markSelectedPhotoAlbumCompleted}
+              onResetProgress={resetSelectedPhotoAlbumProgress}
+              onSetCover={setPhotoAlbumCover}
+              onToggleFavorite={togglePhotoAlbumFavorite}
+            />
             <div className="photo-stage">
               <button className="photo-nav-button previous" type="button" onClick={() => movePhoto(-1)} disabled={currentPhotoIndex <= 0} aria-label="上一张">
                 <ChevronLeft size={34} />
