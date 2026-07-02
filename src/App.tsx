@@ -415,7 +415,9 @@ import { PhotoAlbumStats } from "./PhotoAlbumStats";
 import { PhotoAlbumTagDialog } from "./PhotoAlbumTagDialog";
 import { PhotoAlbumToolbar, type PhotoAlbumViewFilter } from "./PhotoAlbumToolbar";
 import { PhotoRootStatusCard } from "./PhotoRootStatusCard";
+import { PhotoViewerFilmstrip } from "./PhotoViewerFilmstrip";
 import { PhotoViewerHeader } from "./PhotoViewerHeader";
+import { PhotoViewerStage } from "./PhotoViewerStage";
 import { RatingFilterCard } from "./RatingFilterCard";
 import { RatingDialog } from "./RatingDialog";
 import { ShortcutDialog } from "./ShortcutDialog";
@@ -8455,50 +8457,24 @@ export default function App() {
               onSetCover={setPhotoAlbumCover}
               onToggleFavorite={togglePhotoAlbumFavorite}
             />
-            <div className="photo-stage">
-              <button className="photo-nav-button previous" type="button" onClick={() => movePhoto(-1)} disabled={currentPhotoIndex <= 0} aria-label="上一张">
-                <ChevronLeft size={34} />
-              </button>
-              {currentPhoto && currentPhotoUrl ? (
-                <img key={currentPhoto.id} src={currentPhotoUrl} alt={currentPhoto.name} decoding="async" loading="eager" draggable={false} />
-              ) : (
-                <div className="photo-empty-state">没有可显示的图片</div>
-              )}
-              <button
-                className="photo-nav-button next"
-                type="button"
-                onClick={() => movePhoto(1)}
-                disabled={currentPhotoIndex >= selectedPhotoAlbum.images.length - 1}
-                aria-label="下一张"
-              >
-                <ChevronRight size={34} />
-              </button>
-            </div>
-            <footer className="photo-filmstrip">
-              <div className="photo-page-indicator">
-                <strong>{Math.min(currentPhotoIndex + 1, selectedPhotoAlbum.imageCount)} / {selectedPhotoAlbum.imageCount}</strong>
-                <span>{currentPhoto?.name ?? selectedPhotoAlbum.title}</span>
-              </div>
-              <div className="photo-thumbnails" aria-label="图片缩略图">
-                {visiblePhotoThumbnails.map((image) => {
-                  const thumbnailUrl = getPhotoImageUrl(image);
-                  return (
-                    <button
-                      className={image.index === currentPhotoIndex ? "active" : ""}
-                      key={image.id}
-                      type="button"
-                      onClick={() => {
-                        setCurrentPhotoIndex(image.index);
-                        persistPhotoAlbumProgress(selectedPhotoAlbum, image.index, image.index === selectedPhotoAlbum.images.length - 1);
-                      }}
-                      title={image.name}
-                    >
-                      {thumbnailUrl ? <img src={thumbnailUrl} alt="" decoding="async" loading="lazy" draggable={false} /> : null}
-                    </button>
-                  );
-                })}
-              </div>
-            </footer>
+            <PhotoViewerStage
+              currentIndex={currentPhotoIndex}
+              currentPhoto={currentPhoto}
+              currentPhotoUrl={currentPhotoUrl}
+              imageCount={selectedPhotoAlbum.images.length}
+              onMove={movePhoto}
+            />
+            <PhotoViewerFilmstrip
+              currentIndex={currentPhotoIndex}
+              currentPhotoName={currentPhoto?.name ?? selectedPhotoAlbum.title}
+              getImageUrl={getPhotoImageUrl}
+              imageCount={selectedPhotoAlbum.imageCount}
+              thumbnails={visiblePhotoThumbnails}
+              onSelectImage={(image) => {
+                setCurrentPhotoIndex(image.index);
+                persistPhotoAlbumProgress(selectedPhotoAlbum, image.index, image.index === selectedPhotoAlbum.images.length - 1);
+              }}
+            />
           </section>
         ) : null}
 
