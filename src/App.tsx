@@ -401,6 +401,7 @@ import { CacheStatusDialog } from "./CacheStatusDialog";
 import { DeleteConfirmDialog } from "./DeleteConfirmDialog";
 import { FolderAccessDialog } from "./FolderAccessDialog";
 import { HighEnergyTagDialog, type HighEnergyTagPrompt } from "./HighEnergyTagDialog";
+import { ExistingMediaRootDialog, MediaRootLabelDialog } from "./MediaRootPromptDialogs";
 import { PhotoAlbumTagDialog } from "./PhotoAlbumTagDialog";
 import { RatingDialog } from "./RatingDialog";
 
@@ -10334,99 +10335,25 @@ export default function App() {
       onTagInputChange={setPhotoAlbumTagInput}
     />
     {mediaRootLabelPrompt ? (
-      <div className="modal-backdrop" role="presentation" onMouseDown={() => closeMediaRootLabelPrompt(null)}>
-        <section
-          aria-labelledby="media-root-label-title"
-          aria-modal="true"
-          className="media-root-label-dialog"
-          role="dialog"
-          onMouseDown={(event) => event.stopPropagation()}
-        >
-          <button
-            aria-label="关闭"
-            className="dialog-close"
-            type="button"
-            onClick={() => closeMediaRootLabelPrompt(null)}
-          >
-            <X size={18} />
-          </button>
-          <div className="dialog-icon">
-            <FolderOpen size={28} />
-          </div>
-          <div className="dialog-copy">
-            <h2 id="media-root-label-title">命名媒体库</h2>
-            <p>为“{mediaRootLabelPrompt.directoryName}”设置一个媒体库名称。</p>
-          </div>
-          <label className="media-root-label-field">
-            <span>媒体库名称</span>
-            <input
-              autoFocus
-              type="text"
-              value={mediaRootLabelPrompt.value}
-              onChange={(event) =>
-                setMediaRootLabelPrompt((previous) =>
-                  previous ? { ...previous, value: event.target.value } : previous,
-                )
-              }
-              onKeyDown={(event) => {
-                if (event.key === "Enter") submitMediaRootLabelPrompt();
-                if (event.key === "Escape") closeMediaRootLabelPrompt(null);
-              }}
-            />
-          </label>
-          <div className="dialog-actions">
-            <button className="secondary-button" type="button" onClick={() => closeMediaRootLabelPrompt(null)}>
-              取消
-            </button>
-            <button
-              className="primary-button"
-              type="button"
-              onClick={submitMediaRootLabelPrompt}
-              disabled={!mediaRootLabelPrompt.value.trim()}
-            >
-              确定
-            </button>
-          </div>
-        </section>
-      </div>
+      <MediaRootLabelDialog
+        directoryName={mediaRootLabelPrompt.directoryName}
+        value={mediaRootLabelPrompt.value}
+        onClose={() => closeMediaRootLabelPrompt(null)}
+        onSubmit={submitMediaRootLabelPrompt}
+        onValueChange={(value) =>
+          setMediaRootLabelPrompt((previous) =>
+            previous ? { ...previous, value } : previous,
+          )
+        }
+      />
     ) : null}
     {existingMediaRootPrompt ? (
-      <div className="modal-backdrop" role="presentation" onMouseDown={() => closeExistingMediaRootPrompt(false)}>
-        <section
-          aria-labelledby="existing-media-root-title"
-          aria-modal="true"
-          className="media-root-label-dialog"
-          role="dialog"
-          onMouseDown={(event) => event.stopPropagation()}
-        >
-          <button
-            aria-label="关闭"
-            className="dialog-close"
-            type="button"
-            onClick={() => closeExistingMediaRootPrompt(false)}
-          >
-            <X size={18} />
-          </button>
-          <div className="dialog-icon">
-            <FolderOpen size={28} />
-          </div>
-          <div className="dialog-copy">
-            <h2 id="existing-media-root-title">该媒体库已添加</h2>
-            <p>
-              “{existingMediaRootPrompt.mediaRootLabel}”已在全局媒体库中。重新扫描会刷新“{existingMediaRootPrompt.directoryName}”下的视频和字幕。
-            </p>
-          </div>
-          <div className="dialog-actions">
-            <button className="secondary-button" type="button" onClick={() => closeExistingMediaRootPrompt(false)}>
-              取消
-            </button>
-            <button className="primary-button" type="button" onClick={() => closeExistingMediaRootPrompt(true)}>
-              <RefreshCw size={18} />
-              重新扫描
-            </button>
-          </div>
-        </section>
-      </div>
+      <ExistingMediaRootDialog
+        directoryName={existingMediaRootPrompt.directoryName}
+        mediaRootLabel={existingMediaRootPrompt.mediaRootLabel}
+        onCancel={() => closeExistingMediaRootPrompt(false)}
+        onRescan={() => closeExistingMediaRootPrompt(true)}
+      />
     ) : null}
     {mediaRootLocalPathDialog ? (
       <div className="modal-backdrop" role="presentation" onMouseDown={closeMediaRootLocalPathDialog}>
