@@ -357,7 +357,6 @@ import {
 import { DeletionDialogs } from "./DeletionDialogs";
 import { DuplicateVideoGroupCard } from "./DuplicateVideoGroupCard";
 import { EmbeddedSubtitleDialog } from "./EmbeddedSubtitleDialog";
-import { FolderAccessDialog } from "./FolderAccessDialog";
 import { HighEnergyTagDialog, type HighEnergyTagPrompt } from "./HighEnergyTagDialog";
 import { HomeNextEpisodeSection } from "./HomeNextEpisodeSection";
 import { HomeRecentSection } from "./HomeRecentSection";
@@ -365,7 +364,7 @@ import { HomeResumeSection } from "./HomeResumeSection";
 import { HomeSideColumn } from "./HomeSideColumn";
 import { HomeSpecialInsightsSection } from "./HomeSpecialInsightsSection";
 import { HomeCardThumbnail, HomeListCard } from "./HomeVideoCards";
-import { ExistingMediaRootDialog, MediaRootLabelDialog, MediaRootLocalPathDialogView } from "./MediaRootPromptDialogs";
+import { MediaRootDialogsGroup } from "./MediaRootDialogsGroup";
 import { LibrarySearchResultItem } from "./LibrarySearchResultItem";
 import { PhotoAlbumCard } from "./PhotoAlbumCard";
 import { PhotoAlbumTagDialog } from "./PhotoAlbumTagDialog";
@@ -8561,44 +8560,39 @@ export default function App() {
       onRemoveTag={removeTagFromPhotoAlbum}
       onTagInputChange={setPhotoAlbumTagInput}
     />
-    {mediaRootLabelPrompt ? (
-      <MediaRootLabelDialog
-        directoryName={mediaRootLabelPrompt.directoryName}
-        value={mediaRootLabelPrompt.value}
-        onClose={() => closeMediaRootLabelPrompt(null)}
-        onSubmit={submitMediaRootLabelPrompt}
-        onValueChange={(value) =>
+    <MediaRootDialogsGroup
+      label={mediaRootLabelPrompt ? {
+        directoryName: mediaRootLabelPrompt.directoryName,
+        value: mediaRootLabelPrompt.value,
+        onClose: () => closeMediaRootLabelPrompt(null),
+        onSubmit: submitMediaRootLabelPrompt,
+        onValueChange: (value) =>
           setMediaRootLabelPrompt((previous) =>
             previous ? { ...previous, value } : previous,
-          )
-        }
-      />
-    ) : null}
-    {existingMediaRootPrompt ? (
-      <ExistingMediaRootDialog
-        directoryName={existingMediaRootPrompt.directoryName}
-        mediaRootLabel={existingMediaRootPrompt.mediaRootLabel}
-        onCancel={() => closeExistingMediaRootPrompt(false)}
-        onRescan={() => closeExistingMediaRootPrompt(true)}
-      />
-    ) : null}
-    {mediaRootLocalPathDialog ? (
-      <MediaRootLocalPathDialogView
-        root={mediaRootLocalPathDialog.root}
-        value={mediaRootLocalPathDialog.value}
-        error={mediaRootLocalPathDialog.error}
-        isSaving={mediaRootLocalPathDialog.isSaving}
-        onClose={closeMediaRootLocalPathDialog}
-        onSubmit={() => void submitMediaRootLocalPath()}
-        onValueChange={updateMediaRootLocalPathValue}
-      />
-    ) : null}
-    <FolderAccessDialog
-      isOpen={isFolderDialogOpen}
-      skipPrompt={skipFolderAccessPrompt}
-      onClose={() => setIsFolderDialogOpen(false)}
-      onSkipPromptChange={updateSkipFolderAccessPrompt}
-      onContinue={chooseMediaLibraryDirectory}
+          ),
+      } : null}
+      existingRoot={existingMediaRootPrompt ? {
+        directoryName: existingMediaRootPrompt.directoryName,
+        mediaRootLabel: existingMediaRootPrompt.mediaRootLabel,
+        onCancel: () => closeExistingMediaRootPrompt(false),
+        onRescan: () => closeExistingMediaRootPrompt(true),
+      } : null}
+      localPath={mediaRootLocalPathDialog ? {
+        root: mediaRootLocalPathDialog.root,
+        value: mediaRootLocalPathDialog.value,
+        error: mediaRootLocalPathDialog.error,
+        isSaving: mediaRootLocalPathDialog.isSaving,
+        onClose: closeMediaRootLocalPathDialog,
+        onSubmit: () => void submitMediaRootLocalPath(),
+        onValueChange: updateMediaRootLocalPathValue,
+      } : null}
+      folderAccess={{
+        isOpen: isFolderDialogOpen,
+        skipPrompt: skipFolderAccessPrompt,
+        onClose: () => setIsFolderDialogOpen(false),
+        onSkipPromptChange: updateSkipFolderAccessPrompt,
+        onContinue: chooseMediaLibraryDirectory,
+      }}
     />
     <CompatibleMediaDialogs
       confirm={compatibleMediaConfirm}
