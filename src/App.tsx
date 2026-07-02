@@ -408,6 +408,7 @@ import { PlayerOptionControls } from "./PlayerOptionControls";
 import { PlayerPlaybackControls } from "./PlayerPlaybackControls";
 import { PlayerStagePlaceholders } from "./PlayerStagePlaceholders";
 import { PlayerTimelineControls } from "./PlayerTimelineControls";
+import { PlayerVideoElement } from "./PlayerVideoElement";
 import { PlayerViewControls } from "./PlayerViewControls";
 import { RatingFilterCard } from "./RatingFilterCard";
 import { RatingDialog } from "./RatingDialog";
@@ -8451,17 +8452,12 @@ export default function App() {
         >
           <div className="player-viewport">
             {currentVideo ? (
-              <video
-                ref={videoRef}
-                className={`video-element ${normalizedVideoRotation ? "manual-rotated" : ""} ${isVideoSideways ? "sideways" : ""}`}
-                style={
-                  normalizedVideoRotation
-                    ? ({
-                        "--landscape-source-aspect-ratio": currentVideoSourceAspectRatio,
-                        "--video-rotation": `${normalizedVideoRotation}deg`,
-                      } as React.CSSProperties)
-                    : undefined
-                }
+              <PlayerVideoElement
+                currentVideoSourceAspectRatio={currentVideoSourceAspectRatio}
+                isVideoSideways={isVideoSideways}
+                normalizedVideoRotation={normalizedVideoRotation}
+                selectedSubtitle={selectedSubtitle}
+                videoRef={videoRef}
                 onClick={togglePlay}
                 onPlay={() => {
                   setIsPlaying(true);
@@ -8477,12 +8473,7 @@ export default function App() {
                 onTimeUpdate={handleTimeUpdate}
                 onDurationChange={handleDurationChange}
                 onEnded={handleEnded}
-                playsInline
-              >
-                {selectedSubtitle ? (
-                  <track key={selectedSubtitle.id} src={selectedSubtitle.url} kind="subtitles" label={selectedSubtitle.name} default />
-                ) : null}
-              </video>
+              />
             ) : null}
 
             <PlayerStagePlaceholders isPrivacyMode={isPrivacyMode} message={message} showEmptyState={!currentVideo} />
