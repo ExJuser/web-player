@@ -280,7 +280,6 @@ import {
 
 
 const photoAlbumPageSize = 20;
-const cacheStatusPageSize = 10;
 const photoThumbnailWindowSize = 24;
 const photoViewerWarmRadius = 4;
 const photoViewerDecodeRadius = 2;
@@ -379,32 +378,19 @@ import {
   readStoredVolume,
   type AppTheme,
 } from "./appBrowserUtils";
+import {
+  cacheStatusPageSize,
+  getAvailableCacheItemIds,
+  getCacheStatusPageState,
+  getClearableCacheStatusItems,
+  getSelectedCacheStatusItems,
+  toggleAllCacheItemSelection,
+  toggleCacheItemSelection as toggleCacheStatusItemSelection,
+  type CacheStatus,
+  type ClearCacheResponse,
+} from "./cacheStatusUtils";
 
 type PhotoAlbumViewFilter = "all" | "favorites";
-
-type CacheStatusItem = {
-  id: string;
-  label: string;
-  path: string;
-  bytes: number;
-  files: number;
-  updatedAt: number | null;
-  error?: string;
-  clearable?: boolean;
-};
-
-type CacheStatus = {
-  rootPath: string;
-  totalBytes: number;
-  totalFiles: number;
-  updatedAt: number | null;
-  items: CacheStatusItem[];
-};
-
-type ClearCacheResponse = {
-  cleared: string[];
-  status: CacheStatus;
-};
 
 type LibrarySearchMode = "idle" | "local" | "ai" | "empty";
 type LibrarySearchSurface = "home" | "player";
@@ -7182,9 +7168,9 @@ export default function App() {
   }, []);
 
   const cacheStatusItems = cacheStatus?.items ?? [];
-  const clearableCacheStatusItems = useMemo(() => cacheStatusItems.filter((item) => item.clearable !== false), [cacheStatusItems]);
+  const clearableCacheStatusItems = useMemo(() => getClearableCacheStatusItems(cacheStatusItems), [cacheStatusItems]);
   const selectedCacheItems = useMemo(
-    () => clearableCacheStatusItems.filter((item) => selectedCacheItemIds.has(item.id)),
+    () => getSelectedCacheStatusItems(clearableCacheStatusItems, selectedCacheItemIds),
     [clearableCacheStatusItems, selectedCacheItemIds],
   );
   const selectedCacheItemIdsList = useMemo(() => selectedCacheItems.map((item) => item.id), [selectedCacheItems]);
@@ -7192,18 +7178,19 @@ export default function App() {
   const selectedCacheFiles = selectedCacheItems.reduce((sum, item) => sum + item.files, 0);
   const isAllCacheSelected =
     clearableCacheStatusItems.length > 0 && clearableCacheStatusItems.every((item) => selectedCacheItemIds.has(item.id));
-  const cacheStatusPageCount = Math.max(1, Math.ceil(cacheStatusItems.length / cacheStatusPageSize));
-  const visibleCacheStatusPage = Math.min(Math.max(cacheStatusPage, 1), cacheStatusPageCount);
-  const pagedCacheStatusItems = useMemo(() => {
-    const start = (visibleCacheStatusPage - 1) * cacheStatusPageSize;
-    return cacheStatusItems.slice(start, start + cacheStatusPageSize);
-  }, [cacheStatusItems, visibleCacheStatusPage]);
-  const cacheStatusPageStart = cacheStatusItems.length ? (visibleCacheStatusPage - 1) * cacheStatusPageSize + 1 : 0;
-  const cacheStatusPageEnd = Math.min(visibleCacheStatusPage * cacheStatusPageSize, cacheStatusItems.length);
+  const cacheStatusPageState = useMemo(
+    () => getCacheStatusPageState(cacheStatusItems, cacheStatusPage),
+    [cacheStatusItems, cacheStatusPage],
+  );
+  const cacheStatusPageCount = cacheStatusPageState.pageCount;
+  const visibleCacheStatusPage = cacheStatusPageState.visiblePage;
+  const pagedCacheStatusItems = cacheStatusPageState.items;
+  const cacheStatusPageStart = cacheStatusPageState.start;
+  const cacheStatusPageEnd = cacheStatusPageState.end;
 
   useEffect(() => {
     if (!cacheStatus) return;
-    const availableIds = new Set(cacheStatus.items.filter((item) => item.clearable !== false).map((item) => item.id));
+    const availableIds = getAvailableCacheItemIds(cacheStatus.items);
     setSelectedCacheItemIds((previous) => {
       const next = new Set(Array.from(previous).filter((id) => availableIds.has(id)));
       return next.size === previous.size ? previous : next;
@@ -7215,23 +7202,11 @@ export default function App() {
   }, [cacheStatusPageCount]);
 
   const toggleCacheItemSelection = useCallback((id: string, checked: boolean) => {
-    setSelectedCacheItemIds((previous) => {
-      const next = new Set(previous);
-      if (checked) {
-        next.add(id);
-      } else {
-        next.delete(id);
-      }
-      return next;
-    });
+    setSelectedCacheItemIds((previous) => toggleCacheStatusItemSelection(previous, id, checked));
   }, []);
 
   const toggleAllCacheItems = useCallback(() => {
-    setSelectedCacheItemIds((previous) => {
-      if (!clearableCacheStatusItems.length) return previous;
-      const shouldSelectAll = !clearableCacheStatusItems.every((item) => previous.has(item.id));
-      return shouldSelectAll ? new Set(clearableCacheStatusItems.map((item) => item.id)) : new Set();
-    });
+    setSelectedCacheItemIds((previous) => toggleAllCacheItemSelection(previous, clearableCacheStatusItems));
   }, [clearableCacheStatusItems]);
 
   const requestClearSelectedCache = useCallback(() => {
