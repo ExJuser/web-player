@@ -7917,7 +7917,7 @@ export default function App() {
       />
     );
   };
-  const renderDuplicateVideoGroup = (group: DuplicateVideoGroup) => (
+  const renderDuplicateVideoGroup = useCallback((group: DuplicateVideoGroup) => (
     <DuplicateVideoGroupCard
       formatFileSize={formatFileSize}
       formatTime={formatTime}
@@ -7925,7 +7925,7 @@ export default function App() {
       key={group.id}
       onOpenVideo={openDuplicateVideo}
     />
-  );
+  ), [openDuplicateVideo]);
   const duplicateDetectionPercent = duplicateDetectionProgress?.percent ?? 0;
   const duplicateDetectionDisplayMessage =
     duplicateVideoGroups.length && !isDuplicateDetectionResultCurrent && !isDuplicateDetectionRunning
