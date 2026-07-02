@@ -398,6 +398,7 @@ import {
   type ClearCacheResponse,
 } from "./cacheStatusUtils";
 import { CacheStatusDialog } from "./CacheStatusDialog";
+import { DeleteConfirmDialog } from "./DeleteConfirmDialog";
 import { RatingDialog } from "./RatingDialog";
 
 type PhotoAlbumViewFilter = "all" | "favorites";
@@ -10319,183 +10320,57 @@ export default function App() {
         </form>
       </div>
     ) : null}
-    {videoDeleteCandidate ? (
-      <div
-        className="modal-backdrop"
-        role="presentation"
-        onMouseDown={() => {
-          if (isVideoDeletePending) return;
-          setVideoDeleteCandidate(null);
-          setVideoDeleteError("");
-        }}
-      >
-        <section
-          aria-labelledby="delete-video-title"
-          aria-modal="true"
-          className="delete-dialog"
-          role="dialog"
-          onMouseDown={(event) => event.stopPropagation()}
-        >
-          <button
-            aria-label="关闭"
-            className="dialog-close"
-            type="button"
-            onClick={() => {
-              setVideoDeleteCandidate(null);
-              setVideoDeleteError("");
-            }}
-            disabled={isVideoDeletePending}
-          >
-            <X size={18} />
-          </button>
-          <div className="dialog-icon danger">
-            <Trash2 size={28} />
-          </div>
-          <div className="dialog-copy">
-            <h2 id="delete-video-title">删除视频文件？</h2>
-            <p>这个操作会直接从磁盘删除视频文件，删除后无法在播放器内恢复。</p>
-          </div>
-          <div className="delete-file-preview">
-            <strong>{videoDeleteCandidate.name}</strong>
-            <span>{videoDeleteError || videoDeleteCandidate.relativePath}</span>
-          </div>
-          <div className="dialog-actions">
-            <button
-              className="secondary-button"
-              type="button"
-              onClick={() => {
-                setVideoDeleteCandidate(null);
-                setVideoDeleteError("");
-              }}
-              disabled={isVideoDeletePending}
-            >
-              取消
-            </button>
-            <button
-              className="danger-button"
-              type="button"
-              onClick={() => void confirmDeleteVideo()}
-              disabled={isVideoDeletePending}
-            >
-              <Trash2 size={18} />
-              {isVideoDeletePending ? "删除中..." : "删除文件"}
-            </button>
-          </div>
-        </section>
-      </div>
-    ) : null}
-    {photoDeleteCandidate ? (
-      <div
-        className="modal-backdrop"
-        role="presentation"
-        onMouseDown={() => {
-          if (isPhotoDeletePending) return;
-          setPhotoDeleteCandidate(null);
-        }}
-      >
-        <section
-          aria-labelledby="delete-photo-title"
-          aria-modal="true"
-          className="delete-dialog"
-          role="dialog"
-          onMouseDown={(event) => event.stopPropagation()}
-        >
-          <button
-            aria-label="关闭"
-            className="dialog-close"
-            type="button"
-            onClick={() => setPhotoDeleteCandidate(null)}
-            disabled={isPhotoDeletePending}
-          >
-            <X size={18} />
-          </button>
-          <div className="dialog-icon danger">
-            <Trash2 size={28} />
-          </div>
-          <div className="dialog-copy">
-            <h2 id="delete-photo-title">删除图片？</h2>
-            <p>这个操作会直接从本地磁盘删除图片文件，删除后无法在播放器内恢复。</p>
-          </div>
-          <div className="delete-file-preview">
-            <strong>{photoDeleteCandidate.name}</strong>
-            <span>{photoDeleteCandidate.relativePath || photoDeleteCandidate.albumTitle}</span>
-          </div>
-          {photoDeleteError ? <div className="dialog-inline-error">{photoDeleteError}</div> : null}
-          <div className="dialog-actions">
-            <button className="secondary-button" type="button" onClick={() => setPhotoDeleteCandidate(null)} disabled={isPhotoDeletePending}>
-              取消
-            </button>
-            <button className="danger-button" type="button" onClick={() => void confirmDeleteCurrentPhoto()} disabled={isPhotoDeletePending}>
-              <Trash2 size={18} />
-              {isPhotoDeletePending ? "删除中" : "删除图片"}
-            </button>
-          </div>
-        </section>
-      </div>
-    ) : null}
-    {photoAlbumDeleteCandidate ? (
-      <div
-        className="modal-backdrop"
-        role="presentation"
-        onMouseDown={() => {
-          if (isPhotoDeletePending) return;
-          setPhotoAlbumDeleteCandidate(null);
-          setPhotoDeleteError("");
-        }}
-      >
-        <section
-          aria-labelledby="delete-photo-album-title"
-          aria-modal="true"
-          className="delete-dialog"
-          role="dialog"
-          onMouseDown={(event) => event.stopPropagation()}
-        >
-          <button
-            aria-label="关闭"
-            className="dialog-close"
-            type="button"
-            onClick={() => {
-              setPhotoAlbumDeleteCandidate(null);
-              setPhotoDeleteError("");
-            }}
-            disabled={isPhotoDeletePending}
-          >
-            <X size={18} />
-          </button>
-          <div className="dialog-icon danger">
-            <Trash2 size={28} />
-          </div>
-          <div className="dialog-copy">
-            <h2 id="delete-photo-album-title">删除整个图集？</h2>
-            <p>这个操作会直接从本地磁盘删除这个图集中的图片文件，删除后无法在播放器内恢复。</p>
-          </div>
-          <div className="delete-file-preview">
-            <strong>{photoAlbumDeleteCandidate.title}</strong>
-            <span>
-              {(photoAlbumDeleteCandidate.relativePath || "根目录")} · {photoAlbumDeleteCandidate.imageCount} 张 · {formatFileSize(photoAlbumDeleteCandidate.totalSize)}
-            </span>
-          </div>
-          {photoDeleteError ? <div className="dialog-inline-error">{photoDeleteError}</div> : null}
-          <div className="dialog-actions">
-            <button
-              className="secondary-button"
-              type="button"
-              onClick={() => {
-                setPhotoAlbumDeleteCandidate(null);
-                setPhotoDeleteError("");
-              }}
-              disabled={isPhotoDeletePending}
-            >
-              取消
-            </button>
-            <button className="danger-button" type="button" onClick={() => void confirmDeletePhotoAlbum()} disabled={isPhotoDeletePending}>
-              <Trash2 size={18} />
-              {isPhotoDeletePending ? "删除中" : "删除整本"}
-            </button>
-          </div>
-        </section>
-      </div>
-    ) : null}
+    <DeleteConfirmDialog
+      isOpen={Boolean(videoDeleteCandidate)}
+      titleId="delete-video-title"
+      title="删除视频文件？"
+      description="这个操作会直接从磁盘删除视频文件，删除后无法在播放器内恢复。"
+      primaryText="删除文件"
+      pendingText="删除中..."
+      isPending={isVideoDeletePending}
+      previewTitle={videoDeleteCandidate?.name ?? ""}
+      previewMeta={videoDeleteError || videoDeleteCandidate?.relativePath || ""}
+      onClose={() => {
+        setVideoDeleteCandidate(null);
+        setVideoDeleteError("");
+      }}
+      onConfirm={() => void confirmDeleteVideo()}
+    />
+    <DeleteConfirmDialog
+      isOpen={Boolean(photoDeleteCandidate)}
+      titleId="delete-photo-title"
+      title="删除图片？"
+      description="这个操作会直接从本地磁盘删除图片文件，删除后无法在播放器内恢复。"
+      primaryText="删除图片"
+      pendingText="删除中"
+      isPending={isPhotoDeletePending}
+      previewTitle={photoDeleteCandidate?.name ?? ""}
+      previewMeta={photoDeleteCandidate?.relativePath || photoDeleteCandidate?.albumTitle || ""}
+      error={photoDeleteError}
+      onClose={() => setPhotoDeleteCandidate(null)}
+      onConfirm={() => void confirmDeleteCurrentPhoto()}
+    />
+    <DeleteConfirmDialog
+      isOpen={Boolean(photoAlbumDeleteCandidate)}
+      titleId="delete-photo-album-title"
+      title="删除整个图集？"
+      description="这个操作会直接从本地磁盘删除这个图集中的图片文件，删除后无法在播放器内恢复。"
+      primaryText="删除整本"
+      pendingText="删除中"
+      isPending={isPhotoDeletePending}
+      previewTitle={photoAlbumDeleteCandidate?.title ?? ""}
+      previewMeta={
+        photoAlbumDeleteCandidate
+          ? `${photoAlbumDeleteCandidate.relativePath || "根目录"} · ${photoAlbumDeleteCandidate.imageCount} 张 · ${formatFileSize(photoAlbumDeleteCandidate.totalSize)}`
+          : ""
+      }
+      error={photoDeleteError}
+      onClose={() => {
+        setPhotoAlbumDeleteCandidate(null);
+        setPhotoDeleteError("");
+      }}
+      onConfirm={() => void confirmDeletePhotoAlbum()}
+    />
     {photoAlbumTagEditorAlbum ? (
       <div className="modal-backdrop" role="presentation" onMouseDown={() => setPhotoAlbumTagEditorAlbumId(null)}>
         <section
