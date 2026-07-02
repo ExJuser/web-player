@@ -7861,7 +7861,7 @@ export default function App() {
       onThumbnailError={markVideoThumbnailFailed}
     />
   );
-  const renderLibrarySearchResult = (result: LibrarySearchResult) => {
+  const renderLibrarySearchResult = useCallback((result: LibrarySearchResult) => {
     return (
       <LibrarySearchResultItem
         createCard={createHomeVideoCard}
@@ -7874,7 +7874,23 @@ export default function App() {
         videoTags={videoTags}
       />
     );
-  };
+  }, [createHomeVideoCard, formatLibrarySearchProgressLabel, isResumableProgress, openLibraryFolderFromSearch, videoRatings, videoTags]);
+  const homeLibrarySearchPreviewItems = useMemo(
+    () => (homeLibrarySearchPreviewResults.length ? homeLibrarySearchPreviewResults.map(renderLibrarySearchResult) : null),
+    [homeLibrarySearchPreviewResults, renderLibrarySearchResult],
+  );
+  const visibleHomeLibrarySearchItems = useMemo(
+    () => visibleHomeLibrarySearchResults.map(renderLibrarySearchResult),
+    [renderLibrarySearchResult, visibleHomeLibrarySearchResults],
+  );
+  const playerLibrarySearchPreviewItems = useMemo(
+    () => (playerLibrarySearchPreviewResults.length ? playerLibrarySearchPreviewResults.map(renderLibrarySearchResult) : null),
+    [playerLibrarySearchPreviewResults, renderLibrarySearchResult],
+  );
+  const visiblePlayerLibrarySearchItems = useMemo(
+    () => visiblePlayerLibrarySearchResults.map(renderLibrarySearchResult),
+    [renderLibrarySearchResult, visiblePlayerLibrarySearchResults],
+  );
   const getPhotoImageUrl = (image?: PhotoAlbumImage | null) => (image ? image.url || photoObjectUrls[image.id] || "" : "");
   const renderPhotoAlbumCard = (album: PhotoAlbum) => {
     const progress = photoAlbumProgress[album.id];
@@ -8317,7 +8333,7 @@ export default function App() {
                   inputValue={homeLibrarySearchQuery}
                   placeholder={homeLibrarySearchPlaceholder}
                   previewHint="仅本地匹配，不调用 AI"
-                  previewResults={homeLibrarySearchPreviewResults.length ? homeLibrarySearchPreviewResults.map(renderLibrarySearchResult) : null}
+                  previewResults={homeLibrarySearchPreviewItems}
                   showPreview={shouldShowHomeLibrarySearchPreview}
                   onBlur={handleLibrarySearchBlur}
                   onFocus={() => setFocusedLibrarySearchSurface("home")}
@@ -8335,7 +8351,7 @@ export default function App() {
                   hasMoreResults={hasMoreHomeLibrarySearchResults}
                   isEmpty={isHomeLibrarySearchSurface && librarySearchMode === "empty"}
                   loadMoreRef={librarySearchLoadMoreRef}
-                  results={visibleHomeLibrarySearchResults.map(renderLibrarySearchResult)}
+                  results={visibleHomeLibrarySearchItems}
                   resultsRef={librarySearchResultsRef}
                   totalCount={homeLibrarySearchResults.length}
                   visibleCount={visibleHomeLibrarySearchResults.length}
@@ -8734,8 +8750,8 @@ export default function App() {
           isLoading={isPlayerLibrarySearchLoading}
           loadMoreRef={playerLibrarySearchLoadMoreRef}
           placeholder={playerLibrarySearchPlaceholder}
-          previewResults={playerLibrarySearchPreviewResults.length ? playerLibrarySearchPreviewResults.map(renderLibrarySearchResult) : null}
-          results={visiblePlayerLibrarySearchResults.map(renderLibrarySearchResult)}
+          previewResults={playerLibrarySearchPreviewItems}
+          results={visiblePlayerLibrarySearchItems}
           resultsRef={playerLibrarySearchResultsRef}
           searchMode={playerLibrarySearchMode}
           shouldShowPreview={shouldShowPlayerLibrarySearchPreview}
