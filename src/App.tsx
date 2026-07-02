@@ -400,6 +400,7 @@ import { PlaylistEmptyState } from "./PlaylistEmptyState";
 import { PlaylistItemCard } from "./PlaylistItemCard";
 import { PlaylistPagination } from "./PlaylistPagination";
 import { PlaylistTools } from "./PlaylistTools";
+import { PlayerDanmakuLayer } from "./PlayerDanmakuLayer";
 import { PlayerHighlightControls } from "./PlayerHighlightControls";
 import { PlayerLibrarySearchSection } from "./PlayerLibrarySearchSection";
 import { PlayerMediaActionControls } from "./PlayerMediaActionControls";
@@ -8492,44 +8493,18 @@ export default function App() {
               </div>
             ) : null}
 
-            {isDanmakuAvailable && activeDanmakuComments.length ? (
-              <div
-                ref={danmakuLayerRef}
-                className="danmaku-layer"
-                aria-hidden="true"
-                style={
-                  {
-                    "--danmaku-opacity": danmakuPreferences.opacity,
-                    "--danmaku-speed": `${danmakuPreferences.speed}s`,
-                    "--danmaku-font-size": `${danmakuPreferences.fontSize}px`,
-                    "--danmaku-play-state": isPlaying ? "running" : "paused",
-                  } as React.CSSProperties
-                }
-              >
-                {activeDanmakuComments.map((comment) => {
-                  const elapsed = Math.max(0, currentTime - comment.time);
-                  const lane = getDanmakuLane(comment, danmakuLaneCount);
-                  const text = danmakuPreferences.showSimplified ? comment.simplifiedText || comment.text : comment.text;
-                  return (
-                    <span
-                      key={`${comment.id}:${Math.floor(comment.time * 10)}`}
-                      className={`danmaku-item mode-${comment.mode}`}
-                      style={
-                        {
-                          "--danmaku-lane": lane,
-                          "--danmaku-lanes": danmakuLaneCount,
-                          "--danmaku-lane-top": formatDanmakuLaneTop(lane, danmakuLaneCount, danmakuPreferences.displayArea),
-                          "--danmaku-lane-offset": `${Math.round(lane * danmakuPreferences.fontSize * danmakuLaneLineHeight)}px`,
-                          "--danmaku-delay": `-${elapsed}s`,
-                          color: comment.color,
-                        } as React.CSSProperties
-                      }
-                    >
-                      {text}
-                    </span>
-                  );
-                })}
-              </div>
+            {isDanmakuAvailable ? (
+              <PlayerDanmakuLayer
+                comments={activeDanmakuComments}
+                currentTime={currentTime}
+                danmakuLaneCount={danmakuLaneCount}
+                danmakuLaneLineHeight={danmakuLaneLineHeight}
+                danmakuLayerRef={danmakuLayerRef}
+                isPlaying={isPlaying}
+                preferences={danmakuPreferences}
+                getDanmakuLane={getDanmakuLane}
+                formatDanmakuLaneTop={formatDanmakuLaneTop}
+              />
             ) : null}
 
             {launchEffectKey ? (
