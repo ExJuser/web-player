@@ -388,9 +388,7 @@ import { PhotoAlbumCard } from "./PhotoAlbumCard";
 import { PhotoAlbumTagDialog } from "./PhotoAlbumTagDialog";
 import type { PhotoAlbumViewFilter } from "./PhotoAlbumToolbar";
 import { PhotoDashboardSection } from "./PhotoDashboardSection";
-import { PhotoViewerFilmstrip } from "./PhotoViewerFilmstrip";
-import { PhotoViewerHeader } from "./PhotoViewerHeader";
-import { PhotoViewerStage } from "./PhotoViewerStage";
+import { PhotoViewerSection } from "./PhotoViewerSection";
 import { PlaylistPagination } from "./PlaylistPagination";
 import { PlaylistTools } from "./PlaylistTools";
 import { PlaylistVideoList } from "./PlaylistVideoList";
@@ -8393,39 +8391,28 @@ export default function App() {
         ) : null}
 
         {isPhotoAlbumViewVisible && activeView === "photoViewer" && selectedPhotoAlbum ? (
-          <section className="photo-viewer" aria-label={`阅读 ${selectedPhotoAlbum.title}`}>
-            <PhotoViewerHeader
-              album={selectedPhotoAlbum}
-              currentPhoto={currentPhoto}
-              isCoverCurrent={Boolean(currentPhoto && photoAlbumCoverPreferences[selectedPhotoAlbum.id] === currentPhoto.id)}
-              isFavorite={favoritePhotoAlbumIds.has(selectedPhotoAlbum.id)}
-              onBack={showPhotoAlbumList}
-              onDeleteCurrentPhoto={requestDeleteCurrentPhoto}
-              onEditTags={openPhotoAlbumTagEditor}
-              onMarkCompleted={markSelectedPhotoAlbumCompleted}
-              onResetProgress={resetSelectedPhotoAlbumProgress}
-              onSetCover={setPhotoAlbumCover}
-              onToggleFavorite={togglePhotoAlbumFavorite}
-            />
-            <PhotoViewerStage
-              currentIndex={currentPhotoIndex}
-              currentPhoto={currentPhoto}
-              currentPhotoUrl={currentPhotoUrl}
-              imageCount={selectedPhotoAlbum.images.length}
-              onMove={movePhoto}
-            />
-            <PhotoViewerFilmstrip
-              currentIndex={currentPhotoIndex}
-              currentPhotoName={currentPhoto?.name ?? selectedPhotoAlbum.title}
-              getImageUrl={getPhotoImageUrl}
-              imageCount={selectedPhotoAlbum.imageCount}
-              thumbnails={visiblePhotoThumbnails}
-              onSelectImage={(image) => {
-                setCurrentPhotoIndex(image.index);
-                persistPhotoAlbumProgress(selectedPhotoAlbum, image.index, image.index === selectedPhotoAlbum.images.length - 1);
-              }}
-            />
-          </section>
+          <PhotoViewerSection
+            album={selectedPhotoAlbum}
+            currentIndex={currentPhotoIndex}
+            currentPhoto={currentPhoto}
+            currentPhotoUrl={currentPhotoUrl}
+            isCoverCurrent={Boolean(currentPhoto && photoAlbumCoverPreferences[selectedPhotoAlbum.id] === currentPhoto.id)}
+            isFavorite={favoritePhotoAlbumIds.has(selectedPhotoAlbum.id)}
+            thumbnails={visiblePhotoThumbnails}
+            getImageUrl={getPhotoImageUrl}
+            onBack={showPhotoAlbumList}
+            onDeleteCurrentPhoto={requestDeleteCurrentPhoto}
+            onEditTags={openPhotoAlbumTagEditor}
+            onMarkCompleted={markSelectedPhotoAlbumCompleted}
+            onMove={movePhoto}
+            onResetProgress={resetSelectedPhotoAlbumProgress}
+            onSelectImage={(image) => {
+              setCurrentPhotoIndex(image.index);
+              persistPhotoAlbumProgress(selectedPhotoAlbum, image.index, image.index === selectedPhotoAlbum.images.length - 1);
+            }}
+            onSetCover={setPhotoAlbumCover}
+            onToggleFavorite={togglePhotoAlbumFavorite}
+          />
         ) : null}
 
         <div
