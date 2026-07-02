@@ -403,6 +403,7 @@ import { DuplicateVideoGroupCard } from "./DuplicateVideoGroupCard";
 import { EmbeddedSubtitleDialog } from "./EmbeddedSubtitleDialog";
 import { FolderAccessDialog } from "./FolderAccessDialog";
 import { HighEnergyTagDialog, type HighEnergyTagPrompt } from "./HighEnergyTagDialog";
+import { HomeLibraryStats } from "./HomeLibraryStats";
 import { HomeModeCard } from "./HomeModeCard";
 import { HomeRecapCard } from "./HomeRecapCard";
 import { HomeCardThumbnail, HomeListCard } from "./HomeVideoCards";
@@ -8236,24 +8237,7 @@ export default function App() {
                 onModeChange={updateHomeMediaMode}
               />
 
-              <section className="home-stats">
-                <div>
-                  <strong>{libraryStats.total}</strong>
-                  <span>视频</span>
-                </div>
-                <div>
-                  <strong>{libraryStats.unfinished}</strong>
-                  <span>未看完</span>
-                </div>
-                <div>
-                  <strong>{libraryStats.completed}</strong>
-                  <span>已看完</span>
-                </div>
-                <div>
-                  <strong>{libraryStats.favorites}</strong>
-                  <span>收藏</span>
-                </div>
-              </section>
+              <HomeLibraryStats stats={libraryStats} />
 
               <section className="home-section media-library-card">
                 <button
