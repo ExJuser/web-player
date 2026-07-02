@@ -347,16 +347,13 @@ import {
 } from "./cacheStatusUtils";
 import { AiSubtitleDialog, type AiSubtitleTab } from "./AiSubtitleDialog";
 import { DanmakuDialog } from "./DanmakuDialog";
-import { CacheStatusDialog } from "./CacheStatusDialog";
 import {
-  CompatibleMediaDialogs,
   type CompatibleMediaConfirmState,
   type CompatibleMediaDeleteConfirmState,
   type CompatibleMediaTaskState,
 } from "./CompatibleMediaDialogs";
 import { DeletionDialogs } from "./DeletionDialogs";
 import { DuplicateVideoGroupCard } from "./DuplicateVideoGroupCard";
-import { EmbeddedSubtitleDialog } from "./EmbeddedSubtitleDialog";
 import { HighEnergyTagDialog, type HighEnergyTagPrompt } from "./HighEnergyTagDialog";
 import { HomeNextEpisodeSection } from "./HomeNextEpisodeSection";
 import { HomeRecentSection } from "./HomeRecentSection";
@@ -375,6 +372,7 @@ import { PlaylistPanel } from "./PlaylistPanel";
 import { PlayerControlBar } from "./PlayerControlBar";
 import { PlayerStage } from "./PlayerStage";
 import { PlayerTopBar } from "./PlayerTopBar";
+import { PlayerUtilityDialogs } from "./PlayerUtilityDialogs";
 import { RatingDialog } from "./RatingDialog";
 import { ShortcutDialog } from "./ShortcutDialog";
 import { TagDialog } from "./TagDialog";
@@ -8594,57 +8592,59 @@ export default function App() {
         onContinue: chooseMediaLibraryDirectory,
       }}
     />
-    <CompatibleMediaDialogs
-      confirm={compatibleMediaConfirm}
-      task={compatibleMediaTask}
-      deleteConfirm={compatibleMediaDeleteConfirm}
-      message={compatibleMediaMessage}
-      isDeleting={isDeletingCompatibleMedia}
-      onCloseConfirm={() => setCompatibleMediaConfirm(null)}
-      onCreate={() => void createCompatibleMedia()}
-      onCancelTask={cancelCompatibleMediaGeneration}
-      onCloseDeleteConfirm={() => setCompatibleMediaDeleteConfirm(null)}
-      onDelete={() => void deleteCompatibleMedia()}
-    />
-    <EmbeddedSubtitleDialog
-      isOpen={isEmbeddedSubtitleDialogOpen}
-      tracks={embeddedSubtitleTracks}
-      message={embeddedSubtitleMessage}
-      isLoading={isEmbeddedSubtitleLoading}
-      onClose={() => setIsEmbeddedSubtitleDialogOpen(false)}
-      onExtract={(track) => void extractEmbeddedSubtitle(track)}
-    />
-    <CacheStatusDialog
-      isOpen={isCacheStatusDialogOpen}
-      isClearConfirmOpen={isClearCacheConfirmOpen}
-      cacheStatus={cacheStatus}
-      cacheStatusItems={cacheStatusItems}
-      cacheStatusMessage={cacheStatusMessage}
-      isCacheStatusLoading={isCacheStatusLoading}
-      isClearingCache={isClearingCache}
-      isAllCacheSelected={isAllCacheSelected}
-      selectedCacheItemIds={selectedCacheItemIds}
-      selectedCacheItems={selectedCacheItems}
-      selectedCacheBytes={selectedCacheBytes}
-      selectedCacheFiles={selectedCacheFiles}
-      pagedCacheStatusItems={pagedCacheStatusItems}
-      cacheStatusPageStart={cacheStatusPageStart}
-      cacheStatusPageEnd={cacheStatusPageEnd}
-      visibleCacheStatusPage={visibleCacheStatusPage}
-      cacheStatusPageCount={cacheStatusPageCount}
-      onClose={() => {
-        setIsCacheStatusDialogOpen(false);
-        setIsClearCacheConfirmOpen(false);
+    <PlayerUtilityDialogs
+      compatibleMedia={{
+        confirm: compatibleMediaConfirm,
+        task: compatibleMediaTask,
+        deleteConfirm: compatibleMediaDeleteConfirm,
+        message: compatibleMediaMessage,
+        isDeleting: isDeletingCompatibleMedia,
+        onCloseConfirm: () => setCompatibleMediaConfirm(null),
+        onCreate: () => void createCompatibleMedia(),
+        onCancelTask: cancelCompatibleMediaGeneration,
+        onCloseDeleteConfirm: () => setCompatibleMediaDeleteConfirm(null),
+        onDelete: () => void deleteCompatibleMedia(),
       }}
-      onCloseClearConfirm={() => setIsClearCacheConfirmOpen(false)}
-      onToggleAllCacheItems={toggleAllCacheItems}
-      onToggleCacheItemSelection={toggleCacheItemSelection}
-      onCacheStatusPageChange={setCacheStatusPage}
-      onLoadCacheStatus={() => void loadCacheStatus()}
-      onRequestClearSelectedCache={requestClearSelectedCache}
-      onConfirmClearSelectedCache={() => void confirmClearSelectedCache()}
-      formatFileSize={formatFileSize}
-      formatModifiedTime={formatModifiedTime}
+      embeddedSubtitle={{
+        isOpen: isEmbeddedSubtitleDialogOpen,
+        tracks: embeddedSubtitleTracks,
+        message: embeddedSubtitleMessage,
+        isLoading: isEmbeddedSubtitleLoading,
+        onClose: () => setIsEmbeddedSubtitleDialogOpen(false),
+        onExtract: (track) => void extractEmbeddedSubtitle(track),
+      }}
+      cacheStatus={{
+        isOpen: isCacheStatusDialogOpen,
+        isClearConfirmOpen: isClearCacheConfirmOpen,
+        cacheStatus,
+        cacheStatusItems,
+        cacheStatusMessage,
+        isCacheStatusLoading,
+        isClearingCache,
+        isAllCacheSelected,
+        selectedCacheItemIds,
+        selectedCacheItems,
+        selectedCacheBytes,
+        selectedCacheFiles,
+        pagedCacheStatusItems,
+        cacheStatusPageStart,
+        cacheStatusPageEnd,
+        visibleCacheStatusPage,
+        cacheStatusPageCount,
+        onClose: () => {
+          setIsCacheStatusDialogOpen(false);
+          setIsClearCacheConfirmOpen(false);
+        },
+        onCloseClearConfirm: () => setIsClearCacheConfirmOpen(false),
+        onToggleAllCacheItems: toggleAllCacheItems,
+        onToggleCacheItemSelection: toggleCacheItemSelection,
+        onCacheStatusPageChange: setCacheStatusPage,
+        onLoadCacheStatus: () => void loadCacheStatus(),
+        onRequestClearSelectedCache: requestClearSelectedCache,
+        onConfirmClearSelectedCache: () => void confirmClearSelectedCache(),
+        formatFileSize,
+        formatModifiedTime,
+      }}
     />
     <RatingDialog
       isOpen={Boolean(ratingDialogVideoId)}
