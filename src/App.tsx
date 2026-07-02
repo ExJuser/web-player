@@ -14,14 +14,11 @@ import {
   RotateCcw,
   Rocket,
   ShieldCheck,
-  Star,
-  Subtitles,
   Tags,
   RefreshCw,
   Moon,
   Sun,
   X,
-  Zap,
 } from "lucide-react";
 import {
   useCallback,
@@ -408,6 +405,7 @@ import { PlaylistEmptyState } from "./PlaylistEmptyState";
 import { PlaylistFilterControl } from "./PlaylistFilterControl";
 import { PlaylistItemCard } from "./PlaylistItemCard";
 import { PlaylistPagination } from "./PlaylistPagination";
+import { PlayerMediaActionControls } from "./PlayerMediaActionControls";
 import { PlayerOptionControls } from "./PlayerOptionControls";
 import { PlayerPlaybackControls } from "./PlayerPlaybackControls";
 import { PlayerViewControls } from "./PlayerViewControls";
@@ -8755,98 +8753,43 @@ export default function App() {
                 onDeleteCompatibleMedia={openCompatibleMediaDeleteConfirm}
               />
 
-              {homeMediaMode !== "special" ? (
-                <>
-                  <ControlSelect
-                    label={<Subtitles size={18} aria-hidden="true" />}
-                    ariaLabel="字幕"
-                    value={selectedSubtitleId}
-                    options={subtitleControlOptions}
-                    onChange={(value) => {
-                      autoSubtitleSelectionVideoIdRef.current = null;
-                      if (value === "manual") {
-                        void chooseSubtitleFile();
-                        return;
-                      }
-                      updateSelectedSubtitleId(value);
-                    }}
-                    className="subtitle-control"
-                    disabled={!currentVideo}
-                  />
-
-                  <button
-                    className="icon-button"
-                    type="button"
-                    onClick={probeEmbeddedSubtitles}
-                    disabled={!canUseEmbeddedSubtitles || isEmbeddedSubtitleLoading}
-                    title={
-                      canUseEmbeddedSubtitles
-                        ? "检测内封字幕"
-                        : "需要在 config/app.json 配置媒体根路径，并安装 ffmpeg/ffprobe"
-                    }
-                  >
-                    CC
-                  </button>
-                  <button
-                    className={`icon-button ${isAiPanelOpen ? "active" : ""}`}
-                    type="button"
-                    onClick={() => setIsAiPanelOpen(true)}
-                    disabled={!selectedSubtitle}
-                    title={selectedSubtitle ? "字幕总结和问答" : "请先选择字幕"}
-                  >
-                    AI
-                  </button>
-                </>
-              ) : null}
-              {homeMediaMode === "anime" ? (
-                <button
-                  className={`icon-button ${danmakuPreferences.enabled && currentDanmakuSource ? "active" : ""}`}
-                  type="button"
-                  onClick={() => {
-                    setIsDanmakuDialogOpen(true);
-                    setDanmakuMessage((message) => message || "匹配或拉取弹幕后显示在视频上方。");
-                  }}
-                  disabled={!currentVideo || !isSeriesMode}
-                  title={isSeriesMode ? "弹幕源和弹幕设置" : "弹幕只在追番模式的剧集播放中可用"}
-                >
-                  弹
-                </button>
-              ) : null}
-              <button
-                className={`icon-button ${currentVideoTags.length ? "active" : ""}`}
-                type="button"
-                onClick={() => {
+              <PlayerMediaActionControls
+                canUseEmbeddedSubtitles={canUseEmbeddedSubtitles}
+                currentVideoRating={currentVideoRating}
+                hasCurrentVideo={Boolean(currentVideo)}
+                hasSelectedSubtitle={Boolean(selectedSubtitle)}
+                homeMediaMode={homeMediaMode}
+                isAiPanelOpen={isAiPanelOpen}
+                isDanmakuActive={Boolean(danmakuPreferences.enabled && currentDanmakuSource)}
+                isEmbeddedSubtitleLoading={isEmbeddedSubtitleLoading}
+                isHighEnergyMarkDisabled={!currentVideo || !duration || isPrivacyMode}
+                isHighEnergyMarkPending={pendingHighEnergyStart?.videoId === currentVideo?.id}
+                isSeriesMode={isSeriesMode}
+                selectedSubtitleId={selectedSubtitleId}
+                subtitleControlOptions={subtitleControlOptions}
+                videoTagCount={currentVideoTags.length}
+                onChangeSubtitle={(value) => {
+                  autoSubtitleSelectionVideoIdRef.current = null;
+                  if (value === "manual") {
+                    void chooseSubtitleFile();
+                    return;
+                  }
+                  updateSelectedSubtitleId(value);
+                }}
+                onMarkHighEnergySegment={markCurrentHighEnergySegment}
+                onOpenAiPanel={() => setIsAiPanelOpen(true)}
+                onOpenDanmakuDialog={() => {
+                  setIsDanmakuDialogOpen(true);
+                  setDanmakuMessage((message) => message || "匹配或拉取弹幕后显示在视频上方。");
+                }}
+                onOpenRatingDialog={() => currentVideo && openVideoRatingDialog(currentVideo)}
+                onOpenTagDialog={() => {
                   setIsTagDialogOpen(true);
                   setTagMessage("");
                   setTagMergePrompt(null);
                 }}
-                disabled={!currentVideo}
-                title="管理视频标签"
-                aria-label="管理视频标签"
-              >
-                <Tags size={18} />
-              </button>
-              <button
-                className={`icon-button ${typeof currentVideoRating === "number" ? "active" : ""}`}
-                type="button"
-                onClick={() => currentVideo && openVideoRatingDialog(currentVideo)}
-                disabled={!currentVideo}
-                title={typeof currentVideoRating === "number" ? `当前评分 ${currentVideoRating}/10` : "给视频评分"}
-                aria-label="给视频评分"
-              >
-                <Star size={18} fill={typeof currentVideoRating === "number" ? "currentColor" : "none"} />
-              </button>
-              <button
-                className={`icon-button highlight-mark-button ${pendingHighEnergyStart?.videoId === currentVideo?.id ? "active" : ""}`}
-                type="button"
-                onClick={markCurrentHighEnergySegment}
-                disabled={!currentVideo || !duration || isPrivacyMode}
-                title={pendingHighEnergyStart?.videoId === currentVideo?.id ? "标记高能结束点" : "标记高能起点"}
-                aria-label={pendingHighEnergyStart?.videoId === currentVideo?.id ? "标记高能结束点" : "标记高能起点"}
-                aria-pressed={pendingHighEnergyStart?.videoId === currentVideo?.id}
-              >
-                <Zap size={18} />
-              </button>
+                onProbeEmbeddedSubtitles={probeEmbeddedSubtitles}
+              />
               {canRecordEmission ? (
                 <SpecialStatsControl
                   disabled={!currentVideo}
