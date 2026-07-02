@@ -400,6 +400,7 @@ import {
   type CompatibleMediaTaskState,
 } from "./CompatibleMediaDialogs";
 import { DeleteConfirmDialog } from "./DeleteConfirmDialog";
+import { DuplicateVideoGroupCard } from "./DuplicateVideoGroupCard";
 import { EmbeddedSubtitleDialog } from "./EmbeddedSubtitleDialog";
 import { FolderAccessDialog } from "./FolderAccessDialog";
 import { HighEnergyTagDialog, type HighEnergyTagPrompt } from "./HighEnergyTagDialog";
@@ -7976,20 +7977,13 @@ export default function App() {
     );
   };
   const renderDuplicateVideoGroup = (group: DuplicateVideoGroup) => (
-    <div className="duplicate-video-group" key={group.id}>
-      <div className="duplicate-video-group-header">
-        <strong>{group.severity === "duplicate" ? "高度重复" : "疑似重复"}</strong>
-        <span>{group.videos.length} 个 · {group.reasons.join("、")}</span>
-      </div>
-      <div className="duplicate-video-list">
-        {group.videos.map((video) => (
-          <button key={video.id} type="button" onClick={() => openDuplicateVideo(video)} title={video.relativePath || video.name}>
-            <span>{video.name}</span>
-            <small>{formatFileSize(video.size)} · {video.duration ? formatTime(video.duration) : "未知时长"} · {video.width && video.height ? `${video.width}x${video.height}` : "未知分辨率"}</small>
-          </button>
-        ))}
-      </div>
-    </div>
+    <DuplicateVideoGroupCard
+      formatFileSize={formatFileSize}
+      formatTime={formatTime}
+      group={group}
+      key={group.id}
+      onOpenVideo={openDuplicateVideo}
+    />
   );
   const duplicateDetectionPercent = duplicateDetectionProgress?.percent ?? 0;
   const duplicateDetectionDisplayMessage =
