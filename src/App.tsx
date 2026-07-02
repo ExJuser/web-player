@@ -9,13 +9,11 @@ import {
   HardDrive,
   Images,
   LocateFixed,
-  Pause,
   Pencil,
   Play,
   RotateCcw,
   Rocket,
   ShieldCheck,
-  SkipForward,
   Star,
   Subtitles,
   Tags,
@@ -24,8 +22,6 @@ import {
   Moon,
   Sun,
   X,
-  VolumeX,
-  Volume2,
   Zap,
 } from "lucide-react";
 import {
@@ -413,6 +409,7 @@ import { PlaylistEmptyState } from "./PlaylistEmptyState";
 import { PlaylistFilterControl } from "./PlaylistFilterControl";
 import { PlaylistItemCard } from "./PlaylistItemCard";
 import { PlaylistPagination } from "./PlaylistPagination";
+import { PlayerPlaybackControls } from "./PlayerPlaybackControls";
 import { PlayerViewControls } from "./PlayerViewControls";
 import { RatingFilterCard } from "./RatingFilterCard";
 import { RatingDialog } from "./RatingDialog";
@@ -8721,42 +8718,19 @@ export default function App() {
             ) : null}
 
             <div className="control-row">
-              <button className="icon-button" type="button" onClick={togglePlay} disabled={!currentVideo} title="播放/暂停">
-                {isPlaying ? <Pause size={20} /> : <Play size={20} />}
-              </button>
-              <button className="icon-button" type="button" onClick={playNext} disabled={!canPlayNext} title="下一集">
-                <SkipForward size={20} />
-              </button>
-
-              <label className="volume-control">
-                <button
-                  aria-label={isMuted ? "取消静音" : "静音"}
-                  className="volume-toggle"
-                  type="button"
-                  onClick={toggleMute}
-                  disabled={!currentVideo}
-                  title={isMuted ? "取消静音" : "静音"}
-                >
-                  {isMuted || volume === 0 ? <VolumeX size={18} /> : <Volume2 size={18} />}
-                </button>
-                <input
-                  aria-label="音量"
-                  type="range"
-                  min={0}
-                  max={1}
-                  step={0.01}
-                  value={volume}
-                  onChange={(event) => changeVolume(Number(event.target.value))}
-                />
-              </label>
-
-              <ControlSelect
-                label="播放速度"
-                ariaLabel="播放速度"
-                value={effectivePlaybackRate}
-                options={playbackRateOptions.map((rate) => ({ value: rate, label: `${rate}x` }))}
-                onChange={setPlaybackRate}
-                className="rate-control"
+              <PlayerPlaybackControls
+                canPlayNext={canPlayNext}
+                hasCurrentVideo={Boolean(currentVideo)}
+                isMuted={isMuted}
+                isPlaying={isPlaying}
+                playbackRate={effectivePlaybackRate}
+                playbackRateOptions={playbackRateOptions.map((rate) => ({ value: rate, label: `${rate}x` }))}
+                volume={volume}
+                onChangePlaybackRate={setPlaybackRate}
+                onChangeVolume={changeVolume}
+                onPlayNext={playNext}
+                onToggleMute={toggleMute}
+                onTogglePlay={togglePlay}
               />
 
               {currentVideoHasCompatibleMedia ? (
