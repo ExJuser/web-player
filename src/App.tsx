@@ -401,7 +401,7 @@ import { CacheStatusDialog } from "./CacheStatusDialog";
 import { DeleteConfirmDialog } from "./DeleteConfirmDialog";
 import { FolderAccessDialog } from "./FolderAccessDialog";
 import { HighEnergyTagDialog, type HighEnergyTagPrompt } from "./HighEnergyTagDialog";
-import { ExistingMediaRootDialog, MediaRootLabelDialog } from "./MediaRootPromptDialogs";
+import { ExistingMediaRootDialog, MediaRootLabelDialog, MediaRootLocalPathDialogView } from "./MediaRootPromptDialogs";
 import { PhotoAlbumTagDialog } from "./PhotoAlbumTagDialog";
 import { RatingDialog } from "./RatingDialog";
 
@@ -10356,73 +10356,15 @@ export default function App() {
       />
     ) : null}
     {mediaRootLocalPathDialog ? (
-      <div className="modal-backdrop" role="presentation" onMouseDown={closeMediaRootLocalPathDialog}>
-        <section
-          aria-labelledby="media-root-local-path-title"
-          aria-modal="true"
-          className="media-root-local-path-dialog"
-          role="dialog"
-          onMouseDown={(event) => event.stopPropagation()}
-        >
-          <button
-            aria-label="关闭"
-            className="dialog-close"
-            type="button"
-            onClick={closeMediaRootLocalPathDialog}
-            disabled={mediaRootLocalPathDialog.isSaving}
-          >
-            <X size={18} />
-          </button>
-          <div className="dialog-icon">
-            <HardDrive size={28} />
-          </div>
-          <div className="dialog-copy">
-            <h2 id="media-root-local-path-title">配置本机路径</h2>
-            <p>为“{mediaRootLocalPathDialog.root.label}”填写服务端可访问的本机绝对路径。</p>
-          </div>
-          <div className="media-root-path-preview">
-            <span>浏览器目录</span>
-            <code>{mediaRootLocalPathDialog.root.path}</code>
-          </div>
-          <label className="media-root-label-field">
-            <span>本机绝对路径</span>
-            <input
-              autoFocus
-              type="text"
-              value={mediaRootLocalPathDialog.value}
-              placeholder="D:\\Media\\Anime"
-              onChange={(event) => updateMediaRootLocalPathValue(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") void submitMediaRootLocalPath();
-                if (event.key === "Escape") closeMediaRootLocalPathDialog();
-              }}
-              disabled={mediaRootLocalPathDialog.isSaving}
-            />
-          </label>
-          {mediaRootLocalPathDialog.error ? (
-            <div className="dialog-inline-error">{mediaRootLocalPathDialog.error}</div>
-          ) : null}
-          <div className="dialog-actions">
-            <button
-              className="secondary-button"
-              type="button"
-              onClick={closeMediaRootLocalPathDialog}
-              disabled={mediaRootLocalPathDialog.isSaving}
-            >
-              取消
-            </button>
-            <button
-              className="primary-button"
-              type="button"
-              onClick={() => void submitMediaRootLocalPath()}
-              disabled={mediaRootLocalPathDialog.isSaving || !mediaRootLocalPathDialog.value.trim()}
-            >
-              <HardDrive size={18} />
-              {mediaRootLocalPathDialog.isSaving ? "保存中..." : "保存路径"}
-            </button>
-          </div>
-        </section>
-      </div>
+      <MediaRootLocalPathDialogView
+        root={mediaRootLocalPathDialog.root}
+        value={mediaRootLocalPathDialog.value}
+        error={mediaRootLocalPathDialog.error}
+        isSaving={mediaRootLocalPathDialog.isSaving}
+        onClose={closeMediaRootLocalPathDialog}
+        onSubmit={() => void submitMediaRootLocalPath()}
+        onValueChange={updateMediaRootLocalPathValue}
+      />
     ) : null}
     <FolderAccessDialog
       isOpen={isFolderDialogOpen}
