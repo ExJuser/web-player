@@ -410,6 +410,7 @@ import { ExistingMediaRootDialog, MediaRootLabelDialog, MediaRootLocalPathDialog
 import { LibrarySearchResultItem } from "./LibrarySearchResultItem";
 import { RatingChip, TagChips } from "./MetadataChips";
 import { PhotoAlbumCard } from "./PhotoAlbumCard";
+import { PhotoAlbumSearchRow } from "./PhotoAlbumSearchRow";
 import { PhotoAlbumStats } from "./PhotoAlbumStats";
 import { PhotoAlbumTagDialog } from "./PhotoAlbumTagDialog";
 import { RatingFilterCard } from "./RatingFilterCard";
@@ -8428,26 +8429,11 @@ export default function App() {
               </div>
             </section>
 
-            <section className="photo-search-row" aria-label="搜索图集">
-              <Search size={17} />
-              <input
-                type="search"
-                value={photoAlbumSearchQuery}
-                placeholder="搜索图集、路径或标签"
-                onChange={(event) => setPhotoAlbumSearchQuery(event.target.value)}
-              />
-              {photoAlbumSearchQuery ? (
-                <button
-                  className="icon-button"
-                  type="button"
-                  onClick={() => setPhotoAlbumSearchQuery("")}
-                  aria-label="清空看图搜索"
-                  title="清空搜索"
-                >
-                  <X size={16} />
-                </button>
-              ) : null}
-            </section>
+            <PhotoAlbumSearchRow
+              query={photoAlbumSearchQuery}
+              onChange={setPhotoAlbumSearchQuery}
+              onClear={() => setPhotoAlbumSearchQuery("")}
+            />
 
             <PhotoAlbumStats stats={photoAlbumStats} />
 
