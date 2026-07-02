@@ -409,6 +409,7 @@ import { ExistingMediaRootDialog, MediaRootLabelDialog, MediaRootLocalPathDialog
 import { LibrarySearchResultItem } from "./LibrarySearchResultItem";
 import { RatingChip, TagChips } from "./MetadataChips";
 import { PhotoAlbumCard } from "./PhotoAlbumCard";
+import { PhotoAlbumPagination } from "./PhotoAlbumPagination";
 import { PhotoAlbumSearchRow } from "./PhotoAlbumSearchRow";
 import { PhotoAlbumStats } from "./PhotoAlbumStats";
 import { PhotoAlbumTagDialog } from "./PhotoAlbumTagDialog";
@@ -8417,34 +8418,15 @@ export default function App() {
                 <section className={`photo-album-grid ${isPhotoAlbumGridCompact ? "photo-album-grid-compact" : ""}`.trim()}>
                   {pagedPhotoAlbums.map(renderPhotoAlbumCard)}
                 </section>
-                {photoAlbumPageCount > 1 ? (
-                  <nav className="photo-pagination" aria-label="看图分页">
-                    <span>
-                      {photoAlbumPageStart}-{photoAlbumPageEnd} / {visiblePhotoAlbums.length}
-                    </span>
-                    <div>
-                      <button
-                        className="secondary-button"
-                        type="button"
-                        onClick={() => setPhotoAlbumPage((page) => Math.max(page - 1, 1))}
-                        disabled={photoAlbumPage <= 1}
-                      >
-                        <ChevronLeft size={16} />
-                        上一页
-                      </button>
-                      <strong>{photoAlbumPage} / {photoAlbumPageCount}</strong>
-                      <button
-                        className="secondary-button"
-                        type="button"
-                        onClick={() => setPhotoAlbumPage((page) => Math.min(page + 1, photoAlbumPageCount))}
-                        disabled={photoAlbumPage >= photoAlbumPageCount}
-                      >
-                        下一页
-                        <ChevronRight size={16} />
-                      </button>
-                    </div>
-                  </nav>
-                ) : null}
+                <PhotoAlbumPagination
+                  currentPage={photoAlbumPage}
+                  end={photoAlbumPageEnd}
+                  pageCount={photoAlbumPageCount}
+                  start={photoAlbumPageStart}
+                  total={visiblePhotoAlbums.length}
+                  onNext={() => setPhotoAlbumPage((page) => Math.min(page + 1, photoAlbumPageCount))}
+                  onPrevious={() => setPhotoAlbumPage((page) => Math.max(page - 1, 1))}
+                />
               </>
             ) : (
               <section className="home-section photo-empty-state">
