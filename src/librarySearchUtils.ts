@@ -43,6 +43,25 @@ export type LibrarySearchEntry<Video extends LibrarySearchVideo, Progress = unkn
   reason: string;
 };
 
+export type LibrarySearchCandidate = {
+  id: string;
+  name: string;
+  relativePath: string;
+  mediaRootLabel: string;
+  seriesTitle: string;
+  tags: string[];
+  progressLabel: string;
+  isFavorite: boolean;
+  isCompleted: boolean;
+};
+
+export type LibrarySearchCandidateCard<Video extends LibrarySearchVideo> = {
+  video: Video;
+  mediaRootLabel?: string;
+  seriesTitle?: string;
+  progress?: { completed?: boolean } | null;
+};
+
 export function applyLibrarySearchResultLimit<T>(results: T[], limit?: number) {
   return typeof limit === "number" ? results.slice(0, limit) : results;
 }
@@ -58,6 +77,49 @@ export function getVisibleLibrarySearchResults<T>(results: T[], visibleCount: nu
 
 export function createLibrarySearchSignature(query: string) {
   return query.trim();
+}
+
+export function buildLibrarySearchCandidates<
+  Video extends LibrarySearchVideo,
+  Progress,
+  Card extends LibrarySearchCandidateCard<Video>,
+>(input: {
+  localResults: Array<LibrarySearchEntry<Video, Progress>>;
+  videos: Video[];
+  extraCards?: Card[];
+  createCard: (video: Video) => Card;
+  getTags: (videoId: string) => string[] | undefined;
+  isFavorite: (videoId: string) => boolean;
+  formatProgressLabel: (card: Card) => string;
+  limit?: number;
+}): LibrarySearchCandidate[] {
+  const candidates: LibrarySearchCandidate[] = [];
+  const seenIds = new Set<string>();
+  const limit = input.limit ?? 80;
+  const addVideo = (video: Video) => {
+    if (seenIds.has(video.id) || candidates.length >= limit) return;
+    seenIds.add(video.id);
+    const card = input.createCard(video);
+    candidates.push({
+      id: video.id,
+      name: video.name,
+      relativePath: video.relativePath,
+      mediaRootLabel: card.mediaRootLabel ?? "",
+      seriesTitle: card.seriesTitle ?? "",
+      tags: input.getTags(video.id) ?? [],
+      progressLabel: input.formatProgressLabel(card),
+      isFavorite: input.isFavorite(video.id),
+      isCompleted: Boolean(card.progress?.completed),
+    });
+  };
+
+  input.localResults.forEach((result) => {
+    addVideo(result.representativeVideo);
+    result.videos.forEach(({ video }) => addVideo(video));
+  });
+  input.extraCards?.forEach((card) => addVideo(card.video));
+  input.videos.forEach(addVideo);
+  return candidates;
 }
 
 export function parseLibrarySearchQuery(query: string, allowExcludedTags = true) {

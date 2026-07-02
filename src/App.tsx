@@ -59,12 +59,14 @@ import {
 import { fetchLocalJson as fetchJson, readLocalApiStream } from "./localApiClient";
 import { normalizeClientLocalConfig, shouldAutoScanGlobalMediaLibrary } from "./localConfigClient";
 import {
+  buildLibrarySearchCandidates,
   createAiLibrarySearchResults,
   createLibrarySearchSignature,
   getVisibleLibrarySearchResults,
   shouldUseAiLibrarySearch,
   librarySearchResultPageSize,
   searchLibraryEntries,
+  type LibrarySearchCandidate,
   type LibrarySearchEntry,
 } from "./librarySearchUtils";
 import {
@@ -412,18 +414,6 @@ type LibrarySearchMode = "idle" | "local" | "ai" | "empty";
 type LibrarySearchSurface = "home" | "player";
 
 type LibrarySearchResult = LibrarySearchEntry<VideoItem, PlaybackProgress>;
-
-type LibrarySearchCandidate = {
-  id: string;
-  name: string;
-  relativePath: string;
-  mediaRootLabel: string;
-  seriesTitle: string;
-  tags: string[];
-  progressLabel: string;
-  isFavorite: boolean;
-  isCompleted: boolean;
-};
 
 type LibraryAiSearchResponse = {
   answer: string;
@@ -2253,37 +2243,17 @@ export default function App() {
 
   const createLibrarySearchCandidates = useCallback(
     (localResults: LibrarySearchResult[], surface: LibrarySearchSurface): LibrarySearchCandidate[] => {
-      const candidates: LibrarySearchCandidate[] = [];
-      const seenIds = new Set<string>();
       const videos = surface === "player" ? playerLibrarySearchVideos : homeLibrarySearchVideos;
-      const addVideo = (video: VideoItem) => {
-        if (seenIds.has(video.id) || candidates.length >= 80) return;
-        seenIds.add(video.id);
-        const card = createHomeVideoCard(video);
-        candidates.push({
-          id: video.id,
-          name: video.name,
-          relativePath: video.relativePath,
-          mediaRootLabel: card.mediaRootLabel ?? "",
-          seriesTitle: card.seriesTitle ?? "",
-          tags: videoTags[video.id] ?? [],
-          progressLabel: formatLibrarySearchProgressLabel(card),
-          isFavorite: favoriteVideoIds.has(video.id),
-          isCompleted: Boolean(card.progress?.completed),
-        });
-      };
-
-      localResults.forEach((result) => {
-        addVideo(result.representativeVideo);
-        result.videos.forEach(({ video }) => addVideo(video));
+      const extraCards = surface === "home" ? [...resumableHomeCards, ...favoriteHomeCards, ...recentHomeCards] : [];
+      return buildLibrarySearchCandidates({
+        localResults,
+        videos,
+        extraCards,
+        createCard: createHomeVideoCard,
+        getTags: (videoId) => videoTags[videoId],
+        isFavorite: (videoId) => favoriteVideoIds.has(videoId),
+        formatProgressLabel: formatLibrarySearchProgressLabel,
       });
-      if (surface === "home") {
-        resumableHomeCards.forEach((card) => addVideo(card.video));
-        favoriteHomeCards.forEach((card) => addVideo(card.video));
-        recentHomeCards.forEach((card) => addVideo(card.video));
-      }
-      videos.forEach(addVideo);
-      return candidates;
     },
     [
       createHomeVideoCard,

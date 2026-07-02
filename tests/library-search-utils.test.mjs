@@ -67,6 +67,44 @@ test("detects when AI library search should be used", () => {
   assert.equal(librarySearchUtils.shouldUseAiLibrarySearch("long search", []), true);
 });
 
+test("builds library search candidates with stable dedupe and limits", () => {
+  const videos = Array.from({ length: 85 }, (_, index) =>
+    createVideo({
+      id: `video-${index}`,
+      name: `video-${index}.mp4`,
+      relativePath: `show/video-${index}.mp4`,
+      lastModified: index + 1,
+    }),
+  );
+  const localResults = [
+    {
+      representativeVideo: videos[0],
+      videos: [{ video: videos[1] }, { video: videos[0] }],
+    },
+  ];
+  const candidates = librarySearchUtils.buildLibrarySearchCandidates({
+    localResults,
+    videos,
+    extraCards: [{ video: videos[2], mediaRootLabel: "Ignored", seriesTitle: "Ignored", progress: { completed: false } }],
+    createCard: (video) => ({
+      video,
+      ...(video.id === "video-2" ? { mediaRootLabel: "Anime", seriesTitle: "Show", progress: { completed: true } } : {}),
+      ...(video.id === "video-1" ? { progress: { completed: false } } : {}),
+    }),
+    getTags: (videoId) => (videoId === "video-1" ? ["收藏"] : undefined),
+    isFavorite: (videoId) => videoId === "video-2",
+    formatProgressLabel: (card) => (card.progress?.completed ? "已看完" : "未开始"),
+  });
+
+  assert.equal(candidates.length, 80);
+  assert.deepEqual(candidates.slice(0, 4).map((candidate) => candidate.id), ["video-0", "video-1", "video-2", "video-3"]);
+  assert.deepEqual(candidates[1].tags, ["收藏"]);
+  assert.equal(candidates[2].mediaRootLabel, "Anime");
+  assert.equal(candidates[2].seriesTitle, "Show");
+  assert.equal(candidates[2].isFavorite, true);
+  assert.equal(candidates[2].isCompleted, true);
+});
+
 const createVideo = (overrides) => ({
   id: "root-special|actor/test.mp4|100|1",
   name: "test.mp4",
