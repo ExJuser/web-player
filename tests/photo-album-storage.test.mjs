@@ -60,6 +60,31 @@ test("photo album store keeps valid favorites, progress, preferences, and tags",
   });
 });
 
+test("photo album display helpers keep sort labels and progress text", () => {
+  const album = {
+    id: "photos|Set",
+    title: "Set",
+    relativePath: "Set",
+    mediaRootId: "photos",
+    mediaRootLabel: "Photos",
+    coverImageUrl: "",
+    imageCount: 5,
+    totalSize: 100,
+    updatedAt: 1,
+    images: [],
+  };
+
+  assert.deepEqual(storage.photoAlbumSortOptions.map((option) => [option.value, option.label]), [
+    ["updated", "最近更新"],
+    ["name", "名称"],
+    ["count", "图片数"],
+  ]);
+  assert.equal(storage.formatPhotoAlbumProgress(album, {}), "未开始");
+  assert.equal(storage.formatPhotoAlbumProgress(album, { [album.id]: { imageIndex: 2, updatedAt: 10, completed: false } }), "看到 3 / 5");
+  assert.equal(storage.formatPhotoAlbumProgress(album, { [album.id]: { imageIndex: 9, updatedAt: 10, completed: false } }), "看到 5 / 5");
+  assert.equal(storage.formatPhotoAlbumProgress(album, { [album.id]: { imageIndex: 4, updatedAt: 10, completed: true } }), "已读完");
+});
+
 test("invalid photo album scan cache is ignored", () => {
   assert.equal(storage.parseCachedPhotoAlbumScan(JSON.stringify({ version: 0 })), null);
   assert.equal(storage.parseCachedPhotoAlbumScan(JSON.stringify({

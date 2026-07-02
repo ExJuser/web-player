@@ -1,11 +1,24 @@
-import type { CachedPhotoAlbumScan, PhotoAlbum, PhotoAlbumImage, PhotoAlbumPreferences, PhotoAlbumProgress, PhotoAlbumStore } from "./playerTypes";
+import type { CachedPhotoAlbumScan, PhotoAlbum, PhotoAlbumImage, PhotoAlbumPreferences, PhotoAlbumProgress, PhotoAlbumSortMode, PhotoAlbumStore } from "./playerTypes";
 import { normalizeTagKey } from "./tagUtils";
 export const photoAlbumScanCacheVersion = 1;
+
+export const photoAlbumSortOptions: Array<{ value: PhotoAlbumSortMode; label: string }> = [
+  { value: "updated", label: "最近更新" },
+  { value: "name", label: "名称" },
+  { value: "count", label: "图片数" },
+];
 
 export const defaultPhotoAlbumPreferences: PhotoAlbumPreferences = {
   sortMode: "updated",
   favoritesOnly: false,
 };
+
+export function formatPhotoAlbumProgress(album: PhotoAlbum, progressStore: Record<string, PhotoAlbumProgress>) {
+  const progress = progressStore[album.id];
+  if (progress?.completed) return "已读完";
+  if (!progress) return "未开始";
+  return `看到 ${Math.min(progress.imageIndex + 1, album.imageCount)} / ${album.imageCount}`;
+}
 
 export function parsePhotoAlbumCoverPreferences(source: unknown): Record<string, string> {
   if (!source || typeof source !== "object" || Array.isArray(source)) return {};

@@ -142,8 +142,10 @@ import type {
 import {
   clearCachedPhotoAlbumScan,
   defaultPhotoAlbumPreferences,
+  formatPhotoAlbumProgress,
   loadCachedPhotoAlbumScan,
   loadPhotoAlbumStore,
+  photoAlbumSortOptions,
   saveCachedPhotoAlbumScan,
   savePhotoAlbumFavorite,
   savePhotoAlbumCoverPreference,
@@ -290,11 +292,6 @@ const photoViewerWarmRadius = 4;
 const photoViewerDecodeRadius = 2;
 const photoAlbumScanCacheStaleMs = 24 * 60 * 60 * 1000;
 let hasStartedLegacyThumbnailMigration = false;
-const photoAlbumSortOptions: Array<{ value: PhotoAlbumSortMode; label: string }> = [
-  { value: "updated", label: "最近更新" },
-  { value: "name", label: "名称" },
-  { value: "count", label: "图片数" },
-];
 
 import { ControlSelect } from "./ControlSelect";
 import {
@@ -8098,12 +8095,6 @@ export default function App() {
       </button>
     );
   };
-  const formatPhotoAlbumProgress = (album: PhotoAlbum) => {
-    const progress = photoAlbumProgress[album.id];
-    if (progress?.completed) return "已读完";
-    if (!progress) return "未开始";
-    return `看到 ${Math.min(progress.imageIndex + 1, album.imageCount)} / ${album.imageCount}`;
-  };
   const getPhotoImageUrl = (image?: PhotoAlbumImage | null) => (image ? image.url || photoObjectUrls[image.id] || "" : "");
   const renderPhotoAlbumCard = (album: PhotoAlbum) => {
     const progress = photoAlbumProgress[album.id];
@@ -8143,9 +8134,9 @@ export default function App() {
               ))}
             </div>
           ) : null}
-          <span>{formatPhotoAlbumProgress(album)} · {formatFileSize(album.totalSize)} · {formatRelativeTime(album.updatedAt)}</span>
+          <span>{formatPhotoAlbumProgress(album, photoAlbumProgress)} · {formatFileSize(album.totalSize)} · {formatRelativeTime(album.updatedAt)}</span>
           <div className="photo-album-footer">
-            <div className="home-progress" aria-label={formatPhotoAlbumProgress(album)}>
+            <div className="home-progress" aria-label={formatPhotoAlbumProgress(album, photoAlbumProgress)}>
               <span style={{ width: `${progressPercent}%` }} />
             </div>
             <div className="photo-album-actions">
