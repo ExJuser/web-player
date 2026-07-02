@@ -29,7 +29,6 @@ import {
   Search,
   ShieldCheck,
   SkipForward,
-  Sparkles,
   Star,
   Subtitles,
   Tags,
@@ -398,6 +397,7 @@ import {
 } from "./CompatibleMediaDialogs";
 import { DeleteConfirmDialog } from "./DeleteConfirmDialog";
 import { DuplicateVideoGroupCard } from "./DuplicateVideoGroupCard";
+import { DuplicateVideoSummaryCard } from "./DuplicateVideoSummaryCard";
 import { EmbeddedSubtitleDialog } from "./EmbeddedSubtitleDialog";
 import { FolderAccessDialog } from "./FolderAccessDialog";
 import { HighEnergyTagDialog, type HighEnergyTagPrompt } from "./HighEnergyTagDialog";
@@ -8362,57 +8362,18 @@ export default function App() {
                 ) : null}
               </section>
 
-              <section className="home-section duplicate-video-card">
-                <div className="home-section-header">
-                  <h2>重复视频</h2>
-                  <span>{isDuplicateDetectionRunning ? `${duplicateDetectionPercent}%` : `${activeDuplicateVideoGroups.length} 组`}</span>
-                </div>
-                <div className="duplicate-video-summary">
-                  <Sparkles size={24} />
-                  <span>{duplicateDetectionDisplayMessage}</span>
-                </div>
-                {duplicateDetectionProgress ? (
-                  <div className="duplicate-detection-progress" aria-label={`重复视频检测进度 ${duplicateDetectionPercent}%`}>
-                    <span style={{ width: `${duplicateDetectionPercent}%` }} />
-                  </div>
-                ) : null}
-                <div className="duplicate-video-actions">
-                  <button
-                    className="secondary-button duplicate-detection-button"
-                    type="button"
-                    onClick={() => void runDuplicateVideoDetection()}
-                    disabled={isDuplicateDetectionRunning || modeFilteredVideos.length < 2}
-                    title={modeFilteredVideos.length < 2 ? "当前模式视频不足 2 个" : "手动检测重复或疑似重复视频"}
-                  >
-                    <Activity size={16} className={isDuplicateDetectionRunning ? "spin-icon" : undefined} />
-                    {isDuplicateDetectionRunning ? "检测中" : "检测重复视频"}
-                  </button>
-                  <button
-                    className="primary-button duplicate-detection-button"
-                    type="button"
-                    onClick={openDuplicatePlaylist}
-                    disabled={isDuplicateDetectionRunning || !duplicatePlaylistVideos.length}
-                    title={duplicatePlaylistVideos.length ? "进入重复视频播放列表" : "暂无可处理的重复视频"}
-                  >
-                    <Play size={16} />
-                    进入重复列表
-                  </button>
-                </div>
-                {activeDuplicateVideoGroups.length ? (
-                  <div className="duplicate-video-groups">
-                    {activeDuplicateVideoGroups.slice(0, 6).map(renderDuplicateVideoGroup)}
-                    {activeDuplicateVideoGroups.length > 6 ? (
-                      <button
-                        className="secondary-button duplicate-video-more"
-                        type="button"
-                        onClick={openDuplicatePlaylist}
-                      >
-                        查看全部 {activeDuplicateVideoGroups.length} 组
-                      </button>
-                    ) : null}
-                  </div>
-                ) : null}
-              </section>
+              <DuplicateVideoSummaryCard
+                detectionMessage={duplicateDetectionDisplayMessage}
+                detectionPercent={duplicateDetectionPercent}
+                duplicatePlaylistCount={duplicatePlaylistVideos.length}
+                groups={activeDuplicateVideoGroups}
+                isRunning={isDuplicateDetectionRunning}
+                onOpenPlaylist={openDuplicatePlaylist}
+                onRunDetection={() => void runDuplicateVideoDetection()}
+                progress={duplicateDetectionProgress}
+                renderGroup={renderDuplicateVideoGroup}
+                totalVideoCount={modeFilteredVideos.length}
+              />
 
               {favoriteHomeCards.length ? (
                 <section className="home-section">
