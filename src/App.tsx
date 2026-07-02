@@ -397,6 +397,7 @@ import {
   type CacheStatus,
   type ClearCacheResponse,
 } from "./cacheStatusUtils";
+import { AiSubtitleDialog, type AiSubtitleTab } from "./AiSubtitleDialog";
 import { CacheStatusDialog } from "./CacheStatusDialog";
 import {
   CompatibleMediaDialogs,
@@ -679,7 +680,7 @@ export default function App() {
   const [isDeletingCompatibleMedia, setIsDeletingCompatibleMedia] = useState(false);
   const [playbackSourceChoices, setPlaybackSourceChoices] = useState<Record<string, PlaybackSourceChoice>>({});
   const [isAiPanelOpen, setIsAiPanelOpen] = useState(false);
-  const [aiTab, setAiTab] = useState<"summary" | "qa" | "recap">("summary");
+  const [aiTab, setAiTab] = useState<AiSubtitleTab>("summary");
   const [subtitleSummary, setSubtitleSummary] = useState("");
   const [subtitleQuestion, setSubtitleQuestion] = useState("");
   const [subtitleAnswer, setSubtitleAnswer] = useState("");
@@ -10820,90 +10821,26 @@ export default function App() {
         </div>
       ) : null}
 
-    {isAiPanelOpen ? (
-      <div className="modal-backdrop" role="presentation" onMouseDown={() => setIsAiPanelOpen(false)}>
-        <section
-          aria-labelledby="ai-subtitle-title"
-          aria-modal="true"
-          className="ai-subtitle-dialog"
-          role="dialog"
-          onMouseDown={(event) => event.stopPropagation()}
-        >
-          <button
-            aria-label="关闭"
-            className="dialog-close"
-            type="button"
-            onClick={() => setIsAiPanelOpen(false)}
-          >
-            <X size={18} />
-          </button>
-          <div className="ai-dialog-header">
-            <div>
-              <h2 id="ai-subtitle-title">AI 字幕助手</h2>
-              <span>{selectedSubtitle ? selectedSubtitle.name : "未选择字幕"}</span>
-            </div>
-            <div className="ai-tabs" role="tablist" aria-label="AI 字幕工具">
-              <button className={aiTab === "summary" ? "active" : ""} type="button" onClick={() => setAiTab("summary")}>
-                总结
-              </button>
-              <button className={aiTab === "qa" ? "active" : ""} type="button" onClick={() => setAiTab("qa")}>
-                问答
-              </button>
-              <button className={aiTab === "recap" ? "active" : ""} type="button" onClick={() => setAiTab("recap")}>
-                回顾
-              </button>
-            </div>
-          </div>
-          {!selectedSubtitle ? (
-            <div className="ai-empty-state">请先在播放器控制栏选择字幕。</div>
-          ) : !localConfig?.ai.configured ? (
-            <div className="ai-empty-state">未配置 DEEPSEEK_API_KEY。配置后重启开发服务即可使用。</div>
-          ) : aiTab === "summary" ? (
-            <div className="ai-panel-body">
-              <div className="dialog-actions compact">
-                <button className="primary-button" type="button" onClick={() => void loadSubtitleSummary()} disabled={isAiLoading}>
-                  {subtitleSummary ? "重新总结" : "生成总结"}
-                </button>
-              </div>
-              <div className="ai-output">{subtitleSummary || aiMessage || "还没有生成总结。"}</div>
-            </div>
-          ) : aiTab === "recap" ? (
-            <div className="ai-panel-body">
-              <div className="ai-recap-meta">截至当前时间 {formatTime(currentTime)}</div>
-              <div className="dialog-actions compact">
-                <button className="primary-button" type="button" onClick={() => void loadProgressRecap()} disabled={isAiLoading}>
-                  {subtitleRecap ? "重新回顾" : "生成回顾"}
-                </button>
-              </div>
-              <div className="ai-output">{subtitleRecap || aiMessage || "还没有生成进度回顾。"}</div>
-            </div>
-          ) : (
-            <form
-              className="ai-panel-body"
-              onSubmit={(event) => {
-                event.preventDefault();
-                void askSubtitleQuestion();
-              }}
-            >
-              <textarea
-                className="ai-question-input"
-                value={subtitleQuestion}
-                onChange={(event) => setSubtitleQuestion(event.target.value)}
-                placeholder="基于当前字幕提问..."
-                rows={4}
-              />
-              <div className="dialog-actions compact">
-                <button className="primary-button" type="submit" disabled={isAiLoading || !subtitleQuestion.trim()}>
-                  提问
-                </button>
-              </div>
-              <div className="ai-output">{subtitleAnswer || aiMessage || "回答会显示在这里。"}</div>
-            </form>
-          )}
-          {isAiLoading ? <div className="ai-loading">处理中...</div> : null}
-        </section>
-      </div>
-    ) : null}
+    <AiSubtitleDialog
+      isOpen={isAiPanelOpen}
+      selectedSubtitleName={selectedSubtitle?.name ?? ""}
+      isAiConfigured={Boolean(localConfig?.ai.configured)}
+      aiTab={aiTab}
+      subtitleSummary={subtitleSummary}
+      subtitleQuestion={subtitleQuestion}
+      subtitleAnswer={subtitleAnswer}
+      subtitleRecap={subtitleRecap}
+      aiMessage={aiMessage}
+      isAiLoading={isAiLoading}
+      currentTime={currentTime}
+      onClose={() => setIsAiPanelOpen(false)}
+      onTabChange={setAiTab}
+      onQuestionChange={setSubtitleQuestion}
+      onLoadSummary={() => void loadSubtitleSummary()}
+      onAskQuestion={() => void askSubtitleQuestion()}
+      onLoadRecap={() => void loadProgressRecap()}
+      formatTime={formatTime}
+    />
     <ShortcutDialog
       isOpen={isShortcutDialogOpen}
       shortcutGroups={shortcutGroups}
