@@ -409,6 +409,7 @@ import { ExistingMediaRootDialog, MediaRootLabelDialog, MediaRootLocalPathDialog
 import { PhotoAlbumTagDialog } from "./PhotoAlbumTagDialog";
 import { RatingDialog } from "./RatingDialog";
 import { ShortcutDialog } from "./ShortcutDialog";
+import { TagDialog } from "./TagDialog";
 
 type PhotoAlbumViewFilter = "all" | "favorites";
 
@@ -10444,204 +10445,45 @@ export default function App() {
       onRatingHoverValueChange={setRatingHoverValue}
       onRatingMessageChange={setRatingMessage}
     />
-    {isTagDialogOpen ? (
-      <div className="modal-backdrop tag-dialog-backdrop" role="presentation" onMouseDown={() => setIsTagDialogOpen(false)}>
-        <section
-          ref={tagDialogRef}
-          aria-labelledby="tag-dialog-title"
-          aria-modal="true"
-          className={`tag-dialog${isTagDialogDragging ? " dragging" : ""}`}
-          role="dialog"
-          style={{ transform: `translate(${tagDialogOffset.x}px, ${tagDialogOffset.y}px)` }}
-          onMouseDown={(event) => event.stopPropagation()}
-        >
-          <button
-            aria-label="关闭"
-            className="dialog-close"
-            type="button"
-            onClick={() => setIsTagDialogOpen(false)}
-          >
-            <X size={18} />
-          </button>
-          <div
-            className="tag-dialog-header"
-            onPointerCancel={stopTagDialogDrag}
-            onPointerDown={startTagDialogDrag}
-            onPointerMove={moveTagDialogDrag}
-            onPointerUp={stopTagDialogDrag}
-          >
-            <div className="dialog-icon">
-              <Tags size={28} />
-            </div>
-            <div className="dialog-copy">
-              <h2 id="tag-dialog-title">视频标签</h2>
-              <p>{currentVideo?.name ?? "未选择视频"}</p>
-            </div>
-          </div>
-
-          <div className="tag-editor-current">
-            {currentVideoTags.length ? (
-              currentVideoTags.map((tag) => (
-                <button className="tag-editor-chip" key={tag} type="button" onClick={() => removeTagFromCurrentVideo(tag)}>
-                  <span>{tag}</span>
-                  <X size={14} />
-                </button>
-              ))
-            ) : (
-              <div className="ai-empty-state">当前视频还没有标签。</div>
-            )}
-          </div>
-
-          <form
-            className="tag-editor-form"
-            onSubmit={(event) => {
-              event.preventDefault();
-              submitTagInput();
-            }}
-          >
-            <div className="tag-editor-field">
-              <input
-                autoFocus
-                value={tagInput}
-                placeholder="输入标签，可用空格、逗号、顿号分隔"
-                onChange={(event) => setTagInput(event.target.value)}
-                onKeyDown={(event) => {
-                  if (tagInputSuggestions.length && event.key === "ArrowDown") {
-                    event.preventDefault();
-                    setActiveTagSuggestionIndex((index) => (index + 1) % tagInputSuggestions.length);
-                    return;
-                  }
-                  if (tagInputSuggestions.length && event.key === "ArrowUp") {
-                    event.preventDefault();
-                    setActiveTagSuggestionIndex((index) => (index - 1 + tagInputSuggestions.length) % tagInputSuggestions.length);
-                    return;
-                  }
-                  if (tagInputSuggestions.length && event.key === "Enter") {
-                    event.preventDefault();
-                    submitTagInputSuggestion(tagInputSuggestions[resolvedActiveTagSuggestionIndex] ?? tagInputSuggestions[0]);
-                    return;
-                  }
-                  if (event.key === "Escape") setIsTagDialogOpen(false);
-                }}
-                disabled={!currentVideo}
-                role="combobox"
-                aria-autocomplete="list"
-                aria-expanded={Boolean(tagInputSuggestions.length)}
-                aria-controls={tagInputSuggestions.length ? "tag-input-suggestions" : undefined}
-                aria-activedescendant={activeTagSuggestionId}
-              />
-              {tagInputSuggestions.length ? (
-                <div className="tag-input-suggestions" id="tag-input-suggestions" role="listbox" aria-label="已有标签候选">
-                  {tagInputSuggestions.map((tag, index) => (
-                    <button
-                      className={index === resolvedActiveTagSuggestionIndex ? "active" : ""}
-                      id={`tag-input-suggestion-${index}`}
-                      key={tag}
-                      type="button"
-                      role="option"
-                      aria-selected={index === resolvedActiveTagSuggestionIndex}
-                      onMouseDown={(event) => event.preventDefault()}
-                      onMouseEnter={() => setActiveTagSuggestionIndex(index)}
-                      onClick={() => submitTagInputSuggestion(tag)}
-                    >
-                      {tag}
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-            <button
-              className={`primary-button tag-query-button${isTagSuggestionLoading ? " loading" : ""}`}
-              type="submit"
-              disabled={!currentVideo || !tagInput.trim() || isTagSuggestionLoading}
-            >
-              {isTagSuggestionLoading ? <RefreshCw aria-hidden="true" size={16} /> : null}
-              {isTagSuggestionLoading ? "查询中" : "添加"}
-            </button>
-          </form>
-          <button
-            className={`secondary-button auto-tag-button${isAutoTagLoading ? " loading" : ""}`}
-            type="button"
-            onClick={() => void generateAutoTagsForCurrentVideo()}
-            disabled={!currentVideo || isAutoTagLoading}
-            title={localConfig?.ai.configured ? "AI 自动标签" : "需要先配置大模型 API"}
-          >
-            {isAutoTagLoading ? <RefreshCw size={16} /> : <Sparkles size={16} />}
-            {isAutoTagLoading ? "生成中" : "AI 自动标签"}
-          </button>
-
-          {isAutoTagLoading ? (
-            <div className="ai-empty-state">正在基于视频元信息和 DuckDuckGo 搜索结果生成建议标签。</div>
-          ) : null}
-
-          {autoTagSuggestions.length ? (
-            <div className="auto-tag-suggestion-list" aria-label="建议标签">
-              {autoTagSuggestions.map((tag) => {
-                const isSelected = selectedAutoTags.has(tag);
-                return (
-                  <button
-                    className={`tag-editor-chip auto-tag-chip${isSelected ? " selected" : ""}`}
-                    key={tag}
-                    type="button"
-                    onClick={() => toggleSelectedAutoTag(tag)}
-                    aria-pressed={isSelected}
-                  >
-                    <span>{tag}</span>
-                    {isSelected ? <CheckCircle2 size={14} /> : null}
-                  </button>
-                );
-              })}
-              <button className="primary-button" type="button" onClick={confirmAutoTags}>
-                确认写入
-              </button>
-            </div>
-          ) : null}
-
-          {autoTagSummary ? (
-            <div className="tag-merge-prompt auto-tag-summary">
-              <strong>生成依据</strong>
-              <p>{autoTagSummary}</p>
-            </div>
-          ) : null}
-
-          {autoTagSources.length ? (
-            <div className="auto-tag-sources">
-              <strong>搜索来源</strong>
-              {autoTagSources.map((source) => (
-                <a href={source.url} key={source.url} target="_blank" rel="noreferrer">
-                  <ExternalLink size={14} />
-                  <span>{source.title}</span>
-                </a>
-              ))}
-            </div>
-          ) : null}
-
-          {autoTagMessage ? <div className="ai-empty-state">{autoTagMessage}</div> : null}
-
-          {tagMergePrompt ? (
-            <div className="tag-merge-prompt">
-              <strong>发现相近标签</strong>
-              <p>
-                “{tagMergePrompt.suggestion.newTag}” 和已有标签 “{tagMergePrompt.suggestion.existingTag}” 可能是{tagMergePrompt.suggestion.reason}。
-              </p>
-              <div className="dialog-actions compact">
-                <button className="primary-button" type="button" onClick={applyTagMergeSuggestion}>
-                  采用已有标签
-                </button>
-                <button className="secondary-button" type="button" onClick={keepTagMergeSuggestion}>
-                  保留新标签
-                </button>
-                <button className="secondary-button" type="button" onClick={() => setTagMergePrompt(null)}>
-                  取消
-                </button>
-              </div>
-            </div>
-          ) : null}
-
-          {tagMessage ? <div className="ai-empty-state">{tagMessage}</div> : null}
-        </section>
-      </div>
-    ) : null}
+    <TagDialog
+      isOpen={isTagDialogOpen}
+      dialogRef={tagDialogRef}
+      isDragging={isTagDialogDragging}
+      offset={tagDialogOffset}
+      currentVideoName={currentVideo?.name ?? ""}
+      currentVideoTags={currentVideoTags}
+      tagInput={tagInput}
+      tagInputSuggestions={tagInputSuggestions}
+      resolvedActiveTagSuggestionIndex={resolvedActiveTagSuggestionIndex}
+      activeTagSuggestionId={activeTagSuggestionId}
+      isTagSuggestionLoading={isTagSuggestionLoading}
+      isAutoTagLoading={isAutoTagLoading}
+      autoTagSuggestions={autoTagSuggestions}
+      selectedAutoTags={selectedAutoTags}
+      autoTagSummary={autoTagSummary}
+      autoTagSources={autoTagSources}
+      autoTagMessage={autoTagMessage}
+      tagMergePrompt={tagMergePrompt}
+      tagMessage={tagMessage}
+      isAiConfigured={Boolean(localConfig?.ai.configured)}
+      hasCurrentVideo={Boolean(currentVideo)}
+      onClose={() => setIsTagDialogOpen(false)}
+      onRemoveTag={removeTagFromCurrentVideo}
+      onSubmitTagInput={submitTagInput}
+      onTagInputChange={setTagInput}
+      onActiveTagSuggestionIndexChange={setActiveTagSuggestionIndex}
+      onSelectTagSuggestion={submitTagInputSuggestion}
+      onGenerateAutoTags={() => void generateAutoTagsForCurrentVideo()}
+      onToggleAutoTag={toggleSelectedAutoTag}
+      onConfirmAutoTags={confirmAutoTags}
+      onApplyTagMergeSuggestion={applyTagMergeSuggestion}
+      onKeepTagMergeSuggestion={keepTagMergeSuggestion}
+      onCancelTagMergeSuggestion={() => setTagMergePrompt(null)}
+      onPointerCancel={stopTagDialogDrag}
+      onPointerDown={startTagDialogDrag}
+      onPointerMove={moveTagDialogDrag}
+      onPointerUp={stopTagDialogDrag}
+    />
     <DanmakuDialog
       isOpen={isDanmakuDialogOpen}
       currentVideoName={currentVideo?.name ?? ""}
