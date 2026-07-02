@@ -422,6 +422,7 @@ import { RatingFilterCard } from "./RatingFilterCard";
 import { RatingDialog } from "./RatingDialog";
 import { ShortcutDialog } from "./ShortcutDialog";
 import { SpecialInsightsCard } from "./SpecialInsightsCard";
+import { SpecialStatsControl } from "./SpecialStatsControl";
 import { TagDialog } from "./TagDialog";
 import { WatchActivityMonth, WatchActivityTagButton } from "./WatchActivityCalendar";
 
@@ -8949,49 +8950,11 @@ export default function App() {
                 <Zap size={18} />
               </button>
               {canRecordEmission ? (
-                <div className="special-stats-control" aria-label="特殊模式统计">
-                  <button
-                    className="icon-button emission-launch-button"
-                    type="button"
-                    onClick={recordEmissionForCurrentVideo}
-                    disabled={!currentVideo}
-                    title="发射"
-                    aria-label="发射"
-                  >
-                    <Rocket size={18} />
-                  </button>
-                  <span className="special-stat-pill" title={`上次发射距今：${currentVideoSpecialStats.lastEmissionLabel}`}>
-                    <Clock3 size={14} />
-                    <span>上次发射</span>
-                    <strong>{currentVideoSpecialStats.lastEmissionLabel}</strong>
-                  </span>
-                  <span
-                    className="special-stat-pill"
-                    title={`播放强度：${
-                      currentVideoSpecialStats.playIntensity === null
-                        ? "暂无"
-                        : `${currentVideoSpecialStats.playIntensity.toFixed(1)} 遍`
-                    }`}
-                  >
-                    <Activity size={14} />
-                    <span>播放强度</span>
-                    <strong>
-                      {currentVideoSpecialStats.playIntensity === null
-                        ? "暂无"
-                        : `${currentVideoSpecialStats.playIntensity.toFixed(1)}x`}
-                    </strong>
-                  </span>
-                  <span className="special-stat-pill" title={`播放次数：${currentVideoSpecialStats.playCount}`}>
-                    <Play size={14} />
-                    <span>播放次数</span>
-                    <strong>{currentVideoSpecialStats.playCount}</strong>
-                  </span>
-                  <span className="special-stat-pill emission-stat-pill" title={`发射次数：${currentVideoSpecialStats.emissionCount}`}>
-                    <Rocket size={14} />
-                    <span>发射次数</span>
-                    <strong>{currentVideoSpecialStats.emissionCount}</strong>
-                  </span>
-                </div>
+                <SpecialStatsControl
+                  disabled={!currentVideo}
+                  stats={currentVideoSpecialStats}
+                  onRecordEmission={recordEmissionForCurrentVideo}
+                />
               ) : null}
 
               <span className="control-spacer" />
