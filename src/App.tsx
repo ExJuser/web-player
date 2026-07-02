@@ -381,19 +381,13 @@ import { PhotoViewerSection } from "./PhotoViewerSection";
 import { PlaylistPagination } from "./PlaylistPagination";
 import { PlaylistTools } from "./PlaylistTools";
 import { PlaylistVideoList } from "./PlaylistVideoList";
-import { PlayerHighlightControls } from "./PlayerHighlightControls";
+import { PlayerControlBar } from "./PlayerControlBar";
 import { PlayerLibrarySearchSection } from "./PlayerLibrarySearchSection";
-import { PlayerMediaActionControls } from "./PlayerMediaActionControls";
-import { PlayerOptionControls } from "./PlayerOptionControls";
-import { PlayerPlaybackControls } from "./PlayerPlaybackControls";
 import { PlayerStage } from "./PlayerStage";
-import { PlayerTimelineControls } from "./PlayerTimelineControls";
 import { PlayerTopBar } from "./PlayerTopBar";
-import { PlayerViewControls } from "./PlayerViewControls";
 import { RatingFilterCard } from "./RatingFilterCard";
 import { RatingDialog } from "./RatingDialog";
 import { ShortcutDialog } from "./ShortcutDialog";
-import { SpecialStatsControl } from "./SpecialStatsControl";
 import { TagDialog } from "./TagDialog";
 import { WatchActivityMonth, WatchActivityTagButton } from "./WatchActivityCalendar";
 import { WatchActivitySection } from "./WatchActivitySection";
@@ -7933,6 +7927,8 @@ export default function App() {
     currentVideo?.playability?.performanceWarning ??
     currentVideo?.playability?.reason ??
     "当前视频尚未探测播放兼容性。";
+  const isCurrentHighEnergyMarkPending = pendingHighEnergyStart?.videoId === currentVideo?.id;
+  const pendingHighEnergyStartTime = isCurrentHighEnergyMarkPending ? pendingHighEnergyStart?.time ?? null : null;
 
   return (
     <>
@@ -8269,147 +8265,105 @@ export default function App() {
             onTogglePlay={togglePlay}
           />
 
-          <div
-            ref={controlBarRef}
-            className="control-bar"
-            onFocus={keepControlsVisible}
-            onMouseEnter={keepControlsVisible}
-            onMouseLeave={scheduleControlsHide}
-            onMouseMove={(event) => {
-              event.stopPropagation();
-              keepControlsVisible();
+          <PlayerControlBar
+            canPlayNext={canPlayNext}
+            canRecordEmission={canRecordEmission}
+            canUseEmbeddedSubtitles={canUseEmbeddedSubtitles}
+            controlBarRef={controlBarRef}
+            currentTime={currentTime}
+            currentVideoHasCompatibleMedia={currentVideoHasCompatibleMedia}
+            currentVideoHighlights={currentVideoHighlights}
+            currentVideoRating={currentVideoRating}
+            currentVideoSpecialStats={currentVideoSpecialStats}
+            currentVideoSourceChoice={currentVideoSourceChoice}
+            currentVideoTagsCount={currentVideoTags.length}
+            danmakuEnabled={Boolean(danmakuPreferences.enabled && currentDanmakuSource)}
+            duration={duration}
+            effectivePlaybackRate={effectivePlaybackRate}
+            hasCurrentVideo={Boolean(currentVideo)}
+            hasSelectedSubtitle={Boolean(selectedSubtitle)}
+            holdPlaybackRate={holdPlaybackRate}
+            holdRateOptions={holdRateSelectOptions}
+            homeMediaMode={homeMediaMode}
+            isAiPanelOpen={isAiPanelOpen}
+            isCinemaMode={isCinemaMode}
+            isDeletingCompatibleMedia={isDeletingCompatibleMedia}
+            isEmbeddedSubtitleLoading={isEmbeddedSubtitleLoading}
+            isHighEnergyMarkDisabled={!currentVideo || !duration || isPrivacyMode}
+            isHighEnergyMarkPending={isCurrentHighEnergyMarkPending}
+            isMuted={isMuted}
+            isPlaying={isPlaying}
+            isPrivacyMode={isPrivacyMode}
+            isSeriesMode={isSeriesMode}
+            normalizedVideoRotation={normalizedVideoRotation}
+            pendingHighlightStartTime={pendingHighEnergyStartTime}
+            playbackMode={playbackMode}
+            playbackModeOptions={playbackModeOptions}
+            playbackRateOptions={playbackRateSelectOptions}
+            progressPercent={progressPercent}
+            seekStep={seekStep}
+            seekStepOptions={seekStepSelectOptions}
+            selectedSubtitleId={selectedSubtitleId}
+            showPlaybackMode={!isSeriesMode}
+            startFromHighEnergy={startFromHighEnergy}
+            subtitleControlOptions={subtitleControlOptions}
+            timelinePreview={timelinePreview}
+            timelineRef={timelineRef}
+            volume={volume}
+            formatTime={formatTime}
+            onChangeHoldPlaybackRate={setHoldPlaybackRate}
+            onChangePlaybackMode={setPlaybackMode}
+            onChangePlaybackRate={setPlaybackRate}
+            onChangeSeekStep={setSeekStep}
+            onChangeSourceChoice={(value) => {
+              if (!currentVideo) return;
+              setPlaybackSourceChoices((previous) => ({ ...previous, [currentVideo.id]: value }));
             }}
-          >
-            <PlayerTimelineControls
-              currentTime={currentTime}
-              duration={duration}
-              formatTime={formatTime}
-              hasCurrentVideo={Boolean(currentVideo)}
-              highlights={currentVideoHighlights}
-              isPrivacyMode={isPrivacyMode}
-              progressPercent={progressPercent}
-              timelinePreview={timelinePreview}
-              timelineRef={timelineRef}
-              onHideTimelinePreview={hideTimelinePreview}
-              onReturnFocusToPlayer={returnFocusToPlayer}
-              onSeek={seekTo}
-              onStopTimelineDragPreview={stopTimelineDragPreview}
-              onUpdateTimelinePreview={updateTimelinePreview}
-              onUpdateTimelinePreviewFromTime={updateTimelinePreviewFromTime}
-            />
-
-            {currentVideo ? (
-              <PlayerHighlightControls
-                highlights={currentVideoHighlights}
-                pendingStartTime={pendingHighEnergyStart?.videoId === currentVideo.id ? pendingHighEnergyStart.time : null}
-                formatTime={formatTime}
-                onEditHighlight={editCurrentHighEnergySegment}
-                onRemoveHighlight={removeCurrentHighEnergySegment}
-                onSeekToHighlight={seekTo}
-              />
-            ) : null}
-
-            <div className="control-row">
-              <PlayerPlaybackControls
-                canPlayNext={canPlayNext}
-                hasCurrentVideo={Boolean(currentVideo)}
-                isMuted={isMuted}
-                isPlaying={isPlaying}
-                playbackRate={effectivePlaybackRate}
-                playbackRateOptions={playbackRateSelectOptions}
-                volume={volume}
-                onChangePlaybackRate={setPlaybackRate}
-                onChangeVolume={changeVolume}
-                onPlayNext={playNext}
-                onToggleMute={toggleMute}
-                onTogglePlay={togglePlay}
-              />
-
-              <PlayerOptionControls
-                hasCompatibleMedia={currentVideoHasCompatibleMedia}
-                hasCurrentVideo={Boolean(currentVideo)}
-                holdPlaybackRate={holdPlaybackRate}
-                holdRateOptions={holdRateSelectOptions}
-                isDeletingCompatibleMedia={isDeletingCompatibleMedia}
-                playbackMode={playbackMode}
-                playbackModeOptions={playbackModeOptions}
-                seekStep={seekStep}
-                seekStepOptions={seekStepSelectOptions}
-                showPlaybackMode={!isSeriesMode}
-                sourceChoice={currentVideoSourceChoice}
-                onChangeHoldPlaybackRate={setHoldPlaybackRate}
-                onChangePlaybackMode={setPlaybackMode}
-                onChangeSeekStep={setSeekStep}
-                onChangeSourceChoice={(value) => {
-                  if (!currentVideo) return;
-                  setPlaybackSourceChoices((previous) => ({ ...previous, [currentVideo.id]: value }));
-                }}
-                onDeleteCompatibleMedia={openCompatibleMediaDeleteConfirm}
-              />
-
-              <PlayerMediaActionControls
-                canUseEmbeddedSubtitles={canUseEmbeddedSubtitles}
-                currentVideoRating={currentVideoRating}
-                hasCurrentVideo={Boolean(currentVideo)}
-                hasSelectedSubtitle={Boolean(selectedSubtitle)}
-                homeMediaMode={homeMediaMode}
-                isAiPanelOpen={isAiPanelOpen}
-                isDanmakuActive={Boolean(danmakuPreferences.enabled && currentDanmakuSource)}
-                isEmbeddedSubtitleLoading={isEmbeddedSubtitleLoading}
-                isHighEnergyMarkDisabled={!currentVideo || !duration || isPrivacyMode}
-                isHighEnergyMarkPending={pendingHighEnergyStart?.videoId === currentVideo?.id}
-                isSeriesMode={isSeriesMode}
-                selectedSubtitleId={selectedSubtitleId}
-                subtitleControlOptions={subtitleControlOptions}
-                videoTagCount={currentVideoTags.length}
-                onChangeSubtitle={(value) => {
-                  autoSubtitleSelectionVideoIdRef.current = null;
-                  if (value === "manual") {
-                    void chooseSubtitleFile();
-                    return;
-                  }
-                  updateSelectedSubtitleId(value);
-                }}
-                onMarkHighEnergySegment={markCurrentHighEnergySegment}
-                onOpenAiPanel={() => setIsAiPanelOpen(true)}
-                onOpenDanmakuDialog={() => {
-                  setIsDanmakuDialogOpen(true);
-                  setDanmakuMessage((message) => message || "匹配或拉取弹幕后显示在视频上方。");
-                }}
-                onOpenRatingDialog={() => currentVideo && openVideoRatingDialog(currentVideo)}
-                onOpenTagDialog={() => {
-                  setIsTagDialogOpen(true);
-                  setTagMessage("");
-                  setTagMergePrompt(null);
-                }}
-                onProbeEmbeddedSubtitles={probeEmbeddedSubtitles}
-              />
-              {canRecordEmission ? (
-                <SpecialStatsControl
-                  disabled={!currentVideo}
-                  stats={currentVideoSpecialStats}
-                  onRecordEmission={recordEmissionForCurrentVideo}
-                />
-              ) : null}
-
-              <span className="control-spacer" />
-
-              <PlayerViewControls
-                hasCurrentVideo={Boolean(currentVideo)}
-                isCinemaMode={isCinemaMode}
-                isPrivacyMode={isPrivacyMode}
-                normalizedVideoRotation={normalizedVideoRotation}
-                startFromHighEnergy={startFromHighEnergy}
-                onRotateVideo={rotateVideoClockwise}
-                onToggleCinemaMode={toggleCinemaMode}
-                onToggleFullscreen={toggleFullscreen}
-                onTogglePictureInPicture={togglePictureInPicture}
-                onTogglePrivacyMode={togglePrivacyMode}
-                onToggleShortcutDialog={toggleShortcutDialog}
-                onToggleStartFromHighEnergy={toggleStartFromHighEnergy}
-              />
-            </div>
-          </div>
+            onChangeSubtitle={(value) => {
+              autoSubtitleSelectionVideoIdRef.current = null;
+              if (value === "manual") {
+                void chooseSubtitleFile();
+                return;
+              }
+              updateSelectedSubtitleId(value);
+            }}
+            onChangeVolume={changeVolume}
+            onDeleteCompatibleMedia={openCompatibleMediaDeleteConfirm}
+            onEditHighlight={editCurrentHighEnergySegment}
+            onHideTimelinePreview={hideTimelinePreview}
+            onKeepControlsVisible={keepControlsVisible}
+            onMarkHighEnergySegment={markCurrentHighEnergySegment}
+            onOpenAiPanel={() => setIsAiPanelOpen(true)}
+            onOpenDanmakuDialog={() => {
+              setIsDanmakuDialogOpen(true);
+              setDanmakuMessage((message) => message || "匹配或拉取弹幕后显示在视频上方。");
+            }}
+            onOpenRatingDialog={() => currentVideo && openVideoRatingDialog(currentVideo)}
+            onOpenTagDialog={() => {
+              setIsTagDialogOpen(true);
+              setTagMessage("");
+              setTagMergePrompt(null);
+            }}
+            onPlayNext={playNext}
+            onProbeEmbeddedSubtitles={probeEmbeddedSubtitles}
+            onRecordEmission={recordEmissionForCurrentVideo}
+            onRemoveHighlight={removeCurrentHighEnergySegment}
+            onReturnFocusToPlayer={returnFocusToPlayer}
+            onRotateVideo={rotateVideoClockwise}
+            onScheduleControlsHide={scheduleControlsHide}
+            onSeek={seekTo}
+            onStopTimelineDragPreview={stopTimelineDragPreview}
+            onToggleCinemaMode={toggleCinemaMode}
+            onToggleFullscreen={toggleFullscreen}
+            onToggleMute={toggleMute}
+            onTogglePictureInPicture={togglePictureInPicture}
+            onTogglePlay={togglePlay}
+            onTogglePrivacyMode={togglePrivacyMode}
+            onToggleShortcutDialog={toggleShortcutDialog}
+            onToggleStartFromHighEnergy={toggleStartFromHighEnergy}
+            onUpdateTimelinePreview={updateTimelinePreview}
+            onUpdateTimelinePreviewFromTime={updateTimelinePreviewFromTime}
+          />
         </div>
       </section>
 
