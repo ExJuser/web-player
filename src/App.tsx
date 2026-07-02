@@ -401,6 +401,7 @@ import { PlaylistEmptyState } from "./PlaylistEmptyState";
 import { PlaylistItemCard } from "./PlaylistItemCard";
 import { PlaylistPagination } from "./PlaylistPagination";
 import { PlaylistTools } from "./PlaylistTools";
+import { PlayerLibrarySearchSection } from "./PlayerLibrarySearchSection";
 import { PlayerMediaActionControls } from "./PlayerMediaActionControls";
 import { PlayerOptionControls } from "./PlayerOptionControls";
 import { PlayerPlaybackControls } from "./PlayerPlaybackControls";
@@ -8878,42 +8879,32 @@ export default function App() {
           />
         </div>
 
-        <section className="player-library-search library-search-card" aria-label="播放器片库搜索">
-          <LibrarySearchFormPreview
-            ariaLabel="播放器片库搜索"
-            disabled={isLibrarySearchLoading || !playerLibrarySearchVideos.length}
-            formClassName="player-library-search-form"
-            inputValue={playerLibrarySearchQuery}
-            placeholder={playerLibrarySearchPlaceholder}
-            previewClassName="player-library-search-preview"
-            previewHint="仅本地匹配"
-            previewResults={playerLibrarySearchPreviewResults.length ? playerLibrarySearchPreviewResults.map(renderLibrarySearchResult) : null}
-            previewResultsClassName="player-library-search-preview-results"
-            showPreview={shouldShowPlayerLibrarySearchPreview}
-            onBlur={handleLibrarySearchBlur}
-            onFocus={() => setFocusedLibrarySearchSurface("player")}
-            onInputChange={setPlayerLibrarySearchQuery}
-            onSubmit={() => void runLibrarySearch("player")}
-          />
-          {shouldShowPlayerLibrarySearchStatus ? (
-            <div className={`library-search-status player-library-search-status ${playerLibrarySearchMode}`}>
-              {isPlayerLibrarySearchLoading ? "搜索中..." : playerLibrarySearchMessage || defaultLibrarySearchStatus}
-            </div>
-          ) : null}
-          {playerLibrarySearchAnswer ? <div className="library-search-answer player-library-search-answer">{playerLibrarySearchAnswer}</div> : null}
-          <LibrarySearchResultsList
-            className="player-library-search-results"
-            emptyTarget={playerLibrarySearchEmptyTarget}
-            hasMoreResults={hasMorePlayerLibrarySearchResults}
-            isEmpty={isPlayerLibrarySearchSurface && librarySearchMode === "empty"}
-            loadMoreRef={playerLibrarySearchLoadMoreRef}
-            results={visiblePlayerLibrarySearchResults.map(renderLibrarySearchResult)}
-            resultsRef={playerLibrarySearchResultsRef}
-            totalCount={playerLibrarySearchResults.length}
-            visibleCount={visiblePlayerLibrarySearchResults.length}
-            onLoadMore={loadMoreLibrarySearchResults}
-          />
-        </section>
+        <PlayerLibrarySearchSection
+          answer={playerLibrarySearchAnswer}
+          defaultStatus={defaultLibrarySearchStatus}
+          disabled={isLibrarySearchLoading || !playerLibrarySearchVideos.length}
+          emptyTarget={playerLibrarySearchEmptyTarget}
+          hasMoreResults={hasMorePlayerLibrarySearchResults}
+          inputValue={playerLibrarySearchQuery}
+          isEmpty={isPlayerLibrarySearchSurface && librarySearchMode === "empty"}
+          isLoading={isPlayerLibrarySearchLoading}
+          loadMoreRef={playerLibrarySearchLoadMoreRef}
+          placeholder={playerLibrarySearchPlaceholder}
+          previewResults={playerLibrarySearchPreviewResults.length ? playerLibrarySearchPreviewResults.map(renderLibrarySearchResult) : null}
+          results={visiblePlayerLibrarySearchResults.map(renderLibrarySearchResult)}
+          resultsRef={playerLibrarySearchResultsRef}
+          searchMode={playerLibrarySearchMode}
+          shouldShowPreview={shouldShowPlayerLibrarySearchPreview}
+          shouldShowStatus={shouldShowPlayerLibrarySearchStatus}
+          statusMessage={playerLibrarySearchMessage}
+          totalCount={playerLibrarySearchResults.length}
+          visibleCount={visiblePlayerLibrarySearchResults.length}
+          onBlur={handleLibrarySearchBlur}
+          onFocus={() => setFocusedLibrarySearchSurface("player")}
+          onInputChange={setPlayerLibrarySearchQuery}
+          onLoadMore={loadMoreLibrarySearchResults}
+          onSubmit={() => void runLibrarySearch("player")}
+        />
 
         <div
           className="playlist"
