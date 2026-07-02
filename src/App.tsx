@@ -297,7 +297,6 @@ import {
   countRatingFilterMatches,
   filterVideosBySeries,
   filterRatingPlaylistVideos,
-  formatPhotoRootStatus,
   getActiveSeriesOption,
   getCompatibleMediaAction,
   getCurrentSeriesKey,
@@ -414,6 +413,7 @@ import { PhotoAlbumSearchRow } from "./PhotoAlbumSearchRow";
 import { PhotoAlbumStats } from "./PhotoAlbumStats";
 import { PhotoAlbumTagDialog } from "./PhotoAlbumTagDialog";
 import { PhotoAlbumToolbar, type PhotoAlbumViewFilter } from "./PhotoAlbumToolbar";
+import { PhotoRootStatusCard } from "./PhotoRootStatusCard";
 import { RatingFilterCard } from "./RatingFilterCard";
 import { RatingDialog } from "./RatingDialog";
 import { ShortcutDialog } from "./ShortcutDialog";
@@ -8410,23 +8410,7 @@ export default function App() {
 
             <PhotoAlbumStats stats={photoAlbumStats} />
 
-            {photoRootStatuses.some((status) => status.status !== "ready") ? (
-              <section className="home-section photo-root-status">
-                <div className="home-section-header">
-                  <h2>媒体库状态</h2>
-                  <span>{photoRootStatuses.filter((status) => status.status === "ready").length} / {photoRootStatuses.length} 可用</span>
-                </div>
-                <div className="media-library-list">
-                  {photoRootStatuses.map((status) => (
-                    <div className="media-library-row" key={status.id}>
-                      <strong>{status.label}</strong>
-                      <code>{formatPhotoRootStatus(status)}</code>
-                      {status.error ? <code>{status.error}</code> : null}
-                    </div>
-                  ))}
-                </div>
-              </section>
-            ) : null}
+            <PhotoRootStatusCard statuses={photoRootStatuses} />
 
             {visiblePhotoAlbums.length ? (
               <>
