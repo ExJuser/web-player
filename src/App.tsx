@@ -356,19 +356,13 @@ import {
 } from "./CompatibleMediaDialogs";
 import { DeleteConfirmDialog } from "./DeleteConfirmDialog";
 import { DuplicateVideoGroupCard } from "./DuplicateVideoGroupCard";
-import { DuplicateVideoSummaryCard } from "./DuplicateVideoSummaryCard";
 import { EmbeddedSubtitleDialog } from "./EmbeddedSubtitleDialog";
-import { FavoriteHomeSection } from "./FavoriteHomeSection";
 import { FolderAccessDialog } from "./FolderAccessDialog";
 import { HighEnergyTagDialog, type HighEnergyTagPrompt } from "./HighEnergyTagDialog";
-import { HomeLibraryStats } from "./HomeLibraryStats";
-import { HomeLibrarySearchSection } from "./HomeLibrarySearchSection";
-import { HomeMediaLibraryCard } from "./HomeMediaLibraryCard";
-import { HomeModeCard } from "./HomeModeCard";
 import { HomeNextEpisodeSection } from "./HomeNextEpisodeSection";
 import { HomeRecentSection } from "./HomeRecentSection";
-import { HomeRecapCard } from "./HomeRecapCard";
 import { HomeResumeSection } from "./HomeResumeSection";
+import { HomeSideColumn } from "./HomeSideColumn";
 import { HomeSpecialInsightsSection } from "./HomeSpecialInsightsSection";
 import { HomeCardThumbnail, HomeListCard } from "./HomeVideoCards";
 import { ExistingMediaRootDialog, MediaRootLabelDialog, MediaRootLocalPathDialogView } from "./MediaRootPromptDialogs";
@@ -382,7 +376,6 @@ import { PlaylistPanel } from "./PlaylistPanel";
 import { PlayerControlBar } from "./PlayerControlBar";
 import { PlayerStage } from "./PlayerStage";
 import { PlayerTopBar } from "./PlayerTopBar";
-import { RatingFilterCard } from "./RatingFilterCard";
 import { RatingDialog } from "./RatingDialog";
 import { ShortcutDialog } from "./ShortcutDialog";
 import { TagDialog } from "./TagDialog";
@@ -8059,114 +8052,106 @@ export default function App() {
               />
             </div>
 
-            <aside className="home-side-column">
-              <HomeModeCard
-                homeMediaMode={homeMediaMode}
-                homeMediaModeLabel={homeMediaModeLabel}
-                onModeChange={updateHomeMediaMode}
-              />
-
-              <HomeLibraryStats stats={libraryStats} />
-
-              <HomeMediaLibraryCard
-                homeMediaMode={homeMediaMode}
-                homeMediaModeLabel={homeMediaModeLabel}
-                isOpen={isMediaLibraryPanelOpen}
-                isScanning={isScanning}
-                mediaRootCount={localConfig?.mediaRoots.length ?? 0}
-                mediaRoots={homeModeMediaRoots}
-                mediaRootStatuses={modeFilteredMediaRootStatuses}
-                onConfigureLocalPath={openMediaRootLocalPathDialog}
-                onRefresh={() => void loadGlobalMediaLibrary()}
-                onToggle={() => setIsMediaLibraryPanelOpen((isOpen) => !isOpen)}
-              />
-
-              {isRatingFilterEnabled ? (
-                <RatingFilterCard
-                  numericRatingPlaylistCount={numericRatingPlaylistCount}
-                  onOpenHigh={() => {
-                    setRatingFilterOperator("gt");
-                    setRatingFilterThreshold(8);
-                    openRatingPlaylist("numeric", "gt", 8);
-                  }}
-                  onOpenLow={() => {
-                    setRatingFilterOperator("lt");
-                    setRatingFilterThreshold(6);
-                    openRatingPlaylist("numeric", "lt", 6);
-                  }}
-                  onOpenNumeric={() => openRatingPlaylist("numeric")}
-                  onOpenUnrated={() => openRatingPlaylist("unrated")}
-                  onOperatorChange={setRatingFilterOperator}
-                  onThresholdChange={(threshold) => setRatingFilterThreshold(clamp(threshold, 0, 10))}
-                  ratingFilterLabel={ratingFilterLabel}
-                  ratingFilterOperator={ratingFilterOperator}
-                  ratingFilterThreshold={ratingFilterThreshold}
-                  ratingStats={ratingStats}
-                />
-              ) : null}
-
-              {shouldShowHomeRecap ? (
-                <HomeRecapCard
-                  canUseEmbeddedSubtitles={canUseHomeEmbeddedSubtitles}
-                  canUseRecapSubtitle={canUseHomeRecapSubtitle}
-                  formatProgressLabel={formatHomeProgressLabel}
-                  homeRecapCard={homeRecapCard}
-                  homeRecapMediaRoot={homeRecapMediaRoot}
-                  homeRecapSubtitle={homeRecapSubtitle}
-                  homeRecapVideoId={homeRecapVideoId}
-                  homeProgressRecap={homeProgressRecap}
-                  homeProgressRecapMessage={homeProgressRecapMessage}
-                  homeProgressRecapVideoId={homeProgressRecapVideoId}
-                  isAiConfigured={Boolean(localConfig?.ai.configured)}
-                  isLoading={isHomeProgressRecapLoading}
-                  onConfigureLocalPath={openMediaRootLocalPathDialog}
-                  onLoadRecap={() => void loadHomeProgressRecap()}
-                />
-              ) : null}
-
-              <HomeLibrarySearchSection
-                answer={homeLibrarySearchAnswer}
-                defaultStatus={defaultLibrarySearchStatus}
-                disabled={isLibrarySearchLoading || !homeLibrarySearchVideos.length}
-                emptyTarget={homeLibrarySearchEmptyTarget}
-                hasMoreResults={hasMoreHomeLibrarySearchResults}
-                headerModeLabel={homeMediaMode === "special" ? "本地筛选" : homeLibrarySearchMode === "ai" ? "AI 辅助" : "本地优先"}
-                inputValue={homeLibrarySearchQuery}
-                isEmpty={isHomeLibrarySearchSurface && librarySearchMode === "empty"}
-                isLoading={isHomeLibrarySearchLoading}
-                loadMoreRef={librarySearchLoadMoreRef}
-                placeholder={homeLibrarySearchPlaceholder}
-                previewResults={homeLibrarySearchPreviewItems}
-                results={visibleHomeLibrarySearchItems}
-                resultsRef={librarySearchResultsRef}
-                searchMode={homeLibrarySearchMode}
-                shouldShowPreview={shouldShowHomeLibrarySearchPreview}
-                shouldShowStatus={shouldShowHomeLibrarySearchStatus}
-                statusMessage={homeLibrarySearchMessage}
-                totalCount={homeLibrarySearchResults.length}
-                visibleCount={visibleHomeLibrarySearchResults.length}
-                onBlur={handleLibrarySearchBlur}
-                onFocus={() => setFocusedLibrarySearchSurface("home")}
-                onInputChange={setHomeLibrarySearchQuery}
-                onLoadMore={loadMoreLibrarySearchResults}
-                onSubmit={() => void runLibrarySearch("home")}
-              />
-
-              <DuplicateVideoSummaryCard
-                detectionMessage={duplicateDetectionDisplayMessage}
-                detectionPercent={duplicateDetectionPercent}
-                duplicatePlaylistCount={duplicatePlaylistVideos.length}
-                groups={activeDuplicateVideoGroups}
-                isRunning={isDuplicateDetectionRunning}
-                onOpenPlaylist={openDuplicatePlaylist}
-                onRunDetection={() => void runDuplicateVideoDetection()}
-                progress={duplicateDetectionProgress}
-                renderGroup={renderDuplicateVideoGroup}
-                totalVideoCount={modeFilteredVideos.length}
-              />
-
-              <FavoriteHomeSection cards={favoriteHomeCards} renderCard={renderHomeListCard} />
-            </aside>
+            <HomeSideColumn
+              mode={{
+                homeMediaMode,
+                homeMediaModeLabel,
+                onModeChange: updateHomeMediaMode,
+              }}
+              libraryStats={{ stats: libraryStats }}
+              mediaLibrary={{
+                homeMediaMode,
+                homeMediaModeLabel,
+                isOpen: isMediaLibraryPanelOpen,
+                isScanning,
+                mediaRootCount: localConfig?.mediaRoots.length ?? 0,
+                mediaRoots: homeModeMediaRoots,
+                mediaRootStatuses: modeFilteredMediaRootStatuses,
+                onConfigureLocalPath: openMediaRootLocalPathDialog,
+                onRefresh: () => void loadGlobalMediaLibrary(),
+                onToggle: () => setIsMediaLibraryPanelOpen((isOpen) => !isOpen),
+              }}
+              ratingFilter={isRatingFilterEnabled ? {
+                numericRatingPlaylistCount,
+                onOpenHigh: () => {
+                  setRatingFilterOperator("gt");
+                  setRatingFilterThreshold(8);
+                  openRatingPlaylist("numeric", "gt", 8);
+                },
+                onOpenLow: () => {
+                  setRatingFilterOperator("lt");
+                  setRatingFilterThreshold(6);
+                  openRatingPlaylist("numeric", "lt", 6);
+                },
+                onOpenNumeric: () => openRatingPlaylist("numeric"),
+                onOpenUnrated: () => openRatingPlaylist("unrated"),
+                onOperatorChange: setRatingFilterOperator,
+                onThresholdChange: (threshold) => setRatingFilterThreshold(clamp(threshold, 0, 10)),
+                ratingFilterLabel,
+                ratingFilterOperator,
+                ratingFilterThreshold,
+                ratingStats,
+              } : null}
+              recap={shouldShowHomeRecap ? {
+                canUseEmbeddedSubtitles: canUseHomeEmbeddedSubtitles,
+                canUseRecapSubtitle: canUseHomeRecapSubtitle,
+                formatProgressLabel: formatHomeProgressLabel,
+                homeRecapCard,
+                homeRecapMediaRoot,
+                homeRecapSubtitle,
+                homeRecapVideoId,
+                homeProgressRecap,
+                homeProgressRecapMessage,
+                homeProgressRecapVideoId,
+                isAiConfigured: Boolean(localConfig?.ai.configured),
+                isLoading: isHomeProgressRecapLoading,
+                onConfigureLocalPath: openMediaRootLocalPathDialog,
+                onLoadRecap: () => void loadHomeProgressRecap(),
+              } : null}
+              librarySearch={{
+                answer: homeLibrarySearchAnswer,
+                defaultStatus: defaultLibrarySearchStatus,
+                disabled: isLibrarySearchLoading || !homeLibrarySearchVideos.length,
+                emptyTarget: homeLibrarySearchEmptyTarget,
+                hasMoreResults: hasMoreHomeLibrarySearchResults,
+                headerModeLabel: homeMediaMode === "special" ? "本地筛选" : homeLibrarySearchMode === "ai" ? "AI 辅助" : "本地优先",
+                inputValue: homeLibrarySearchQuery,
+                isEmpty: isHomeLibrarySearchSurface && librarySearchMode === "empty",
+                isLoading: isHomeLibrarySearchLoading,
+                loadMoreRef: librarySearchLoadMoreRef,
+                placeholder: homeLibrarySearchPlaceholder,
+                previewResults: homeLibrarySearchPreviewItems,
+                results: visibleHomeLibrarySearchItems,
+                resultsRef: librarySearchResultsRef,
+                searchMode: homeLibrarySearchMode,
+                shouldShowPreview: shouldShowHomeLibrarySearchPreview,
+                shouldShowStatus: shouldShowHomeLibrarySearchStatus,
+                statusMessage: homeLibrarySearchMessage,
+                totalCount: homeLibrarySearchResults.length,
+                visibleCount: visibleHomeLibrarySearchResults.length,
+                onBlur: handleLibrarySearchBlur,
+                onFocus: () => setFocusedLibrarySearchSurface("home"),
+                onInputChange: setHomeLibrarySearchQuery,
+                onLoadMore: loadMoreLibrarySearchResults,
+                onSubmit: () => void runLibrarySearch("home"),
+              }}
+              duplicateSummary={{
+                detectionMessage: duplicateDetectionDisplayMessage,
+                detectionPercent: duplicateDetectionPercent,
+                duplicatePlaylistCount: duplicatePlaylistVideos.length,
+                groups: activeDuplicateVideoGroups,
+                isRunning: isDuplicateDetectionRunning,
+                onOpenPlaylist: openDuplicatePlaylist,
+                onRunDetection: () => void runDuplicateVideoDetection(),
+                progress: duplicateDetectionProgress,
+                renderGroup: renderDuplicateVideoGroup,
+                totalVideoCount: modeFilteredVideos.length,
+              }}
+              favorites={{
+                cards: favoriteHomeCards,
+                renderCard: renderHomeListCard,
+              }}
+            />
           </section>
         ) : null}
 
