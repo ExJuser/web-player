@@ -1,3 +1,5 @@
+import type { HomeVideoCard } from "./playerTypes";
+
 export function formatTime(seconds: number) {
   if (!Number.isFinite(seconds)) return "00:00";
   const value = Math.max(0, Math.floor(seconds));
@@ -61,4 +63,27 @@ export function formatCumulativeDuration(seconds: number) {
 export function formatResolution(width?: number, height?: number) {
   if (!width || !height) return "读取中";
   return `${width} x ${height}`;
+}
+
+export function formatLibrarySearchProgressLabel(card: HomeVideoCard) {
+  if (card.progress?.completed) return "已看完";
+  if (card.progress) {
+    const total = card.progress.duration || card.video.duration || 0;
+    return `${formatTime(card.progress.currentTime)} / ${formatTime(total)}`;
+  }
+  return card.video.duration ? `未开始 / ${formatTime(card.video.duration)}` : "未开始";
+}
+
+export function formatHomeProgressLabel(card: HomeVideoCard) {
+  if (card.progress?.completed) return "已看完";
+  if (!card.progress) return "未开始";
+  const total = card.progress.duration || card.video.duration || 0;
+  return `${formatTime(card.progress.currentTime)} / ${formatTime(total)}`;
+}
+
+export function formatHomeMeta(card: HomeVideoCard) {
+  const prefix = card.mediaRootLabel ? `${card.mediaRootLabel} · ` : "";
+  if (card.progress?.updatedAt) return `${prefix}${formatHomeProgressLabel(card)} · ${formatRelativeTime(card.progress.updatedAt)}`;
+  if (card.video.duration) return `${prefix}未开始 · ${formatTime(card.video.duration)}`;
+  return `${prefix}未开始`;
 }

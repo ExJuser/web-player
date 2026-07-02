@@ -210,6 +210,9 @@ import {
 import {
   formatCumulativeDuration,
   formatFileSize,
+  formatHomeMeta,
+  formatHomeProgressLabel,
+  formatLibrarySearchProgressLabel,
   formatModifiedTime,
   formatRelativeTime,
   formatTime,
@@ -524,15 +527,6 @@ type MediaProbeResponse = {
 };
 
 type PlaybackSourceChoice = "original" | "compatible";
-
-function formatLibrarySearchProgressLabel(card: HomeVideoCard) {
-  if (card.progress?.completed) return "已看完";
-  if (card.progress) {
-    const total = card.progress.duration || card.video.duration || 0;
-    return `${formatTime(card.progress.currentTime)} / ${formatTime(total)}`;
-  }
-  return card.video.duration ? `未开始 / ${formatTime(card.video.duration)}` : "未开始";
-}
 
 export default function App() {
   const initialVolumeRef = useRef(readStoredVolume());
@@ -7903,18 +7897,6 @@ export default function App() {
   const progressPercent = duration ? Math.min(100, (currentTime / duration) * 100) : 0;
   const primaryHomeTitle = primaryResumeCard ? "继续观看" : modeFilteredVideos.length ? "开始观看" : "准备播放";
   const primaryHomeAction = primaryResumeCard ? "继续播放" : "播放第一个视频";
-  const formatHomeProgressLabel = (card: HomeVideoCard) => {
-    if (card.progress?.completed) return "已看完";
-    if (!card.progress) return "未开始";
-    const total = card.progress.duration || card.video.duration || 0;
-    return `${formatTime(card.progress.currentTime)} / ${formatTime(total)}`;
-  };
-  const formatHomeMeta = (card: HomeVideoCard) => {
-    const prefix = card.mediaRootLabel ? `${card.mediaRootLabel} · ` : "";
-    if (card.progress?.updatedAt) return `${prefix}${formatHomeProgressLabel(card)} · ${formatRelativeTime(card.progress.updatedAt)}`;
-    if (card.video.duration) return `${prefix}未开始 · ${formatTime(card.video.duration)}`;
-    return `${prefix}未开始`;
-  };
   const homeCardThumbnail = (card: HomeVideoCard, fallbackIndex?: number) => (
     <span className={`home-card-thumbnail ${card.video.thumbnailUrl ? "has-image" : ""}`} aria-hidden="true">
       {card.video.thumbnailUrl ? (

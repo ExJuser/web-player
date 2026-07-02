@@ -56,3 +56,19 @@ test("formats cumulative durations and resolution", () => {
   assert.equal(formatUtils.formatResolution(), "读取中");
   assert.equal(formatUtils.formatResolution(1920, 1080), "1920 x 1080");
 });
+
+test("formats home and library search progress labels", () => {
+  const card = {
+    video: { id: "video-1", name: "01.mp4", relativePath: "Show/01.mp4", url: "", size: 1, lastModified: 1, duration: 120 },
+    progress: { currentTime: 30, duration: 100, completed: false, updatedAt: Date.now() },
+    progressPercent: 30,
+    mediaRootLabel: "Anime",
+  };
+
+  assert.equal(formatUtils.formatLibrarySearchProgressLabel(card), "00:30 / 01:40");
+  assert.equal(formatUtils.formatHomeProgressLabel(card), "00:30 / 01:40");
+  assert.equal(formatUtils.formatLibrarySearchProgressLabel({ ...card, progress: undefined }), "未开始 / 02:00");
+  assert.equal(formatUtils.formatHomeProgressLabel({ ...card, progress: undefined }), "未开始");
+  assert.equal(formatUtils.formatHomeMeta({ ...card, progress: undefined }), "Anime · 未开始 · 02:00");
+  assert.equal(formatUtils.formatHomeMeta({ ...card, progress: { ...card.progress, completed: true } }), "Anime · 已看完 · 刚刚");
+});
