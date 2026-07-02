@@ -403,6 +403,7 @@ import { DuplicateVideoGroupCard } from "./DuplicateVideoGroupCard";
 import { EmbeddedSubtitleDialog } from "./EmbeddedSubtitleDialog";
 import { FolderAccessDialog } from "./FolderAccessDialog";
 import { HighEnergyTagDialog, type HighEnergyTagPrompt } from "./HighEnergyTagDialog";
+import { HomeModeCard } from "./HomeModeCard";
 import { HomeRecapCard } from "./HomeRecapCard";
 import { HomeCardThumbnail, HomeListCard } from "./HomeVideoCards";
 import { ExistingMediaRootDialog, MediaRootLabelDialog, MediaRootLocalPathDialogView } from "./MediaRootPromptDialogs";
@@ -8229,41 +8230,11 @@ export default function App() {
             </div>
 
             <aside className="home-side-column">
-              <section className="home-mode-card">
-                <div className="home-section-header">
-                  <h2>媒体模式</h2>
-                  <span>{homeMediaModeLabel}</span>
-                </div>
-                <div className="home-mode-switch" role="group" aria-label="首页媒体库模式">
-                  <button
-                    className={homeMediaMode === "all" ? "active" : ""}
-                    type="button"
-                    onClick={() => updateHomeMediaMode("all")}
-                    aria-pressed={homeMediaMode === "all"}
-                  >
-                    <Play size={15} />
-                    全部
-                  </button>
-                  <button
-                    className={homeMediaMode === "anime" ? "active" : ""}
-                    type="button"
-                    onClick={() => updateHomeMediaMode("anime")}
-                    aria-pressed={homeMediaMode === "anime"}
-                  >
-                    <Subtitles size={15} />
-                    追番模式
-                  </button>
-                  <button
-                    className={homeMediaMode === "special" ? "active" : ""}
-                    type="button"
-                    onClick={() => updateHomeMediaMode("special")}
-                    aria-pressed={homeMediaMode === "special"}
-                  >
-                    <ShieldCheck size={15} />
-                    特殊模式
-                  </button>
-                </div>
-              </section>
+              <HomeModeCard
+                homeMediaMode={homeMediaMode}
+                homeMediaModeLabel={homeMediaModeLabel}
+                onModeChange={updateHomeMediaMode}
+              />
 
               <section className="home-stats">
                 <div>
