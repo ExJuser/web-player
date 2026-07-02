@@ -291,24 +291,20 @@ const photoAlbumSortOptions: Array<{ value: PhotoAlbumSortMode; label: string }>
   { value: "count", label: "图片数" },
 ];
 
-type DuplicatePlaylistVideoMeta = {
-  groupIndex: number;
-  groupSize: number;
-  severity: DuplicateVideoGroup["severity"];
-  reasons: string[];
-};
-
-type RatingFilterOperator = "gt" | "lt" | "eq";
-type RatingPlaylistMode = "numeric" | "unrated";
-
 import { ControlSelect } from "./ControlSelect";
 import {
   createPersistedEmbeddedSubtitles,
+  createDuplicatePlaylistMetaByVideoId,
+  createRatingStats,
   createVideoMetadataRows,
   createVideoMetadataTitle,
+  countRatingFilterMatches,
+  filterRatingPlaylistVideos,
   formatMediaRootStatus,
   formatPhotoRootStatus,
   getCompatibleMediaAction,
+  getDuplicatePlaylistVideos,
+  getRatingFilterLabel,
   getPlayableVideoUrl,
   createSubtitleControlOptions,
   createVideoStatsKey,
@@ -319,7 +315,10 @@ import {
   resolveSubtitleSelection,
   shouldShowHomeRecapCard,
   shouldShowNextEpisodeCard,
+  type DuplicatePlaylistVideoMeta,
   type HomeMediaMode,
+  type RatingFilterOperator,
+  type RatingPlaylistMode,
 } from "./playerUiState";
 import {
   createTagPairKey,
@@ -1303,49 +1302,23 @@ export default function App() {
       ),
     [isPlaylistSortReversed, isSeriesMode, modeFilteredVideos, playlistSortMode, videoStatsRevision],
   );
-  const ratingFilterSymbol = ratingFilterOperator === "gt" ? ">" : ratingFilterOperator === "lt" ? "<" : "=";
-  const ratingFilterLabel = `评分 ${ratingFilterSymbol} ${ratingFilterThreshold}`;
-  const ratingStats = useMemo(() => {
-    let rated = 0;
-    let high = 0;
-    let low = 0;
-    modeFilteredVideos.forEach((video) => {
-      const rating = videoRatings[video.id];
-      if (typeof rating !== "number") return;
-      rated += 1;
-      if (rating > 8) high += 1;
-      if (rating < 6) low += 1;
-    });
-    return {
-      rated,
-      unrated: Math.max(modeFilteredVideos.length - rated, 0),
-      high,
-      low,
-    };
-  }, [modeFilteredVideos, videoRatings]);
-  const ratingPlaylistVideos = useMemo(() => {
-    if (!isRatingFilterEnabled) return [];
-    if (ratingPlaylistMode === "unrated") {
-      return playlistVideos.filter((video) => typeof videoRatings[video.id] !== "number");
-    }
-    return playlistVideos.filter((video) => {
-      const rating = videoRatings[video.id];
-      if (typeof rating !== "number") return false;
-      if (ratingFilterOperator === "gt") return rating > ratingFilterThreshold;
-      if (ratingFilterOperator === "lt") return rating < ratingFilterThreshold;
-      return rating === ratingFilterThreshold;
-    });
-  }, [isRatingFilterEnabled, playlistVideos, ratingFilterOperator, ratingFilterThreshold, ratingPlaylistMode, videoRatings]);
+  const ratingFilterLabel = getRatingFilterLabel(ratingFilterOperator, ratingFilterThreshold);
+  const ratingStats = useMemo(() => createRatingStats(modeFilteredVideos, videoRatings), [modeFilteredVideos, videoRatings]);
+  const ratingPlaylistVideos = useMemo(
+    () =>
+      filterRatingPlaylistVideos(
+        playlistVideos,
+        videoRatings,
+        isRatingFilterEnabled ? ratingPlaylistMode : null,
+        ratingFilterOperator,
+        ratingFilterThreshold,
+      ),
+    [isRatingFilterEnabled, playlistVideos, ratingFilterOperator, ratingFilterThreshold, ratingPlaylistMode, videoRatings],
+  );
   const numericRatingPlaylistCount = useMemo(
     () =>
       isRatingFilterEnabled
-        ? playlistVideos.filter((video) => {
-            const rating = videoRatings[video.id];
-            if (typeof rating !== "number") return false;
-            if (ratingFilterOperator === "gt") return rating > ratingFilterThreshold;
-            if (ratingFilterOperator === "lt") return rating < ratingFilterThreshold;
-            return rating === ratingFilterThreshold;
-          }).length
+        ? countRatingFilterMatches(playlistVideos, videoRatings, ratingFilterOperator, ratingFilterThreshold)
         : 0,
     [isRatingFilterEnabled, playlistVideos, ratingFilterOperator, ratingFilterThreshold, videoRatings],
   );
@@ -1447,38 +1420,14 @@ export default function App() {
     () => seriesFilteredVideos.filter((video) => favoriteVideoIds.has(video.id)),
     [favoriteVideoIds, seriesFilteredVideos],
   );
-  const duplicatePlaylistVideos = useMemo(() => {
-    const availableVideosById = new Map(videos.map((video) => [video.id, video]));
-    const seenIds = new Set<string>();
-    const nextVideos: VideoItem[] = [];
-
-    activeDuplicateVideoGroups.forEach((group) => {
-      group.videos.forEach((groupVideo) => {
-        if (seenIds.has(groupVideo.id)) return;
-        const video = availableVideosById.get(groupVideo.id);
-        if (!video) return;
-        seenIds.add(video.id);
-        nextVideos.push(video);
-      });
-    });
-
-    return nextVideos;
-  }, [activeDuplicateVideoGroups, videos]);
-  const duplicatePlaylistMetaByVideoId = useMemo(() => {
-    const metaById = new Map<string, DuplicatePlaylistVideoMeta>();
-    activeDuplicateVideoGroups.forEach((group, groupIndex) => {
-      group.videos.forEach((video) => {
-        if (metaById.has(video.id)) return;
-        metaById.set(video.id, {
-          groupIndex: groupIndex + 1,
-          groupSize: group.videos.length,
-          severity: group.severity,
-          reasons: group.reasons,
-        });
-      });
-    });
-    return metaById;
-  }, [activeDuplicateVideoGroups]);
+  const duplicatePlaylistVideos = useMemo(
+    () => getDuplicatePlaylistVideos(videos, activeDuplicateVideoGroups),
+    [activeDuplicateVideoGroups, videos],
+  );
+  const duplicatePlaylistMetaByVideoId = useMemo(
+    () => createDuplicatePlaylistMetaByVideoId(activeDuplicateVideoGroups),
+    [activeDuplicateVideoGroups],
+  );
   const visibleVideos = useMemo(
     () =>
       isDuplicatePlaylistActive

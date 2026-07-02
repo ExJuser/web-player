@@ -8,6 +8,16 @@ import type { HomeMediaMode } from "./playerTypes";
 
 export type { HomeMediaMode };
 
+export type RatingFilterOperator = "gt" | "lt" | "eq";
+export type RatingPlaylistMode = "numeric" | "unrated";
+
+export type DuplicatePlaylistVideoMeta = {
+  groupIndex: number;
+  groupSize: number;
+  severity: string;
+  reasons: string[];
+};
+
 type MediaRootForUi = {
   label?: string;
   source?: "browser" | "local";
@@ -46,9 +56,20 @@ type VideoForCompatibilityUi = {
 };
 
 type VideoForStatsUi = {
+  id?: string;
   name?: string;
   size?: number;
   lastModified?: number;
+};
+
+type RatedVideoForUi = {
+  id: string;
+};
+
+type DuplicateVideoGroupForUi<Video extends RatedVideoForUi> = {
+  videos: Video[];
+  severity: string;
+  reasons: string[];
 };
 
 type SubtitleForUi = {
@@ -204,6 +225,104 @@ export function createVideoStatsKey(video: VideoForStatsUi) {
   const size = Number.isFinite(video.size) ? Math.max(0, Math.floor(video.size ?? 0)) : 0;
   const lastModified = Number.isFinite(video.lastModified) ? Math.max(0, Math.round(video.lastModified ?? 0)) : 0;
   return `${normalizedName}|${size}|${lastModified}`;
+}
+
+export function getRatingFilterLabel(operator: RatingFilterOperator, threshold: number) {
+  const symbol = operator === "gt" ? ">" : operator === "lt" ? "<" : "=";
+  return `评分 ${symbol} ${threshold}`;
+}
+
+export function createRatingStats<Video extends RatedVideoForUi>(
+  videos: Video[],
+  ratings: Record<string, number | undefined>,
+) {
+  let rated = 0;
+  let high = 0;
+  let low = 0;
+  videos.forEach((video) => {
+    const rating = ratings[video.id];
+    if (typeof rating !== "number") return;
+    rated += 1;
+    if (rating > 8) high += 1;
+    if (rating < 6) low += 1;
+  });
+  return {
+    rated,
+    unrated: Math.max(videos.length - rated, 0),
+    high,
+    low,
+  };
+}
+
+export function doesVideoMatchRatingFilter(
+  rating: number | undefined,
+  operator: RatingFilterOperator,
+  threshold: number,
+) {
+  if (typeof rating !== "number") return false;
+  if (operator === "gt") return rating > threshold;
+  if (operator === "lt") return rating < threshold;
+  return rating === threshold;
+}
+
+export function filterRatingPlaylistVideos<Video extends RatedVideoForUi>(
+  videos: Video[],
+  ratings: Record<string, number | undefined>,
+  mode: RatingPlaylistMode | null,
+  operator: RatingFilterOperator,
+  threshold: number,
+) {
+  if (!mode) return [];
+  if (mode === "unrated") {
+    return videos.filter((video) => typeof ratings[video.id] !== "number");
+  }
+  return videos.filter((video) => doesVideoMatchRatingFilter(ratings[video.id], operator, threshold));
+}
+
+export function countRatingFilterMatches<Video extends RatedVideoForUi>(
+  videos: Video[],
+  ratings: Record<string, number | undefined>,
+  operator: RatingFilterOperator,
+  threshold: number,
+) {
+  return videos.filter((video) => doesVideoMatchRatingFilter(ratings[video.id], operator, threshold)).length;
+}
+
+export function getDuplicatePlaylistVideos<Video extends RatedVideoForUi>(
+  videos: Video[],
+  groups: Array<DuplicateVideoGroupForUi<RatedVideoForUi>>,
+) {
+  const availableVideosById = new Map(videos.map((video) => [video.id, video]));
+  const seenIds = new Set<string>();
+  const nextVideos: Video[] = [];
+
+  groups.forEach((group) => {
+    group.videos.forEach((groupVideo) => {
+      if (seenIds.has(groupVideo.id)) return;
+      const video = availableVideosById.get(groupVideo.id);
+      if (!video) return;
+      seenIds.add(video.id);
+      nextVideos.push(video);
+    });
+  });
+
+  return nextVideos;
+}
+
+export function createDuplicatePlaylistMetaByVideoId(groups: Array<DuplicateVideoGroupForUi<RatedVideoForUi>>) {
+  const metaById = new Map<string, DuplicatePlaylistVideoMeta>();
+  groups.forEach((group, groupIndex) => {
+    group.videos.forEach((video) => {
+      if (metaById.has(video.id)) return;
+      metaById.set(video.id, {
+        groupIndex: groupIndex + 1,
+        groupSize: group.videos.length,
+        severity: group.severity,
+        reasons: group.reasons,
+      });
+    });
+  });
+  return metaById;
 }
 
 export function shouldShowHomeRecapCard(mode: HomeMediaMode) {

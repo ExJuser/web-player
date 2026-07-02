@@ -271,6 +271,38 @@ test("video stats key changes when file fingerprint changes", () => {
   assert.notEqual(base, uiState.createVideoStatsKey({ name: "Movie.mp4", size: 1024, lastModified: 1700000001000 }));
 });
 
+test("rating playlist helpers derive stats and filtered videos", () => {
+  const videos = [{ id: "a" }, { id: "b" }, { id: "c" }];
+  const ratings = { a: 9, b: 5 };
+
+  assert.equal(uiState.getRatingFilterLabel("gt", 8), "评分 > 8");
+  assert.deepEqual(uiState.createRatingStats(videos, ratings), {
+    rated: 2,
+    unrated: 1,
+    high: 1,
+    low: 1,
+  });
+  assert.deepEqual(uiState.filterRatingPlaylistVideos(videos, ratings, "numeric", "gt", 8), [videos[0]]);
+  assert.deepEqual(uiState.filterRatingPlaylistVideos(videos, ratings, "unrated", "gt", 8), [videos[2]]);
+  assert.equal(uiState.countRatingFilterMatches(videos, ratings, "lt", 6), 1);
+});
+
+test("duplicate playlist helpers dedupe videos and build metadata", () => {
+  const videos = [{ id: "a", name: "a.mp4" }, { id: "b", name: "b.mp4" }, { id: "c", name: "c.mp4" }];
+  const groups = [
+    { videos: [{ id: "a" }, { id: "b" }], severity: "duplicate", reasons: ["same size"] },
+    { videos: [{ id: "b" }, { id: "missing" }, { id: "c" }], severity: "suspicious", reasons: ["similar"] },
+  ];
+
+  assert.deepEqual(uiState.getDuplicatePlaylistVideos(videos, groups), [videos[0], videos[1], videos[2]]);
+  assert.deepEqual(Array.from(uiState.createDuplicatePlaylistMetaByVideoId(groups).entries()), [
+    ["a", { groupIndex: 1, groupSize: 2, severity: "duplicate", reasons: ["same size"] }],
+    ["b", { groupIndex: 1, groupSize: 2, severity: "duplicate", reasons: ["same size"] }],
+    ["missing", { groupIndex: 2, groupSize: 3, severity: "suspicious", reasons: ["similar"] }],
+    ["c", { groupIndex: 2, groupSize: 3, severity: "suspicious", reasons: ["similar"] }],
+  ]);
+});
+
 test("home all mode includes unlabeled and temporary media roots", () => {
   assert.equal(uiState.isMediaRootInHomeMode({}, "all"), true);
 });
