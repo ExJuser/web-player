@@ -400,6 +400,7 @@ import {
 import { CacheStatusDialog } from "./CacheStatusDialog";
 import { DeleteConfirmDialog } from "./DeleteConfirmDialog";
 import { HighEnergyTagDialog, type HighEnergyTagPrompt } from "./HighEnergyTagDialog";
+import { PhotoAlbumTagDialog } from "./PhotoAlbumTagDialog";
 import { RatingDialog } from "./RatingDialog";
 
 type PhotoAlbumViewFilter = "all" | "favorites";
@@ -10321,71 +10322,16 @@ export default function App() {
       }}
       onConfirm={() => void confirmDeletePhotoAlbum()}
     />
-    {photoAlbumTagEditorAlbum ? (
-      <div className="modal-backdrop" role="presentation" onMouseDown={() => setPhotoAlbumTagEditorAlbumId(null)}>
-        <section
-          aria-labelledby="photo-album-tag-dialog-title"
-          aria-modal="true"
-          className="tag-dialog photo-album-tag-dialog"
-          role="dialog"
-          onMouseDown={(event) => event.stopPropagation()}
-        >
-          <button
-            aria-label="关闭"
-            className="dialog-close"
-            type="button"
-            onClick={() => setPhotoAlbumTagEditorAlbumId(null)}
-          >
-            <X size={18} />
-          </button>
-          <div className="tag-dialog-header auto-tag-dialog-header">
-            <div className="dialog-icon">
-              <Tags size={28} />
-            </div>
-            <div className="dialog-copy">
-              <h2 id="photo-album-tag-dialog-title">图集标签</h2>
-              <p>{photoAlbumTagEditorAlbum.title}</p>
-            </div>
-          </div>
-
-          <div className="tag-editor-current">
-            {(photoAlbumTags[photoAlbumTagEditorAlbum.id] ?? []).length ? (
-              (photoAlbumTags[photoAlbumTagEditorAlbum.id] ?? []).map((tag) => (
-                <button className="tag-editor-chip" key={tag} type="button" onClick={() => removeTagFromPhotoAlbum(tag)}>
-                  <span>{tag}</span>
-                  <X size={14} />
-                </button>
-              ))
-            ) : (
-              <div className="ai-empty-state">当前图集还没有标签。</div>
-            )}
-          </div>
-
-          <form
-            className="tag-editor-form"
-            onSubmit={(event) => {
-              event.preventDefault();
-              addTagsToPhotoAlbum();
-            }}
-          >
-            <input
-              autoFocus
-              value={photoAlbumTagInput}
-              placeholder="输入标签，可用空格、逗号、顿号分隔"
-              onChange={(event) => setPhotoAlbumTagInput(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Escape") setPhotoAlbumTagEditorAlbumId(null);
-              }}
-            />
-            <button className="primary-button" type="submit" disabled={!photoAlbumTagInput.trim()}>
-              添加
-            </button>
-          </form>
-
-          {photoAlbumTagMessage ? <div className="ai-empty-state">{photoAlbumTagMessage}</div> : null}
-        </section>
-      </div>
-    ) : null}
+    <PhotoAlbumTagDialog
+      album={photoAlbumTagEditorAlbum}
+      tags={photoAlbumTagEditorAlbum ? photoAlbumTags[photoAlbumTagEditorAlbum.id] ?? [] : []}
+      tagInput={photoAlbumTagInput}
+      message={photoAlbumTagMessage}
+      onClose={() => setPhotoAlbumTagEditorAlbumId(null)}
+      onAddTags={addTagsToPhotoAlbum}
+      onRemoveTag={removeTagFromPhotoAlbum}
+      onTagInputChange={setPhotoAlbumTagInput}
+    />
     {mediaRootLabelPrompt ? (
       <div className="modal-backdrop" role="presentation" onMouseDown={() => closeMediaRootLabelPrompt(null)}>
         <section
