@@ -378,11 +378,8 @@ import { PhotoAlbumTagDialog } from "./PhotoAlbumTagDialog";
 import type { PhotoAlbumViewFilter } from "./PhotoAlbumToolbar";
 import { PhotoDashboardSection } from "./PhotoDashboardSection";
 import { PhotoViewerSection } from "./PhotoViewerSection";
-import { PlaylistPagination } from "./PlaylistPagination";
-import { PlaylistTools } from "./PlaylistTools";
-import { PlaylistVideoList } from "./PlaylistVideoList";
+import { PlaylistPanel } from "./PlaylistPanel";
 import { PlayerControlBar } from "./PlayerControlBar";
-import { PlayerLibrarySearchSection } from "./PlayerLibrarySearchSection";
 import { PlayerStage } from "./PlayerStage";
 import { PlayerTopBar } from "./PlayerTopBar";
 import { RatingFilterCard } from "./RatingFilterCard";
@@ -7929,6 +7926,28 @@ export default function App() {
     "当前视频尚未探测播放兼容性。";
   const isCurrentHighEnergyMarkPending = pendingHighEnergyStart?.videoId === currentVideo?.id;
   const pendingHighEnergyStartTime = isCurrentHighEnergyMarkPending ? pendingHighEnergyStart?.time ?? null : null;
+  const playlistPanelAriaLabel = isDuplicatePlaylistActive
+    ? "重复视频列表"
+    : isRatingPlaylistActive
+      ? "评分视频列表"
+      : isPlaylistSeriesMode
+        ? "追番列表"
+        : "播放列表";
+  const playlistPanelTitle = isDuplicatePlaylistActive
+    ? `重复列表 · ${playlistVisibleCountLabel} 个视频 · ${activeDuplicateVideoGroups.length} 组`
+    : isRatingPlaylistActive
+      ? `评分列表 · ${playlistVisibleCountLabel} 个视频 · ${activeRatingPlaylistLabel}`
+      : modeFilteredVideos.length
+        ? playlistFilter === "favorites"
+          ? `${playlistVisibleCountLabel} / ${modeFilteredVideos.length} 个收藏`
+          : isPlaylistSeriesMode
+            ? `${playlistVisibleCountLabel} / ${modeFilteredVideos.length} 个视频`
+            : homeMediaMode === "all"
+              ? `${playlistVisibleCountLabel} 个视频`
+              : `${homeMediaModeLabel} · ${playlistVisibleCountLabel} 个视频`
+        : videos.length
+          ? `当前${homeMediaModeLabel}没有视频`
+          : "等待新增媒体库";
 
   return (
     <>
@@ -8368,124 +8387,110 @@ export default function App() {
       </section>
 
       {!isNonPlayerViewVisible && !isPrivacyMode && !isCinemaMode ? (
-      <aside className="playlist-panel" aria-label={isDuplicatePlaylistActive ? "重复视频列表" : isRatingPlaylistActive ? "评分视频列表" : isPlaylistSeriesMode ? "追番列表" : "播放列表"}>
-        <div className="playlist-header">
-          <div className="playlist-title-row">
-            <span>
-              {isDuplicatePlaylistActive
-                ? `重复列表 · ${playlistVisibleCountLabel} 个视频 · ${activeDuplicateVideoGroups.length} 组`
-                : isRatingPlaylistActive
-                  ? `评分列表 · ${playlistVisibleCountLabel} 个视频 · ${activeRatingPlaylistLabel}`
-                : modeFilteredVideos.length
-                ? playlistFilter === "favorites"
-                  ? `${playlistVisibleCountLabel} / ${modeFilteredVideos.length} 个收藏`
-                  : isPlaylistSeriesMode
-                    ? `${playlistVisibleCountLabel} / ${modeFilteredVideos.length} 个视频`
-                    : homeMediaMode === "all"
-                      ? `${playlistVisibleCountLabel} 个视频`
-                      : `${homeMediaModeLabel} · ${playlistVisibleCountLabel} 个视频`
-                : videos.length
-                  ? `当前${homeMediaModeLabel}没有视频`
-                  : "等待新增媒体库"}
-            </span>
-          </div>
-          <PlaylistTools
-            bangumiButtonTitle={bangumiButtonTitle}
-            canOpenBangumiSubject={canOpenBangumiSubject}
-            hasModeFilteredVideos={Boolean(modeFilteredVideos.length)}
-            hasVisibleVideos={Boolean(visibleVideos.length)}
-            homeMediaMode={homeMediaMode}
-            isBangumiLoading={activeBangumiMatch?.status === "loading"}
-            isCurrentVideoVisible={isCurrentVideoVisible}
-            isDuplicatePlaylistActive={isDuplicatePlaylistActive}
-            isPlaylistSeriesMode={isPlaylistSeriesMode}
-            isPlaylistSortReversed={isPlaylistSortReversed}
-            isRatingPlaylistActive={isRatingPlaylistActive}
-            isSeriesMenuOpen={isSeriesMenuOpen}
-            playerMediaModeLabel={playerMediaModeLabel}
-            playlistFilter={playlistFilter}
-            playlistScrollTop={playlistViewport.scrollTop}
-            playlistSortMode={playlistSortMode}
-            playlistSortOptions={playlistSortOptions}
-            selectedSeriesKey={selectedSeriesKey}
-            seriesOptions={seriesOptions}
-            onChangePlaylistFilter={(nextFilter) => {
-              setPlaylistPage(1);
-              setPlaylistFilter(nextFilter);
-            }}
-            onChangePlaylistSortMode={updatePlaylistSortMode}
-            onClearDuplicatePlaylist={() => {
-              setPlaylistPage(1);
-              setIsDuplicatePlaylistActive(false);
-            }}
-            onClearRatingPlaylist={() => {
-              setPlaylistPage(1);
-              setRatingPlaylistMode(null);
-            }}
-            onOpenBangumiSubject={openBangumiSubject}
-            onScrollPlaylistToCurrent={() => scrollToCurrentPlaylistItem()}
-            onScrollPlaylistToTop={() => scrollPlaylistToTop()}
-            onSelectSeries={updateSelectedSeries}
-            onTogglePlaylistSortDirection={togglePlaylistSortDirection}
-            onToggleSeriesMenu={() => setIsSeriesMenuOpen((isOpen) => !isOpen)}
-          />
-        </div>
-
-        <PlayerLibrarySearchSection
-          answer={playerLibrarySearchAnswer}
-          defaultStatus={defaultLibrarySearchStatus}
-          disabled={isLibrarySearchLoading || !playerLibrarySearchVideos.length}
-          emptyTarget={playerLibrarySearchEmptyTarget}
-          hasMoreResults={hasMorePlayerLibrarySearchResults}
-          inputValue={playerLibrarySearchQuery}
-          isEmpty={isPlayerLibrarySearchSurface && librarySearchMode === "empty"}
-          isLoading={isPlayerLibrarySearchLoading}
-          loadMoreRef={playerLibrarySearchLoadMoreRef}
-          placeholder={playerLibrarySearchPlaceholder}
-          previewResults={playerLibrarySearchPreviewItems}
-          results={visiblePlayerLibrarySearchItems}
-          resultsRef={playerLibrarySearchResultsRef}
-          searchMode={playerLibrarySearchMode}
-          shouldShowPreview={shouldShowPlayerLibrarySearchPreview}
-          shouldShowStatus={shouldShowPlayerLibrarySearchStatus}
-          statusMessage={playerLibrarySearchMessage}
-          totalCount={playerLibrarySearchResults.length}
-          visibleCount={visiblePlayerLibrarySearchResults.length}
-          onBlur={handleLibrarySearchBlur}
-          onFocus={() => setFocusedLibrarySearchSurface("player")}
-          onInputChange={setPlayerLibrarySearchQuery}
-          onLoadMore={loadMoreLibrarySearchResults}
-          onSubmit={() => void runLibrarySearch("player")}
-        />
-
-        <PlaylistVideoList
+        <PlaylistPanel
+          ariaLabel={playlistPanelAriaLabel}
+          bangumiButtonTitle={bangumiButtonTitle}
+          canOpenBangumiSubject={canOpenBangumiSubject}
           currentVideoId={currentVideoId}
+          defaultLibrarySearchStatus={defaultLibrarySearchStatus}
           duplicatePlaylistMetaByVideoId={duplicatePlaylistMetaByVideoId}
           favoriteVideoIds={favoriteVideoIds}
+          hasModeFilteredVideos={Boolean(modeFilteredVideos.length)}
+          hasMorePlayerLibrarySearchResults={hasMorePlayerLibrarySearchResults}
+          hasVisibleVideos={Boolean(visibleVideos.length)}
+          homeMediaMode={homeMediaMode}
           homeMediaModeLabel={homeMediaModeLabel}
+          isBangumiLoading={activeBangumiMatch?.status === "loading"}
+          isCurrentVideoVisible={isCurrentVideoVisible}
           isDuplicatePlaylistActive={isDuplicatePlaylistActive}
-          isRatingPlaylistActive={isRatingPlaylistActive}
+          isPlayerLibrarySearchEmpty={isPlayerLibrarySearchSurface && librarySearchMode === "empty"}
+          isPlayerLibrarySearchLoading={isPlayerLibrarySearchLoading}
           isPlaylistSeriesMode={isPlaylistSeriesMode}
+          isPlaylistSortReversed={isPlaylistSortReversed}
+          isRatingPlaylistActive={isRatingPlaylistActive}
+          isSeriesMenuOpen={isSeriesMenuOpen}
           isVideoDeletePending={isVideoDeletePending}
           message={message}
           modeFilteredVideoCount={modeFilteredVideos.length}
           pagedPlaylistVideos={pagedPlaylistVideos}
+          playerLibrarySearchAnswer={playerLibrarySearchAnswer}
+          playerLibrarySearchDisabled={isLibrarySearchLoading || !playerLibrarySearchVideos.length}
+          playerLibrarySearchEmptyTarget={playerLibrarySearchEmptyTarget}
+          playerLibrarySearchInput={playerLibrarySearchQuery}
+          playerLibrarySearchLoadMoreRef={playerLibrarySearchLoadMoreRef}
+          playerLibrarySearchPlaceholder={playerLibrarySearchPlaceholder}
+          playerLibrarySearchPreviewItems={playerLibrarySearchPreviewItems}
+          playerLibrarySearchResultsRef={playerLibrarySearchResultsRef}
+          playerLibrarySearchSearchMode={playerLibrarySearchMode}
+          playerLibrarySearchStatusMessage={playerLibrarySearchMessage}
+          playerLibrarySearchTotalCount={playerLibrarySearchResults.length}
+          playerMediaModeLabel={playerMediaModeLabel}
+          playlistFilter={playlistFilter}
           playlistIndexById={playlistIndexById}
+          playlistPageCount={playlistPageCount}
+          playlistPageEndLabel={playlistPageEndLabel}
+          playlistPageInput={playlistPageInput}
+          playlistPageSize={playlistPageSize}
+          playlistPageSizeOptions={playlistPageSizeSelectOptions}
+          playlistPageStartLabel={playlistPageStartLabel}
           playlistRef={playlistRef}
+          playlistScrollTop={playlistViewport.scrollTop}
+          playlistSortMode={playlistSortMode}
+          playlistSortOptions={playlistSortOptions}
+          playlistTitle={playlistPanelTitle}
           progressStore={progressStore}
+          selectedSeriesKey={selectedSeriesKey}
+          seriesOptions={seriesOptions}
           seriesTitleByVideoId={seriesTitleByVideoId}
+          shouldShowPlayerLibrarySearchPreview={shouldShowPlayerLibrarySearchPreview}
+          shouldShowPlayerLibrarySearchStatus={shouldShowPlayerLibrarySearchStatus}
           totalVideoCount={videos.length}
+          visiblePlayerLibrarySearchItems={visiblePlayerLibrarySearchItems}
+          visiblePlayerLibrarySearchResultCount={visiblePlayerLibrarySearchResults.length}
+          visiblePlaylistPage={visiblePlaylistPage}
+          visibleVideoCount={visibleVideos.length}
           videoComments={videoComments}
           videoRatings={videoRatings}
           videoTags={videoTags}
-          visibleVideoCount={visibleVideos.length}
           createVideoTitle={createVideoMetadataTitle}
-          onDelete={requestDeleteVideo}
+          onChangePlaylistFilter={(nextFilter) => {
+            setPlaylistPage(1);
+            setPlaylistFilter(nextFilter);
+          }}
+          onChangePlaylistSortMode={updatePlaylistSortMode}
+          onClearDuplicatePlaylist={() => {
+            setPlaylistPage(1);
+            setIsDuplicatePlaylistActive(false);
+          }}
+          onClearRatingPlaylist={() => {
+            setPlaylistPage(1);
+            setRatingPlaylistMode(null);
+          }}
+          onCommitPlaylistPageInput={() => {
+            commitPlaylistPageInput();
+            scrollPlaylistToTop("auto");
+          }}
+          onDeleteVideo={requestDeleteVideo}
           onFavoriteToggle={toggleFavorite}
+          onLibrarySearchBlur={handleLibrarySearchBlur}
+          onLibrarySearchFocus={() => setFocusedLibrarySearchSurface("player")}
+          onLibrarySearchInputChange={setPlayerLibrarySearchQuery}
+          onLibrarySearchLoadMore={loadMoreLibrarySearchResults}
+          onLibrarySearchSubmit={() => void runLibrarySearch("player")}
+          onOpenBangumiSubject={openBangumiSubject}
           onOpenRating={openVideoRatingDialog}
+          onPageInputChange={setPlaylistPageInput}
+          onPageSizeChange={updatePlaylistPageSize}
+          onRequestPage={(page) => {
+            syncPlaylistPageInput(page);
+            scrollPlaylistToTop("auto");
+          }}
           onResetProgress={resetVideoProgress}
-          onScroll={markPlaylistUserScroll}
-          onSelect={(selectedVideo, isActive) => {
+          onScrollPlaylist={markPlaylistUserScroll}
+          onScrollPlaylistToCurrent={() => scrollToCurrentPlaylistItem()}
+          onScrollPlaylistToTop={() => scrollPlaylistToTop()}
+          onSelectSeries={updateSelectedSeries}
+          onSelectVideo={(selectedVideo, isActive) => {
             if (isActive) return;
             if (isDuplicatePlaylistActive) {
               openDuplicateVideo(selectedVideo, { keepDuplicatePlaylist: true });
@@ -8498,28 +8503,9 @@ export default function App() {
             selectVideo(selectedVideo.id);
           }}
           onThumbnailError={(videoId) => setVideoThumbnailState(videoId, "failed")}
+          onTogglePlaylistSortDirection={togglePlaylistSortDirection}
+          onToggleSeriesMenu={() => setIsSeriesMenuOpen((isOpen) => !isOpen)}
         />
-        <PlaylistPagination
-          endLabel={playlistPageEndLabel}
-          page={visiblePlaylistPage}
-          pageCount={playlistPageCount}
-          pageInput={playlistPageInput}
-          pageSize={playlistPageSize}
-          pageSizeOptions={playlistPageSizeSelectOptions}
-          startLabel={playlistPageStartLabel}
-          total={visibleVideos.length}
-          onCommitPageInput={() => {
-            commitPlaylistPageInput();
-            scrollPlaylistToTop("auto");
-          }}
-          onPageInputChange={setPlaylistPageInput}
-          onPageSizeChange={updatePlaylistPageSize}
-          onRequestPage={(page) => {
-            syncPlaylistPageInput(page);
-            scrollPlaylistToTop("auto");
-          }}
-        />
-      </aside>
       ) : null}
     </main>
     <HighEnergyTagDialog
