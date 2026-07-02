@@ -4,12 +4,10 @@ import {
   Activity,
   BarChart3,
   CalendarDays,
-  CheckCircle2,
   Clock3,
   FolderOpen,
   EyeOff,
   HardDrive,
-  Heart,
   Images,
   Keyboard,
   LocateFixed,
@@ -405,7 +403,6 @@ import { ExistingMediaRootDialog, MediaRootLabelDialog, MediaRootLocalPathDialog
 import { LibrarySearchFormPreview } from "./LibrarySearchFormPreview";
 import { LibrarySearchResultsList } from "./LibrarySearchResultsList";
 import { LibrarySearchResultItem } from "./LibrarySearchResultItem";
-import { RatingChip, TagChips } from "./MetadataChips";
 import { PhotoAlbumCard } from "./PhotoAlbumCard";
 import { PhotoAlbumEmptyState } from "./PhotoAlbumEmptyState";
 import { PhotoAlbumPagination } from "./PhotoAlbumPagination";
@@ -419,6 +416,7 @@ import { PhotoViewerHeader } from "./PhotoViewerHeader";
 import { PhotoViewerStage } from "./PhotoViewerStage";
 import { PlaylistEmptyState } from "./PlaylistEmptyState";
 import { PlaylistFilterControl } from "./PlaylistFilterControl";
+import { PlaylistItemCard } from "./PlaylistItemCard";
 import { PlaylistPagination } from "./PlaylistPagination";
 import { RatingFilterCard } from "./RatingFilterCard";
 import { RatingDialog } from "./RatingDialog";
@@ -9151,105 +9149,39 @@ export default function App() {
             const rating = videoRatings[video.id];
             const ratingComment = videoComments[video.id];
             return (
-              <div
+              <PlaylistItemCard
                 key={video.id}
-                className={`playlist-item ${isActive ? "active" : ""}`}
-                data-video-id={video.id}
+                duplicateMeta={duplicateMeta}
+                hasProgress={Boolean(progress)}
+                isActive={isActive}
+                isCompleted={isCompleted}
+                isDeletePending={isVideoDeletePending}
+                isFavorite={isFavorite}
+                playlistIndex={playlistIndex}
+                rating={rating}
+                ratingComment={ratingComment}
+                seriesTitle={seriesTitle}
+                tags={tags}
                 title={createVideoMetadataTitle(video)}
-              >
-                <button
-                  className="playlist-select"
-                  type="button"
-                  onClick={() => {
+                video={video}
+                onDelete={requestDeleteVideo}
+                onFavoriteToggle={toggleFavorite}
+                onOpenRating={openVideoRatingDialog}
+                onResetProgress={resetVideoProgress}
+                onSelect={(selectedVideo) => {
                     if (isActive) return;
                     if (isDuplicatePlaylistActive) {
-                      openDuplicateVideo(video, { keepDuplicatePlaylist: true });
+                      openDuplicateVideo(selectedVideo, { keepDuplicatePlaylist: true });
                       return;
                     }
                     if (isRatingPlaylistActive) {
-                      selectVideo(video.id, { keepRatingPlaylist: true, syncSeriesMode: false });
+                      selectVideo(selectedVideo.id, { keepRatingPlaylist: true, syncSeriesMode: false });
                       return;
                     }
-                    selectVideo(video.id);
+                    selectVideo(selectedVideo.id);
                   }}
-                >
-                  <span className={`episode-thumbnail ${video.thumbnailUrl ? "has-image" : ""}`} aria-hidden="true">
-                    {video.thumbnailUrl ? (
-                      <img
-                        src={video.thumbnailUrl}
-                        alt=""
-                        draggable={false}
-                        onError={() => setVideoThumbnailState(video.id, "failed")}
-                      />
-                    ) : (
-                      <span>{String(playlistIndex + 1).padStart(2, "0")}</span>
-                    )}
-                  </span>
-                  <span className="episode-main">
-                    <strong>{video.name}</strong>
-                    <small>{video.relativePath}</small>
-                    {duplicateMeta ? (
-                      <small className={`episode-duplicate-meta severity-${duplicateMeta.severity}`}>
-                        第 {duplicateMeta.groupIndex} 组 · {duplicateMeta.severity === "duplicate" ? "高度重复" : "疑似重复"} · {duplicateMeta.groupSize} 个 · {duplicateMeta.reasons.join("、")}
-                      </small>
-                    ) : null}
-                    {seriesTitle ? <small className="episode-series">{seriesTitle}</small> : null}
-                    <TagChips tags={tags} compact />
-                    <RatingChip rating={rating} comment={ratingComment} />
-                    {isCompleted ? (
-                      <span className="episode-progress compact">
-                        <CheckCircle2 size={15} />
-                        已看完
-                      </span>
-                    ) : null}
-                  </span>
-                </button>
-                {isCompleted ? (
-                  <span className="episode-progress">
-                    <CheckCircle2 size={15} />
-                    已看完
-                  </span>
-                ) : null}
-                <span className="episode-actions">
-                  <button
-                    className={`episode-action-button favorite ${isFavorite ? "active" : ""}`}
-                    type="button"
-                    onClick={() => toggleFavorite(video)}
-                    title={isFavorite ? "取消收藏" : "收藏/稍后看"}
-                    aria-label={isFavorite ? "取消收藏" : "收藏/稍后看"}
-                  >
-                    <Heart size={15} fill={isFavorite ? "currentColor" : "none"} />
-                  </button>
-                  <button
-                    className={`episode-action-button rating ${typeof rating === "number" ? "active" : ""}`}
-                    type="button"
-                    onClick={() => openVideoRatingDialog(video)}
-                    title={typeof rating === "number" ? `当前评分 ${rating}/10` : "给视频评分"}
-                    aria-label="给视频评分"
-                  >
-                    <Star size={15} fill={typeof rating === "number" ? "currentColor" : "none"} />
-                  </button>
-                  <button
-                    className="episode-action-button"
-                    type="button"
-                    onClick={() => resetVideoProgress(video)}
-                    disabled={!progressStore[video.id]}
-                    title="清除进度"
-                  >
-                    <RotateCcw size={15} />
-                  </button>
-                  <button
-                    className="episode-action-button danger"
-                    type="button"
-                    onClick={() => requestDeleteVideo(video)}
-                    disabled={isVideoDeletePending}
-                    title="删除磁盘文件"
-                    aria-label="删除磁盘文件"
-                  >
-                    <Trash2 size={15} />
-                  </button>
-                </span>
-              </div>
+                onThumbnailError={(videoId) => setVideoThumbnailState(videoId, "failed")}
+              />
             );
           })}
           <PlaylistEmptyState

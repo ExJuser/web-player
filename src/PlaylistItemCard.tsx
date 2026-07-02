@@ -1,0 +1,139 @@
+import { CheckCircle2, Heart, RotateCcw, Star, Trash2 } from "lucide-react";
+
+import { RatingChip, TagChips } from "./MetadataChips";
+import type { VideoItem } from "./playerTypes";
+import type { DuplicatePlaylistVideoMeta } from "./playerUiState";
+
+type PlaylistItemCardProps = {
+  duplicateMeta?: DuplicatePlaylistVideoMeta | null;
+  hasProgress: boolean;
+  isActive: boolean;
+  isCompleted: boolean;
+  isDeletePending: boolean;
+  isFavorite: boolean;
+  playlistIndex: number;
+  rating?: number;
+  ratingComment?: string;
+  seriesTitle?: string;
+  tags: string[];
+  title: string;
+  video: VideoItem;
+  onDelete: (video: VideoItem) => void;
+  onFavoriteToggle: (video: VideoItem) => void;
+  onOpenRating: (video: VideoItem) => void;
+  onResetProgress: (video: VideoItem) => void;
+  onSelect: (video: VideoItem) => void;
+  onThumbnailError: (videoId: string) => void;
+};
+
+export function PlaylistItemCard({
+  duplicateMeta,
+  hasProgress,
+  isActive,
+  isCompleted,
+  isDeletePending,
+  isFavorite,
+  playlistIndex,
+  rating,
+  ratingComment,
+  seriesTitle,
+  tags,
+  title,
+  video,
+  onDelete,
+  onFavoriteToggle,
+  onOpenRating,
+  onResetProgress,
+  onSelect,
+  onThumbnailError,
+}: PlaylistItemCardProps) {
+  return (
+    <div
+      className={`playlist-item ${isActive ? "active" : ""}`}
+      data-video-id={video.id}
+      title={title}
+    >
+      <button
+        className="playlist-select"
+        type="button"
+        onClick={() => onSelect(video)}
+      >
+        <span className={`episode-thumbnail ${video.thumbnailUrl ? "has-image" : ""}`} aria-hidden="true">
+          {video.thumbnailUrl ? (
+            <img
+              src={video.thumbnailUrl}
+              alt=""
+              draggable={false}
+              onError={() => onThumbnailError(video.id)}
+            />
+          ) : (
+            <span>{String(playlistIndex + 1).padStart(2, "0")}</span>
+          )}
+        </span>
+        <span className="episode-main">
+          <strong>{video.name}</strong>
+          <small>{video.relativePath}</small>
+          {duplicateMeta ? (
+            <small className={`episode-duplicate-meta severity-${duplicateMeta.severity}`}>
+              第 {duplicateMeta.groupIndex} 组 · {duplicateMeta.severity === "duplicate" ? "高度重复" : "疑似重复"} · {duplicateMeta.groupSize} 个 · {duplicateMeta.reasons.join("、")}
+            </small>
+          ) : null}
+          {seriesTitle ? <small className="episode-series">{seriesTitle}</small> : null}
+          <TagChips tags={tags} compact />
+          <RatingChip rating={rating} comment={ratingComment} />
+          {isCompleted ? (
+            <span className="episode-progress compact">
+              <CheckCircle2 size={15} />
+              已看完
+            </span>
+          ) : null}
+        </span>
+      </button>
+      {isCompleted ? (
+        <span className="episode-progress">
+          <CheckCircle2 size={15} />
+          已看完
+        </span>
+      ) : null}
+      <span className="episode-actions">
+        <button
+          className={`episode-action-button favorite ${isFavorite ? "active" : ""}`}
+          type="button"
+          onClick={() => onFavoriteToggle(video)}
+          title={isFavorite ? "取消收藏" : "收藏/稍后看"}
+          aria-label={isFavorite ? "取消收藏" : "收藏/稍后看"}
+        >
+          <Heart size={15} fill={isFavorite ? "currentColor" : "none"} />
+        </button>
+        <button
+          className={`episode-action-button rating ${typeof rating === "number" ? "active" : ""}`}
+          type="button"
+          onClick={() => onOpenRating(video)}
+          title={typeof rating === "number" ? `当前评分 ${rating}/10` : "给视频评分"}
+          aria-label="给视频评分"
+        >
+          <Star size={15} fill={typeof rating === "number" ? "currentColor" : "none"} />
+        </button>
+        <button
+          className="episode-action-button"
+          type="button"
+          onClick={() => onResetProgress(video)}
+          disabled={!hasProgress}
+          title="清除进度"
+        >
+          <RotateCcw size={15} />
+        </button>
+        <button
+          className="episode-action-button danger"
+          type="button"
+          onClick={() => onDelete(video)}
+          disabled={isDeletePending}
+          title="删除磁盘文件"
+          aria-label="删除磁盘文件"
+        >
+          <Trash2 size={15} />
+        </button>
+      </span>
+    </div>
+  );
+}
