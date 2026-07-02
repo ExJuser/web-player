@@ -412,6 +412,7 @@ import { PhotoAlbumTagDialog } from "./PhotoAlbumTagDialog";
 import { RatingDialog } from "./RatingDialog";
 import { ShortcutDialog } from "./ShortcutDialog";
 import { TagDialog } from "./TagDialog";
+import { WatchActivityMonth, WatchActivityTagButton } from "./WatchActivityCalendar";
 
 type PhotoAlbumViewFilter = "all" | "favorites";
 
@@ -7899,89 +7900,33 @@ export default function App() {
       </div>
     );
   };
-  const renderWatchActivityDay = (day: typeof watchActivityInsights.days[number]) => {
-    const metricValue = getWatchActivityMetricValue(day, watchActivityMetric);
-    const share = watchActivityInsights.maxMetricValue > 0 ? metricValue / watchActivityInsights.maxMetricValue : 0;
-    const level = metricValue > 0 ? Math.max(0.18, share) : 0;
-    const isSelected = selectedWatchActivityDay?.date === day.date;
-    const carouselCards = watchActivityCarouselCardsByDate.get(day.date) ?? [];
-    const carouselCount = carouselCards.length;
-    const carouselActiveIndex = carouselCount ? (watchActivityCarouselTick + Number(day.date.slice(-2))) % carouselCount : 0;
-    return (
-      <button
-        className={`watch-activity-day ${carouselCount ? "has-carousel" : ""} ${isSelected ? "active" : ""}`}
-        key={day.date}
-        type="button"
-        onClick={() => setSelectedWatchActivityDate(day.date)}
-        style={{ "--activity-level": level } as CSSProperties}
-        title={`${formatWatchActivityDate(day.date)}：${formatWatchActivityMetric(metricValue, watchActivityMetric)}`}
-        aria-label={`${formatWatchActivityDate(day.date)}，${formatWatchActivityMetric(metricValue, watchActivityMetric)}`}
-      >
-        {carouselCount ? (
-          <span className="watch-activity-day-carousel" aria-hidden="true">
-            {carouselCards.map((card, index) => (
-              <span
-                className={`watch-activity-day-slide ${index === carouselActiveIndex ? "active" : ""} ${card.video.thumbnailUrl ? "has-image" : ""}`}
-                key={card.video.id}
-              >
-                {card.video.thumbnailUrl ? (
-                  <img
-                    src={card.video.thumbnailUrl}
-                    alt=""
-                    draggable={false}
-                    onError={() => setVideoThumbnailState(card.video.id, "failed")}
-                  />
-                ) : null}
-              </span>
-            ))}
-          </span>
-        ) : null}
-        <span className="watch-activity-day-number">{Number(day.date.slice(-2))}</span>
-      </button>
-    );
-  };
   const renderWatchActivityMonth = (month: typeof watchActivityMonthGroups[number]) => (
-    <section className="watch-activity-month" key={month.key} aria-label={`${month.label}观看分布`}>
-      <div className="watch-activity-month-header">
-        <strong>{month.label}</strong>
-        <span>{month.activeDays} 个活跃日</span>
-      </div>
-      <div className="watch-activity-weekdays" aria-hidden="true">
-        {watchActivityWeekdayLabels.map((label) => (
-          <span key={`${month.key}-${label}`}>{label}</span>
-        ))}
-      </div>
-      <div className="watch-activity-month-days" role="list">
-        {Array.from({ length: month.leadingEmptyDays }).map((_, index) => (
-          <span className="watch-activity-day-placeholder" key={`${month.key}-empty-${index}`} aria-hidden="true" />
-        ))}
-        {month.days.map(renderWatchActivityDay)}
-      </div>
-    </section>
+    <WatchActivityMonth
+      carouselCardsByDate={watchActivityCarouselCardsByDate}
+      carouselTick={watchActivityCarouselTick}
+      formatDate={formatWatchActivityDate}
+      formatMetric={formatWatchActivityMetric}
+      getMetricValue={getWatchActivityMetricValue}
+      key={month.key}
+      maxMetricValue={watchActivityInsights.maxMetricValue}
+      metric={watchActivityMetric}
+      month={month}
+      onSelectDate={setSelectedWatchActivityDate}
+      onThumbnailError={markVideoThumbnailFailed}
+      selectedDate={selectedWatchActivityDay?.date}
+      weekdayLabels={watchActivityWeekdayLabels}
+    />
   );
-  const renderWatchActivityTagInsight = (insight: WatchActivityTagInsight, index: number) => {
-    const metricValue =
-      watchActivityMetric === "plays"
-        ? insight.playCount
-        : watchActivityMetric === "completed"
-          ? insight.completedCount
-          : watchActivityMetric === "emission"
-            ? insight.emissionCount
-            : insight.watchedSeconds;
-    return (
-      <button
-        className="watch-activity-tag"
-        key={insight.key}
-        type="button"
-        onClick={() => runSpecialInsightTagSearch(insight.tag)}
-        title={`筛选标签：${insight.tag}`}
-      >
-        <span>{index + 1}</span>
-        <strong>{insight.tag}</strong>
-        <small>{formatWatchActivityMetric(metricValue, watchActivityMetric)}</small>
-      </button>
-    );
-  };
+  const renderWatchActivityTagInsight = (insight: WatchActivityTagInsight, index: number) => (
+    <WatchActivityTagButton
+      formatMetric={formatWatchActivityMetric}
+      index={index}
+      insight={insight}
+      key={insight.key}
+      metric={watchActivityMetric}
+      onSelectTag={runSpecialInsightTagSearch}
+    />
+  );
   const renderHomeListCard = (card: HomeVideoCard, index: number) => (
     <HomeListCard
       card={card}
