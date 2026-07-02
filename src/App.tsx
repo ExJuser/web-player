@@ -413,14 +413,13 @@ import { PhotoAlbumCard } from "./PhotoAlbumCard";
 import { PhotoAlbumSearchRow } from "./PhotoAlbumSearchRow";
 import { PhotoAlbumStats } from "./PhotoAlbumStats";
 import { PhotoAlbumTagDialog } from "./PhotoAlbumTagDialog";
+import { PhotoAlbumToolbar, type PhotoAlbumViewFilter } from "./PhotoAlbumToolbar";
 import { RatingFilterCard } from "./RatingFilterCard";
 import { RatingDialog } from "./RatingDialog";
 import { ShortcutDialog } from "./ShortcutDialog";
 import { SpecialInsightsCard } from "./SpecialInsightsCard";
 import { TagDialog } from "./TagDialog";
 import { WatchActivityMonth, WatchActivityTagButton } from "./WatchActivityCalendar";
-
-type PhotoAlbumViewFilter = "all" | "favorites";
 
 type LibrarySearchMode = "idle" | "local" | "ai" | "empty";
 type LibrarySearchSurface = "home" | "player";
@@ -8392,42 +8391,16 @@ export default function App() {
 
         {isPhotoAlbumViewVisible && activeView === "photos" ? (
           <section className="photo-dashboard" aria-label="看图">
-            <section className="photo-toolbar home-section">
-              <div>
-                <h2>本地相册</h2>
-                <p>{photoAlbumMessage}</p>
-              </div>
-              <div className="photo-toolbar-actions">
-                <div className="playlist-filter" role="group" aria-label="看图筛选">
-                  <button
-                    type="button"
-                    className={photoAlbumFilter === "all" ? "active" : ""}
-                    onClick={() => updatePhotoAlbumFilter("all")}
-                  >
-                    全部
-                  </button>
-                  <button
-                    type="button"
-                    className={photoAlbumFilter === "favorites" ? "active" : ""}
-                    onClick={() => updatePhotoAlbumFilter("favorites")}
-                  >
-                    收藏
-                  </button>
-                </div>
-                <ControlSelect
-                  label="排序"
-                  ariaLabel="看图排序"
-                  value={photoAlbumSortMode}
-                  options={photoAlbumSortOptions}
-                  onChange={updatePhotoAlbumSortMode}
-                  className="photo-sort-control"
-                />
-                <button className="secondary-button" type="button" onClick={() => void refreshPhotoAlbumDirectory()} disabled={isPhotoAlbumsLoading}>
-                  <RefreshCw size={16} className={isPhotoAlbumsLoading ? "spin-icon" : undefined} />
-                  {isPhotoAlbumsLoading ? "扫描中" : "刷新"}
-                </button>
-              </div>
-            </section>
+            <PhotoAlbumToolbar
+              filter={photoAlbumFilter}
+              isLoading={isPhotoAlbumsLoading}
+              message={photoAlbumMessage}
+              sortMode={photoAlbumSortMode}
+              sortOptions={photoAlbumSortOptions}
+              onFilterChange={updatePhotoAlbumFilter}
+              onRefresh={() => void refreshPhotoAlbumDirectory()}
+              onSortModeChange={updatePhotoAlbumSortMode}
+            />
 
             <PhotoAlbumSearchRow
               query={photoAlbumSearchQuery}
