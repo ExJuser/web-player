@@ -401,6 +401,7 @@ import { PlaylistItemCard } from "./PlaylistItemCard";
 import { PlaylistPagination } from "./PlaylistPagination";
 import { PlaylistTools } from "./PlaylistTools";
 import { PlayerDanmakuLayer } from "./PlayerDanmakuLayer";
+import { PlayerFeedbackOverlays } from "./PlayerFeedbackOverlays";
 import { PlayerHighlightControls } from "./PlayerHighlightControls";
 import { PlayerLibrarySearchSection } from "./PlayerLibrarySearchSection";
 import { PlayerMediaActionControls } from "./PlayerMediaActionControls";
@@ -410,6 +411,7 @@ import { PlayerTimelineControls } from "./PlayerTimelineControls";
 import { PlayerViewControls } from "./PlayerViewControls";
 import { RatingFilterCard } from "./RatingFilterCard";
 import { RatingDialog } from "./RatingDialog";
+import { RocketLaunchEffect } from "./RocketLaunchEffect";
 import { ShortcutDialog } from "./ShortcutDialog";
 import { SpecialInsightsCard } from "./SpecialInsightsCard";
 import { SpecialStatsControl } from "./SpecialStatsControl";
@@ -8507,22 +8509,7 @@ export default function App() {
               />
             ) : null}
 
-            {launchEffectKey ? (
-              <div key={launchEffectKey} className="rocket-launch-effect" aria-hidden="true">
-                <div className="rocket-launch-effect__sky">
-                  <span className="rocket-launch-effect__star star-one" />
-                  <span className="rocket-launch-effect__star star-two" />
-                  <span className="rocket-launch-effect__star star-three" />
-                </div>
-                <div className="rocket-launch-effect__rocket">
-                  <Rocket size={58} strokeWidth={2.2} />
-                </div>
-                <div className="rocket-launch-effect__flame" />
-                <div className="rocket-launch-effect__smoke smoke-one" />
-                <div className="rocket-launch-effect__smoke smoke-two" />
-                <div className="rocket-launch-effect__smoke smoke-three" />
-              </div>
-            ) : null}
+            {launchEffectKey ? <RocketLaunchEffect effectKey={launchEffectKey} /> : null}
 
             {currentVideo ? (
               <>
@@ -8539,17 +8526,7 @@ export default function App() {
             ) : null}
           </div>
 
-          {doubleClickFeedback ? (
-            <div className={`double-click-feedback ${doubleClickFeedback.side}`} aria-live="polite">
-              {doubleClickFeedback.text}
-            </div>
-          ) : null}
-
-          {playerOverlayFeedback ? (
-            <div className="player-overlay-feedback" aria-live="polite">
-              {playerOverlayFeedback}
-            </div>
-          ) : null}
+          <PlayerFeedbackOverlays doubleClickFeedback={doubleClickFeedback} playerOverlayFeedback={playerOverlayFeedback} />
 
           {autoNextPrompt ? (
             <AutoNextPromptCard prompt={autoNextPrompt} onCancel={cancelAutoNextPrompt} onConfirm={confirmAutoNext} />
