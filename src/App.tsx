@@ -402,6 +402,7 @@ import { HomeRecapCard } from "./HomeRecapCard";
 import { HomeCardThumbnail, HomeListCard } from "./HomeVideoCards";
 import { ExistingMediaRootDialog, MediaRootLabelDialog, MediaRootLocalPathDialogView } from "./MediaRootPromptDialogs";
 import { LibrarySearchFormPreview } from "./LibrarySearchFormPreview";
+import { LibrarySearchResultsList } from "./LibrarySearchResultsList";
 import { LibrarySearchResultItem } from "./LibrarySearchResultItem";
 import { RatingChip, TagChips } from "./MetadataChips";
 import { PhotoAlbumCard } from "./PhotoAlbumCard";
@@ -8325,23 +8326,17 @@ export default function App() {
                   </div>
                 ) : null}
                 {homeLibrarySearchAnswer ? <div className="library-search-answer">{homeLibrarySearchAnswer}</div> : null}
-                {homeLibrarySearchResults.length ? (
-                  <div className="home-compact-list library-search-results" ref={librarySearchResultsRef}>
-                    {visibleHomeLibrarySearchResults.map(renderLibrarySearchResult)}
-                    {hasMoreHomeLibrarySearchResults ? (
-                      <div className="library-search-load-more" ref={librarySearchLoadMoreRef}>
-                        <span>
-                          已显示 {visibleHomeLibrarySearchResults.length} / {homeLibrarySearchResults.length}
-                        </span>
-                        <button type="button" onClick={loadMoreLibrarySearchResults}>
-                          加载更多
-                        </button>
-                      </div>
-                    ) : null}
-                  </div>
-                ) : isHomeLibrarySearchSurface && librarySearchMode === "empty" ? (
-                  <div className="empty-list compact">没有找到匹配{homeLibrarySearchEmptyTarget}</div>
-                ) : null}
+                <LibrarySearchResultsList
+                  emptyTarget={homeLibrarySearchEmptyTarget}
+                  hasMoreResults={hasMoreHomeLibrarySearchResults}
+                  isEmpty={isHomeLibrarySearchSurface && librarySearchMode === "empty"}
+                  loadMoreRef={librarySearchLoadMoreRef}
+                  results={visibleHomeLibrarySearchResults.map(renderLibrarySearchResult)}
+                  resultsRef={librarySearchResultsRef}
+                  totalCount={homeLibrarySearchResults.length}
+                  visibleCount={visibleHomeLibrarySearchResults.length}
+                  onLoadMore={loadMoreLibrarySearchResults}
+                />
               </section>
 
               <DuplicateVideoSummaryCard
@@ -9132,23 +9127,18 @@ export default function App() {
             </div>
           ) : null}
           {playerLibrarySearchAnswer ? <div className="library-search-answer player-library-search-answer">{playerLibrarySearchAnswer}</div> : null}
-          {playerLibrarySearchResults.length ? (
-            <div className="home-compact-list library-search-results player-library-search-results" ref={playerLibrarySearchResultsRef}>
-              {visiblePlayerLibrarySearchResults.map(renderLibrarySearchResult)}
-              {hasMorePlayerLibrarySearchResults ? (
-                <div className="library-search-load-more" ref={playerLibrarySearchLoadMoreRef}>
-                  <span>
-                    已显示 {visiblePlayerLibrarySearchResults.length} / {playerLibrarySearchResults.length}
-                  </span>
-                  <button type="button" onClick={loadMoreLibrarySearchResults}>
-                    加载更多
-                  </button>
-                </div>
-              ) : null}
-            </div>
-          ) : isPlayerLibrarySearchSurface && librarySearchMode === "empty" ? (
-            <div className="empty-list compact">没有找到匹配{playerLibrarySearchEmptyTarget}</div>
-          ) : null}
+          <LibrarySearchResultsList
+            className="player-library-search-results"
+            emptyTarget={playerLibrarySearchEmptyTarget}
+            hasMoreResults={hasMorePlayerLibrarySearchResults}
+            isEmpty={isPlayerLibrarySearchSurface && librarySearchMode === "empty"}
+            loadMoreRef={playerLibrarySearchLoadMoreRef}
+            results={visiblePlayerLibrarySearchResults.map(renderLibrarySearchResult)}
+            resultsRef={playerLibrarySearchResultsRef}
+            totalCount={playerLibrarySearchResults.length}
+            visibleCount={visiblePlayerLibrarySearchResults.length}
+            onLoadMore={loadMoreLibrarySearchResults}
+          />
         </section>
 
         <div
