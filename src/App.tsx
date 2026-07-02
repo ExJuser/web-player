@@ -21,7 +21,6 @@ import {
   RotateCcw,
   RotateCw,
   Rocket,
-  Search,
   ShieldCheck,
   SkipForward,
   Star,
@@ -402,6 +401,7 @@ import { HomeModeCard } from "./HomeModeCard";
 import { HomeRecapCard } from "./HomeRecapCard";
 import { HomeCardThumbnail, HomeListCard } from "./HomeVideoCards";
 import { ExistingMediaRootDialog, MediaRootLabelDialog, MediaRootLocalPathDialogView } from "./MediaRootPromptDialogs";
+import { LibrarySearchFormPreview } from "./LibrarySearchFormPreview";
 import { LibrarySearchResultItem } from "./LibrarySearchResultItem";
 import { RatingChip, TagChips } from "./MetadataChips";
 import { PhotoAlbumCard } from "./PhotoAlbumCard";
@@ -8306,44 +8306,19 @@ export default function App() {
                   <h2>片库搜索</h2>
                   <span>{homeMediaMode === "special" ? "本地筛选" : homeLibrarySearchMode === "ai" ? "AI 辅助" : "本地优先"}</span>
                 </div>
-                <div
-                  className="library-search-popover-root"
-                  onFocus={() => setFocusedLibrarySearchSurface("home")}
+                <LibrarySearchFormPreview
+                  ariaLabel="片库搜索"
+                  disabled={isLibrarySearchLoading || !homeLibrarySearchVideos.length}
+                  inputValue={homeLibrarySearchQuery}
+                  placeholder={homeLibrarySearchPlaceholder}
+                  previewHint="仅本地匹配，不调用 AI"
+                  previewResults={homeLibrarySearchPreviewResults.length ? homeLibrarySearchPreviewResults.map(renderLibrarySearchResult) : null}
+                  showPreview={shouldShowHomeLibrarySearchPreview}
                   onBlur={handleLibrarySearchBlur}
-                >
-                  <form
-                    className="library-search-form"
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      void runLibrarySearch("home");
-                    }}
-                  >
-                    <input
-                      type="search"
-                      value={homeLibrarySearchQuery}
-                      onChange={(event) => setHomeLibrarySearchQuery(event.target.value)}
-                      placeholder={homeLibrarySearchPlaceholder}
-                      aria-label="片库搜索"
-                      disabled={isLibrarySearchLoading || !homeLibrarySearchVideos.length}
-                    />
-                    <Search className="library-search-input-icon" size={17} aria-hidden="true" />
-                  </form>
-                  {shouldShowHomeLibrarySearchPreview ? (
-                    <div className="library-search-preview">
-                      <div className="library-search-preview-header">
-                        <span>搜索预览</span>
-                        <small>仅本地匹配，不调用 AI</small>
-                      </div>
-                      {homeLibrarySearchPreviewResults.length ? (
-                        <div className="home-compact-list library-search-preview-results">
-                          {homeLibrarySearchPreviewResults.map(renderLibrarySearchResult)}
-                        </div>
-                      ) : (
-                        <div className="empty-list compact">本地预览暂无命中</div>
-                      )}
-                    </div>
-                  ) : null}
-                </div>
+                  onFocus={() => setFocusedLibrarySearchSurface("home")}
+                  onInputChange={setHomeLibrarySearchQuery}
+                  onSubmit={() => void runLibrarySearch("home")}
+                />
                 {shouldShowHomeLibrarySearchStatus ? (
                   <div className={`library-search-status ${homeLibrarySearchMode}`}>
                     {isHomeLibrarySearchLoading ? "搜索中..." : homeLibrarySearchMessage || defaultLibrarySearchStatus}
@@ -9135,44 +9110,22 @@ export default function App() {
         </div>
 
         <section className="player-library-search library-search-card" aria-label="播放器片库搜索">
-          <div
-            className="library-search-popover-root"
-            onFocus={() => setFocusedLibrarySearchSurface("player")}
+          <LibrarySearchFormPreview
+            ariaLabel="播放器片库搜索"
+            disabled={isLibrarySearchLoading || !playerLibrarySearchVideos.length}
+            formClassName="player-library-search-form"
+            inputValue={playerLibrarySearchQuery}
+            placeholder={playerLibrarySearchPlaceholder}
+            previewClassName="player-library-search-preview"
+            previewHint="仅本地匹配"
+            previewResults={playerLibrarySearchPreviewResults.length ? playerLibrarySearchPreviewResults.map(renderLibrarySearchResult) : null}
+            previewResultsClassName="player-library-search-preview-results"
+            showPreview={shouldShowPlayerLibrarySearchPreview}
             onBlur={handleLibrarySearchBlur}
-          >
-            <form
-              className="library-search-form player-library-search-form"
-              onSubmit={(event) => {
-                event.preventDefault();
-                void runLibrarySearch("player");
-              }}
-            >
-              <input
-                type="search"
-                value={playerLibrarySearchQuery}
-                onChange={(event) => setPlayerLibrarySearchQuery(event.target.value)}
-                placeholder={playerLibrarySearchPlaceholder}
-                aria-label="播放器片库搜索"
-                disabled={isLibrarySearchLoading || !playerLibrarySearchVideos.length}
-              />
-              <Search className="library-search-input-icon" size={17} aria-hidden="true" />
-            </form>
-            {shouldShowPlayerLibrarySearchPreview ? (
-              <div className="library-search-preview player-library-search-preview">
-                <div className="library-search-preview-header">
-                  <span>搜索预览</span>
-                  <small>仅本地匹配</small>
-                </div>
-                {playerLibrarySearchPreviewResults.length ? (
-                  <div className="home-compact-list library-search-preview-results player-library-search-preview-results">
-                    {playerLibrarySearchPreviewResults.map(renderLibrarySearchResult)}
-                  </div>
-                ) : (
-                  <div className="empty-list compact">本地预览暂无命中</div>
-                )}
-              </div>
-            ) : null}
-          </div>
+            onFocus={() => setFocusedLibrarySearchSurface("player")}
+            onInputChange={setPlayerLibrarySearchQuery}
+            onSubmit={() => void runLibrarySearch("player")}
+          />
           {shouldShowPlayerLibrarySearchStatus ? (
             <div className={`library-search-status player-library-search-status ${playerLibrarySearchMode}`}>
               {isPlayerLibrarySearchLoading ? "搜索中..." : playerLibrarySearchMessage || defaultLibrarySearchStatus}
