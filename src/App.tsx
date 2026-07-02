@@ -405,6 +405,7 @@ import { DeleteConfirmDialog } from "./DeleteConfirmDialog";
 import { EmbeddedSubtitleDialog } from "./EmbeddedSubtitleDialog";
 import { FolderAccessDialog } from "./FolderAccessDialog";
 import { HighEnergyTagDialog, type HighEnergyTagPrompt } from "./HighEnergyTagDialog";
+import { HomeCardThumbnail, HomeListCard } from "./HomeVideoCards";
 import { ExistingMediaRootDialog, MediaRootLabelDialog, MediaRootLocalPathDialogView } from "./MediaRootPromptDialogs";
 import { RatingChip, TagChips } from "./MetadataChips";
 import { PhotoAlbumTagDialog } from "./PhotoAlbumTagDialog";
@@ -7781,20 +7782,7 @@ export default function App() {
   const progressPercent = duration ? Math.min(100, (currentTime / duration) * 100) : 0;
   const primaryHomeTitle = primaryResumeCard ? "继续观看" : modeFilteredVideos.length ? "开始观看" : "准备播放";
   const primaryHomeAction = primaryResumeCard ? "继续播放" : "播放第一个视频";
-  const homeCardThumbnail = (card: HomeVideoCard, fallbackIndex?: number) => (
-    <span className={`home-card-thumbnail ${card.video.thumbnailUrl ? "has-image" : ""}`} aria-hidden="true">
-      {card.video.thumbnailUrl ? (
-        <img
-          src={card.video.thumbnailUrl}
-          alt=""
-          draggable={false}
-          onError={() => setVideoThumbnailState(card.video.id, "failed")}
-        />
-      ) : (
-        <span>{typeof fallbackIndex === "number" ? String(fallbackIndex + 1).padStart(2, "0") : <Play size={24} />}</span>
-      )}
-    </span>
-  );
+  const markVideoThumbnailFailed = (videoId: string) => setVideoThumbnailState(videoId, "failed");
   const specialInsightTabOptions: Array<{ value: SpecialInsightTab; label: string; icon: React.ReactNode }> = [
     { value: "played", label: "播放最久", icon: <Clock3 size={14} /> },
     { value: "count", label: "次数最多", icon: <BarChart3 size={14} /> },
@@ -7995,21 +7983,15 @@ export default function App() {
     );
   };
   const renderHomeListCard = (card: HomeVideoCard, index: number) => (
-    <button
+    <HomeListCard
+      card={card}
+      index={index}
       key={card.video.id}
-      className="home-list-card"
-      type="button"
-      onClick={() => openVideoFromHome(card.video)}
       title={createVideoMetadataTitle(card.video)}
-    >
-      {homeCardThumbnail(card, index)}
-      <span className="home-list-copy">
-        <strong>{card.video.name}</strong>
-        <small>{formatHomeMeta(card)}</small>
-        <TagChips tags={card.tags ?? []} limit={10} compact />
-        <RatingChip rating={card.rating} comment={card.ratingComment} />
-      </span>
-    </button>
+      meta={formatHomeMeta(card)}
+      onOpen={openVideoFromHome}
+      onThumbnailError={markVideoThumbnailFailed}
+    />
   );
   const renderLibrarySearchResult = (result: LibrarySearchResult) => {
     if (result.kind === "video") {
@@ -8283,7 +8265,7 @@ export default function App() {
               <section className={`home-resume-card ${primaryHomeCard ? "" : "empty"}`}>
                 {primaryHomeCard ? (
                   <>
-                    {homeCardThumbnail(primaryHomeCard)}
+                    <HomeCardThumbnail card={primaryHomeCard} onThumbnailError={markVideoThumbnailFailed} />
                     <div className="home-resume-copy">
                       <span className="home-section-eyebrow">{primaryHomeTitle}</span>
                       <h2>{primaryHomeCard.video.name}</h2>
@@ -8336,7 +8318,7 @@ export default function App() {
                     <span>{nextEpisodeCard.seriesTitle}</span>
                   </div>
                   <div className="home-next-card">
-                    {homeCardThumbnail(nextEpisodeCard)}
+                    <HomeCardThumbnail card={nextEpisodeCard} onThumbnailError={markVideoThumbnailFailed} />
                     <div>
                       <strong>{nextEpisodeCard.video.name}</strong>
                       <small>{nextEpisodeCard.mediaRootLabel} · {nextEpisodeCard.video.relativePath}</small>
@@ -8442,7 +8424,7 @@ export default function App() {
                               onClick={() => openVideoFromHome(card.video)}
                               title={card.video.relativePath || card.video.name}
                             >
-                              {homeCardThumbnail(card, index)}
+                              <HomeCardThumbnail card={card} fallbackIndex={index} onThumbnailError={markVideoThumbnailFailed} />
                               <span>
                                 <strong>{card.video.name}</strong>
                                 <small>{label}</small>
