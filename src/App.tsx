@@ -6,8 +6,6 @@ import {
   CalendarDays,
   CheckCircle2,
   ChevronDown,
-  ChevronLeft,
-  ChevronRight,
   Clock3,
   ExternalLink,
   FolderOpen,
@@ -418,6 +416,8 @@ import { PhotoRootStatusCard } from "./PhotoRootStatusCard";
 import { PhotoViewerFilmstrip } from "./PhotoViewerFilmstrip";
 import { PhotoViewerHeader } from "./PhotoViewerHeader";
 import { PhotoViewerStage } from "./PhotoViewerStage";
+import { PlaylistFilterControl } from "./PlaylistFilterControl";
+import { PlaylistPagination } from "./PlaylistPagination";
 import { RatingFilterCard } from "./RatingFilterCard";
 import { RatingDialog } from "./RatingDialog";
 import { ShortcutDialog } from "./ShortcutDialog";
@@ -9167,30 +9167,14 @@ export default function App() {
                 退出
               </button>
             ) : !isPlaylistSeriesMode ? (
-              <div className="playlist-filter" aria-label="播放列表筛选">
-                <button
-                  className={playlistFilter === "all" ? "active" : ""}
-                  type="button"
-                  onClick={() => {
-                    setPlaylistPage(1);
-                    setPlaylistFilter("all");
-                  }}
-                  disabled={!modeFilteredVideos.length}
-                >
-                  全部
-                </button>
-                <button
-                  className={playlistFilter === "favorites" ? "active" : ""}
-                  type="button"
-                  onClick={() => {
-                    setPlaylistPage(1);
-                    setPlaylistFilter("favorites");
-                  }}
-                  disabled={!modeFilteredVideos.length}
-                >
-                  <Star size={14} />
-                </button>
-              </div>
+              <PlaylistFilterControl
+                disabled={!modeFilteredVideos.length}
+                filter={playlistFilter}
+                onChange={(nextFilter) => {
+                  setPlaylistPage(1);
+                  setPlaylistFilter(nextFilter);
+                }}
+              />
             ) : null}
           </div>
         </div>
@@ -9383,99 +9367,26 @@ export default function App() {
           {videos.length && !isDuplicatePlaylistActive && !isRatingPlaylistActive && !modeFilteredVideos.length ? <div className="empty-list">当前{homeMediaModeLabel}没有视频</div> : null}
           {modeFilteredVideos.length && !isDuplicatePlaylistActive && !isRatingPlaylistActive && !visibleVideos.length ? <div className="empty-list">还没有收藏的视频</div> : null}
         </div>
-        {visibleVideos.length ? (
-          <div className="playlist-pagination" aria-label="播放列表分页">
-            <button
-              className="playlist-page-button"
-              type="button"
-              onClick={() => {
-                syncPlaylistPageInput(visiblePlaylistPage - 5);
-                scrollPlaylistToTop("auto");
-              }}
-              disabled={visiblePlaylistPage <= 1}
-              title="向前 5 页"
-              aria-label="向前 5 页"
-            >
-              <SkipForward className="playlist-page-skip-back" size={16} />
-            </button>
-            <button
-              className="playlist-page-button"
-              type="button"
-              onClick={() => {
-                syncPlaylistPageInput(visiblePlaylistPage - 1);
-                scrollPlaylistToTop("auto");
-              }}
-              disabled={visiblePlaylistPage <= 1}
-              title="上一页"
-              aria-label="上一页"
-            >
-              <ChevronLeft size={16} />
-            </button>
-            <span className="playlist-page-status">
-              {playlistPageStartLabel}-{playlistPageEndLabel} / {visibleVideos.length}
-              <small>第 {visiblePlaylistPage} / {playlistPageCount} 页</small>
-            </span>
-            <button
-              className="playlist-page-button"
-              type="button"
-              onClick={() => {
-                syncPlaylistPageInput(visiblePlaylistPage + 1);
-                scrollPlaylistToTop("auto");
-              }}
-              disabled={visiblePlaylistPage >= playlistPageCount}
-              title="下一页"
-              aria-label="下一页"
-            >
-              <ChevronRight size={16} />
-            </button>
-            <button
-              className="playlist-page-button"
-              type="button"
-              onClick={() => {
-                syncPlaylistPageInput(visiblePlaylistPage + 5);
-                scrollPlaylistToTop("auto");
-              }}
-              disabled={visiblePlaylistPage >= playlistPageCount}
-              title="向后 5 页"
-              aria-label="向后 5 页"
-            >
-              <SkipForward className="playlist-page-skip-forward" size={16} />
-            </button>
-            <label className="playlist-page-jump" aria-label="跳转页数">
-              <span>跳转</span>
-              <input
-                className="playlist-page-jump-input"
-                type="number"
-                min={1}
-                max={playlistPageCount}
-                step={1}
-                inputMode="numeric"
-                value={playlistPageInput}
-                onChange={(event) => setPlaylistPageInput(event.target.value)}
-                onBlur={() => {
-                  commitPlaylistPageInput();
-                  scrollPlaylistToTop("auto");
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    event.preventDefault();
-                    commitPlaylistPageInput();
-                    scrollPlaylistToTop("auto");
-                  }
-                }}
-                aria-label="输入页码跳转"
-              />
-            </label>
-            <ControlSelect
-              label="每页"
-              ariaLabel="播放列表每页数量"
-              value={playlistPageSize}
-              options={playlistPageSizeSelectOptions}
-              onChange={updatePlaylistPageSize}
-              className="playlist-page-size-control"
-            />
-          </div>
-        ) : null}
+        <PlaylistPagination
+          endLabel={playlistPageEndLabel}
+          page={visiblePlaylistPage}
+          pageCount={playlistPageCount}
+          pageInput={playlistPageInput}
+          pageSize={playlistPageSize}
+          pageSizeOptions={playlistPageSizeSelectOptions}
+          startLabel={playlistPageStartLabel}
+          total={visibleVideos.length}
+          onCommitPageInput={() => {
+            commitPlaylistPageInput();
+            scrollPlaylistToTop("auto");
+          }}
+          onPageInputChange={setPlaylistPageInput}
+          onPageSizeChange={updatePlaylistPageSize}
+          onRequestPage={(page) => {
+            syncPlaylistPageInput(page);
+            scrollPlaylistToTop("auto");
+          }}
+        />
       </aside>
       ) : null}
     </main>
