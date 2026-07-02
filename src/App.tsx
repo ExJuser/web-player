@@ -411,6 +411,7 @@ import { HighEnergyTagDialog, type HighEnergyTagPrompt } from "./HighEnergyTagDi
 import { ExistingMediaRootDialog, MediaRootLabelDialog, MediaRootLocalPathDialogView } from "./MediaRootPromptDialogs";
 import { PhotoAlbumTagDialog } from "./PhotoAlbumTagDialog";
 import { RatingDialog } from "./RatingDialog";
+import { ShortcutDialog } from "./ShortcutDialog";
 
 type PhotoAlbumViewFilter = "all" | "favorites";
 
@@ -10903,68 +10904,21 @@ export default function App() {
         </section>
       </div>
     ) : null}
-    {isShortcutDialogOpen ? (
-      <div className="modal-backdrop" role="presentation" onMouseDown={() => setIsShortcutDialogOpen(false)}>
-        <section
-          aria-labelledby="shortcut-help-title"
-          aria-modal="true"
-          className="shortcut-dialog"
-          role="dialog"
-          onMouseDown={(event) => event.stopPropagation()}
-        >
-          <button
-            aria-label="关闭"
-            className="dialog-close"
-            type="button"
-            onClick={() => setIsShortcutDialogOpen(false)}
-          >
-            <X size={18} />
-          </button>
-          <div className="shortcut-dialog-title">
-            <Keyboard size={24} />
-            <h2 id="shortcut-help-title">快捷键设置</h2>
-          </div>
-          <p className="shortcut-dialog-note">
-            点击按键后按下新的快捷键。Esc 关闭录制，右方向默认同时用于短按快进和长按倍速。
-          </p>
-          <div className="shortcut-grid">
-            {shortcutGroups.map((group) => (
-              <section key={group.title} className="shortcut-group">
-                <h3>{group.title}</h3>
-                <dl>
-                  {group.items.map((item) => (
-                    <div key={item.action}>
-                      <dt>
-                        <button
-                          className={`shortcut-key-button ${recordingShortcutAction === item.action ? "recording" : ""}`}
-                          type="button"
-                          onClick={() => {
-                            setRecordingShortcutAction(item.action);
-                            setShortcutMessage(`按下新的“${item.label}”快捷键`);
-                          }}
-                          onKeyDown={(event) => handleShortcutCapture(event, item.action)}
-                        >
-                          {recordingShortcutAction === item.action
-                            ? "录制中"
-                            : formatShortcutKey(shortcuts[item.action])}
-                        </button>
-                      </dt>
-                      <dd>{item.label}</dd>
-                    </div>
-                  ))}
-                </dl>
-              </section>
-            ))}
-          </div>
-          <div className="shortcut-dialog-footer">
-            <span>{shortcutMessage || "滚轮仍可在播放器区域调节音量。"}</span>
-            <button className="secondary-button" type="button" onClick={resetShortcuts}>
-              恢复默认
-            </button>
-          </div>
-        </section>
-      </div>
-    ) : null}
+    <ShortcutDialog
+      isOpen={isShortcutDialogOpen}
+      shortcutGroups={shortcutGroups}
+      shortcuts={shortcuts}
+      recordingShortcutAction={recordingShortcutAction}
+      shortcutMessage={shortcutMessage}
+      onClose={() => setIsShortcutDialogOpen(false)}
+      onStartRecording={(action, label) => {
+        setRecordingShortcutAction(action);
+        setShortcutMessage(`按下新的“${label}”快捷键`);
+      }}
+      onCapture={handleShortcutCapture}
+      onReset={resetShortcuts}
+      formatShortcutKey={formatShortcutKey}
+    />
     </>
   );
 }
