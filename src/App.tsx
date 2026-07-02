@@ -377,13 +377,12 @@ import { FavoriteHomeSection } from "./FavoriteHomeSection";
 import { FolderAccessDialog } from "./FolderAccessDialog";
 import { HighEnergyTagDialog, type HighEnergyTagPrompt } from "./HighEnergyTagDialog";
 import { HomeLibraryStats } from "./HomeLibraryStats";
+import { HomeLibrarySearchSection } from "./HomeLibrarySearchSection";
 import { HomeMediaLibraryCard } from "./HomeMediaLibraryCard";
 import { HomeModeCard } from "./HomeModeCard";
 import { HomeRecapCard } from "./HomeRecapCard";
 import { HomeCardThumbnail, HomeListCard } from "./HomeVideoCards";
 import { ExistingMediaRootDialog, MediaRootLabelDialog, MediaRootLocalPathDialogView } from "./MediaRootPromptDialogs";
-import { LibrarySearchFormPreview } from "./LibrarySearchFormPreview";
-import { LibrarySearchResultsList } from "./LibrarySearchResultsList";
 import { LibrarySearchResultItem } from "./LibrarySearchResultItem";
 import { PhotoAlbumCard } from "./PhotoAlbumCard";
 import { PhotoAlbumEmptyState } from "./PhotoAlbumEmptyState";
@@ -8322,42 +8321,33 @@ export default function App() {
                 />
               ) : null}
 
-              <section className="home-section library-search-card">
-                <div className="home-section-header">
-                  <h2>片库搜索</h2>
-                  <span>{homeMediaMode === "special" ? "本地筛选" : homeLibrarySearchMode === "ai" ? "AI 辅助" : "本地优先"}</span>
-                </div>
-                <LibrarySearchFormPreview
-                  ariaLabel="片库搜索"
-                  disabled={isLibrarySearchLoading || !homeLibrarySearchVideos.length}
-                  inputValue={homeLibrarySearchQuery}
-                  placeholder={homeLibrarySearchPlaceholder}
-                  previewHint="仅本地匹配，不调用 AI"
-                  previewResults={homeLibrarySearchPreviewItems}
-                  showPreview={shouldShowHomeLibrarySearchPreview}
-                  onBlur={handleLibrarySearchBlur}
-                  onFocus={() => setFocusedLibrarySearchSurface("home")}
-                  onInputChange={setHomeLibrarySearchQuery}
-                  onSubmit={() => void runLibrarySearch("home")}
-                />
-                {shouldShowHomeLibrarySearchStatus ? (
-                  <div className={`library-search-status ${homeLibrarySearchMode}`}>
-                    {isHomeLibrarySearchLoading ? "搜索中..." : homeLibrarySearchMessage || defaultLibrarySearchStatus}
-                  </div>
-                ) : null}
-                {homeLibrarySearchAnswer ? <div className="library-search-answer">{homeLibrarySearchAnswer}</div> : null}
-                <LibrarySearchResultsList
-                  emptyTarget={homeLibrarySearchEmptyTarget}
-                  hasMoreResults={hasMoreHomeLibrarySearchResults}
-                  isEmpty={isHomeLibrarySearchSurface && librarySearchMode === "empty"}
-                  loadMoreRef={librarySearchLoadMoreRef}
-                  results={visibleHomeLibrarySearchItems}
-                  resultsRef={librarySearchResultsRef}
-                  totalCount={homeLibrarySearchResults.length}
-                  visibleCount={visibleHomeLibrarySearchResults.length}
-                  onLoadMore={loadMoreLibrarySearchResults}
-                />
-              </section>
+              <HomeLibrarySearchSection
+                answer={homeLibrarySearchAnswer}
+                defaultStatus={defaultLibrarySearchStatus}
+                disabled={isLibrarySearchLoading || !homeLibrarySearchVideos.length}
+                emptyTarget={homeLibrarySearchEmptyTarget}
+                hasMoreResults={hasMoreHomeLibrarySearchResults}
+                headerModeLabel={homeMediaMode === "special" ? "本地筛选" : homeLibrarySearchMode === "ai" ? "AI 辅助" : "本地优先"}
+                inputValue={homeLibrarySearchQuery}
+                isEmpty={isHomeLibrarySearchSurface && librarySearchMode === "empty"}
+                isLoading={isHomeLibrarySearchLoading}
+                loadMoreRef={librarySearchLoadMoreRef}
+                placeholder={homeLibrarySearchPlaceholder}
+                previewResults={homeLibrarySearchPreviewItems}
+                results={visibleHomeLibrarySearchItems}
+                resultsRef={librarySearchResultsRef}
+                searchMode={homeLibrarySearchMode}
+                shouldShowPreview={shouldShowHomeLibrarySearchPreview}
+                shouldShowStatus={shouldShowHomeLibrarySearchStatus}
+                statusMessage={homeLibrarySearchMessage}
+                totalCount={homeLibrarySearchResults.length}
+                visibleCount={visibleHomeLibrarySearchResults.length}
+                onBlur={handleLibrarySearchBlur}
+                onFocus={() => setFocusedLibrarySearchSurface("home")}
+                onInputChange={setHomeLibrarySearchQuery}
+                onLoadMore={loadMoreLibrarySearchResults}
+                onSubmit={() => void runLibrarySearch("home")}
+              />
 
               <DuplicateVideoSummaryCard
                 detectionMessage={duplicateDetectionDisplayMessage}
