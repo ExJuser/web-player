@@ -399,6 +399,7 @@ import {
 } from "./cacheStatusUtils";
 import { CacheStatusDialog } from "./CacheStatusDialog";
 import { DeleteConfirmDialog } from "./DeleteConfirmDialog";
+import { HighEnergyTagDialog, type HighEnergyTagPrompt } from "./HighEnergyTagDialog";
 import { RatingDialog } from "./RatingDialog";
 
 type PhotoAlbumViewFilter = "all" | "favorites";
@@ -750,14 +751,7 @@ export default function App() {
   const [videoTags, setVideoTags] = useState<VideoTagStore>({});
   const [videoHighlights, setVideoHighlights] = useState<VideoHighlightStore>({});
   const [pendingHighEnergyStart, setPendingHighEnergyStart] = useState<{ videoId: string; time: number } | null>(null);
-  const [highEnergyTagPrompt, setHighEnergyTagPrompt] = useState<{
-    videoId: string;
-    videoName: string;
-    startTime: number;
-    endTime: number;
-    highlightId?: string;
-    tagInput: string;
-  } | null>(null);
+  const [highEnergyTagPrompt, setHighEnergyTagPrompt] = useState<HighEnergyTagPrompt | null>(null);
   const [, setTagMergeDecisions] = useState<TagMergeDecisionStore>({});
   const [isTagDialogOpen, setIsTagDialogOpen] = useState(false);
   const [ratingDialogVideoId, setRatingDialogVideoId] = useState<string | null>(null);
@@ -10269,57 +10263,13 @@ export default function App() {
       </aside>
       ) : null}
     </main>
-    {highEnergyTagPrompt ? (
-      <div className="modal-backdrop" role="presentation" onMouseDown={() => setHighEnergyTagPrompt(null)}>
-        <form
-          aria-labelledby="high-energy-tag-title"
-          aria-modal="true"
-          className="high-energy-tag-dialog"
-          role="dialog"
-          onSubmit={(event) => {
-            event.preventDefault();
-            saveHighEnergyTagPrompt();
-          }}
-          onMouseDown={(event) => event.stopPropagation()}
-        >
-          <button
-            aria-label="关闭"
-            className="dialog-close"
-            type="button"
-            onClick={() => setHighEnergyTagPrompt(null)}
-          >
-            <X size={18} />
-          </button>
-          <div className="dialog-icon">
-            <Sparkles size={28} />
-          </div>
-          <div className="dialog-copy">
-            <h2 id="high-energy-tag-title">{highEnergyTagPrompt.highlightId ? "编辑高能片段" : "高能片段标签"}</h2>
-            <p>
-              {formatTime(highEnergyTagPrompt.startTime)} - {formatTime(highEnergyTagPrompt.endTime)} · {highEnergyTagPrompt.videoName}
-            </p>
-          </div>
-          <label className="high-energy-tag-field">
-            <span>标签</span>
-            <input
-              autoFocus
-              maxLength={40}
-              value={highEnergyTagPrompt.tagInput}
-              onChange={(event) => setHighEnergyTagPrompt((prompt) => prompt ? { ...prompt, tagInput: event.target.value } : prompt)}
-              placeholder="例如：名场面"
-            />
-          </label>
-          <div className="dialog-actions">
-            <button className="secondary-button" type="button" onClick={() => setHighEnergyTagPrompt(null)}>
-              取消
-            </button>
-            <button className="primary-button" type="submit" disabled={!highEnergyTagPrompt.tagInput.trim()}>
-              保存
-            </button>
-          </div>
-        </form>
-      </div>
-    ) : null}
+    <HighEnergyTagDialog
+      prompt={highEnergyTagPrompt}
+      onClose={() => setHighEnergyTagPrompt(null)}
+      onSave={saveHighEnergyTagPrompt}
+      onPromptChange={setHighEnergyTagPrompt}
+      formatTime={formatTime}
+    />
     <DeleteConfirmDialog
       isOpen={Boolean(videoDeleteCandidate)}
       titleId="delete-video-title"
