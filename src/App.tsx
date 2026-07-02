@@ -398,6 +398,12 @@ import {
   type ClearCacheResponse,
 } from "./cacheStatusUtils";
 import { CacheStatusDialog } from "./CacheStatusDialog";
+import {
+  CompatibleMediaDialogs,
+  type CompatibleMediaConfirmState,
+  type CompatibleMediaDeleteConfirmState,
+  type CompatibleMediaTaskState,
+} from "./CompatibleMediaDialogs";
 import { DeleteConfirmDialog } from "./DeleteConfirmDialog";
 import { FolderAccessDialog } from "./FolderAccessDialog";
 import { HighEnergyTagDialog, type HighEnergyTagPrompt } from "./HighEnergyTagDialog";
@@ -663,20 +669,9 @@ export default function App() {
   const [mediaProbeVideoId, setMediaProbeVideoId] = useState<string | null>(null);
   const mediaProbeVideoIdRef = useRef<string | null>(null);
   const [compatibleMediaVideoId, setCompatibleMediaVideoId] = useState<string | null>(null);
-  const [compatibleMediaConfirm, setCompatibleMediaConfirm] = useState<{
-    label: string;
-    rootId: string;
-    relativePath: string;
-    videoId: string;
-    videoName: string;
-  } | null>(null);
-  const [compatibleMediaDeleteConfirm, setCompatibleMediaDeleteConfirm] = useState<{
-    rootId: string;
-    relativePath: string;
-    videoId: string;
-    videoName: string;
-  } | null>(null);
-  const [compatibleMediaTask, setCompatibleMediaTask] = useState<{ label: string; videoName: string; progress: number; status: string } | null>(null);
+  const [compatibleMediaConfirm, setCompatibleMediaConfirm] = useState<CompatibleMediaConfirmState | null>(null);
+  const [compatibleMediaDeleteConfirm, setCompatibleMediaDeleteConfirm] = useState<CompatibleMediaDeleteConfirmState | null>(null);
+  const [compatibleMediaTask, setCompatibleMediaTask] = useState<CompatibleMediaTaskState | null>(null);
   const compatibleMediaAbortControllerRef = useRef<AbortController | null>(null);
   const [compatibleMediaMessage, setCompatibleMediaMessage] = useState("");
   const [isDeletingCompatibleMedia, setIsDeletingCompatibleMedia] = useState(false);
@@ -10373,120 +10368,18 @@ export default function App() {
       onSkipPromptChange={updateSkipFolderAccessPrompt}
       onContinue={chooseMediaLibraryDirectory}
     />
-    {compatibleMediaConfirm ? (
-      <div className="modal-backdrop" role="presentation" onMouseDown={() => setCompatibleMediaConfirm(null)}>
-        <section
-          aria-labelledby="compatible-media-confirm-title"
-          aria-modal="true"
-          className="compatible-media-dialog"
-          role="dialog"
-          onMouseDown={(event) => event.stopPropagation()}
-        >
-          <div className="dialog-icon">
-            <RefreshCw size={28} />
-          </div>
-          <div className="dialog-copy">
-            <h2 id="compatible-media-confirm-title">{compatibleMediaConfirm.label}？</h2>
-            <p>播放器会用 ffmpeg 复制原视频和音频流，重新写入 MP4 封装、索引和 faststart 信息，不会转码、不会降低画质，也不会覆盖原文件。</p>
-          </div>
-          <div className="compatible-media-dialog-file">
-            <strong>{compatibleMediaConfirm.videoName}</strong>
-            <span>输出会保存到项目本地缓存目录，耗时主要取决于文件大小和磁盘速度。</span>
-          </div>
-          <div className="dialog-actions">
-            <button className="secondary-button" type="button" onClick={() => setCompatibleMediaConfirm(null)}>
-              取消
-            </button>
-            <button className="primary-button" type="button" onClick={() => void createCompatibleMedia()}>
-              <RefreshCw size={18} />
-              开始生成
-            </button>
-          </div>
-        </section>
-      </div>
-    ) : null}
-    {compatibleMediaTask ? (
-      <div className="modal-backdrop" role="presentation">
-        <section
-          aria-labelledby="compatible-media-title"
-          aria-modal="true"
-          className="compatible-media-dialog"
-          role="dialog"
-          onMouseDown={(event) => event.stopPropagation()}
-        >
-          <div className="dialog-icon">
-            <RefreshCw size={28} className="spin-icon" />
-          </div>
-          <div className="dialog-copy">
-            <h2 id="compatible-media-title">{compatibleMediaTask.label}</h2>
-            <p>正在生成本地缓存文件，完成后播放器会自动优先使用修复版本。</p>
-          </div>
-          <div className="compatible-media-dialog-file">
-            <strong>{compatibleMediaTask.videoName}</strong>
-            <span>{compatibleMediaTask.status}</span>
-          </div>
-          <div className="compatible-media-progress" aria-label={`生成进度 ${Math.round(compatibleMediaTask.progress)}%`}>
-            <div className="compatible-media-progress-track">
-              <span style={{ width: `${compatibleMediaTask.progress}%` }} />
-            </div>
-            <small>{Math.round(compatibleMediaTask.progress)}%</small>
-          </div>
-          <div className="dialog-actions">
-            <button className="secondary-button" type="button" onClick={cancelCompatibleMediaGeneration}>
-              取消生成
-            </button>
-          </div>
-        </section>
-      </div>
-    ) : null}
-    {compatibleMediaDeleteConfirm ? (
-      <div
-        className="modal-backdrop"
-        role="presentation"
-        onMouseDown={() => {
-          if (!isDeletingCompatibleMedia) setCompatibleMediaDeleteConfirm(null);
-        }}
-      >
-        <section
-          aria-labelledby="compatible-media-delete-title"
-          aria-modal="true"
-          className="delete-dialog"
-          role="dialog"
-          onMouseDown={(event) => event.stopPropagation()}
-        >
-          <div className="dialog-icon danger">
-            <Trash2 size={28} />
-          </div>
-          <div className="dialog-copy">
-            <h2 id="compatible-media-delete-title">删除修复版？</h2>
-            <p>只会删除项目本地缓存目录里的修复 MP4，不会删除原视频。删除后播放器会切回原版。</p>
-          </div>
-          <div className="delete-file-preview">
-            <strong>{compatibleMediaDeleteConfirm.videoName}</strong>
-            <span>{compatibleMediaMessage || "修复版可重新生成。"}</span>
-          </div>
-          <div className="dialog-actions">
-            <button
-              className="secondary-button"
-              type="button"
-              onClick={() => setCompatibleMediaDeleteConfirm(null)}
-              disabled={isDeletingCompatibleMedia}
-            >
-              取消
-            </button>
-            <button
-              className="danger-button"
-              type="button"
-              onClick={() => void deleteCompatibleMedia()}
-              disabled={isDeletingCompatibleMedia}
-            >
-              <Trash2 size={18} />
-              {isDeletingCompatibleMedia ? "删除中..." : "删除修复版"}
-            </button>
-          </div>
-        </section>
-      </div>
-    ) : null}
+    <CompatibleMediaDialogs
+      confirm={compatibleMediaConfirm}
+      task={compatibleMediaTask}
+      deleteConfirm={compatibleMediaDeleteConfirm}
+      message={compatibleMediaMessage}
+      isDeleting={isDeletingCompatibleMedia}
+      onCloseConfirm={() => setCompatibleMediaConfirm(null)}
+      onCreate={() => void createCompatibleMedia()}
+      onCancelTask={cancelCompatibleMediaGeneration}
+      onCloseDeleteConfirm={() => setCompatibleMediaDeleteConfirm(null)}
+      onDelete={() => void deleteCompatibleMedia()}
+    />
     {isEmbeddedSubtitleDialogOpen ? (
       <div className="modal-backdrop" role="presentation" onMouseDown={() => setIsEmbeddedSubtitleDialogOpen(false)}>
         <section
