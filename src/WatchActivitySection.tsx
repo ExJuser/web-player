@@ -1,0 +1,156 @@
+import { CalendarDays } from "lucide-react";
+import type { ReactNode } from "react";
+
+import { HomeCardThumbnail } from "./HomeVideoCards";
+import type { HomeVideoCard, VideoItem, WatchActivityStore } from "./playerTypes";
+import {
+  createWatchActivityKey,
+  getWatchActivityMetricValue,
+  type WatchActivityDayInsight,
+  type WatchActivityInsights,
+  type WatchActivityMetric,
+  type WatchActivityRange,
+} from "./watchActivityInsights";
+
+type WatchActivitySectionProps = {
+  cards: HomeVideoCard[];
+  insights: WatchActivityInsights;
+  metric: WatchActivityMetric;
+  metricOptions: Array<{ value: WatchActivityMetric; label: string }>;
+  range: WatchActivityRange;
+  rangeOptions: Array<{ value: WatchActivityRange; label: string }>;
+  selectedDay: WatchActivityDayInsight | null;
+  tagNodes: ReactNode;
+  watchActivityStore: WatchActivityStore;
+  formatCumulativeDuration: (seconds: number) => string;
+  formatDate: (date: string) => string;
+  formatHomeMeta: (card: HomeVideoCard) => string;
+  formatMetric: (value: number, metric: WatchActivityMetric) => string;
+  monthNodes: ReactNode;
+  onMetricChange: (metric: WatchActivityMetric) => void;
+  onOpenVideo: (video: VideoItem) => void;
+  onRangeChange: (range: WatchActivityRange) => void;
+  onThumbnailError: (videoId: string) => void;
+};
+
+export function WatchActivitySection({
+  cards,
+  insights,
+  metric,
+  metricOptions,
+  range,
+  rangeOptions,
+  selectedDay,
+  tagNodes,
+  watchActivityStore,
+  formatCumulativeDuration,
+  formatDate,
+  formatHomeMeta,
+  formatMetric,
+  monthNodes,
+  onMetricChange,
+  onOpenVideo,
+  onRangeChange,
+  onThumbnailError,
+}: WatchActivitySectionProps) {
+  const selectedMetricLabel = selectedDay
+    ? formatMetric(getWatchActivityMetricValue(selectedDay, metric), metric)
+    : "暂无记录";
+
+  return (
+    <section className="home-section watch-activity-card">
+      <div className="home-section-header">
+        <h2>观看日历</h2>
+        <span>{insights.activeDays} 个活跃日</span>
+      </div>
+      <div className="watch-activity-summary">
+        <div>
+          <strong>{formatCumulativeDuration(insights.totalWatchedSeconds)}</strong>
+          <span>观看时长</span>
+        </div>
+        <div>
+          <strong>{insights.totalPlayCount}</strong>
+          <span>播放次数</span>
+        </div>
+        <div>
+          <strong>{insights.totalCompletedCount}</strong>
+          <span>完成</span>
+        </div>
+        <div>
+          <strong>{insights.totalEmissionCount}</strong>
+          <span>发射</span>
+        </div>
+      </div>
+      <div className="watch-activity-toolbar">
+        <div className="watch-activity-segment" role="group" aria-label="观看日历范围">
+          {rangeOptions.map((option) => (
+            <button
+              className={range === option.value ? "active" : ""}
+              key={option.value}
+              type="button"
+              onClick={() => onRangeChange(option.value)}
+              aria-pressed={range === option.value}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+        <div className="watch-activity-segment" role="group" aria-label="观看日历指标">
+          {metricOptions.map((option) => (
+            <button
+              className={metric === option.value ? "active" : ""}
+              key={option.value}
+              type="button"
+              onClick={() => onMetricChange(option.value)}
+              aria-pressed={metric === option.value}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="watch-activity-calendar" role="list" aria-label="最近观看分布">
+        {monthNodes}
+      </div>
+      <div className="watch-activity-detail">
+        <div className="watch-activity-detail-header">
+          <span>
+            <CalendarDays size={14} />
+            {selectedDay ? formatDate(selectedDay.date) : "暂无日期"}
+          </span>
+          <strong>{selectedMetricLabel}</strong>
+        </div>
+        {cards.length ? (
+          <div className="watch-activity-video-list">
+            {cards.map((card, index) => {
+              const activity = selectedDay ? watchActivityStore[createWatchActivityKey(selectedDay.date, card.video.id)] : null;
+              const label = activity
+                ? `${formatCumulativeDuration(activity.watchedSeconds)} · ${activity.playCount} 次播放`
+                : formatHomeMeta(card);
+              return (
+                <button
+                  className="watch-activity-video"
+                  key={card.video.id}
+                  type="button"
+                  onClick={() => onOpenVideo(card.video)}
+                  title={card.video.relativePath || card.video.name}
+                >
+                  <HomeCardThumbnail card={card} fallbackIndex={index} onThumbnailError={onThumbnailError} />
+                  <span>
+                    <strong>{card.video.name}</strong>
+                    <small>{label}</small>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="empty-list compact">这一天还没有观看记录。</div>
+        )}
+      </div>
+      <div className="watch-activity-tags" aria-label="当前范围热门标签">
+        {insights.topTags.length ? tagNodes : <small>当前范围暂无可统计标签。</small>}
+      </div>
+    </section>
+  );
+}
