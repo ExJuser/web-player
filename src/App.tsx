@@ -296,13 +296,19 @@ import {
   createPersistedEmbeddedSubtitles,
   createDuplicatePlaylistMetaByVideoId,
   createRatingStats,
+  createSeriesOptions,
+  createSeriesOptionsKey,
+  createSeriesTitleByVideoId,
   createVideoMetadataRows,
   createVideoMetadataTitle,
   countRatingFilterMatches,
+  filterVideosBySeries,
   filterRatingPlaylistVideos,
   formatMediaRootStatus,
   formatPhotoRootStatus,
+  getActiveSeriesOption,
   getCompatibleMediaAction,
+  getCurrentSeriesKey,
   getDuplicatePlaylistVideos,
   getRatingFilterLabel,
   getPlayableVideoUrl,
@@ -1322,36 +1328,15 @@ export default function App() {
         : 0,
     [isRatingFilterEnabled, playlistVideos, ratingFilterOperator, ratingFilterThreshold, videoRatings],
   );
-  const seriesOptions = useMemo(() => {
-    const seriesByKey = new Map<string, { key: string; title: string; count: number; mediaRootLabel?: string }>();
-    playlistVideos.forEach((video) => {
-      const title = inferSeriesTitle(video);
-      const key = scopedSeriesKeyForVideo(video, title);
-      const mediaRoot = video.mediaRootId ? localConfig?.mediaRoots.find((root) => root.id === video.mediaRootId) : null;
-      const existing = seriesByKey.get(key);
-      if (existing) {
-        existing.count += 1;
-      } else {
-        seriesByKey.set(key, {
-          key,
-          title,
-          count: 1,
-          mediaRootLabel: mediaRoot?.label ?? (video.mediaRootId ? fallbackMediaRootLabelForVideo(video) : undefined),
-        });
-      }
-    });
-    return Array.from(seriesByKey.values()).sort((a, b) => collator.compare(a.title, b.title));
-  }, [localConfig, playlistVideos]);
-  const seriesTitleByVideoId = useMemo(() => {
-    const titles = new Map<string, string>();
-    playlistVideos.forEach((video) => titles.set(video.id, inferSeriesTitle(video)));
-    return titles;
-  }, [playlistVideos]);
-  const seriesFilteredVideos = useMemo(() => {
-    if (!isSeriesMode || selectedSeriesKey === "all") return playlistVideos;
-    if (!seriesOptions.some((series) => series.key === selectedSeriesKey)) return playlistVideos;
-    return playlistVideos.filter((video) => scopedSeriesKeyForVideo(video, seriesTitleByVideoId.get(video.id) ?? "") === selectedSeriesKey);
-  }, [isSeriesMode, playlistVideos, selectedSeriesKey, seriesOptions, seriesTitleByVideoId]);
+  const seriesOptions = useMemo(
+    () => createSeriesOptions(playlistVideos, localConfig?.mediaRoots ?? []),
+    [localConfig, playlistVideos],
+  );
+  const seriesTitleByVideoId = useMemo(() => createSeriesTitleByVideoId(playlistVideos), [playlistVideos]);
+  const seriesFilteredVideos = useMemo(
+    () => filterVideosBySeries(playlistVideos, seriesOptions, seriesTitleByVideoId, isSeriesMode, selectedSeriesKey),
+    [isSeriesMode, playlistVideos, selectedSeriesKey, seriesOptions, seriesTitleByVideoId],
+  );
   const currentVideo = useMemo(
     () => videos.find((item) => item.id === currentVideoId) ?? null,
     [currentVideoId, videos],
@@ -1394,24 +1379,15 @@ export default function App() {
     const mediaRoot = localConfig?.mediaRoots.find((root) => root.id === currentVideo.mediaRootId);
     return mediaRoot?.label ?? fallbackMediaRootLabelForVideo(currentVideo);
   }, [currentVideo, localConfig]);
-  const seriesOptionsKey = useMemo(
-    () => seriesOptions.map((series) => `${series.key}\t${series.title}\t${series.count}`).join("\n"),
-    [seriesOptions],
-  );
+  const seriesOptionsKey = useMemo(() => createSeriesOptionsKey(seriesOptions), [seriesOptions]);
   const currentSeriesKey = useMemo(
-    () => (currentVideo ? scopedSeriesKeyForVideo(currentVideo, seriesTitleByVideoId.get(currentVideo.id) ?? inferSeriesTitle(currentVideo)) : ""),
+    () => getCurrentSeriesKey(currentVideo, seriesTitleByVideoId),
     [currentVideo, seriesTitleByVideoId],
   );
-  const activeBangumiSeries = useMemo(() => {
-    if (!isSeriesMode) return null;
-    if (selectedSeriesKey !== "all") {
-      return seriesOptions.find((series) => series.key === selectedSeriesKey) ?? null;
-    }
-    if (currentSeriesKey) {
-      return seriesOptions.find((series) => series.key === currentSeriesKey) ?? null;
-    }
-    return seriesOptions[0] ?? null;
-  }, [currentSeriesKey, isSeriesMode, selectedSeriesKey, seriesOptions]);
+  const activeBangumiSeries = useMemo(
+    () => getActiveSeriesOption(seriesOptions, { isSeriesMode, selectedSeriesKey, currentSeriesKey }),
+    [currentSeriesKey, isSeriesMode, selectedSeriesKey, seriesOptions],
+  );
   const activeBangumiMatch = activeBangumiSeries ? bangumiMatchesBySeriesKey[activeBangumiSeries.key] : null;
   const currentVideoSourceAspectRatio = currentVideo?.width && currentVideo.height ? currentVideo.width / currentVideo.height : 9 / 16;
   const normalizedVideoRotation = ((videoRotation % 360) + 360) % 360;

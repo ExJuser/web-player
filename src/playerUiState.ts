@@ -4,6 +4,9 @@ import {
   formatResolution,
   formatTime,
 } from "./playerFormatUtils";
+import { fallbackMediaRootLabelForVideo } from "./mediaPathUtils";
+import { collator } from "./playerConstants";
+import { inferSeriesTitle, scopedSeriesKeyForVideo, type SeriesVideo } from "./playerSeriesUtils";
 import type { HomeMediaMode } from "./playerTypes";
 
 export type { HomeMediaMode };
@@ -18,10 +21,22 @@ export type DuplicatePlaylistVideoMeta = {
   reasons: string[];
 };
 
+export type SeriesOption = {
+  key: string;
+  title: string;
+  count: number;
+  mediaRootLabel?: string;
+};
+
 type MediaRootForUi = {
+  id?: string;
   label?: string;
   source?: "browser" | "local";
   localPath?: string;
+};
+
+type SeriesVideoForUi = SeriesVideo & {
+  id: string;
 };
 
 type MediaRootStatusForUi = {
@@ -323,6 +338,74 @@ export function createDuplicatePlaylistMetaByVideoId(groups: Array<DuplicateVide
     });
   });
   return metaById;
+}
+
+export function createSeriesOptions<Video extends SeriesVideoForUi>(
+  videos: Video[],
+  mediaRoots: MediaRootForUi[] = [],
+) {
+  const mediaRootsById = new Map(mediaRoots.map((root) => [root.id, root]));
+  const seriesByKey = new Map<string, SeriesOption>();
+  videos.forEach((video) => {
+    const title = inferSeriesTitle(video);
+    const key = scopedSeriesKeyForVideo(video, title);
+    const mediaRoot = video.mediaRootId ? mediaRootsById.get(video.mediaRootId) : null;
+    const existing = seriesByKey.get(key);
+    if (existing) {
+      existing.count += 1;
+    } else {
+      seriesByKey.set(key, {
+        key,
+        title,
+        count: 1,
+        mediaRootLabel: mediaRoot?.label ?? (video.mediaRootId ? fallbackMediaRootLabelForVideo(video) : undefined),
+      });
+    }
+  });
+  return Array.from(seriesByKey.values()).sort((a, b) => collator.compare(a.title, b.title));
+}
+
+export function createSeriesTitleByVideoId<Video extends SeriesVideoForUi>(videos: Video[]) {
+  const titles = new Map<string, string>();
+  videos.forEach((video) => titles.set(video.id, inferSeriesTitle(video)));
+  return titles;
+}
+
+export function filterVideosBySeries<Video extends SeriesVideoForUi>(
+  videos: Video[],
+  options: SeriesOption[],
+  titlesByVideoId: ReadonlyMap<string, string>,
+  isSeriesMode: boolean,
+  selectedSeriesKey: string,
+) {
+  if (!isSeriesMode || selectedSeriesKey === "all") return videos;
+  if (!options.some((series) => series.key === selectedSeriesKey)) return videos;
+  return videos.filter((video) => scopedSeriesKeyForVideo(video, titlesByVideoId.get(video.id) ?? "") === selectedSeriesKey);
+}
+
+export function createSeriesOptionsKey(options: SeriesOption[]) {
+  return options.map((series) => `${series.key}\t${series.title}\t${series.count}`).join("\n");
+}
+
+export function getCurrentSeriesKey<Video extends SeriesVideoForUi>(
+  currentVideo: Video | null | undefined,
+  titlesByVideoId: ReadonlyMap<string, string>,
+) {
+  return currentVideo ? scopedSeriesKeyForVideo(currentVideo, titlesByVideoId.get(currentVideo.id) ?? inferSeriesTitle(currentVideo)) : "";
+}
+
+export function getActiveSeriesOption(
+  options: SeriesOption[],
+  input: { isSeriesMode: boolean; selectedSeriesKey: string; currentSeriesKey: string },
+) {
+  if (!input.isSeriesMode) return null;
+  if (input.selectedSeriesKey !== "all") {
+    return options.find((series) => series.key === input.selectedSeriesKey) ?? null;
+  }
+  if (input.currentSeriesKey) {
+    return options.find((series) => series.key === input.currentSeriesKey) ?? null;
+  }
+  return options[0] ?? null;
 }
 
 export function shouldShowHomeRecapCard(mode: HomeMediaMode) {

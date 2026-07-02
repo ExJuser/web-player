@@ -303,6 +303,30 @@ test("duplicate playlist helpers dedupe videos and build metadata", () => {
   ]);
 });
 
+test("series helpers derive options and filter selected series", () => {
+  const videos = [
+    { id: "v1", name: "01.mkv", relativePath: "Show A/01.mkv", mediaRootId: "anime" },
+    { id: "v2", name: "02.mkv", relativePath: "Show A/02.mkv", mediaRootId: "anime" },
+    { id: "v3", name: "01.mkv", relativePath: "Show B/01.mkv", mediaRootId: "anime" },
+  ];
+  const options = uiState.createSeriesOptions(videos, [{ id: "anime", label: "Anime" }]);
+  const titlesById = uiState.createSeriesTitleByVideoId(videos);
+
+  assert.deepEqual(options, [
+    { key: "anime:show a", title: "Show A", count: 2, mediaRootLabel: "Anime" },
+    { key: "anime:show b", title: "Show B", count: 1, mediaRootLabel: "Anime" },
+  ]);
+  assert.equal(titlesById.get("v1"), "Show A");
+  assert.deepEqual(uiState.filterVideosBySeries(videos, options, titlesById, true, "anime:show a"), [videos[0], videos[1]]);
+  assert.equal(uiState.createSeriesOptionsKey(options), "anime:show a\tShow A\t2\nanime:show b\tShow B\t1");
+  assert.equal(uiState.getCurrentSeriesKey(videos[2], titlesById), "anime:show b");
+  assert.deepEqual(
+    uiState.getActiveSeriesOption(options, { isSeriesMode: true, selectedSeriesKey: "all", currentSeriesKey: "anime:show b" }),
+    options[1],
+  );
+  assert.equal(uiState.getActiveSeriesOption(options, { isSeriesMode: false, selectedSeriesKey: "all", currentSeriesKey: "" }), null);
+});
+
 test("home all mode includes unlabeled and temporary media roots", () => {
   assert.equal(uiState.isMediaRootInHomeMode({}, "all"), true);
 });
