@@ -346,7 +346,6 @@ import {
   type ClearCacheResponse,
 } from "./cacheStatusUtils";
 import { AiSubtitleDialog, type AiSubtitleTab } from "./AiSubtitleDialog";
-import { AutoNextPromptCard } from "./AutoNextPromptCard";
 import { DanmakuDialog } from "./DanmakuDialog";
 import { CacheStatusDialog } from "./CacheStatusDialog";
 import {
@@ -382,25 +381,20 @@ import { PhotoViewerSection } from "./PhotoViewerSection";
 import { PlaylistPagination } from "./PlaylistPagination";
 import { PlaylistTools } from "./PlaylistTools";
 import { PlaylistVideoList } from "./PlaylistVideoList";
-import { PlayerDanmakuLayer } from "./PlayerDanmakuLayer";
-import { PlayerFeedbackOverlays } from "./PlayerFeedbackOverlays";
 import { PlayerHighlightControls } from "./PlayerHighlightControls";
 import { PlayerLibrarySearchSection } from "./PlayerLibrarySearchSection";
 import { PlayerMediaActionControls } from "./PlayerMediaActionControls";
 import { PlayerOptionControls } from "./PlayerOptionControls";
 import { PlayerPlaybackControls } from "./PlayerPlaybackControls";
-import { PlayerStagePlaceholders } from "./PlayerStagePlaceholders";
+import { PlayerStage } from "./PlayerStage";
 import { PlayerTimelineControls } from "./PlayerTimelineControls";
 import { PlayerTopBar } from "./PlayerTopBar";
-import { PlayerVideoElement } from "./PlayerVideoElement";
 import { PlayerViewControls } from "./PlayerViewControls";
 import { RatingFilterCard } from "./RatingFilterCard";
 import { RatingDialog } from "./RatingDialog";
-import { RocketLaunchEffect } from "./RocketLaunchEffect";
 import { ShortcutDialog } from "./ShortcutDialog";
 import { SpecialStatsControl } from "./SpecialStatsControl";
 import { TagDialog } from "./TagDialog";
-import { TimelinePreviewTargets } from "./TimelinePreviewTargets";
 import { WatchActivityMonth, WatchActivityTagButton } from "./WatchActivityCalendar";
 import { WatchActivitySection } from "./WatchActivitySection";
 
@@ -8231,58 +8225,49 @@ export default function App() {
           }}
           tabIndex={-1}
         >
-          <div className="player-viewport">
-            {currentVideo ? (
-              <PlayerVideoElement
-                currentVideoSourceAspectRatio={currentVideoSourceAspectRatio}
-                isVideoSideways={isVideoSideways}
-                normalizedVideoRotation={normalizedVideoRotation}
-                selectedSubtitle={selectedSubtitle}
-                videoRef={videoRef}
-                onClick={togglePlay}
-                onPlay={() => {
-                  setIsPlaying(true);
-                  if (currentVideo) {
-                    recordPlaybackStartForActivity(currentVideo);
-                    recordPlaybackStartForStats(currentVideo);
-                  }
-                }}
-                onPause={() => {
-                  setIsPlaying(false);
-                  persistCurrentProgress();
-                }}
-                onTimeUpdate={handleTimeUpdate}
-                onDurationChange={handleDurationChange}
-                onEnded={handleEnded}
-              />
-            ) : null}
-
-            <PlayerStagePlaceholders isPrivacyMode={isPrivacyMode} message={message} showEmptyState={!currentVideo} />
-
-            {isDanmakuAvailable ? (
-              <PlayerDanmakuLayer
-                comments={activeDanmakuComments}
-                currentTime={currentTime}
-                danmakuLaneCount={danmakuLaneCount}
-                danmakuLaneLineHeight={danmakuLaneLineHeight}
-                danmakuLayerRef={danmakuLayerRef}
-                isPlaying={isPlaying}
-                preferences={danmakuPreferences}
-                getDanmakuLane={getDanmakuLane}
-                formatDanmakuLaneTop={formatDanmakuLaneTop}
-              />
-            ) : null}
-
-            {launchEffectKey ? <RocketLaunchEffect effectKey={launchEffectKey} /> : null}
-
-            {currentVideo ? <TimelinePreviewTargets previewCanvasRef={previewCanvasRef} previewVideoRef={previewVideoRef} /> : null}
-          </div>
-
-          <PlayerFeedbackOverlays doubleClickFeedback={doubleClickFeedback} playerOverlayFeedback={playerOverlayFeedback} />
-
-          {autoNextPrompt ? (
-            <AutoNextPromptCard prompt={autoNextPrompt} onCancel={cancelAutoNextPrompt} onConfirm={confirmAutoNext} />
-          ) : null}
+          <PlayerStage
+            activeDanmakuComments={activeDanmakuComments}
+            autoNextPrompt={autoNextPrompt}
+            currentTime={currentTime}
+            currentVideoSourceAspectRatio={currentVideoSourceAspectRatio}
+            danmakuLaneCount={danmakuLaneCount}
+            danmakuLaneLineHeight={danmakuLaneLineHeight}
+            danmakuLayerRef={danmakuLayerRef}
+            danmakuPreferences={danmakuPreferences}
+            doubleClickFeedback={doubleClickFeedback}
+            hasCurrentVideo={Boolean(currentVideo)}
+            isDanmakuAvailable={isDanmakuAvailable}
+            isPlaying={isPlaying}
+            isPrivacyMode={isPrivacyMode}
+            isVideoSideways={isVideoSideways}
+            launchEffectKey={launchEffectKey}
+            message={message}
+            normalizedVideoRotation={normalizedVideoRotation}
+            playerOverlayFeedback={playerOverlayFeedback}
+            previewCanvasRef={previewCanvasRef}
+            previewVideoRef={previewVideoRef}
+            selectedSubtitle={selectedSubtitle}
+            videoRef={videoRef}
+            formatDanmakuLaneTop={formatDanmakuLaneTop}
+            getDanmakuLane={getDanmakuLane}
+            onAutoNextCancel={cancelAutoNextPrompt}
+            onAutoNextConfirm={confirmAutoNext}
+            onDurationChange={handleDurationChange}
+            onEnded={handleEnded}
+            onPause={() => {
+              setIsPlaying(false);
+              persistCurrentProgress();
+            }}
+            onPlay={() => {
+              setIsPlaying(true);
+              if (currentVideo) {
+                recordPlaybackStartForActivity(currentVideo);
+                recordPlaybackStartForStats(currentVideo);
+              }
+            }}
+            onTimeUpdate={handleTimeUpdate}
+            onTogglePlay={togglePlay}
+          />
 
           <div
             ref={controlBarRef}
