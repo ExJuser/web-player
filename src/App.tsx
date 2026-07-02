@@ -11,7 +11,6 @@ import {
   ChevronRight,
   Clock3,
   ExternalLink,
-  Folder,
   FolderOpen,
   EyeOff,
   HardDrive,
@@ -185,7 +184,7 @@ import {
   getDanmakuLaneCount,
   getDanmakuSourceBreakdown,
 } from "./danmakuUtils";
-import { directoryPartsOf, fallbackMediaRootLabelForVideo } from "./mediaPathUtils";
+import { fallbackMediaRootLabelForVideo } from "./mediaPathUtils";
 import {
   basePathOf,
   createLibraryMetadata,
@@ -406,6 +405,7 @@ import { FolderAccessDialog } from "./FolderAccessDialog";
 import { HighEnergyTagDialog, type HighEnergyTagPrompt } from "./HighEnergyTagDialog";
 import { HomeCardThumbnail, HomeListCard } from "./HomeVideoCards";
 import { ExistingMediaRootDialog, MediaRootLabelDialog, MediaRootLocalPathDialogView } from "./MediaRootPromptDialogs";
+import { LibrarySearchResultItem } from "./LibrarySearchResultItem";
 import { RatingChip, TagChips } from "./MetadataChips";
 import { PhotoAlbumCard } from "./PhotoAlbumCard";
 import { PhotoAlbumTagDialog } from "./PhotoAlbumTagDialog";
@@ -7847,62 +7847,17 @@ export default function App() {
     />
   );
   const renderLibrarySearchResult = (result: LibrarySearchResult) => {
-    if (result.kind === "video") {
-      const video = result.representativeVideo;
-      const card = createHomeVideoCard(video);
-      const directoryLabel = directoryPartsOf(video.relativePath).join(" / ");
-      const progressLabel = formatLibrarySearchProgressLabel(card);
-      return (
-        <button
-          key={result.key}
-          className="library-folder-result"
-          type="button"
-          onClick={() => openLibraryFolderFromSearch(result)}
-          title={video.relativePath || video.name}
-        >
-          <span className="library-folder-icon" aria-hidden="true">
-            <Play size={20} />
-          </span>
-          <span className="library-folder-copy">
-            <strong>{video.name}</strong>
-            <small>{progressLabel} · {result.reason}</small>
-            {directoryLabel || result.mediaRootLabel ? (
-              <small>{[result.mediaRootLabel, directoryLabel].filter(Boolean).join(" · ")}</small>
-            ) : null}
-            <TagChips tags={videoTags[video.id] ?? []} limit={3} compact />
-            <RatingChip rating={videoRatings[video.id]} />
-          </span>
-        </button>
-      );
-    }
-
-    const unfinishedCount = result.videos.filter(({ progress }) => !progress?.completed).length;
-    const resumableCount = result.videos.filter(({ progress }) => isResumableProgress(progress)).length;
-    const statusLabel = resumableCount
-      ? `${resumableCount} 个可继续`
-      : unfinishedCount
-        ? `${unfinishedCount} 个未看完`
-        : "已看完";
     return (
-      <button
+      <LibrarySearchResultItem
+        createCard={createHomeVideoCard}
+        formatProgressLabel={formatLibrarySearchProgressLabel}
+        isResumableProgress={isResumableProgress}
         key={result.key}
-        className="library-folder-result"
-        type="button"
-        onClick={() => openLibraryFolderFromSearch(result)}
-        title={result.path || result.title}
-      >
-        <span className="library-folder-icon" aria-hidden="true">
-          <Folder size={20} />
-        </span>
-        <span className="library-folder-copy">
-          <strong>{result.title}</strong>
-          <small>{result.videos.length} 集 · {statusLabel} · {result.reason}</small>
-          {result.path || result.mediaRootLabel ? (
-            <small>{[result.mediaRootLabel, result.path].filter(Boolean).join(" · ")}</small>
-          ) : null}
-          <RatingChip rating={videoRatings[result.representativeVideo.id]} />
-        </span>
-      </button>
+        onOpen={openLibraryFolderFromSearch}
+        result={result}
+        videoRatings={videoRatings}
+        videoTags={videoTags}
+      />
     );
   };
   const getPhotoImageUrl = (image?: PhotoAlbumImage | null) => (image ? image.url || photoObjectUrls[image.id] || "" : "");
