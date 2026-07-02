@@ -1,13 +1,8 @@
 import {
-  Activity,
-  BarChart3,
-  Clock3,
   FolderOpen,
   HardDrive,
   Images,
-  Rocket,
   ShieldCheck,
-  Tags,
   RefreshCw,
   Moon,
   Sun,
@@ -381,6 +376,7 @@ import { HomeNextEpisodeSection } from "./HomeNextEpisodeSection";
 import { HomeRecentSection } from "./HomeRecentSection";
 import { HomeRecapCard } from "./HomeRecapCard";
 import { HomeResumeSection } from "./HomeResumeSection";
+import { HomeSpecialInsightsSection } from "./HomeSpecialInsightsSection";
 import { HomeCardThumbnail, HomeListCard } from "./HomeVideoCards";
 import { ExistingMediaRootDialog, MediaRootLabelDialog, MediaRootLocalPathDialogView } from "./MediaRootPromptDialogs";
 import { LibrarySearchResultItem } from "./LibrarySearchResultItem";
@@ -407,7 +403,6 @@ import { RatingFilterCard } from "./RatingFilterCard";
 import { RatingDialog } from "./RatingDialog";
 import { RocketLaunchEffect } from "./RocketLaunchEffect";
 import { ShortcutDialog } from "./ShortcutDialog";
-import { SpecialInsightsCard } from "./SpecialInsightsCard";
 import { SpecialStatsControl } from "./SpecialStatsControl";
 import { TagDialog } from "./TagDialog";
 import { TimelinePreviewTargets } from "./TimelinePreviewTargets";
@@ -7794,12 +7789,6 @@ export default function App() {
   const primaryHomeTitle = primaryResumeCard ? "继续观看" : modeFilteredVideos.length ? "开始观看" : "准备播放";
   const primaryHomeAction = primaryResumeCard ? "继续播放" : "播放第一个视频";
   const markVideoThumbnailFailed = (videoId: string) => setVideoThumbnailState(videoId, "failed");
-  const specialInsightTabOptions: Array<{ value: SpecialInsightTab; label: string; icon: React.ReactNode }> = [
-    { value: "played", label: "播放最久", icon: <Clock3 size={14} /> },
-    { value: "count", label: "次数最多", icon: <BarChart3 size={14} /> },
-    { value: "emission", label: "发射最多", icon: <Rocket size={14} /> },
-    { value: "active", label: "最近活跃", icon: <Activity size={14} /> },
-  ];
   const specialInsightRankingVideos = specialModeInsights
     ? {
         played: specialModeInsights.videosByPlayedDuration,
@@ -8090,27 +8079,19 @@ export default function App() {
                 />
               ) : null}
 
-              {specialModeInsights && specialModeInsights.summary.totalVideos ? (
-                <SpecialInsightsCard
-                  activeTab={specialInsightTab}
-                  formatDuration={formatCumulativeDuration}
-                  formatRelativeTime={formatRelativeTime}
-                  formatVideoMetric={formatSpecialInsightVideoMetric}
-                  insights={specialModeInsights}
-                  onOpenVideo={openVideoFromHome}
-                  onSelectTag={runSpecialInsightTagSearch}
-                  onTabChange={setSpecialInsightTab}
-                  rankingVideos={specialInsightRankingVideos}
-                  tagGroupIcons={{
-                    videoCount: <Tags size={14} />,
-                    played: <Clock3 size={14} />,
-                    emission: <Rocket size={14} />,
-                  }}
-                  tabOptions={specialInsightTabOptions}
-                  videoComments={videoComments}
-                  videoRatings={videoRatings}
-                />
-              ) : null}
+              <HomeSpecialInsightsSection
+                activeTab={specialInsightTab}
+                formatDuration={formatCumulativeDuration}
+                formatRelativeTime={formatRelativeTime}
+                formatVideoMetric={formatSpecialInsightVideoMetric}
+                insights={specialModeInsights}
+                onOpenVideo={openVideoFromHome}
+                onSelectTag={runSpecialInsightTagSearch}
+                onTabChange={setSpecialInsightTab}
+                rankingVideos={specialInsightRankingVideos}
+                videoComments={videoComments}
+                videoRatings={videoRatings}
+              />
             </div>
 
             <aside className="home-side-column">
