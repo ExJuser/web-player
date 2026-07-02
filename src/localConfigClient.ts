@@ -15,3 +15,7 @@ export function normalizeClientLocalConfig<T extends { bangumi?: ClientBangumiCo
 export function shouldAutoScanGlobalMediaLibrary(_config: { mediaRoots?: unknown[] }) {
   return false;
 }
+
+export function supportsServerFileAccess(root: { source?: string; localPath?: string } | null | undefined) {
+  return Boolean(root && (root.source !== "browser" || root.localPath));
+}

@@ -27,6 +27,13 @@ import type {
   WatchActivityItem,
   WatchActivityStore
 } from "./playerTypes";
+
+export function isPlayerGlobalMetadata(
+  metadata: PlayerDataStore["metadata"] | null | undefined,
+): metadata is PlayerGlobalMetadata {
+  return Boolean(metadata && "mediaRoots" in metadata && Array.isArray(metadata.mediaRoots));
+}
+
 import {
   PROGRESS_FILE_NAME,
   RECENT_FOLDER_DB_NAME,

@@ -5,6 +5,12 @@ import { importTsModule } from "./importTsModule.mjs";
 
 const storage = await importTsModule(new URL("../src/playerStorage.ts", import.meta.url));
 
+test("detects global player metadata", () => {
+  assert.equal(storage.isPlayerGlobalMetadata({ mediaRoots: [] }), true);
+  assert.equal(storage.isPlayerGlobalMetadata({ id: "library", name: "Library" }), false);
+  assert.equal(storage.isPlayerGlobalMetadata(null), false);
+});
+
 test("old player data stores load with empty video tags and merge decisions", () => {
   const parsed = storage.parsePlayerDataStore(JSON.stringify({
     version: 4,

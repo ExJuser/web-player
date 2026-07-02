@@ -57,7 +57,7 @@ import {
 } from "react";
 
 import { fetchLocalJson as fetchJson, readLocalApiStream } from "./localApiClient";
-import { normalizeClientLocalConfig, shouldAutoScanGlobalMediaLibrary } from "./localConfigClient";
+import { normalizeClientLocalConfig, shouldAutoScanGlobalMediaLibrary, supportsServerFileAccess } from "./localConfigClient";
 import {
   buildLibrarySearchCandidates,
   createAiLibrarySearchResults,
@@ -299,14 +299,6 @@ type DuplicatePlaylistVideoMeta = {
 type RatingFilterOperator = "gt" | "lt" | "eq";
 type RatingPlaylistMode = "numeric" | "unrated";
 
-function isPlayerGlobalMetadata(metadata: PlayerDataStore["metadata"] | null | undefined): metadata is PlayerGlobalMetadata {
-  return Boolean(metadata && "mediaRoots" in metadata && Array.isArray(metadata.mediaRoots));
-}
-
-function supportsServerFileAccess(root: LocalMediaRoot | null | undefined) {
-  return Boolean(root && (root.source !== "browser" || root.localPath));
-}
-
 import { ControlSelect } from "./ControlSelect";
 import {
   createPersistedEmbeddedSubtitles,
@@ -345,6 +337,7 @@ import {
   deleteLegacyPlayerDataStore,
   deletePlayerProgress,
   hasDirectoryWritePermission,
+  isPlayerGlobalMetadata,
   loadCachedMediaRootScan,
   loadLegacyPlayerDataStore,
   loadGlobalPlayerDataStore,

@@ -34,3 +34,10 @@ test("global media library does not auto-scan configured roots on page load", ()
     false,
   );
 });
+
+test("server file access is available for local roots and browser roots with localPath", () => {
+  assert.equal(localConfigClient.supportsServerFileAccess({ source: "local" }), true);
+  assert.equal(localConfigClient.supportsServerFileAccess({ source: "browser", localPath: "D:/Anime" }), true);
+  assert.equal(localConfigClient.supportsServerFileAccess({ source: "browser" }), false);
+  assert.equal(localConfigClient.supportsServerFileAccess(null), false);
+});
