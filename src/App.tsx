@@ -6,7 +6,6 @@ import {
   CalendarDays,
   CheckCircle2,
   Clock3,
-  ExternalLink,
   FolderOpen,
   EyeOff,
   HardDrive,
@@ -384,6 +383,7 @@ import {
 import { AiSubtitleDialog, type AiSubtitleTab } from "./AiSubtitleDialog";
 import { DanmakuDialog } from "./DanmakuDialog";
 import { CacheStatusDialog } from "./CacheStatusDialog";
+import { BangumiLinkButton } from "./BangumiLinkButton";
 import {
   CompatibleMediaDialogs,
   type CompatibleMediaConfirmState,
@@ -415,6 +415,7 @@ import { PhotoRootStatusCard } from "./PhotoRootStatusCard";
 import { PhotoViewerFilmstrip } from "./PhotoViewerFilmstrip";
 import { PhotoViewerHeader } from "./PhotoViewerHeader";
 import { PhotoViewerStage } from "./PhotoViewerStage";
+import { PlaylistEmptyState } from "./PlaylistEmptyState";
 import { PlaylistFilterControl } from "./PlaylistFilterControl";
 import { PlaylistPagination } from "./PlaylistPagination";
 import { RatingFilterCard } from "./RatingFilterCard";
@@ -9050,16 +9051,12 @@ export default function App() {
               />
             ) : null}
             {isPlaylistSeriesMode ? (
-              <button
-                className={`bangumi-link-button ${canOpenBangumiSubject ? "active" : ""} ${activeBangumiMatch?.status === "loading" ? "loading" : ""}`}
-                type="button"
-                onClick={openBangumiSubject}
-                disabled={!canOpenBangumiSubject}
+              <BangumiLinkButton
+                canOpen={canOpenBangumiSubject}
+                isLoading={activeBangumiMatch?.status === "loading"}
                 title={bangumiButtonTitle}
-                aria-label={bangumiButtonTitle}
-              >
-                {activeBangumiMatch?.status === "loading" ? <RefreshCw size={16} /> : <ExternalLink size={16} />}
-              </button>
+                onOpen={openBangumiSubject}
+              />
             ) : null}
             <ControlSelect
               label="排序"
@@ -9319,11 +9316,15 @@ export default function App() {
               </div>
             );
           })}
-          {!videos.length ? <div className="empty-list">{message}</div> : null}
-          {videos.length && isDuplicatePlaylistActive && !visibleVideos.length ? <div className="empty-list">重复列表已清空</div> : null}
-          {videos.length && isRatingPlaylistActive && !visibleVideos.length ? <div className="empty-list">评分列表已清空</div> : null}
-          {videos.length && !isDuplicatePlaylistActive && !isRatingPlaylistActive && !modeFilteredVideos.length ? <div className="empty-list">当前{homeMediaModeLabel}没有视频</div> : null}
-          {modeFilteredVideos.length && !isDuplicatePlaylistActive && !isRatingPlaylistActive && !visibleVideos.length ? <div className="empty-list">还没有收藏的视频</div> : null}
+          <PlaylistEmptyState
+            homeMediaModeLabel={homeMediaModeLabel}
+            isDuplicatePlaylistActive={isDuplicatePlaylistActive}
+            isRatingPlaylistActive={isRatingPlaylistActive}
+            message={message}
+            modeFilteredVideoCount={modeFilteredVideos.length}
+            totalVideoCount={videos.length}
+            visibleVideoCount={visibleVideos.length}
+          />
         </div>
         <PlaylistPagination
           endLabel={playlistPageEndLabel}
