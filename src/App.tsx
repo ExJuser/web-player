@@ -7788,7 +7788,7 @@ export default function App() {
   const progressPercent = duration ? Math.min(100, (currentTime / duration) * 100) : 0;
   const primaryHomeTitle = primaryResumeCard ? "继续观看" : modeFilteredVideos.length ? "开始观看" : "准备播放";
   const primaryHomeAction = primaryResumeCard ? "继续播放" : "播放第一个视频";
-  const markVideoThumbnailFailed = (videoId: string) => setVideoThumbnailState(videoId, "failed");
+  const markVideoThumbnailFailed = useCallback((videoId: string) => setVideoThumbnailState(videoId, "failed"), []);
   const specialInsightRankingVideos = specialModeInsights
     ? {
         played: specialModeInsights.videosByPlayedDuration,
@@ -7833,7 +7833,7 @@ export default function App() {
       onSelectTag={runSpecialInsightTagSearch}
     />
   );
-  const renderHomeListCard = (card: HomeVideoCard, index: number) => (
+  const renderHomeListCard = useCallback((card: HomeVideoCard, index: number) => (
     <HomeListCard
       card={card}
       index={index}
@@ -7843,7 +7843,7 @@ export default function App() {
       onOpen={openVideoFromHome}
       onThumbnailError={markVideoThumbnailFailed}
     />
-  );
+  ), [markVideoThumbnailFailed, openVideoFromHome]);
   const renderLibrarySearchResult = useCallback((result: LibrarySearchResult) => {
     return (
       <LibrarySearchResultItem
@@ -7874,8 +7874,11 @@ export default function App() {
     () => visiblePlayerLibrarySearchResults.map(renderLibrarySearchResult),
     [renderLibrarySearchResult, visiblePlayerLibrarySearchResults],
   );
-  const getPhotoImageUrl = (image?: PhotoAlbumImage | null) => (image ? image.url || photoObjectUrls[image.id] || "" : "");
-  const renderPhotoAlbumCard = (album: PhotoAlbum) => {
+  const getPhotoImageUrl = useCallback(
+    (image?: PhotoAlbumImage | null) => (image ? image.url || photoObjectUrls[image.id] || "" : ""),
+    [photoObjectUrls],
+  );
+  const renderPhotoAlbumCard = useCallback((album: PhotoAlbum) => {
     const progress = photoAlbumProgress[album.id];
     const progressPercent = progress ? Math.min(100, ((progress.imageIndex + 1) / Math.max(album.imageCount, 1)) * 100) : 0;
     const isFavorite = favoritePhotoAlbumIds.has(album.id);
@@ -7900,7 +7903,17 @@ export default function App() {
         tags={tags}
       />
     );
-  };
+  }, [
+    favoritePhotoAlbumIds,
+    getPhotoImageUrl,
+    openPhotoAlbum,
+    openPhotoAlbumTagEditor,
+    photoAlbumCoverPreferences,
+    photoAlbumProgress,
+    photoAlbumTags,
+    requestDeletePhotoAlbum,
+    togglePhotoAlbumFavorite,
+  ]);
   const renderDuplicateVideoGroup = useCallback((group: DuplicateVideoGroup) => (
     <DuplicateVideoGroupCard
       formatFileSize={formatFileSize}
