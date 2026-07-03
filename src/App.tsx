@@ -9,23 +9,17 @@ import {
   useRef,
   useState,
   type CSSProperties,
-  type FocusEvent as ReactFocusEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
 
 import { fetchLocalJson as fetchJson, readLocalApiStream } from "./localApiClient";
 import { readAiTextStream } from "./aiStreamClient";
 import { useCacheStatusDialog } from "./useCacheStatusDialog";
+import { useLibrarySearchState } from "./useLibrarySearchState";
 import { usePhotoObjectUrls } from "./usePhotoObjectUrls";
 import { normalizeClientLocalConfig, shouldAutoScanGlobalMediaLibrary, supportsServerFileAccess } from "./localConfigClient";
 import {
   buildLibrarySearchCandidates,
-  createAiLibrarySearchResults,
-  createLibrarySearchSignature,
-  getVisibleLibrarySearchResults,
-  shouldUseAiLibrarySearch,
-  librarySearchResultPageSize,
-  searchLibraryEntries,
   type LibrarySearchCandidate,
 } from "./librarySearchUtils";
 import {
@@ -252,8 +246,6 @@ import type {
   DialogDragState,
   DialogOffset,
   ExistingMediaRootPrompt,
-  LibraryAiSearchResponse,
-  LibrarySearchMode,
   LibrarySearchResult,
   LibrarySearchSurface,
   MediaProbeResponse,
@@ -510,7 +502,6 @@ export default function App() {
   const librarySearchLoadMoreRef = useRef<HTMLDivElement | null>(null);
   const playerLibrarySearchResultsRef = useRef<HTMLDivElement | null>(null);
   const playerLibrarySearchLoadMoreRef = useRef<HTMLDivElement | null>(null);
-  const librarySearchRunIdRef = useRef(0);
   const duplicateDetectionRunIdRef = useRef(0);
   const duplicateDetectionAbortRef = useRef<AbortController | null>(null);
   const duplicateFingerprintCacheRef = useRef(new Map<string, DuplicateFingerprintCacheEntry>());
@@ -566,17 +557,6 @@ export default function App() {
   const [homeProgressRecapMessage, setHomeProgressRecapMessage] = useState("");
   const [homeProgressRecapVideoId, setHomeProgressRecapVideoId] = useState("");
   const [isHomeProgressRecapLoading, setIsHomeProgressRecapLoading] = useState(false);
-  const [homeLibrarySearchQuery, setHomeLibrarySearchQuery] = useState("");
-  const [playerLibrarySearchQuery, setPlayerLibrarySearchQuery] = useState("");
-  const [librarySearchResults, setLibrarySearchResults] = useState<LibrarySearchResult[]>([]);
-  const [librarySearchVisibleCount, setLibrarySearchVisibleCount] = useState(librarySearchResultPageSize);
-  const [librarySearchAnswer, setLibrarySearchAnswer] = useState("");
-  const [librarySearchMessage, setLibrarySearchMessage] = useState("");
-  const [librarySearchMode, setLibrarySearchMode] = useState<LibrarySearchMode>("idle");
-  const [isLibrarySearchLoading, setIsLibrarySearchLoading] = useState(false);
-  const [librarySearchSubmittedSignature, setLibrarySearchSubmittedSignature] = useState("");
-  const [librarySearchSurface, setLibrarySearchSurface] = useState<LibrarySearchSurface | null>(null);
-  const [focusedLibrarySearchSurface, setFocusedLibrarySearchSurface] = useState<LibrarySearchSurface | null>(null);
   const [specialInsightTab, setSpecialInsightTab] = useState<SpecialInsightTab>("played");
   const [duplicateVideoGroups, setDuplicateVideoGroups] = useState<DuplicateVideoGroup[]>([]);
   const [duplicateDetectionProgress, setDuplicateDetectionProgress] = useState<DuplicateDetectionProgress | null>(null);
@@ -1148,17 +1128,6 @@ export default function App() {
   const homeMediaModeLabel = getHomeMediaModeLabel(homeMediaMode);
   const playerMediaModeLabel = getPlayerMediaModeLabel(homeMediaMode);
   const isRatingFilterEnabled = homeMediaMode === "special";
-  const homeLibrarySearchDraftSignature = useMemo(
-    () => createLibrarySearchSignature(homeLibrarySearchQuery),
-    [homeLibrarySearchQuery],
-  );
-  const playerLibrarySearchDraftSignature = useMemo(
-    () => createLibrarySearchSignature(playerLibrarySearchQuery),
-    [playerLibrarySearchQuery],
-  );
-  const effectiveLibrarySearchMode = homeMediaMode === "special" && librarySearchMode === "ai" ? "local" : librarySearchMode;
-  const visibleLibrarySearchMessage = homeMediaMode === "special" && librarySearchMode === "ai" ? "" : librarySearchMessage;
-  const visibleLibrarySearchAnswer = homeMediaMode === "special" ? "" : librarySearchAnswer;
   const playlistVideos = useMemo(
     () =>
       getSortedVideos(
@@ -1267,24 +1236,8 @@ export default function App() {
     () => createLibrarySearchScopeKey(homeLibrarySearchVideos, playerLibrarySearchVideos),
     [homeLibrarySearchVideos, playerLibrarySearchVideos],
   );
-  const homeLibrarySearchPlaceholder =
-    homeMediaMode === "special" ? "搜索片名、路径或标签" : "搜索片名，或描述想看的内容";
-  const playerLibrarySearchPlaceholder = isAnimePlaylistSearchScope ? "搜索当前列表内的剧集" : homeLibrarySearchPlaceholder;
   const homeLibrarySearchEmptyTarget = homeMediaMode === "special" ? "视频" : "文件夹";
   const playerLibrarySearchEmptyTarget = isAnimePlaylistSearchScope ? "剧集" : homeLibrarySearchEmptyTarget;
-  const defaultLibrarySearchStatus = homeMediaMode === "special" ? "特殊模式仅使用本地片名、路径或标签搜索。" : "";
-  const isHomeLibrarySearchSurface = librarySearchSurface === "home";
-  const isPlayerLibrarySearchSurface = librarySearchSurface === "player";
-  const isHomeLibrarySearchLoading = isLibrarySearchLoading && isHomeLibrarySearchSurface;
-  const isPlayerLibrarySearchLoading = isLibrarySearchLoading && isPlayerLibrarySearchSurface;
-  const homeLibrarySearchMode = isHomeLibrarySearchSurface ? effectiveLibrarySearchMode : "idle";
-  const playerLibrarySearchMode = isPlayerLibrarySearchSurface ? effectiveLibrarySearchMode : "idle";
-  const homeLibrarySearchMessage = isHomeLibrarySearchSurface ? visibleLibrarySearchMessage : "";
-  const playerLibrarySearchMessage = isPlayerLibrarySearchSurface ? visibleLibrarySearchMessage : "";
-  const homeLibrarySearchAnswer = isHomeLibrarySearchSurface ? visibleLibrarySearchAnswer : "";
-  const playerLibrarySearchAnswer = isPlayerLibrarySearchSurface ? visibleLibrarySearchAnswer : "";
-  const shouldShowHomeLibrarySearchStatus = Boolean(isHomeLibrarySearchLoading || homeLibrarySearchMessage || defaultLibrarySearchStatus);
-  const shouldShowPlayerLibrarySearchStatus = Boolean(isPlayerLibrarySearchLoading || playerLibrarySearchMessage || defaultLibrarySearchStatus);
   const playlistIndexById = useMemo(
     () =>
       createVideoIndexById(
@@ -1731,29 +1684,6 @@ export default function App() {
       localConfig.ffmpeg.ffprobe,
   );
   const canUseHomeRecapSubtitle = Boolean(homeRecapSubtitle || canUseHomeEmbeddedSubtitles);
-  const searchLibraryLocally = useCallback(
-    (query: string, limit?: number, surface: LibrarySearchSurface = "home"): LibrarySearchResult[] => {
-      const videos = surface === "player" ? playerLibrarySearchVideos : homeLibrarySearchVideos;
-      const context = surface === "player" ? playerLibrarySearchContext : homeLibrarySearchContext;
-      return searchLibraryEntries(query, videos, context, limit);
-    },
-    [homeLibrarySearchContext, homeLibrarySearchVideos, playerLibrarySearchContext, playerLibrarySearchVideos],
-  );
-
-  useEffect(() => {
-    librarySearchRunIdRef.current += 1;
-    setHomeLibrarySearchQuery("");
-    setPlayerLibrarySearchQuery("");
-    setIsLibrarySearchLoading(false);
-    setLibrarySearchMode("idle");
-    setLibrarySearchMessage("");
-    setLibrarySearchResults([]);
-    setLibrarySearchVisibleCount(librarySearchResultPageSize);
-    setLibrarySearchAnswer("");
-    setLibrarySearchSubmittedSignature("");
-    setLibrarySearchSurface(null);
-  }, [homeMediaMode, librarySearchScopeKey]);
-
   const createLibrarySearchCandidates = useCallback(
     (localResults: LibrarySearchResult[], surface: LibrarySearchSurface): LibrarySearchCandidate[] => {
       const videos = surface === "player" ? playerLibrarySearchVideos : homeLibrarySearchVideos;
@@ -1779,6 +1709,61 @@ export default function App() {
       videoTags,
     ],
   );
+  const {
+    defaultStatus: defaultLibrarySearchStatus,
+    filterResults: filterLibrarySearchResults,
+    handleBlur: handleLibrarySearchBlur,
+    hasMoreHomeResults: hasMoreHomeLibrarySearchResults,
+    hasMorePlayerResults: hasMorePlayerLibrarySearchResults,
+    homeAnswer: homeLibrarySearchAnswer,
+    homeMessage: homeLibrarySearchMessage,
+    homeMode: homeLibrarySearchMode,
+    homePlaceholder: homeLibrarySearchPlaceholder,
+    homePreviewResults: homeLibrarySearchPreviewResults,
+    homeQuery: homeLibrarySearchQuery,
+    homeResults: homeLibrarySearchResults,
+    isHomeLoading: isHomeLibrarySearchLoading,
+    isHomeSurface: isHomeLibrarySearchSurface,
+    isLoading: isLibrarySearchLoading,
+    isPlayerLoading: isPlayerLibrarySearchLoading,
+    isPlayerSurface: isPlayerLibrarySearchSurface,
+    loadMore: loadMoreLibrarySearchResults,
+    mode: librarySearchMode,
+    playerAnswer: playerLibrarySearchAnswer,
+    playerMessage: playerLibrarySearchMessage,
+    playerMode: playerLibrarySearchMode,
+    playerPreviewResults: playerLibrarySearchPreviewResults,
+    playerQuery: playerLibrarySearchQuery,
+    playerResults: playerLibrarySearchResults,
+    runSearch: runLibrarySearch,
+    runTagSearch: runSpecialInsightTagSearch,
+    setFocusedSurface: setFocusedLibrarySearchSurface,
+    setHomeQuery: setHomeLibrarySearchQuery,
+    setPlayerQuery: setPlayerLibrarySearchQuery,
+    shouldShowHomePreview: shouldShowHomeLibrarySearchPreview,
+    shouldShowHomeStatus: shouldShowHomeLibrarySearchStatus,
+    shouldShowPlayerPreview: shouldShowPlayerLibrarySearchPreview,
+    shouldShowPlayerStatus: shouldShowPlayerLibrarySearchStatus,
+    visibleHomeResults: visibleHomeLibrarySearchResults,
+    visiblePlayerResults: visiblePlayerLibrarySearchResults,
+  } = useLibrarySearchState({
+    createCandidates: createLibrarySearchCandidates,
+    homeMediaMode,
+    homeVideos: homeLibrarySearchVideos,
+    homeContext: homeLibrarySearchContext,
+    isCinemaMode,
+    isNonPlayerViewVisible,
+    isPrivacyMode,
+    localConfig,
+    playerVideos: playerLibrarySearchVideos,
+    playerContext: playerLibrarySearchContext,
+    scopeKey: librarySearchScopeKey,
+    homeResultsRef: librarySearchResultsRef,
+    homeLoadMoreRef: librarySearchLoadMoreRef,
+    playerResultsRef: playerLibrarySearchResultsRef,
+    playerLoadMoreRef: playerLibrarySearchLoadMoreRef,
+  });
+  const playerLibrarySearchPlaceholder = isAnimePlaylistSearchScope ? "搜索当前列表内的剧集" : homeLibrarySearchPlaceholder;
   const currentVideoSubtitles = useMemo(() => {
     if (!currentVideo) return [];
     const currentBasePath = basePathOf(currentVideo.relativePath);
@@ -3704,8 +3689,8 @@ export default function App() {
       setWatchActivityRevision((revision) => revision + 1);
       setDanmakuSelections(nextDanmakuSelections);
       setFavoriteVideoIds(nextFavorites);
-      setLibrarySearchResults((previous) =>
-        previous.flatMap((result) => {
+      filterLibrarySearchResults((results) =>
+        results.flatMap((result) => {
           if (result.kind === "video") return result.representativeVideo.id === video.id ? [] : [result];
           const nextResultVideos = result.videos.filter((entry) => entry.video.id !== video.id);
           if (!nextResultVideos.length) return [];
@@ -3828,7 +3813,7 @@ export default function App() {
         saveDanmakuSelection(video.id, null).catch(() => undefined),
       ]);
     },
-    [homeMediaMode, mediaRootStatuses, saveCurrentPlayerDataStore],
+    [filterLibrarySearchResults, homeMediaMode, mediaRootStatuses, saveCurrentPlayerDataStore],
   );
 
   const deleteBrowserVideoFile = useCallback(async (video: VideoItem) => {
@@ -6476,182 +6461,6 @@ export default function App() {
     localConfig,
     probeEmbeddedSubtitleTracksForVideo,
     shouldShowHomeRecap,
-  ]);
-
-  const runLibrarySearch = useCallback(async (surface: LibrarySearchSurface) => {
-    const searchRunId = (librarySearchRunIdRef.current += 1);
-    const query = (surface === "home" ? homeLibrarySearchQuery : playerLibrarySearchQuery).trim();
-    const draftSignature = surface === "home" ? homeLibrarySearchDraftSignature : playerLibrarySearchDraftSignature;
-    const isSpecialSearch = homeMediaMode === "special";
-    setLibrarySearchSurface(surface);
-    setLibrarySearchAnswer("");
-    if (!query) {
-      setLibrarySearchMode("idle");
-      setLibrarySearchMessage(isSpecialSearch ? "输入片名、路径或标签关键词。" : "输入片名、关键词或想看的内容。");
-      setLibrarySearchResults([]);
-      setLibrarySearchVisibleCount(librarySearchResultPageSize);
-      setLibrarySearchSubmittedSignature("");
-      setLibrarySearchSurface(null);
-      return;
-    }
-
-    setLibrarySearchSubmittedSignature(draftSignature);
-    setLibrarySearchVisibleCount(librarySearchResultPageSize);
-    const searchVideos = surface === "player" ? playerLibrarySearchVideos : homeLibrarySearchVideos;
-    const searchContext = surface === "player" ? playerLibrarySearchContext : homeLibrarySearchContext;
-    const localResults = searchLibraryLocally(query, undefined, surface);
-    setLibrarySearchResults(localResults);
-    const needsAi =
-      !isSpecialSearch &&
-      Boolean(localConfig?.ai.configured) &&
-      shouldUseAiLibrarySearch(query, localResults);
-    if (!needsAi) {
-      setLibrarySearchMode(localResults.length ? "local" : "empty");
-      setLibrarySearchMessage(
-        isSpecialSearch
-          ? localResults.length
-            ? "特殊模式仅使用本地片名/路径/标签搜索。"
-            : "特殊模式本地没有找到匹配结果。"
-          : localResults.length
-            ? "本地检索已命中，未调用大模型。"
-            : localConfig?.ai.configured
-              ? "本地没有找到匹配结果。"
-              : "本地没有找到匹配结果，且未配置 DEEPSEEK_API_KEY。",
-      );
-      return;
-    }
-
-    setIsLibrarySearchLoading(true);
-    setLibrarySearchMode("ai");
-    setLibrarySearchMessage("本地匹配不足，正在调用 AI 分析候选片库...");
-    try {
-      const candidates = createLibrarySearchCandidates(localResults, surface);
-      if (!candidates.length) throw new Error("当前片库没有可搜索的视频。");
-      const response = await fetchJson<LibraryAiSearchResponse>("/api/ai/library/search", {
-        method: "POST",
-        body: JSON.stringify({ query, candidates }),
-      });
-      if (librarySearchRunIdRef.current !== searchRunId) return;
-      const aiResults = createAiLibrarySearchResults(response.matchIds, searchVideos, searchContext);
-      setLibrarySearchResults(aiResults.length ? aiResults : localResults);
-      setLibrarySearchVisibleCount(librarySearchResultPageSize);
-      setLibrarySearchAnswer(response.answer);
-      setLibrarySearchMessage(aiResults.length ? "AI 已从本地候选中挑选结果。" : "AI 未返回明确条目，保留本地结果。");
-    } catch (error) {
-      if (librarySearchRunIdRef.current !== searchRunId) return;
-      setLibrarySearchMode(localResults.length ? "local" : "empty");
-      setLibrarySearchResults(localResults);
-      setLibrarySearchVisibleCount(librarySearchResultPageSize);
-      setLibrarySearchMessage(error instanceof Error ? error.message : "AI 搜索失败，已保留本地结果。");
-    } finally {
-      if (librarySearchRunIdRef.current === searchRunId) {
-        setIsLibrarySearchLoading(false);
-      }
-    }
-  }, [
-    createLibrarySearchCandidates,
-    homeMediaMode,
-    homeLibrarySearchDraftSignature,
-    homeLibrarySearchQuery,
-    homeLibrarySearchContext,
-    homeLibrarySearchVideos,
-    localConfig,
-    playerLibrarySearchContext,
-    playerLibrarySearchDraftSignature,
-    playerLibrarySearchQuery,
-    playerLibrarySearchVideos,
-    searchLibraryLocally,
-  ]);
-
-  const runSpecialInsightTagSearch = useCallback(
-    (tag: string) => {
-      const query = tag.trim();
-      if (!query) return;
-      librarySearchRunIdRef.current += 1;
-      setHomeLibrarySearchQuery(query);
-      setLibrarySearchAnswer("");
-      setIsLibrarySearchLoading(false);
-      setLibrarySearchSurface("home");
-      setLibrarySearchSubmittedSignature(createLibrarySearchSignature(query));
-      setLibrarySearchVisibleCount(librarySearchResultPageSize);
-      const localResults = searchLibraryLocally(query, undefined, "home");
-      setLibrarySearchResults(localResults);
-      setLibrarySearchMode(localResults.length ? "local" : "empty");
-      setLibrarySearchMessage(localResults.length ? "已按标签筛选特殊模式视频。" : "特殊模式本地没有找到匹配结果。");
-    },
-    [searchLibraryLocally],
-  );
-
-  const homeLibrarySearchPreviewResults = useMemo(() => {
-    const query = homeLibrarySearchQuery.trim();
-    if (!query) return [];
-    return searchLibraryLocally(query, 3, "home");
-  }, [
-    homeLibrarySearchQuery,
-    searchLibraryLocally,
-  ]);
-  const playerLibrarySearchPreviewResults = useMemo(() => {
-    const query = playerLibrarySearchQuery.trim();
-    if (!query) return [];
-    return searchLibraryLocally(query, 3, "player");
-  }, [
-    playerLibrarySearchQuery,
-    searchLibraryLocally,
-  ]);
-  const hasHomeLibrarySearchQuery = Boolean(homeLibrarySearchQuery.trim());
-  const hasPlayerLibrarySearchQuery = Boolean(playerLibrarySearchQuery.trim());
-  const shouldShowHomeLibrarySearchPreview = Boolean(
-    focusedLibrarySearchSurface === "home" &&
-    hasHomeLibrarySearchQuery &&
-      (homeLibrarySearchDraftSignature !== librarySearchSubmittedSignature || !isHomeLibrarySearchSurface),
-  );
-  const shouldShowPlayerLibrarySearchPreview = Boolean(
-    focusedLibrarySearchSurface === "player" &&
-    hasPlayerLibrarySearchQuery &&
-      (playerLibrarySearchDraftSignature !== librarySearchSubmittedSignature || !isPlayerLibrarySearchSurface),
-  );
-  const handleLibrarySearchBlur = useCallback((event: ReactFocusEvent<HTMLElement>) => {
-    if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
-    setFocusedLibrarySearchSurface(null);
-  }, []);
-  const { visibleResults: visibleLibrarySearchResults, hasMoreResults: hasMoreLibrarySearchResults } = useMemo(
-    () => getVisibleLibrarySearchResults(librarySearchResults, librarySearchVisibleCount),
-    [librarySearchResults, librarySearchVisibleCount],
-  );
-  const homeLibrarySearchResults = isHomeLibrarySearchSurface ? librarySearchResults : [];
-  const playerLibrarySearchResults = isPlayerLibrarySearchSurface ? librarySearchResults : [];
-  const visibleHomeLibrarySearchResults = isHomeLibrarySearchSurface ? visibleLibrarySearchResults : [];
-  const visiblePlayerLibrarySearchResults = isPlayerLibrarySearchSurface ? visibleLibrarySearchResults : [];
-  const hasMoreHomeLibrarySearchResults = isHomeLibrarySearchSurface && hasMoreLibrarySearchResults;
-  const hasMorePlayerLibrarySearchResults = isPlayerLibrarySearchSurface && hasMoreLibrarySearchResults;
-  const loadMoreLibrarySearchResults = useCallback(() => {
-    setLibrarySearchVisibleCount((count) => Math.min(count + librarySearchResultPageSize, librarySearchResults.length));
-  }, [librarySearchResults.length]);
-
-  useEffect(() => {
-    const shouldUsePlayerSearchContainer = !isNonPlayerViewVisible && !isPrivacyMode && !isCinemaMode;
-    const hasMoreVisibleResults = shouldUsePlayerSearchContainer ? hasMorePlayerLibrarySearchResults : hasMoreHomeLibrarySearchResults;
-    const root = shouldUsePlayerSearchContainer ? playerLibrarySearchResultsRef.current : librarySearchResultsRef.current;
-    const target = shouldUsePlayerSearchContainer ? playerLibrarySearchLoadMoreRef.current : librarySearchLoadMoreRef.current;
-    if (!hasMoreVisibleResults || !root || !target) return;
-    if (typeof IntersectionObserver === "undefined") return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) loadMoreLibrarySearchResults();
-      },
-      { root, rootMargin: "40px 0px 80px", threshold: 0.1 },
-    );
-    observer.observe(target);
-    return () => observer.disconnect();
-  }, [
-    hasMoreHomeLibrarySearchResults,
-    hasMorePlayerLibrarySearchResults,
-    isCinemaMode,
-    isNonPlayerViewVisible,
-    isPrivacyMode,
-    loadMoreLibrarySearchResults,
-    visibleHomeLibrarySearchResults.length,
-    visiblePlayerLibrarySearchResults.length,
   ]);
 
   const clearAllCacheRuntimeData = useCallback(async () => {
