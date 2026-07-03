@@ -18,6 +18,7 @@ import { useCacheStatusDialog } from "./useCacheStatusDialog";
 import { useDraggableDialog } from "./useDraggableDialog";
 import { useLibrarySearchState } from "./useLibrarySearchState";
 import { useMediaRootLocalPathDialog } from "./useMediaRootLocalPathDialog";
+import { useMediaRootPrompts } from "./useMediaRootPrompts";
 import { usePhotoAlbumTagEditor } from "./usePhotoAlbumTagEditor";
 import { usePhotoObjectUrls } from "./usePhotoObjectUrls";
 import { useRatingDialog } from "./useRatingDialog";
@@ -243,11 +244,9 @@ import type {
   CompatibleRemuxResponse,
   CompatibleRemuxStreamEvent,
   DanmakuSourcePayload,
-  ExistingMediaRootPrompt,
   LibrarySearchResult,
   LibrarySearchSurface,
   MediaProbeResponse,
-  MediaRootLabelPrompt,
   PlaybackSourceChoice,
   TagMergePrompt,
 } from "./appTypes";
@@ -687,8 +686,16 @@ export default function App() {
   const [videoDeleteCandidate, setVideoDeleteCandidate] = useState<VideoItem | null>(null);
   const [videoDeleteError, setVideoDeleteError] = useState("");
   const [isVideoDeletePending, setIsVideoDeletePending] = useState(false);
-  const [mediaRootLabelPrompt, setMediaRootLabelPrompt] = useState<MediaRootLabelPrompt | null>(null);
-  const [existingMediaRootPrompt, setExistingMediaRootPrompt] = useState<ExistingMediaRootPrompt | null>(null);
+  const {
+    closeExistingMediaRootPrompt,
+    closeMediaRootLabelPrompt,
+    existingMediaRootPrompt,
+    mediaRootLabelPrompt,
+    requestExistingMediaRootRescan,
+    requestMediaRootLabel,
+    submitMediaRootLabelPrompt,
+    updateMediaRootLabelPromptValue,
+  } = useMediaRootPrompts();
   const [skipFolderAccessPrompt, setSkipFolderAccessPrompt] = useState(defaultPlayerSettings.skipFolderAccessPrompt);
   const [message, setMessage] = useState("新增一个媒体库开始播放");
   const {
@@ -2156,42 +2163,6 @@ export default function App() {
     const matches = roots.filter((root) => root.basename === directoryName);
     return matches.length === 1 ? matches[0].id : null;
   }, []);
-
-  const requestMediaRootLabel = useCallback((directoryName: string) => {
-    return new Promise<string | null>((resolve) => {
-      setMediaRootLabelPrompt({ directoryName, value: directoryName, resolve });
-    });
-  }, []);
-
-  const requestExistingMediaRootRescan = useCallback((directoryName: string, mediaRootLabel: string) => {
-    return new Promise<boolean>((resolve) => {
-      setExistingMediaRootPrompt({ directoryName, mediaRootLabel, resolve });
-    });
-  }, []);
-
-  const closeExistingMediaRootPrompt = useCallback(
-    (shouldRescan: boolean) => {
-      if (!existingMediaRootPrompt) return;
-      existingMediaRootPrompt.resolve(shouldRescan);
-      setExistingMediaRootPrompt(null);
-    },
-    [existingMediaRootPrompt],
-  );
-
-  const closeMediaRootLabelPrompt = useCallback(
-    (value: string | null) => {
-      if (!mediaRootLabelPrompt) return;
-      mediaRootLabelPrompt.resolve(value);
-      setMediaRootLabelPrompt(null);
-    },
-    [mediaRootLabelPrompt],
-  );
-
-  const submitMediaRootLabelPrompt = useCallback(() => {
-    const label = mediaRootLabelPrompt?.value.trim();
-    if (!label) return;
-    closeMediaRootLabelPrompt(label);
-  }, [closeMediaRootLabelPrompt, mediaRootLabelPrompt]);
 
   const ensureMediaRootForDirectory = useCallback(
     async (directory: FileSystemDirectoryHandle) => {
@@ -7645,10 +7616,7 @@ export default function App() {
         value: mediaRootLabelPrompt.value,
         onClose: () => closeMediaRootLabelPrompt(null),
         onSubmit: submitMediaRootLabelPrompt,
-        onValueChange: (value) =>
-          setMediaRootLabelPrompt((previous) =>
-            previous ? { ...previous, value } : previous,
-          ),
+        onValueChange: updateMediaRootLabelPromptValue,
       } : null}
       existingRoot={existingMediaRootPrompt ? {
         directoryName: existingMediaRootPrompt.directoryName,
