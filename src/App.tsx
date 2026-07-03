@@ -366,6 +366,7 @@ import {
   readStoredVolume,
   type AppTheme,
 } from "./appBrowserUtils";
+import { revokeObjectUrl, revokeObjectUrls } from "./appResourceCleanup";
 import { createPrimaryHomeLabels, formatSpecialInsightVideoMetric } from "./appViewModel";
 import { AiSubtitleDialog, type AiSubtitleTab } from "./AiSubtitleDialog";
 import { DanmakuDialog } from "./DanmakuDialog";
@@ -968,10 +969,10 @@ export default function App() {
         applyPhotoAlbumStore(store);
         photoAlbumsRef.current.forEach((album) => {
           album.images.forEach((image) => {
-            if (isObjectUrl(image.url)) URL.revokeObjectURL(image.url);
+            revokeObjectUrl(image.url);
           });
         });
-        Object.values(photoObjectUrlsRef.current).forEach((url) => URL.revokeObjectURL(url));
+        revokeObjectUrls(Object.values(photoObjectUrlsRef.current));
         photoObjectUrlsRef.current = {};
         photoObjectUrlAccessRef.current = {};
         decodedPhotoImageIdsRef.current.clear();
@@ -1809,7 +1810,7 @@ export default function App() {
       .then((url) => {
         createdUrl = url;
         if (isCancelled) {
-          if (isObjectUrl(url)) URL.revokeObjectURL(url);
+          revokeObjectUrl(url);
           return;
         }
         setSubtitles((previous) => {
@@ -1832,7 +1833,7 @@ export default function App() {
 
     return () => {
       isCancelled = true;
-      if (createdUrl && !didApplyUrl && isObjectUrl(createdUrl)) URL.revokeObjectURL(createdUrl);
+      if (!didApplyUrl) revokeObjectUrl(createdUrl);
     };
   }, [selectedSubtitle]);
   const effectivePlaybackRate = isHoldSpeedActive ? holdPlaybackRate : playbackRate;
@@ -2241,17 +2242,17 @@ export default function App() {
 
   const revokeVideoUrls = useCallback((items: VideoItem[]) => {
     items.forEach((video) => {
-      if (isObjectUrl(video.url)) URL.revokeObjectURL(video.url);
-      if (video.thumbnailUrl && isObjectUrl(video.thumbnailUrl)) URL.revokeObjectURL(video.thumbnailUrl);
+      revokeObjectUrl(video.url);
+      revokeObjectUrl(video.thumbnailUrl);
     });
   }, []);
 
   const revokeReplacedMediaRootVideoUrls = useCallback((replacedVideos: VideoItem[], nextVideos: VideoItem[]) => {
     const retainedVideoIds = new Set(nextVideos.map((video) => video.id));
     replacedVideos.forEach((video) => {
-      if (isObjectUrl(video.url)) URL.revokeObjectURL(video.url);
+      revokeObjectUrl(video.url);
       if (!retainedVideoIds.has(video.id) && video.thumbnailUrl && isObjectUrl(video.thumbnailUrl)) {
-        URL.revokeObjectURL(video.thumbnailUrl);
+        revokeObjectUrl(video.thumbnailUrl);
       }
     });
   }, []);
@@ -2261,7 +2262,7 @@ export default function App() {
     videoRef.current?.pause();
     revokeVideoUrls(videosRef.current);
     subtitlesRef.current.forEach((subtitle) => {
-      if (subtitle.url && isObjectUrl(subtitle.url)) URL.revokeObjectURL(subtitle.url);
+      revokeObjectUrl(subtitle.url);
     });
     videosRef.current = [];
     subtitlesRef.current = [];
@@ -2524,9 +2525,9 @@ export default function App() {
         didChange = true;
         const nextThumbnailUrl = url ?? (status === "failed" || status === "idle" ? undefined : video.thumbnailUrl);
         if (url && video.thumbnailUrl && video.thumbnailUrl !== url) {
-          URL.revokeObjectURL(video.thumbnailUrl);
+          revokeObjectUrl(video.thumbnailUrl);
         } else if (!url && nextThumbnailUrl !== video.thumbnailUrl && video.thumbnailUrl) {
-          URL.revokeObjectURL(video.thumbnailUrl);
+          revokeObjectUrl(video.thumbnailUrl);
         }
         return { ...video, thumbnailStatus: status, thumbnailUrl: nextThumbnailUrl };
       });
@@ -3428,8 +3429,8 @@ export default function App() {
       delete nextDanmakuSelections[video.id];
       nextFavorites.delete(video.id);
 
-      if (video.thumbnailUrl) URL.revokeObjectURL(video.thumbnailUrl);
-      if (isObjectUrl(video.url)) URL.revokeObjectURL(video.url);
+      revokeObjectUrl(video.thumbnailUrl);
+      revokeObjectUrl(video.url);
 
       videosRef.current = nextVideos;
       progressStoreRef.current = nextProgress;
@@ -3983,7 +3984,7 @@ export default function App() {
   const clearPhotoAlbumAccessAfterWritePermissionDenied = useCallback(async () => {
     await clearPhotoAlbumFolderHandle().catch(() => undefined);
     await clearCachedPhotoAlbumScan().catch(() => undefined);
-    Object.values(photoObjectUrlsRef.current).forEach((url) => URL.revokeObjectURL(url));
+    revokeObjectUrls(Object.values(photoObjectUrlsRef.current));
     photoAlbumDirectoryRef.current = null;
     photoAlbumsRef.current = [];
     photoObjectUrlsRef.current = {};
@@ -4115,8 +4116,8 @@ export default function App() {
       }
 
       const objectUrl = photoObjectUrlsRef.current[photo.id];
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-      if (isObjectUrl(photo.url)) URL.revokeObjectURL(photo.url);
+      revokeObjectUrl(objectUrl);
+      revokeObjectUrl(photo.url);
       const nextPhotoObjectUrls = { ...photoObjectUrlsRef.current };
       delete nextPhotoObjectUrls[photo.id];
       delete photoObjectUrlAccessRef.current[photo.id];
@@ -4270,8 +4271,8 @@ export default function App() {
       const nextPhotoObjectUrls = { ...photoObjectUrlsRef.current };
       album.images.forEach((image) => {
         const objectUrl = photoObjectUrlsRef.current[image.id];
-        if (objectUrl) URL.revokeObjectURL(objectUrl);
-        if (isObjectUrl(image.url)) URL.revokeObjectURL(image.url);
+        revokeObjectUrl(objectUrl);
+        revokeObjectUrl(image.url);
         delete nextPhotoObjectUrls[image.id];
         delete photoObjectUrlAccessRef.current[image.id];
         delete photoImageFilePromisesRef.current[image.id];
@@ -4697,7 +4698,7 @@ export default function App() {
         });
         subtitlesRef.current
           .filter((subtitle) => !existingSubtitlesOutsideRoot.includes(subtitle) && subtitle.url && isObjectUrl(subtitle.url))
-          .forEach((subtitle) => URL.revokeObjectURL(subtitle.url));
+          .forEach((subtitle) => revokeObjectUrl(subtitle.url));
         let mergedSubtitles = [...existingSubtitlesOutsideRoot, ...media.subtitles];
 
         const rootStatuses = mediaRootStatuses.filter((status) => status.id !== nextMediaRootId);
@@ -4823,7 +4824,7 @@ export default function App() {
       setSelectedSeriesKey(playerPreferencesRef.current.selectedSeriesKey);
       revokeVideoUrls(videosRef.current);
       subtitlesRef.current.forEach((subtitle) => {
-        if (subtitle.url) URL.revokeObjectURL(subtitle.url);
+        revokeObjectUrl(subtitle.url);
       });
       videosRef.current = media.videos;
       subtitlesRef.current = nextSubtitles;
@@ -4982,7 +4983,7 @@ export default function App() {
         try {
           const { thumbnailUrl, metadata } = await loadVideoThumbnail(libraryIdRef.current, video);
           if (isCancelled || thumbnailLoadRunIdRef.current !== runId) {
-            URL.revokeObjectURL(thumbnailUrl);
+            revokeObjectUrl(thumbnailUrl);
             const currentVideo = videosRef.current.find((item) => item.id === video.id);
             if (currentVideo?.thumbnailStatus === "loading") {
               setVideoThumbnailState(video.id, "idle");
@@ -5120,7 +5121,7 @@ export default function App() {
       thumbnailLoadRunIdRef.current += 1;
       revokeVideoUrls(videosRef.current);
       subtitlesRef.current.forEach((subtitle) => {
-        if (subtitle.url && isObjectUrl(subtitle.url)) URL.revokeObjectURL(subtitle.url);
+        revokeObjectUrl(subtitle.url);
       });
     };
   }, [revokeVideoUrls]);
@@ -5563,7 +5564,7 @@ export default function App() {
         setSubtitles((previous) => {
           previous
             .filter((item) => item.isManual && item.id.startsWith(`manual:${currentVideo.id}:`))
-            .forEach((item) => URL.revokeObjectURL(item.url));
+            .forEach((item) => revokeObjectUrl(item.url));
           return [
             ...previous.filter((item) => !(item.isManual && item.id.startsWith(`manual:${currentVideo.id}:`))),
             subtitleWithUrl,
@@ -5635,7 +5636,7 @@ export default function App() {
       const restoredIds = new Set(restoredSubtitles.map((subtitle) => subtitle.id));
       subtitlesRef.current
         .filter((subtitle) => restoredIds.has(subtitle.id) && subtitle.url && isObjectUrl(subtitle.url))
-        .forEach((subtitle) => URL.revokeObjectURL(subtitle.url));
+        .forEach((subtitle) => revokeObjectUrl(subtitle.url));
       const nextSubtitles = [
         ...subtitlesRef.current.filter((subtitle) => !restoredIds.has(subtitle.id)),
         ...restoredSubtitles,
@@ -5705,9 +5706,7 @@ export default function App() {
       setSubtitles((previous) => {
         previous
           .filter((item) => item.id === subtitleWithUrl.id)
-          .forEach((item) => {
-            if (item.url) URL.revokeObjectURL(item.url);
-          });
+          .forEach((item) => revokeObjectUrl(item.url));
         const nextSubtitles = [...previous.filter((item) => item.id !== subtitleWithUrl.id), subtitleWithUrl];
         subtitlesRef.current = nextSubtitles;
         return nextSubtitles;
