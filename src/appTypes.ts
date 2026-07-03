@@ -47,19 +47,6 @@ export type TagMergePrompt = {
   suggestion: TagMergeSuggestion;
 };
 
-export type DialogOffset = {
-  x: number;
-  y: number;
-};
-
-export type DialogDragState = {
-  pointerId: number;
-  startX: number;
-  startY: number;
-  originX: number;
-  originY: number;
-};
-
 export type ExistingMediaRootPrompt = {
   directoryName: string;
   mediaRootLabel: string;

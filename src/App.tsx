@@ -15,6 +15,7 @@ import {
 import { fetchLocalJson as fetchJson, readLocalApiStream } from "./localApiClient";
 import { readAiTextStream } from "./aiStreamClient";
 import { useCacheStatusDialog } from "./useCacheStatusDialog";
+import { useDraggableDialog } from "./useDraggableDialog";
 import { useLibrarySearchState } from "./useLibrarySearchState";
 import { usePhotoAlbumTagEditor } from "./usePhotoAlbumTagEditor";
 import { usePhotoObjectUrls } from "./usePhotoObjectUrls";
@@ -241,8 +242,6 @@ import type {
   CompatibleRemuxResponse,
   CompatibleRemuxStreamEvent,
   DanmakuSourcePayload,
-  DialogDragState,
-  DialogOffset,
   ExistingMediaRootPrompt,
   LibrarySearchResult,
   LibrarySearchSurface,
@@ -451,8 +450,6 @@ export default function App() {
   const watchActivityRef = useRef<WatchActivityStore>({});
   const videoHighlightsRef = useRef<VideoHighlightStore>({});
   const tagMergeDecisionsRef = useRef<TagMergeDecisionStore>({});
-  const tagDialogRef = useRef<HTMLElement | null>(null);
-  const tagDialogDragRef = useRef<DialogDragState | null>(null);
   const videosRef = useRef<VideoItem[]>([]);
   const subtitlesRef = useRef<SubtitleItem[]>([]);
   const danmakuSelectionsRef = useRef<DanmakuSelectionStore>({});
@@ -599,6 +596,14 @@ export default function App() {
   const [highEnergyTagPrompt, setHighEnergyTagPrompt] = useState<HighEnergyTagPrompt | null>(null);
   const [, setTagMergeDecisions] = useState<TagMergeDecisionStore>({});
   const [isTagDialogOpen, setIsTagDialogOpen] = useState(false);
+  const {
+    dialogRef: tagDialogRef,
+    isDragging: isTagDialogDragging,
+    moveDrag: moveTagDialogDrag,
+    offset: tagDialogOffset,
+    startDrag: startTagDialogDrag,
+    stopDrag: stopTagDialogDrag,
+  } = useDraggableDialog(isTagDialogOpen);
   const [ratingDialogVideoId, setRatingDialogVideoId] = useState<string | null>(null);
   const [ratingInput, setRatingInput] = useState("");
   const [ratingCommentInput, setRatingCommentInput] = useState("");
@@ -609,8 +614,6 @@ export default function App() {
   const [tagMessage, setTagMessage] = useState("");
   const [isTagSuggestionLoading, setIsTagSuggestionLoading] = useState(false);
   const [tagMergePrompt, setTagMergePrompt] = useState<TagMergePrompt | null>(null);
-  const [tagDialogOffset, setTagDialogOffset] = useState<DialogOffset>({ x: 0, y: 0 });
-  const [isTagDialogDragging, setIsTagDialogDragging] = useState(false);
   const [isAutoTagLoading, setIsAutoTagLoading] = useState(false);
   const [autoTagSuggestions, setAutoTagSuggestions] = useState<string[]>([]);
   const [selectedAutoTags, setSelectedAutoTags] = useState<Set<string>>(() => new Set());
@@ -3095,67 +3098,6 @@ export default function App() {
     });
     void addTagsToCurrentVideo(pendingTags, { skipPrompt: true });
   }, [addTagsToCurrentVideo, replaceTagMergeDecisions, tagMergePrompt]);
-
-  const clampTagDialogOffset = useCallback((offset: DialogOffset) => {
-    const dialog = tagDialogRef.current;
-    if (!dialog) return offset;
-
-    const rect = dialog.getBoundingClientRect();
-    const margin = 12;
-    const viewportWidth = window.innerWidth;
-    const viewportHeight = window.innerHeight;
-    const halfWidth = rect.width / 2;
-    const halfHeight = rect.height / 2;
-    const maxX = Math.max(0, viewportWidth / 2 - halfWidth - margin);
-    const minX = Math.min(0, -viewportWidth / 2 + halfWidth + margin);
-    const maxY = Math.max(0, viewportHeight / 2 - halfHeight - margin);
-    const minY = Math.min(0, -viewportHeight / 2 + halfHeight + margin);
-
-    return {
-      x: Math.min(maxX, Math.max(minX, offset.x)),
-      y: Math.min(maxY, Math.max(minY, offset.y)),
-    };
-  }, []);
-
-  const startTagDialogDrag = useCallback((event: ReactPointerEvent<HTMLElement>) => {
-    if (event.button !== 0) return;
-    const origin = tagDialogOffset;
-    tagDialogDragRef.current = {
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      startY: event.clientY,
-      originX: origin.x,
-      originY: origin.y,
-    };
-    setIsTagDialogDragging(true);
-    event.currentTarget.setPointerCapture(event.pointerId);
-  }, [tagDialogOffset]);
-
-  const moveTagDialogDrag = useCallback((event: ReactPointerEvent<HTMLElement>) => {
-    const dragState = tagDialogDragRef.current;
-    if (!dragState || dragState.pointerId !== event.pointerId) return;
-    setTagDialogOffset(clampTagDialogOffset({
-      x: dragState.originX + event.clientX - dragState.startX,
-      y: dragState.originY + event.clientY - dragState.startY,
-    }));
-  }, [clampTagDialogOffset]);
-
-  const stopTagDialogDrag = useCallback((event: ReactPointerEvent<HTMLElement>) => {
-    const dragState = tagDialogDragRef.current;
-    if (!dragState || dragState.pointerId !== event.pointerId) return;
-    tagDialogDragRef.current = null;
-    setIsTagDialogDragging(false);
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!isTagDialogOpen) return;
-    tagDialogDragRef.current = null;
-    setTagDialogOffset({ x: 0, y: 0 });
-    setIsTagDialogDragging(false);
-  }, [isTagDialogOpen]);
 
   const clearCurrentLibraryRuntimeData = useCallback(() => {
     progressStoreRef.current = {};
