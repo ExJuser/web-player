@@ -5,6 +5,21 @@ import { importTsModule } from "./importTsModule.mjs";
 
 const storage = await importTsModule(new URL("../src/photoAlbumStorage.ts", import.meta.url));
 
+function createAlbum(overrides = {}) {
+  return {
+    id: overrides.id ?? "photos|Set",
+    title: overrides.title ?? "Set",
+    relativePath: overrides.relativePath ?? "Set",
+    mediaRootId: "photos",
+    mediaRootLabel: overrides.mediaRootLabel ?? "Photos",
+    coverImageUrl: "",
+    imageCount: overrides.imageCount ?? 5,
+    totalSize: overrides.totalSize ?? 100,
+    updatedAt: overrides.updatedAt ?? 1,
+    images: overrides.images ?? [{ id: `${overrides.id ?? "photos|Set"}|001`, name: "001.jpg" }],
+  };
+}
+
 test("missing photo album store fields fall back to defaults", () => {
   const parsed = storage.parsePhotoAlbumStore(JSON.stringify({ version: 1 }));
 
@@ -61,18 +76,7 @@ test("photo album store keeps valid favorites, progress, preferences, and tags",
 });
 
 test("photo album display helpers keep sort labels and progress text", () => {
-  const album = {
-    id: "photos|Set",
-    title: "Set",
-    relativePath: "Set",
-    mediaRootId: "photos",
-    mediaRootLabel: "Photos",
-    coverImageUrl: "",
-    imageCount: 5,
-    totalSize: 100,
-    updatedAt: 1,
-    images: [],
-  };
+  const album = createAlbum();
 
   assert.deepEqual(storage.photoAlbumSortOptions.map((option) => [option.value, option.label]), [
     ["updated", "最近更新"],
@@ -83,6 +87,41 @@ test("photo album display helpers keep sort labels and progress text", () => {
   assert.equal(storage.formatPhotoAlbumProgress(album, { [album.id]: { imageIndex: 2, updatedAt: 10, completed: false } }), "看到 3 / 5");
   assert.equal(storage.formatPhotoAlbumProgress(album, { [album.id]: { imageIndex: 9, updatedAt: 10, completed: false } }), "看到 5 / 5");
   assert.equal(storage.formatPhotoAlbumProgress(album, { [album.id]: { imageIndex: 4, updatedAt: 10, completed: true } }), "已读完");
+});
+
+test("photo album display helpers filter sort paginate and summarize albums", () => {
+  const first = createAlbum({ id: "photos|A", title: "Alpha", relativePath: "旅行/Alpha", imageCount: 2, updatedAt: 20, images: [{ id: "a1", name: "cover-a.jpg" }] });
+  const second = createAlbum({ id: "photos|B", title: "Beta", relativePath: "人像/Beta", imageCount: 5, updatedAt: 30, images: [{ id: "b1", name: "cover-b.jpg" }] });
+  const third = createAlbum({ id: "photos|C", title: "Gamma", relativePath: "风景/Gamma", imageCount: 1, updatedAt: 10, images: [{ id: "c1", name: "cover-c.jpg" }] });
+  const albums = [first, second, third];
+  const favorites = new Set([second.id]);
+  const albumTags = {
+    [first.id]: ["旅行"],
+    [second.id]: ["人像"],
+    [third.id]: ["风景"],
+  };
+
+  assert.deepEqual(
+    storage.getVisiblePhotoAlbums({ albums, favoriteAlbumIds: favorites, filter: "favorites", searchQuery: "", sortMode: "updated", albumTags }).map((album) => album.id),
+    [second.id],
+  );
+  assert.deepEqual(
+    storage.getVisiblePhotoAlbums({ albums, favoriteAlbumIds: new Set(), filter: "all", searchQuery: "人像", sortMode: "updated", albumTags }).map((album) => album.id),
+    [second.id],
+  );
+  assert.deepEqual(
+    storage.getVisiblePhotoAlbums({ albums, favoriteAlbumIds: new Set(), filter: "all", searchQuery: "", sortMode: "count", albumTags }).map((album) => album.id),
+    [second.id, first.id, third.id],
+  );
+  assert.deepEqual(storage.getPagedPhotoAlbums(albums, 2, 2).map((album) => album.id), [third.id]);
+  assert.deepEqual(storage.getPhotoAlbumPageBounds(3, 2, 2), { pageCount: 2, start: 3, end: 3 });
+  assert.deepEqual(storage.getPhotoAlbumPageBounds(0, 1, 2), { pageCount: 1, start: 0, end: 0 });
+  assert.deepEqual(storage.createPhotoAlbumStats(albums, favorites, { [second.id]: { imageIndex: 4, updatedAt: 1, completed: true } }), {
+    total: 3,
+    images: 8,
+    favorites: 1,
+    completed: 1,
+  });
 });
 
 test("invalid photo album scan cache is ignored", () => {

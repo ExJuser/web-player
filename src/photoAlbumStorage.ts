@@ -1,5 +1,6 @@
 import type { CachedPhotoAlbumScan, PhotoAlbum, PhotoAlbumImage, PhotoAlbumPreferences, PhotoAlbumProgress, PhotoAlbumSortMode, PhotoAlbumStore } from "./playerTypes";
-import { normalizeTagKey } from "./tagUtils";
+import { collator } from "./playerConstants";
+import { getTagSearchScore, normalizeTagKey, parseTagInput } from "./tagUtils";
 export const photoAlbumScanCacheVersion = 1;
 
 export const photoAlbumSortOptions: Array<{ value: PhotoAlbumSortMode; label: string }> = [
@@ -18,6 +19,73 @@ export function formatPhotoAlbumProgress(album: PhotoAlbum, progressStore: Recor
   if (progress?.completed) return "已读完";
   if (!progress) return "未开始";
   return `看到 ${Math.min(progress.imageIndex + 1, album.imageCount)} / ${album.imageCount}`;
+}
+
+export function getVisiblePhotoAlbums(input: {
+  albums: PhotoAlbum[];
+  favoriteAlbumIds: ReadonlySet<string>;
+  filter: "all" | "favorites";
+  searchQuery: string;
+  sortMode: PhotoAlbumSortMode;
+  albumTags: Record<string, string[] | undefined>;
+}) {
+  const source =
+    input.filter === "favorites"
+      ? input.albums.filter((album) => input.favoriteAlbumIds.has(album.id))
+      : input.albums;
+  const queryTokens = parseTagInput(input.searchQuery);
+  const filteredSource = queryTokens.length
+    ? source.filter((album) => {
+        const tags = input.albumTags[album.id] ?? [];
+        const searchableText = normalizeTagKey([
+          album.title,
+          album.relativePath,
+          album.mediaRootLabel,
+          album.images[0]?.name ?? "",
+        ].join(" "));
+        return queryTokens.every((token) => {
+          const tokenKey = normalizeTagKey(token);
+          return Boolean(tokenKey && (searchableText.includes(tokenKey) || getTagSearchScore(token, tags) > 0));
+        });
+      })
+    : source;
+
+  return [...filteredSource].sort((a, b) => {
+    if (input.sortMode === "name") {
+      return collator.compare(a.title || a.relativePath, b.title || b.relativePath);
+    }
+    if (input.sortMode === "count") {
+      return b.imageCount - a.imageCount || collator.compare(a.title, b.title);
+    }
+    return b.updatedAt - a.updatedAt || collator.compare(a.title, b.title);
+  });
+}
+
+export function getPagedPhotoAlbums(albums: PhotoAlbum[], page: number, pageSize: number) {
+  const start = (page - 1) * pageSize;
+  return albums.slice(start, start + pageSize);
+}
+
+export function getPhotoAlbumPageBounds(totalCount: number, page: number, pageSize: number) {
+  return {
+    pageCount: Math.max(1, Math.ceil(totalCount / pageSize)),
+    start: totalCount ? (page - 1) * pageSize + 1 : 0,
+    end: Math.min(page * pageSize, totalCount),
+  };
+}
+
+export function createPhotoAlbumStats(
+  albums: PhotoAlbum[],
+  favoriteAlbumIds: ReadonlySet<string>,
+  progress: Record<string, PhotoAlbumProgress | undefined>,
+) {
+  const completed = albums.filter((album) => progress[album.id]?.completed).length;
+  return {
+    total: albums.length,
+    images: albums.reduce((sum, album) => sum + album.imageCount, 0),
+    favorites: favoriteAlbumIds.size,
+    completed,
+  };
 }
 
 export function parsePhotoAlbumCoverPreferences(source: unknown): Record<string, string> {

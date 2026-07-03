@@ -97,8 +97,12 @@ import type {
 } from "./playerTypes";
 import {
   clearCachedPhotoAlbumScan,
+  createPhotoAlbumStats,
   defaultPhotoAlbumPreferences,
   formatPhotoAlbumProgress,
+  getPagedPhotoAlbums,
+  getPhotoAlbumPageBounds,
+  getVisiblePhotoAlbums,
   loadCachedPhotoAlbumScan,
   loadPhotoAlbumStore,
   photoAlbumSortOptions,
@@ -288,7 +292,6 @@ import {
   createTagInputSuggestions,
   findTagMergeSuggestion,
   getActiveTagInputSegment,
-  getTagSearchScore,
   mergeTags,
   normalizeTagKey,
   parseTagInput,
@@ -1853,54 +1856,17 @@ export default function App() {
     () => photoAlbums.find((album) => album.id === photoAlbumTagEditorAlbumId) ?? null,
     [photoAlbums, photoAlbumTagEditorAlbumId],
   );
-  const visiblePhotoAlbums = useMemo(() => {
-    const source =
-      photoAlbumFilter === "favorites"
-        ? photoAlbums.filter((album) => favoritePhotoAlbumIds.has(album.id))
-        : photoAlbums;
-    const queryTokens = parseTagInput(photoAlbumSearchQuery);
-    const filteredSource = queryTokens.length
-      ? source.filter((album) => {
-          const tags = photoAlbumTags[album.id] ?? [];
-          const searchableText = normalizeTagKey([
-            album.title,
-            album.relativePath,
-            album.mediaRootLabel,
-            album.images[0]?.name ?? "",
-          ].join(" "));
-          return queryTokens.every((token) => {
-            const tokenKey = normalizeTagKey(token);
-            return Boolean(tokenKey && (searchableText.includes(tokenKey) || getTagSearchScore(token, tags) > 0));
-          });
-        })
-      : source;
-    return [...filteredSource].sort((a, b) => {
-      if (photoAlbumSortMode === "name") {
-        return collator.compare(a.title || a.relativePath, b.title || b.relativePath);
-      }
-      if (photoAlbumSortMode === "count") {
-        return b.imageCount - a.imageCount || collator.compare(a.title, b.title);
-      }
-      return b.updatedAt - a.updatedAt || collator.compare(a.title, b.title);
-    });
-  }, [favoritePhotoAlbumIds, photoAlbumFilter, photoAlbumSearchQuery, photoAlbumSortMode, photoAlbumTags, photoAlbums]);
-  const photoAlbumPageCount = Math.max(1, Math.ceil(visiblePhotoAlbums.length / photoAlbumPageSize));
-  const pagedPhotoAlbums = useMemo(() => {
-    const start = (photoAlbumPage - 1) * photoAlbumPageSize;
-    return visiblePhotoAlbums.slice(start, start + photoAlbumPageSize);
-  }, [photoAlbumPage, visiblePhotoAlbums]);
+  const visiblePhotoAlbums = useMemo(
+    () => getVisiblePhotoAlbums({ albums: photoAlbums, favoriteAlbumIds: favoritePhotoAlbumIds, filter: photoAlbumFilter, searchQuery: photoAlbumSearchQuery, sortMode: photoAlbumSortMode, albumTags: photoAlbumTags }),
+    [favoritePhotoAlbumIds, photoAlbumFilter, photoAlbumSearchQuery, photoAlbumSortMode, photoAlbumTags, photoAlbums],
+  );
+  const { pageCount: photoAlbumPageCount, start: photoAlbumPageStart, end: photoAlbumPageEnd } = getPhotoAlbumPageBounds(visiblePhotoAlbums.length, photoAlbumPage, photoAlbumPageSize);
+  const pagedPhotoAlbums = useMemo(
+    () => getPagedPhotoAlbums(visiblePhotoAlbums, photoAlbumPage, photoAlbumPageSize),
+    [photoAlbumPage, visiblePhotoAlbums],
+  );
   const isPhotoAlbumGridCompact = pagedPhotoAlbums.length <= 5;
-  const photoAlbumPageStart = visiblePhotoAlbums.length ? (photoAlbumPage - 1) * photoAlbumPageSize + 1 : 0;
-  const photoAlbumPageEnd = Math.min(photoAlbumPage * photoAlbumPageSize, visiblePhotoAlbums.length);
-  const photoAlbumStats = useMemo(() => {
-    const completed = photoAlbums.filter((album) => photoAlbumProgress[album.id]?.completed).length;
-    return {
-      total: photoAlbums.length,
-      images: photoAlbums.reduce((sum, album) => sum + album.imageCount, 0),
-      favorites: favoritePhotoAlbumIds.size,
-      completed,
-    };
-  }, [favoritePhotoAlbumIds.size, photoAlbumProgress, photoAlbums]);
+  const photoAlbumStats = useMemo(() => createPhotoAlbumStats(photoAlbums, favoritePhotoAlbumIds, photoAlbumProgress), [favoritePhotoAlbumIds, photoAlbumProgress, photoAlbums]);
   const visiblePhotoThumbnails = useMemo(() => {
     if (!selectedPhotoAlbum) return [];
     const halfWindow = Math.floor(photoThumbnailWindowSize / 2);
