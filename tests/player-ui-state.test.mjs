@@ -291,6 +291,72 @@ test("library stats helper counts total progress and favorites", () => {
   );
 });
 
+test("home card helpers sort resumable recent and favorite cards", () => {
+  const videos = [
+    { id: "a", relativePath: "Show/02.mkv", lastModified: 20 },
+    { id: "b", relativePath: "Show/01.mkv", lastModified: 30 },
+    { id: "c", relativePath: "Show/03.mkv", lastModified: 10 },
+    { id: "d", relativePath: "Show/04.mkv", lastModified: 40 },
+  ];
+  const progressById = {
+    a: { updatedAt: 10 },
+    b: { updatedAt: 30, completed: true },
+    c: { updatedAt: 20 },
+  };
+  const createCard = (video) => ({ video, progress: progressById[video.id] });
+  const isResumableProgress = (progress) => Boolean(progress && !progress.completed);
+
+  assert.deepEqual(
+    uiState.createResumableHomeCards({ videos, createCard, isResumableProgress }).map((card) => card.video.id),
+    ["c", "a"],
+  );
+  assert.deepEqual(uiState.createRecentHomeCards(videos, createCard).map((card) => card.video.id), ["c", "a", "b"]);
+  assert.deepEqual(
+    uiState.createFavoriteHomeCards({
+      videos,
+      favoriteVideoIds: new Set(["a", "b", "d"]),
+      createCard,
+    }).map((card) => card.video.id),
+    ["a", "d", "b"],
+  );
+  assert.equal(uiState.createPrimaryHomeCard(null, createCard(videos[0])).video.id, "a");
+});
+
+test("next episode helper follows the active series source", () => {
+  const videos = [
+    { id: "s1", relativePath: "Show/01.mkv", lastModified: 1 },
+    { id: "s2", relativePath: "Show/02.mkv", lastModified: 2 },
+    { id: "s3", relativePath: "Show/03.mkv", lastModified: 3 },
+    { id: "other", relativePath: "Other/01.mkv", lastModified: 4 },
+  ];
+  const createCard = (video) => ({ video });
+
+  assert.equal(
+    uiState.createNextEpisodeCard({
+      enabled: true,
+      primaryResumeCard: createCard(videos[0]),
+      recentHomeCards: [],
+      currentVideo: null,
+      playlistVideos: videos,
+      seriesTitleByVideoId: new Map(),
+      createCard,
+    }).video.id,
+    "s2",
+  );
+  assert.equal(
+    uiState.createNextEpisodeCard({
+      enabled: false,
+      primaryResumeCard: createCard(videos[0]),
+      recentHomeCards: [],
+      currentVideo: null,
+      playlistVideos: videos,
+      seriesTitleByVideoId: new Map(),
+      createCard,
+    }),
+    null,
+  );
+});
+
 test("video stats key is stable across media roots", () => {
   const first = uiState.createVideoStatsKey({
     id: "root-a|folder-a/movie.mp4|1024|1700000000000",

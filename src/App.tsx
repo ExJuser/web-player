@@ -181,7 +181,6 @@ import {
   formatWatchActivityMetric,
 } from "./playerFormatUtils";
 import {
-  compareNaturalRelativePath,
   createEmptyMediaCollection,
   getLatestResumableVideo,
   getSortedVideos,
@@ -255,12 +254,17 @@ import {
   createDuplicatePlaylistMetaByVideoId,
   createLibraryStats,
   createMediaRootIdSet,
+  createFavoriteHomeCards,
+  createNextEpisodeCard,
   createPlaylistPanelLabels,
   createPlaylistPageLabels,
   createPlaylistPageSizeSelectOptions,
   createPlaylistThumbnailVideos,
+  createPrimaryHomeCard,
+  createRecentHomeCards,
   createThumbnailQueueVideoIds,
   createRatingStats,
+  createResumableHomeCards,
   createSeriesOptions,
   createSeriesOptionsKey,
   createSeriesTitleByVideoId,
@@ -1520,56 +1524,40 @@ export default function App() {
   );
   const resumableHomeCards = useMemo(
     () =>
-      modeFilteredVideos
-        .map(createHomeVideoCard)
-        .filter((card) => isResumableProgress(card.progress))
-        .sort((a, b) => (b.progress?.updatedAt ?? 0) - (a.progress?.updatedAt ?? 0)),
+      createResumableHomeCards({
+        videos: modeFilteredVideos,
+        createCard: createHomeVideoCard,
+        isResumableProgress,
+      }),
     [createHomeVideoCard, modeFilteredVideos],
   );
   const primaryResumeCard = resumableHomeCards[0] ?? null;
   const recentHomeCards = useMemo(
-    () =>
-      modeFilteredVideos
-        .map(createHomeVideoCard)
-        .filter((card) => Boolean(card.progress))
-        .sort((a, b) => {
-          const aCompleted = a.progress?.completed ? 1 : 0;
-          const bCompleted = b.progress?.completed ? 1 : 0;
-          return aCompleted - bCompleted || (b.progress?.updatedAt ?? 0) - (a.progress?.updatedAt ?? 0);
-        })
-        .slice(0, 6),
+    () => createRecentHomeCards(modeFilteredVideos, createHomeVideoCard),
     [createHomeVideoCard, modeFilteredVideos],
   );
   const favoriteHomeCards = useMemo(
     () =>
-      modeFilteredVideos
-        .filter((video) => favoriteVideoIds.has(video.id))
-        .map(createHomeVideoCard)
-        .sort((a, b) => {
-          const statusRank = (card: HomeVideoCard) =>
-            card.progress?.completed ? 2 : card.progress ? 0 : 1;
-          return (
-            statusRank(a) - statusRank(b) ||
-            (b.progress?.updatedAt ?? b.video.lastModified) - (a.progress?.updatedAt ?? a.video.lastModified) ||
-            compareNaturalRelativePath(a.video.relativePath, b.video.relativePath)
-          );
-        })
-        .slice(0, 6),
+      createFavoriteHomeCards({
+        videos: modeFilteredVideos,
+        favoriteVideoIds,
+        createCard: createHomeVideoCard,
+      }),
     [createHomeVideoCard, favoriteVideoIds, modeFilteredVideos],
   );
-  const nextEpisodeCard = useMemo(() => {
-    if (!shouldShowNextEpisodeCard(homeMediaMode)) return null;
-    const sourceVideo = primaryResumeCard?.video ?? recentHomeCards[0]?.video ?? currentVideo;
-    if (!sourceVideo) return null;
-    const sourceSeriesKey = scopedSeriesKeyForVideo(sourceVideo, seriesTitleByVideoId.get(sourceVideo.id) ?? inferSeriesTitle(sourceVideo));
-    const seriesVideos = playlistVideos.filter(
-      (video) => scopedSeriesKeyForVideo(video, seriesTitleByVideoId.get(video.id) ?? inferSeriesTitle(video)) === sourceSeriesKey,
-    );
-    if (seriesVideos.length < 2) return null;
-    const sourceIndex = seriesVideos.findIndex((video) => video.id === sourceVideo.id);
-    if (sourceIndex < 0 || sourceIndex >= seriesVideos.length - 1) return null;
-    return createHomeVideoCard(seriesVideos[sourceIndex + 1]);
-  }, [createHomeVideoCard, currentVideo, homeMediaMode, playlistVideos, primaryResumeCard, recentHomeCards, seriesTitleByVideoId]);
+  const nextEpisodeCard = useMemo(
+    () =>
+      createNextEpisodeCard({
+        enabled: shouldShowNextEpisodeCard(homeMediaMode),
+        primaryResumeCard,
+        recentHomeCards,
+        currentVideo,
+        playlistVideos,
+        seriesTitleByVideoId,
+        createCard: createHomeVideoCard,
+      }),
+    [createHomeVideoCard, currentVideo, homeMediaMode, playlistVideos, primaryResumeCard, recentHomeCards, seriesTitleByVideoId],
+  );
   const isHomeViewVisible = activeView === "home" && !isPrivacyMode && !isCinemaMode && !isFullscreen;
   const isPhotoAlbumViewVisible =
     (activeView === "photos" || activeView === "photoViewer") && !isPrivacyMode && !isCinemaMode && !isFullscreen;
@@ -1582,7 +1570,7 @@ export default function App() {
     return () => window.clearInterval(timer);
   }, [isHomeViewVisible]);
   const firstPlayableHomeCard = playlistVideos[0] ? createHomeVideoCard(playlistVideos[0]) : null;
-  const primaryHomeCard = primaryResumeCard ?? firstPlayableHomeCard;
+  const primaryHomeCard = createPrimaryHomeCard(primaryResumeCard, firstPlayableHomeCard);
   const libraryStats = useMemo(
     () => createLibraryStats({ videos: modeFilteredVideos, progressStore, favoriteVideoIds, isResumableProgress }),
     [favoriteVideoIds, modeFilteredVideos, progressStore],

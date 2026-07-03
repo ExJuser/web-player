@@ -97,6 +97,18 @@ type ModeVideoForUi = IdentifiedVideoForUi & {
 
 type ProgressForUi = {
   completed?: boolean;
+  updatedAt?: number;
+};
+
+type HomeCardVideoForUi = IdentifiedVideoForUi & {
+  name: string;
+  relativePath: string;
+  lastModified: number;
+};
+
+type HomeCardForUi<Video extends HomeCardVideoForUi, Progress extends ProgressForUi = ProgressForUi> = {
+  video: Video;
+  progress?: Progress;
 };
 
 type WatchActivityVideoForUi = IdentifiedVideoForUi & {
@@ -314,6 +326,79 @@ export function createLibraryStats<Video extends IdentifiedVideoForUi, Progress 
     completed,
     favorites,
   };
+}
+
+export function createResumableHomeCards<Video extends HomeCardVideoForUi, Progress extends ProgressForUi, Card extends HomeCardForUi<Video, Progress>>(input: {
+  videos: Video[];
+  createCard: (video: Video) => Card;
+  isResumableProgress: (progress?: Progress) => boolean;
+}) {
+  return input.videos
+    .map(input.createCard)
+    .filter((card) => input.isResumableProgress(card.progress))
+    .sort((a, b) => (b.progress?.updatedAt ?? 0) - (a.progress?.updatedAt ?? 0));
+}
+
+export function createRecentHomeCards<Video extends HomeCardVideoForUi, Progress extends ProgressForUi, Card extends HomeCardForUi<Video, Progress>>(
+  videos: Video[],
+  createCard: (video: Video) => Card,
+  limit = 6,
+) {
+  return videos
+    .map(createCard)
+    .filter((card) => Boolean(card.progress))
+    .sort((a, b) => {
+      const aCompleted = a.progress?.completed ? 1 : 0;
+      const bCompleted = b.progress?.completed ? 1 : 0;
+      return aCompleted - bCompleted || (b.progress?.updatedAt ?? 0) - (a.progress?.updatedAt ?? 0);
+    })
+    .slice(0, limit);
+}
+
+export function createFavoriteHomeCards<Video extends HomeCardVideoForUi, Progress extends ProgressForUi, Card extends HomeCardForUi<Video, Progress>>(input: {
+  videos: Video[];
+  favoriteVideoIds: ReadonlySet<string>;
+  createCard: (video: Video) => Card;
+  limit?: number;
+}) {
+  const limit = input.limit ?? 6;
+  const statusRank = (card: Card) => (card.progress?.completed ? 2 : card.progress ? 0 : 1);
+  return input.videos
+    .filter((video) => input.favoriteVideoIds.has(video.id))
+    .map(input.createCard)
+    .sort(
+      (a, b) =>
+        statusRank(a) - statusRank(b) ||
+        (b.progress?.updatedAt ?? b.video.lastModified) - (a.progress?.updatedAt ?? a.video.lastModified) ||
+        compareNaturalRelativePath(a.video.relativePath, b.video.relativePath),
+    )
+    .slice(0, limit);
+}
+
+export function createNextEpisodeCard<Video extends HomeCardVideoForUi, Progress extends ProgressForUi, Card extends HomeCardForUi<Video, Progress>>(input: {
+  enabled: boolean;
+  primaryResumeCard?: Card | null;
+  recentHomeCards: Card[];
+  currentVideo?: Video | null;
+  playlistVideos: Video[];
+  seriesTitleByVideoId: ReadonlyMap<string, string>;
+  createCard: (video: Video) => Card;
+}) {
+  if (!input.enabled) return null;
+  const sourceVideo = input.primaryResumeCard?.video ?? input.recentHomeCards[0]?.video ?? input.currentVideo;
+  if (!sourceVideo) return null;
+  const sourceSeriesKey = scopedSeriesKeyForVideo(sourceVideo, input.seriesTitleByVideoId.get(sourceVideo.id) ?? inferSeriesTitle(sourceVideo));
+  const seriesVideos = input.playlistVideos.filter(
+    (video) => scopedSeriesKeyForVideo(video, input.seriesTitleByVideoId.get(video.id) ?? inferSeriesTitle(video)) === sourceSeriesKey,
+  );
+  if (seriesVideos.length < 2) return null;
+  const sourceIndex = seriesVideos.findIndex((video) => video.id === sourceVideo.id);
+  if (sourceIndex < 0 || sourceIndex >= seriesVideos.length - 1) return null;
+  return input.createCard(seriesVideos[sourceIndex + 1]);
+}
+
+export function createPrimaryHomeCard<Card>(primaryResumeCard: Card | null | undefined, firstPlaylistCard: Card | null | undefined) {
+  return primaryResumeCard ?? firstPlaylistCard ?? null;
 }
 
 export function createVideoStatsKey(video: VideoForStatsUi) {
