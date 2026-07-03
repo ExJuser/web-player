@@ -1,4 +1,4 @@
-import { Converter } from "opencc-js";
+import { Converter } from "opencc-js/t2cn";
 
 import type { DanmakuComment, DanmakuCommentMode, DanmakuProvider, DanmakuSource, DanmakuSourceBreakdown } from "./playerTypes";
 

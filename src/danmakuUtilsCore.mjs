@@ -1,4 +1,4 @@
-import { Converter } from "opencc-js";
+import { Converter } from "opencc-js/t2cn";
 
 const traditionalToSimplified = Converter({ from: "tw", to: "cn" });
 export const danmakuLaneLineHeight = 1.12;
