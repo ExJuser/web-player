@@ -19,6 +19,7 @@ import { useDraggableDialog } from "./useDraggableDialog";
 import { useLibrarySearchState } from "./useLibrarySearchState";
 import { useMediaRootLocalPathDialog } from "./useMediaRootLocalPathDialog";
 import { useMediaRootPrompts } from "./useMediaRootPrompts";
+import { usePlayerDataRuntime } from "./usePlayerDataRuntime";
 import { usePhotoAlbumRuntime } from "./usePhotoAlbumRuntime";
 import { usePhotoAlbumTagEditor } from "./usePhotoAlbumTagEditor";
 import { usePhotoObjectUrls } from "./usePhotoObjectUrls";
@@ -429,29 +430,30 @@ export default function App() {
   const rightKeyHoldTimerRef = useRef<number | null>(null);
   const rightMouseHoldTimerRef = useRef<number | null>(null);
   const rightMousePointerIdRef = useRef<number | null>(null);
-  const directoryRef = useRef<FileSystemDirectoryHandle | null>(null);
-  const libraryIdRef = useRef<string | null>(null);
-  const libraryMetadataRef = useRef<PlayerDataStore["metadata"] | undefined>(undefined);
-  const progressStoreRef = useRef<ProgressStore>({});
-  const playerDataSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
-  const playerPreferencesRef = useRef<PlayerPreferences>(defaultPlayerPreferences);
-  const playerSettingsRef = useRef<PlayerPersistentSettings>({
-    ...defaultPlayerSettings,
-    volume: initialVolumeRef.current,
-  });
-  const hasLoadedPlayerDataStoreRef = useRef(false);
-  const favoriteVideoIdsRef = useRef(new Set<string>());
-  const videoRatingsRef = useRef<VideoRatingStore>({});
-  const videoCommentsRef = useRef<VideoCommentStore>({});
-  const videoTagsRef = useRef<VideoTagStore>({});
-  const videoStatsRef = useRef<VideoStatsStore>({});
-  const watchActivityRef = useRef<WatchActivityStore>({});
-  const videoHighlightsRef = useRef<VideoHighlightStore>({});
-  const tagMergeDecisionsRef = useRef<TagMergeDecisionStore>({});
-  const videosRef = useRef<VideoItem[]>([]);
-  const subtitlesRef = useRef<SubtitleItem[]>([]);
-  const danmakuSelectionsRef = useRef<DanmakuSelectionStore>({});
-  const danmakuPreferencesRef = useRef<DanmakuPreferences>(defaultDanmakuPreferences);
+  const {
+    buildPlayerDataStore,
+    danmakuPreferencesRef,
+    danmakuSelectionsRef,
+    directoryRef,
+    duplicateDetectionResultsByModeRef,
+    favoriteVideoIdsRef,
+    hasLoadedPlayerDataStoreRef,
+    libraryIdRef,
+    libraryMetadataRef,
+    playerPreferencesRef,
+    playerSettingsRef,
+    progressStoreRef,
+    saveCurrentPlayerDataStore,
+    subtitlesRef,
+    tagMergeDecisionsRef,
+    videoCommentsRef,
+    videoHighlightsRef,
+    videoRatingsRef,
+    videosRef,
+    videoStatsRef,
+    videoTagsRef,
+    watchActivityRef,
+  } = usePlayerDataRuntime(initialVolumeRef.current);
   const localConfigRef = useRef<LocalConfig | null>(null);
   const mediaRootCacheLoadAttemptedRef = useRef(false);
   const cachedEmbeddedSubtitleLookupKeysRef = useRef(new Set<string>());
@@ -495,7 +497,6 @@ export default function App() {
   const duplicateVideoGroupsRef = useRef<DuplicateVideoGroup[]>([]);
   const duplicateDetectionResultScopeKeyRef = useRef("");
   const duplicateDetectionMessageRef = useRef("尚未检测重复视频。");
-  const duplicateDetectionResultsByModeRef = useRef<PlayerDataStore["duplicateDetections"]>({});
 
   useEffect(() => {
     if (!shouldStartLegacyThumbnailMigration()) return;
@@ -858,42 +859,6 @@ export default function App() {
     setRatingPlaylistMode(null);
     setDuplicateDetectionMessage(message);
   }, [getVideosForHomeMode]);
-
-  const buildPlayerDataStore = useCallback(
-    (overrides?: Partial<PlayerDataStore>): PlayerDataStore => ({
-      version: 5,
-      progress: progressStoreRef.current,
-      favorites: Array.from(favoriteVideoIdsRef.current),
-      videoRatings: videoRatingsRef.current,
-      videoComments: videoCommentsRef.current,
-      videoTags: videoTagsRef.current,
-      videoStats: videoStatsRef.current,
-      watchActivity: watchActivityRef.current,
-      videoHighlights: videoHighlightsRef.current,
-      tagMergeDecisions: tagMergeDecisionsRef.current,
-      embeddedSubtitles: createPersistedEmbeddedSubtitles(subtitlesRef.current),
-      danmakuSelections: danmakuSelectionsRef.current,
-      danmakuPreferences: danmakuPreferencesRef.current,
-      preferences: playerPreferencesRef.current,
-      settings: playerSettingsRef.current,
-      duplicateDetection: null,
-      duplicateDetections: duplicateDetectionResultsByModeRef.current,
-      metadata: libraryMetadataRef.current,
-      ...overrides,
-    }),
-    [],
-  );
-
-  const saveCurrentPlayerDataStore = useCallback(
-    async (overrides?: Partial<PlayerDataStore>) => {
-      const saveOperation = playerDataSaveQueueRef.current
-        .catch(() => undefined)
-        .then(() => saveGlobalPlayerDataStore(buildPlayerDataStore(overrides)));
-      playerDataSaveQueueRef.current = saveOperation.catch(() => undefined);
-      await saveOperation;
-    },
-    [buildPlayerDataStore],
-  );
 
   const applyCachedPhotoAlbumScan = useCallback((cache: CachedPhotoAlbumScan, options?: { status?: PlayerMediaRootStatus["status"]; message?: string; error?: string }) => {
     photoAlbumsRef.current = cache.albums;
