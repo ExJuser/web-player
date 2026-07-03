@@ -14,6 +14,8 @@ import {
 } from "react";
 
 import { fetchLocalJson as fetchJson, readLocalApiStream } from "./localApiClient";
+import { readAiTextStream } from "./aiStreamClient";
+import { usePhotoObjectUrls } from "./usePhotoObjectUrls";
 import { normalizeClientLocalConfig, shouldAutoScanGlobalMediaLibrary, supportsServerFileAccess } from "./localConfigClient";
 import {
   buildLibrarySearchCandidates,
@@ -24,7 +26,6 @@ import {
   librarySearchResultPageSize,
   searchLibraryEntries,
   type LibrarySearchCandidate,
-  type LibrarySearchEntry,
 } from "./librarySearchUtils";
 import {
   buildSpecialModeInsights,
@@ -87,7 +88,6 @@ import type {
   VideoHighlightSegment,
   VideoHighlightStore,
   VideoItem,
-  VideoPlayability,
   VideoMetadata,
   VideoCommentStore,
   VideoRatingStore,
@@ -204,12 +204,10 @@ import {
   type DuplicateNameSimilarityCacheEntry,
   type DuplicateNameSimilarityResponse,
 } from "./playerDuplicateRuntime";
-import { prunePhotoObjectUrlCache } from "./photoObjectUrlCache";
 import {
   collectPhotoAlbumsFromDirectory,
   createCachedPhotoAlbumScan,
   createPhotoAlbumRootStatusFromCache,
-  getPhotoImageFileFromDirectory,
   photoFileExists,
   resolvePhotoAlbumDirectory,
   resolvePhotoParentDirectory,
@@ -239,15 +237,33 @@ import {
   type UpdateMediaRootLocalPathResponse,
   type UpsertMediaRootResponse,
 } from "./mediaRootScanCache";
-
-
-const photoAlbumPageSize = 20;
-const photoThumbnailWindowSize = 24;
-const photoViewerWarmRadius = 4;
-const photoViewerDecodeRadius = 2;
-const photoAlbumScanCacheStaleMs = 24 * 60 * 60 * 1000;
-let hasStartedLegacyThumbnailMigration = false;
-
+import {
+  photoAlbumPageSize,
+  photoThumbnailWindowSize,
+  photoAlbumScanCacheStaleMs,
+  shouldStartLegacyThumbnailMigration,
+} from "./appConfig";
+import type {
+  AiTagMergeSuggestionResponse,
+  AutoTagSuggestionResponse,
+  BangumiSeriesMatch,
+  CompatibleMediaDeleteResponse,
+  CompatibleRemuxResponse,
+  CompatibleRemuxStreamEvent,
+  DanmakuSourcePayload,
+  DialogDragState,
+  DialogOffset,
+  ExistingMediaRootPrompt,
+  LibraryAiSearchResponse,
+  LibrarySearchMode,
+  LibrarySearchResult,
+  LibrarySearchSurface,
+  MediaProbeResponse,
+  MediaRootLabelPrompt,
+  MediaRootLocalPathDialog,
+  PlaybackSourceChoice,
+  TagMergePrompt,
+} from "./appTypes";
 import { ControlSelect } from "./ControlSelect";
 import {
   createPersistedEmbeddedSubtitles,
@@ -411,128 +427,6 @@ import { TagDialog } from "./TagDialog";
 import { WatchActivityMonth, WatchActivityTagButton } from "./WatchActivityCalendar";
 import { WatchActivitySection } from "./WatchActivitySection";
 
-type LibrarySearchMode = "idle" | "local" | "ai" | "empty";
-type LibrarySearchSurface = "home" | "player";
-
-type LibrarySearchResult = LibrarySearchEntry<VideoItem, PlaybackProgress>;
-
-type LibraryAiSearchResponse = {
-  answer: string;
-  matchIds: string[];
-};
-
-type DanmakuSourcePayload = {
-  source: DanmakuSource;
-  comments: DanmakuComment[];
-  reused?: number;
-  requested?: number;
-};
-
-type AiTagMergeSuggestionResponse = {
-  existingTag?: string;
-  newTag?: string;
-  reason?: string;
-};
-
-type AutoTagSuggestionResponse = {
-  tags?: string[];
-  summary?: string;
-  sources?: Array<{
-    title?: string;
-    url?: string;
-  }>;
-};
-
-type TagMergePrompt = {
-  pendingTags: string[];
-  suggestion: TagMergeSuggestion;
-};
-
-type DialogOffset = {
-  x: number;
-  y: number;
-};
-
-type DialogDragState = {
-  pointerId: number;
-  startX: number;
-  startY: number;
-  originX: number;
-  originY: number;
-};
-
-type ExistingMediaRootPrompt = {
-  directoryName: string;
-  mediaRootLabel: string;
-  resolve: (shouldRescan: boolean) => void;
-};
-
-type BangumiSubject = {
-  id: number;
-  name: string;
-  nameCn: string;
-  url: string;
-  score?: number;
-  rank?: number;
-  date?: string;
-  matchScore?: number;
-};
-
-type BangumiSeriesMatch = {
-  status: "loading" | "matched" | "none" | "error";
-  seriesKey: string;
-  title: string;
-  subject: BangumiSubject | null;
-  confidence: "high" | "medium" | "low" | "none";
-  source: "bangumi" | "ai" | "cache" | "none" | "error";
-  candidates: BangumiSubject[];
-  error?: string;
-  updatedAt?: number;
-};
-
-type MediaRootLabelPrompt = {
-  directoryName: string;
-  value: string;
-  resolve: (value: string | null) => void;
-};
-
-type MediaRootLocalPathDialog = {
-  root: LocalMediaRoot;
-  value: string;
-  error: string;
-  isSaving: boolean;
-};
-
-type AiStreamEvent =
-  | { type: "delta"; text: string }
-  | { type: "result"; text: string }
-  | { type: "message"; text: string }
-  | { type: "error"; error: string }
-  | { type: "done" };
-
-type CompatibleRemuxResponse = {
-  cacheId: string;
-  compatibleUrl: string;
-  playability: VideoPlayability;
-};
-
-type CompatibleMediaDeleteResponse = {
-  deleted: boolean;
-  cacheId: string;
-};
-
-type CompatibleRemuxStreamEvent =
-  | { type: "progress"; percent?: number; message?: string }
-  | { type: "done"; result: CompatibleRemuxResponse }
-  | { type: "error"; error: string };
-
-type MediaProbeResponse = {
-  playability: VideoPlayability;
-  metadata?: VideoMetadata;
-};
-
-type PlaybackSourceChoice = "original" | "compatible";
-
 export default function App() {
   const initialVolumeRef = useRef(readStoredVolume());
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -640,8 +534,7 @@ export default function App() {
   const duplicateDetectionResultsByModeRef = useRef<PlayerDataStore["duplicateDetections"]>({});
 
   useEffect(() => {
-    if (hasStartedLegacyThumbnailMigration) return;
-    hasStartedLegacyThumbnailMigration = true;
+    if (!shouldStartLegacyThumbnailMigration()) return;
     void migrateLegacyCachedThumbnailsToLocalData().catch(() => undefined);
   }, []);
 
@@ -1807,127 +1700,20 @@ export default function App() {
     () => getVisiblePhotoThumbnails(selectedPhotoAlbum, currentPhotoIndex, photoThumbnailWindowSize),
     [currentPhotoIndex, selectedPhotoAlbum],
   );
-  useEffect(() => {
-    const neededImages = new Map<string, PhotoAlbumImage>();
-    const directory = photoAlbumDirectoryRef.current;
-    const rememberNeededImage = (image?: PhotoAlbumImage | null) => {
-      if (image && !image.url && (image.file || directory)) neededImages.set(image.id, image);
-    };
-
-    if (activeView === "photos") {
-      pagedPhotoAlbums.forEach((album) => {
-        rememberNeededImage(album.images.find((image) => image.id === photoAlbumCoverPreferences[album.id]) ?? album.images[0]);
-      });
-    } else if (activeView === "photoViewer" && selectedPhotoAlbum) {
-      const warmStart = Math.max(currentPhotoIndex - photoViewerWarmRadius, 0);
-      const warmEnd = Math.min(currentPhotoIndex + photoViewerWarmRadius, selectedPhotoAlbum.images.length - 1);
-      rememberNeededImage(selectedPhotoAlbum.images[currentPhotoIndex]);
-      for (let index = warmStart; index <= warmEnd; index += 1) {
-        rememberNeededImage(selectedPhotoAlbum.images[index]);
-      }
-    }
-
-    const nextUrls = { ...photoObjectUrlsRef.current };
-    let didChange = false;
-    const missingImages: PhotoAlbumImage[] = [];
-
-    neededImages.forEach((image, id) => {
-      if (nextUrls[id]) {
-        photoObjectUrlAccessRef.current[id] = Date.now();
-        return;
-      }
-      if (image.file) {
-        nextUrls[id] = URL.createObjectURL(image.file);
-        photoObjectUrlAccessRef.current[id] = Date.now();
-        didChange = true;
-      } else if (directory) {
-        missingImages.push(image);
-      }
-    });
-
-    const prunedUrls = prunePhotoObjectUrlCache(
-      nextUrls,
-      photoObjectUrlAccessRef.current,
-      new Set(neededImages.keys()),
-      decodedPhotoImageIdsRef.current,
-    );
-    if (prunedUrls !== nextUrls) didChange = true;
-
-    if (didChange) {
-      photoObjectUrlsRef.current = prunedUrls;
-      setPhotoObjectUrls(prunedUrls);
-    }
-
-    if (!directory || !missingImages.length) return;
-
-    let isCancelled = false;
-    missingImages
-      .sort((a, b) => Math.abs(a.index - currentPhotoIndex) - Math.abs(b.index - currentPhotoIndex))
-      .forEach((image) => {
-        if (!photoImageFilePromisesRef.current[image.id]) {
-          photoImageFilePromisesRef.current[image.id] = getPhotoImageFileFromDirectory(directory, image.relativePath).catch(() => null);
-        }
-        void photoImageFilePromisesRef.current[image.id].then((file) => {
-          delete photoImageFilePromisesRef.current[image.id];
-          if (isCancelled || !file || photoObjectUrlsRef.current[image.id]) return;
-          const url = URL.createObjectURL(file);
-          if (isCancelled) {
-            URL.revokeObjectURL(url);
-            return;
-          }
-          photoObjectUrlAccessRef.current[image.id] = Date.now();
-          const cachedUrls = prunePhotoObjectUrlCache(
-            {
-              ...photoObjectUrlsRef.current,
-              [image.id]: url,
-            },
-            photoObjectUrlAccessRef.current,
-            new Set(neededImages.keys()),
-            decodedPhotoImageIdsRef.current,
-          );
-          photoObjectUrlsRef.current = cachedUrls;
-          setPhotoObjectUrls(cachedUrls);
-        });
-      });
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [activeView, currentPhotoIndex, pagedPhotoAlbums, photoAlbumCoverPreferences, selectedPhotoAlbum]);
-  useEffect(() => {
-    if (activeView !== "photoViewer" || !selectedPhotoAlbum) return;
-
-    const decodeStart = Math.max(currentPhotoIndex - photoViewerDecodeRadius, 0);
-    const decodeEnd = Math.min(currentPhotoIndex + photoViewerDecodeRadius, selectedPhotoAlbum.images.length - 1);
-    for (let index = decodeStart; index <= decodeEnd; index += 1) {
-      const image = selectedPhotoAlbum.images[index];
-      const url = image?.url || photoObjectUrls[image?.id ?? ""];
-      if (!image || !url || decodedPhotoImageIdsRef.current.has(image.id)) continue;
-
-      const preloadImage = new Image();
-      preloadImage.decoding = "async";
-      preloadImage.src = url;
-      if (preloadImage.decode) {
-        void preloadImage.decode()
-          .then(() => {
-            decodedPhotoImageIdsRef.current.add(image.id);
-          })
-          .catch(() => undefined);
-      } else {
-        preloadImage.onload = () => {
-          decodedPhotoImageIdsRef.current.add(image.id);
-        };
-      }
-    }
-  }, [activeView, currentPhotoIndex, photoObjectUrls, selectedPhotoAlbum]);
-  useEffect(() => {
-    return () => {
-      Object.values(photoObjectUrlsRef.current).forEach((url) => URL.revokeObjectURL(url));
-      photoObjectUrlsRef.current = {};
-      photoObjectUrlAccessRef.current = {};
-      decodedPhotoImageIdsRef.current.clear();
-    };
-  }, []);
+  usePhotoObjectUrls({
+    activeView,
+    currentPhotoIndex,
+    decodedPhotoImageIdsRef,
+    pagedPhotoAlbums,
+    photoAlbumCoverPreferences,
+    photoAlbumDirectoryRef,
+    photoImageFilePromisesRef,
+    photoObjectUrlAccessRef,
+    photoObjectUrls,
+    photoObjectUrlsRef,
+    selectedPhotoAlbum,
+    setPhotoObjectUrls,
+  });
   useEffect(() => {
     setPhotoAlbumPage((page) => Math.min(Math.max(page, 1), photoAlbumPageCount));
   }, [photoAlbumPageCount]);
@@ -6542,29 +6328,17 @@ export default function App() {
     try {
       const subtitleText = await readSubtitleText(selectedSubtitle);
       if (!subtitleText) throw new Error("当前字幕没有可分析的文本。");
-      await readLocalApiStream<AiStreamEvent>(
+      await readAiTextStream(
         "/api/ai/subtitles/summarize",
         {
-          method: "POST",
-          body: JSON.stringify({
-            videoName: currentVideo.name,
-            subtitleId: selectedSubtitle.id,
-            subtitleText,
-          }),
+          videoName: currentVideo.name,
+          subtitleId: selectedSubtitle.id,
+          subtitleText,
         },
-        (event) => {
-          if (event.type === "message") {
-            setAiMessage(event.text);
-            return;
-          }
-          if (event.type === "result") {
-            setSubtitleSummary(event.text);
-            return;
-          }
-          if (event.type === "delta") {
-            setAiMessage("");
-            setSubtitleSummary((previous) => previous + event.text);
-          }
+        {
+          onMessage: setAiMessage,
+          onResult: setSubtitleSummary,
+          onDelta: (text) => setSubtitleSummary((previous) => previous + text),
         },
       );
       setAiMessage("");
@@ -6595,29 +6369,17 @@ export default function App() {
       const subtitleText = await readSubtitleText(selectedSubtitle);
       const cues = parseSubtitleCues(subtitleText);
       if (!cues.length) throw new Error("当前字幕没有可检索的文本片段。");
-      await readLocalApiStream<AiStreamEvent>(
+      await readAiTextStream(
         "/api/ai/subtitles/ask",
         {
-          method: "POST",
-          body: JSON.stringify({
-            videoName: currentVideo.name,
-            question,
-            chunks: selectRelevantSubtitleChunks(question, cues, currentTime),
-          }),
+          videoName: currentVideo.name,
+          question,
+          chunks: selectRelevantSubtitleChunks(question, cues, currentTime),
         },
-        (event) => {
-          if (event.type === "message") {
-            setAiMessage(event.text);
-            return;
-          }
-          if (event.type === "result") {
-            setSubtitleAnswer(event.text);
-            return;
-          }
-          if (event.type === "delta") {
-            setAiMessage("");
-            setSubtitleAnswer((previous) => previous + event.text);
-          }
+        {
+          onMessage: setAiMessage,
+          onResult: setSubtitleAnswer,
+          onDelta: (text) => setSubtitleAnswer((previous) => previous + text),
         },
       );
       setAiMessage("");
@@ -6645,30 +6407,18 @@ export default function App() {
       if (!cues.length) throw new Error("当前字幕没有可回顾的文本片段。");
       const viewedText = createViewedSubtitleText(cues, currentTime);
       if (!viewedText) throw new Error("当前时间前还没有可回顾的字幕内容。");
-      await readLocalApiStream<AiStreamEvent>(
+      await readAiTextStream(
         "/api/ai/subtitles/recap",
         {
-          method: "POST",
-          body: JSON.stringify({
-            videoName: currentVideo.name,
-            subtitleId: selectedSubtitle.id,
-            currentTime,
-            viewedText,
-          }),
+          videoName: currentVideo.name,
+          subtitleId: selectedSubtitle.id,
+          currentTime,
+          viewedText,
         },
-        (event) => {
-          if (event.type === "message") {
-            setAiMessage(event.text);
-            return;
-          }
-          if (event.type === "result") {
-            setSubtitleRecap(event.text);
-            return;
-          }
-          if (event.type === "delta") {
-            setAiMessage("");
-            setSubtitleRecap((previous) => previous + event.text);
-          }
+        {
+          onMessage: setAiMessage,
+          onResult: setSubtitleRecap,
+          onDelta: (text) => setSubtitleRecap((previous) => previous + text),
         },
       );
       setAiMessage("");
@@ -6720,30 +6470,18 @@ export default function App() {
       if (!cues.length) throw new Error("当前字幕没有可回顾的文本片段。");
       const viewedText = createViewedSubtitleText(cues, progress.currentTime);
       if (!viewedText) throw new Error("当前进度前还没有可回顾的字幕内容。");
-      await readLocalApiStream<AiStreamEvent>(
+      await readAiTextStream(
         "/api/ai/subtitles/recap",
         {
-          method: "POST",
-          body: JSON.stringify({
-            videoName: homeRecapCard.video.name,
-            subtitleId: recapSubtitle.id,
-            currentTime: progress.currentTime,
-            viewedText,
-          }),
+          videoName: homeRecapCard.video.name,
+          subtitleId: recapSubtitle.id,
+          currentTime: progress.currentTime,
+          viewedText,
         },
-        (event) => {
-          if (event.type === "message") {
-            setHomeProgressRecapMessage(event.text);
-            return;
-          }
-          if (event.type === "result") {
-            setHomeProgressRecap(event.text);
-            return;
-          }
-          if (event.type === "delta") {
-            setHomeProgressRecapMessage("");
-            setHomeProgressRecap((previous) => previous + event.text);
-          }
+        {
+          onMessage: setHomeProgressRecapMessage,
+          onResult: setHomeProgressRecap,
+          onDelta: (text) => setHomeProgressRecap((previous) => previous + text),
         },
       );
       setHomeProgressRecapMessage("");
