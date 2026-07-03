@@ -17,7 +17,7 @@
   - Defines data roots relative to the project root passed from `vite.config.ts`.
   - Keeps all route paths, methods, responses, and error messages unchanged.
 - Modify: `vite.config.ts`
-  - Remove `@ts-nocheck`.
+  - Remove the full-file TypeScript check skip directive.
   - Remove API helper imports and route/helper definitions.
   - Import `playerDataApiPlugin` from `./server/playerDataApiPlugin.mjs`.
   - Pass `{ projectRoot: __dirname, env }` to the plugin.
@@ -216,7 +216,7 @@ Run:
 npm run build
 ```
 
-Expected: build passes with no `@ts-nocheck` in `vite.config.ts`.
+Expected: build passes with no full-file TypeScript check skip directive in `vite.config.ts`.
 
 ## Task 3: Full Verification and Commit
 
@@ -243,12 +243,13 @@ npm run build
 
 Expected: TypeScript and Vite build pass. The existing large chunk warning may remain.
 
-- [ ] **Step 3: Verify `@ts-nocheck` removal**
+- [ ] **Step 3: Verify full-file TypeScript check skip removal**
 
 Run:
 
 ```powershell
-rg -n --fixed-strings "@ts-nocheck" .
+$needle = '@ts-' + 'nocheck'
+rg -n --fixed-strings $needle .
 ```
 
 Expected: no matches.
