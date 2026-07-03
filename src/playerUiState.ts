@@ -421,6 +421,36 @@ export function createPlaylistThumbnailVideos<Video extends IdentifiedVideoForUi
   return queuedVideos;
 }
 
+export function createThumbnailQueueVideoIds<Video extends IdentifiedVideoForUi>(input: {
+  isHomeViewVisible: boolean;
+  primaryHomeVideo?: Video | null;
+  nextEpisodeVideo?: Video | null;
+  recentHomeVideos: Array<Video | null | undefined>;
+  favoriteHomeVideos: Array<Video | null | undefined>;
+  watchActivityCarouselVideoIds: string[];
+  modeFilteredVideoById: ReadonlyMap<string, Video>;
+  playlistThumbnailVideos: Video[];
+}) {
+  const queuedVideos = input.isHomeViewVisible
+    ? [
+        input.primaryHomeVideo,
+        input.nextEpisodeVideo,
+        ...input.recentHomeVideos,
+        ...input.favoriteHomeVideos,
+        ...input.watchActivityCarouselVideoIds.map((videoId) => input.modeFilteredVideoById.get(videoId)),
+        ...input.playlistThumbnailVideos,
+      ]
+    : input.playlistThumbnailVideos;
+  const seenIds = new Set<string>();
+  const ids: string[] = [];
+  queuedVideos.forEach((video) => {
+    if (!video || seenIds.has(video.id)) return;
+    seenIds.add(video.id);
+    ids.push(video.id);
+  });
+  return ids;
+}
+
 export function getDuplicatePlaylistVideos<Video extends RatedVideoForUi>(
   videos: Video[],
   groups: Array<DuplicateVideoGroupForUi<RatedVideoForUi>>,

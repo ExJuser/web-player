@@ -257,6 +257,7 @@ import {
   createPlaylistPageLabels,
   createPlaylistPageSizeSelectOptions,
   createPlaylistThumbnailVideos,
+  createThumbnailQueueVideoIds,
   createRatingStats,
   createSeriesOptions,
   createSeriesOptionsKey,
@@ -1661,35 +1662,29 @@ export default function App() {
       })
       .slice(0, 5);
   }, [createHomeVideoCard, modeFilteredVideos, selectedWatchActivityDay, watchActivityRevision]);
-  const thumbnailQueueVideoIds = useMemo(() => {
-    const queuedVideos = isHomeViewVisible
-      ? [
-          primaryHomeCard?.video,
-          nextEpisodeCard?.video,
-          ...recentHomeCards.map((card) => card.video),
-          ...favoriteHomeCards.map((card) => card.video),
-          ...watchActivityCarouselVideoIds.map((videoId) => modeFilteredVideoById.get(videoId)),
-          ...playlistThumbnailVideos,
-        ]
-      : playlistThumbnailVideos;
-    const seenIds = new Set<string>();
-    const ids: string[] = [];
-    queuedVideos.forEach((video) => {
-      if (!video || seenIds.has(video.id)) return;
-      seenIds.add(video.id);
-      ids.push(video.id);
-    });
-    return ids;
-  }, [
-    favoriteHomeCards,
-    isHomeViewVisible,
-    modeFilteredVideoById,
-    nextEpisodeCard,
-    playlistThumbnailVideos,
-    primaryHomeCard,
-    recentHomeCards,
-    watchActivityCarouselVideoIds,
-  ]);
+  const thumbnailQueueVideoIds = useMemo(
+    () =>
+      createThumbnailQueueVideoIds({
+        isHomeViewVisible,
+        primaryHomeVideo: primaryHomeCard?.video,
+        nextEpisodeVideo: nextEpisodeCard?.video,
+        recentHomeVideos: recentHomeCards.map((card) => card.video),
+        favoriteHomeVideos: favoriteHomeCards.map((card) => card.video),
+        watchActivityCarouselVideoIds,
+        modeFilteredVideoById,
+        playlistThumbnailVideos,
+      }),
+    [
+      favoriteHomeCards,
+      isHomeViewVisible,
+      modeFilteredVideoById,
+      nextEpisodeCard,
+      playlistThumbnailVideos,
+      primaryHomeCard,
+      recentHomeCards,
+      watchActivityCarouselVideoIds,
+    ],
+  );
   const thumbnailQueueVideoIdsKey = useMemo(() => thumbnailQueueVideoIds.join("\n"), [thumbnailQueueVideoIds]);
   const getDuplicateFingerprint = useCallback(async (video: VideoItem, signal?: AbortSignal) => {
     const cacheKey = createDuplicateFingerprintCacheKey(video);

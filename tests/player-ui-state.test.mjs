@@ -381,6 +381,37 @@ test("playlist thumbnail helper prioritizes active neighbors and dedupes page vi
   );
 });
 
+test("thumbnail queue ids prioritize home cards and dedupe playlist entries", () => {
+  const videos = ["primary", "next", "recent", "favorite", "activity", "page"].map((id) => ({ id }));
+  const modeFilteredVideoById = new Map(videos.map((video) => [video.id, video]));
+
+  assert.deepEqual(
+    uiState.createThumbnailQueueVideoIds({
+      isHomeViewVisible: true,
+      primaryHomeVideo: videos[0],
+      nextEpisodeVideo: videos[1],
+      recentHomeVideos: [videos[2], videos[0]],
+      favoriteHomeVideos: [videos[3], null],
+      watchActivityCarouselVideoIds: ["activity", "missing", "next"],
+      modeFilteredVideoById,
+      playlistThumbnailVideos: [videos[5], videos[3]],
+    }),
+    ["primary", "next", "recent", "favorite", "activity", "page"],
+  );
+
+  assert.deepEqual(
+    uiState.createThumbnailQueueVideoIds({
+      isHomeViewVisible: false,
+      recentHomeVideos: [videos[2]],
+      favoriteHomeVideos: [videos[3]],
+      watchActivityCarouselVideoIds: ["activity"],
+      modeFilteredVideoById,
+      playlistThumbnailVideos: [videos[5], videos[5]],
+    }),
+    ["page"],
+  );
+});
+
 test("duplicate playlist helpers dedupe videos and build metadata", () => {
   const videos = [{ id: "a", name: "a.mp4" }, { id: "b", name: "b.mp4" }, { id: "c", name: "c.mp4" }];
   const groups = [
