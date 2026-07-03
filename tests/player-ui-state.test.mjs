@@ -412,6 +412,41 @@ test("thumbnail queue ids prioritize home cards and dedupe playlist entries", ()
   );
 });
 
+test("watch activity helpers build carousel and selected day cards", () => {
+  const videos = [
+    { id: "a", relativePath: "Show/02.mkv" },
+    { id: "b", relativePath: "Show/01.mkv" },
+    { id: "c", relativePath: "Show/03.mkv" },
+  ];
+  const createCard = (video) => ({ video, title: video.id });
+  const days = [
+    { date: "2026-01-01", watchedSeconds: 0, playCount: 0, completedCount: 0, emissionCount: 0, videoIds: [] },
+    { date: "2026-01-02", watchedSeconds: 30, playCount: 1, completedCount: 0, emissionCount: 0, videoIds: ["missing", "a", "b"] },
+    { date: "2026-01-03", watchedSeconds: 0, playCount: 0, completedCount: 0, emissionCount: 0, videoIds: ["c"] },
+  ];
+  const videoById = new Map(videos.map((video) => [video.id, video]));
+  const carouselCardsByDate = uiState.createWatchActivityCarouselCardsByDate({ days, videoById, createCard, maxCardsPerDay: 2 });
+
+  assert.deepEqual(Array.from(carouselCardsByDate.keys()), ["2026-01-02", "2026-01-03"]);
+  assert.deepEqual(carouselCardsByDate.get("2026-01-02").map((card) => card.video.id), ["a"]);
+  assert.deepEqual(uiState.createWatchActivityCarouselVideoIds(carouselCardsByDate), ["a", "c"]);
+  assert.equal(uiState.resolveSelectedWatchActivityDay(days, "missing").date, "2026-01-02");
+
+  assert.deepEqual(
+    uiState.createSelectedWatchActivityCards({
+      day: days[1],
+      videos,
+      activityStore: {
+        "2026-01-02::a": { watchedSeconds: 10 },
+        "2026-01-02::b": { watchedSeconds: 10 },
+        "2026-01-02::c": { watchedSeconds: 60 },
+      },
+      createCard,
+    }).map((card) => card.video.id),
+    ["b", "a"],
+  );
+});
+
 test("duplicate playlist helpers dedupe videos and build metadata", () => {
   const videos = [{ id: "a", name: "a.mp4" }, { id: "b", name: "b.mp4" }, { id: "c", name: "c.mp4" }];
   const groups = [

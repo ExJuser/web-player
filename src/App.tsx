@@ -262,8 +262,11 @@ import {
   createSeriesOptions,
   createSeriesOptionsKey,
   createSeriesTitleByVideoId,
+  createSelectedWatchActivityCards,
   createVideoMetadataRows,
   createVideoMetadataTitle,
+  createWatchActivityCarouselCardsByDate,
+  createWatchActivityCarouselVideoIds,
   countRatingFilterMatches,
   filterVideosBySeries,
   filterRatingPlaylistVideos,
@@ -280,6 +283,7 @@ import {
   createSubtitleControlOptions,
   createVideoStatsKey,
   isMediaRootInHomeMode,
+  resolveSelectedWatchActivityDay,
   resolvePlayerEntrySeriesMode,
   resolveRestoredEmbeddedSubtitleSelection,
   resolveSubtitleSelection,
@@ -1615,53 +1619,33 @@ export default function App() {
     [watchActivityInsights.days],
   );
   const modeFilteredVideoById = useMemo(() => new Map(modeFilteredVideos.map((video) => [video.id, video])), [modeFilteredVideos]);
-  const watchActivityCarouselCardsByDate = useMemo(() => {
-    const cardsByDate = new Map<string, HomeVideoCard[]>();
-    watchActivityInsights.days.forEach((day) => {
-      const cards = day.videoIds
-        .slice(0, 5)
-        .map((videoId) => modeFilteredVideoById.get(videoId))
-        .filter((video): video is VideoItem => Boolean(video))
-        .map(createHomeVideoCard);
-      if (cards.length) cardsByDate.set(day.date, cards);
-    });
-    return cardsByDate;
-  }, [createHomeVideoCard, modeFilteredVideoById, watchActivityInsights.days]);
-  const watchActivityCarouselVideoIds = useMemo(() => {
-    const seenIds = new Set<string>();
-    const ids: string[] = [];
-    watchActivityCarouselCardsByDate.forEach((cards) => {
-      cards.forEach((card) => {
-        if (seenIds.has(card.video.id)) return;
-        seenIds.add(card.video.id);
-        ids.push(card.video.id);
-      });
-    });
-    return ids;
-  }, [watchActivityCarouselCardsByDate]);
-  const selectedWatchActivityDay = useMemo(
+  const watchActivityCarouselCardsByDate = useMemo(
     () =>
-      watchActivityInsights.days.find((day) => day.date === selectedWatchActivityDate) ??
-      [...watchActivityInsights.days]
-        .reverse()
-        .find((day) => day.watchedSeconds > 0 || day.playCount > 0 || day.completedCount > 0 || day.emissionCount > 0) ??
-      watchActivityInsights.days[watchActivityInsights.days.length - 1] ??
-      null,
+      createWatchActivityCarouselCardsByDate({
+        days: watchActivityInsights.days,
+        videoById: modeFilteredVideoById,
+        createCard: createHomeVideoCard,
+      }),
+    [createHomeVideoCard, modeFilteredVideoById, watchActivityInsights.days],
+  );
+  const watchActivityCarouselVideoIds = useMemo(
+    () => createWatchActivityCarouselVideoIds(watchActivityCarouselCardsByDate),
+    [watchActivityCarouselCardsByDate],
+  );
+  const selectedWatchActivityDay = useMemo(
+    () => resolveSelectedWatchActivityDay(watchActivityInsights.days, selectedWatchActivityDate),
     [selectedWatchActivityDate, watchActivityInsights.days],
   );
-  const selectedWatchActivityCards = useMemo(() => {
-    if (!selectedWatchActivityDay) return [];
-    const selectedIds = new Set(selectedWatchActivityDay.videoIds);
-    return modeFilteredVideos
-      .filter((video) => selectedIds.has(video.id))
-      .map(createHomeVideoCard)
-      .sort((a, b) => {
-        const aActivity = watchActivityRef.current[createWatchActivityKey(selectedWatchActivityDay.date, a.video.id)];
-        const bActivity = watchActivityRef.current[createWatchActivityKey(selectedWatchActivityDay.date, b.video.id)];
-        return (bActivity?.watchedSeconds ?? 0) - (aActivity?.watchedSeconds ?? 0) || compareNaturalRelativePath(a.video.relativePath, b.video.relativePath);
-      })
-      .slice(0, 5);
-  }, [createHomeVideoCard, modeFilteredVideos, selectedWatchActivityDay, watchActivityRevision]);
+  const selectedWatchActivityCards = useMemo(
+    () =>
+      createSelectedWatchActivityCards({
+        day: selectedWatchActivityDay,
+        videos: modeFilteredVideos,
+        activityStore: watchActivityRef.current,
+        createCard: createHomeVideoCard,
+      }),
+    [createHomeVideoCard, modeFilteredVideos, selectedWatchActivityDay, watchActivityRevision],
+  );
   const thumbnailQueueVideoIds = useMemo(
     () =>
       createThumbnailQueueVideoIds({

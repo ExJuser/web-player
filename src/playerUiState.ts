@@ -6,8 +6,10 @@ import {
 } from "./playerFormatUtils";
 import { fallbackMediaRootLabelForVideo } from "./mediaPathUtils";
 import { collator, playlistPageSizeOptions } from "./playerConstants";
+import { compareNaturalRelativePath } from "./playerMediaUtils";
 import { inferSeriesTitle, scopedSeriesKeyForVideo, type SeriesVideo } from "./playerSeriesUtils";
 import type { HomeMediaMode } from "./playerTypes";
+import { createWatchActivityKey, type WatchActivityDayInsight } from "./watchActivityInsights";
 
 export type { HomeMediaMode };
 
@@ -84,6 +86,20 @@ type RatedVideoForUi = {
 type IdentifiedVideoForUi = {
   id: string;
 };
+
+type WatchActivityVideoForUi = IdentifiedVideoForUi & {
+  relativePath: string;
+};
+
+type WatchActivityCardForUi<Video extends WatchActivityVideoForUi> = {
+  video: Video;
+};
+
+type IdentifiedCardForUi<Video extends IdentifiedVideoForUi = IdentifiedVideoForUi> = {
+  video: Video;
+};
+
+type WatchActivityStoreForUi = Record<string, { watchedSeconds?: number } | undefined>;
 
 type DuplicateVideoGroupForUi<Video extends RatedVideoForUi> = {
   videos: Video[];
@@ -449,6 +465,73 @@ export function createThumbnailQueueVideoIds<Video extends IdentifiedVideoForUi>
     ids.push(video.id);
   });
   return ids;
+}
+
+export function createWatchActivityCarouselCardsByDate<Video extends WatchActivityVideoForUi, Card extends WatchActivityCardForUi<Video>>(input: {
+  days: WatchActivityDayInsight[];
+  videoById: ReadonlyMap<string, Video>;
+  createCard: (video: Video) => Card;
+  maxCardsPerDay?: number;
+}) {
+  const maxCardsPerDay = input.maxCardsPerDay ?? 5;
+  const cardsByDate = new Map<string, Card[]>();
+  input.days.forEach((day) => {
+    const cards = day.videoIds
+      .slice(0, maxCardsPerDay)
+      .map((videoId) => input.videoById.get(videoId))
+      .filter((video): video is Video => Boolean(video))
+      .map(input.createCard);
+    if (cards.length) cardsByDate.set(day.date, cards);
+  });
+  return cardsByDate;
+}
+
+export function createWatchActivityCarouselVideoIds<Card extends IdentifiedCardForUi>(
+  cardsByDate: ReadonlyMap<string, Card[]>,
+) {
+  const seenIds = new Set<string>();
+  const ids: string[] = [];
+  cardsByDate.forEach((cards) => {
+    cards.forEach((card) => {
+      if (seenIds.has(card.video.id)) return;
+      seenIds.add(card.video.id);
+      ids.push(card.video.id);
+    });
+  });
+  return ids;
+}
+
+export function resolveSelectedWatchActivityDay(days: WatchActivityDayInsight[], selectedDate: string | null | undefined) {
+  return (
+    days.find((day) => day.date === selectedDate) ??
+    [...days]
+      .reverse()
+      .find((day) => day.watchedSeconds > 0 || day.playCount > 0 || day.completedCount > 0 || day.emissionCount > 0) ??
+    days[days.length - 1] ??
+    null
+  );
+}
+
+export function createSelectedWatchActivityCards<Video extends WatchActivityVideoForUi, Card extends WatchActivityCardForUi<Video>>(input: {
+  day: WatchActivityDayInsight | null;
+  videos: Video[];
+  activityStore: WatchActivityStoreForUi;
+  createCard: (video: Video) => Card;
+  maxCards?: number;
+}) {
+  if (!input.day) return [];
+  const day = input.day;
+  const maxCards = input.maxCards ?? 5;
+  const selectedIds = new Set(day.videoIds);
+  return input.videos
+    .filter((video) => selectedIds.has(video.id))
+    .map(input.createCard)
+    .sort((a, b) => {
+      const aActivity = input.activityStore[createWatchActivityKey(day.date, a.video.id)];
+      const bActivity = input.activityStore[createWatchActivityKey(day.date, b.video.id)];
+      return (bActivity?.watchedSeconds ?? 0) - (aActivity?.watchedSeconds ?? 0) || compareNaturalRelativePath(a.video.relativePath, b.video.relativePath);
+    })
+    .slice(0, maxCards);
 }
 
 export function getDuplicatePlaylistVideos<Video extends RatedVideoForUi>(
