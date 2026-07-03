@@ -355,6 +355,32 @@ test("playlist panel labels preserve playlist title branches", () => {
   assert.equal(uiState.createPlaylistPanelLabels({ ...base, modeFilteredVideoCount: 0, totalVideoCount: 0 }).title, "等待新增媒体库");
 });
 
+test("playlist thumbnail helper prioritizes active neighbors and dedupes page videos", () => {
+  const visibleVideos = Array.from({ length: 8 }, (_, index) => ({ id: `v${index}` }));
+  const visibleVideoIndexById = new Map(visibleVideos.map((video, index) => [video.id, index]));
+
+  assert.deepEqual(
+    uiState.createPlaylistThumbnailVideos({
+      visibleVideos,
+      pagedVideos: [visibleVideos[0], visibleVideos[4], visibleVideos[7]],
+      visibleVideoIndexById,
+      currentVideoId: "v4",
+      activeRadius: 1,
+    }).map((video) => video.id),
+    ["v3", "v4", "v5", "v0", "v7"],
+  );
+  assert.deepEqual(
+    uiState.createPlaylistThumbnailVideos({
+      visibleVideos,
+      pagedVideos: [visibleVideos[1], visibleVideos[2]],
+      visibleVideoIndexById,
+      currentVideoId: null,
+      activeRadius: 1,
+    }).map((video) => video.id),
+    ["v1", "v2"],
+  );
+});
+
 test("duplicate playlist helpers dedupe videos and build metadata", () => {
   const videos = [{ id: "a", name: "a.mp4" }, { id: "b", name: "b.mp4" }, { id: "c", name: "c.mp4" }];
   const groups = [

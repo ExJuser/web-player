@@ -81,6 +81,10 @@ type RatedVideoForUi = {
   id: string;
 };
 
+type IdentifiedVideoForUi = {
+  id: string;
+};
+
 type DuplicateVideoGroupForUi<Video extends RatedVideoForUi> = {
   videos: Video[];
   severity: string;
@@ -382,6 +386,39 @@ export function createPlaylistPanelLabels(input: {
           : "等待新增媒体库";
 
   return { ariaLabel, title };
+}
+
+export function createPlaylistThumbnailVideos<Video extends IdentifiedVideoForUi>(input: {
+  visibleVideos: Video[];
+  pagedVideos: Video[];
+  visibleVideoIndexById: ReadonlyMap<string, number>;
+  currentVideoId: string | null | undefined;
+  activeRadius: number;
+}) {
+  const queuedVideos: Video[] = [];
+  const seenIds = new Set<string>();
+  const addVideoRange = (startIndex: number, endIndex: number) => {
+    for (let index = Math.max(0, startIndex); index < Math.min(input.visibleVideos.length, endIndex); index += 1) {
+      const video = input.visibleVideos[index];
+      if (!video || seenIds.has(video.id)) continue;
+      seenIds.add(video.id);
+      queuedVideos.push(video);
+    }
+  };
+
+  if (input.currentVideoId) {
+    const activeIndex = input.visibleVideoIndexById.get(input.currentVideoId);
+    if (activeIndex !== undefined) {
+      addVideoRange(activeIndex - input.activeRadius, activeIndex + input.activeRadius + 1);
+    }
+  }
+
+  input.pagedVideos.forEach((video) => {
+    if (seenIds.has(video.id)) return;
+    seenIds.add(video.id);
+    queuedVideos.push(video);
+  });
+  return queuedVideos;
 }
 
 export function getDuplicatePlaylistVideos<Video extends RatedVideoForUi>(

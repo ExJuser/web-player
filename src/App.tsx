@@ -256,6 +256,7 @@ import {
   createPlaylistPanelLabels,
   createPlaylistPageLabels,
   createPlaylistPageSizeSelectOptions,
+  createPlaylistThumbnailVideos,
   createRatingStats,
   createSeriesOptions,
   createSeriesOptionsKey,
@@ -1444,32 +1445,10 @@ export default function App() {
     () => createPlaylistPageSizeSelectOptions(),
     [],
   );
-  const playlistThumbnailVideos = useMemo(() => {
-    const queuedVideos: VideoItem[] = [];
-    const seenIds = new Set<string>();
-    const addVideoRange = (startIndex: number, endIndex: number) => {
-      for (let index = Math.max(0, startIndex); index < Math.min(visibleVideos.length, endIndex); index += 1) {
-        const video = visibleVideos[index];
-        if (!video || seenIds.has(video.id)) continue;
-        seenIds.add(video.id);
-        queuedVideos.push(video);
-      }
-    };
-
-    if (currentVideoId) {
-      const activeIndex = visibleVideoIndexById.get(currentVideoId);
-      if (activeIndex !== undefined) {
-        addVideoRange(activeIndex - playlistActiveThumbnailRadius, activeIndex + playlistActiveThumbnailRadius + 1);
-      }
-    }
-
-    pagedPlaylistVideos.forEach((video) => {
-      if (seenIds.has(video.id)) return;
-      seenIds.add(video.id);
-      queuedVideos.push(video);
-    });
-    return queuedVideos;
-  }, [currentVideoId, pagedPlaylistVideos, visibleVideoIndexById, visibleVideos]);
+  const playlistThumbnailVideos = useMemo(
+    () => createPlaylistThumbnailVideos({ visibleVideos, pagedVideos: pagedPlaylistVideos, visibleVideoIndexById, currentVideoId, activeRadius: playlistActiveThumbnailRadius }),
+    [currentVideoId, pagedPlaylistVideos, visibleVideoIndexById, visibleVideos],
+  );
   const isCurrentVideoVisible = useMemo(
     () => !!currentVideoId && visibleVideos.some((video) => video.id === currentVideoId),
     [currentVideoId, visibleVideos],
