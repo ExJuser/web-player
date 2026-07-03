@@ -17,6 +17,7 @@ import { readAiTextStream } from "./aiStreamClient";
 import { useCacheStatusDialog } from "./useCacheStatusDialog";
 import { useLibrarySearchState } from "./useLibrarySearchState";
 import { usePhotoObjectUrls } from "./usePhotoObjectUrls";
+import { useShortcutSettings } from "./useShortcutSettings";
 import { normalizeClientLocalConfig, shouldAutoScanGlobalMediaLibrary, supportsServerFileAccess } from "./localConfigClient";
 import {
   buildLibrarySearchCandidates,
@@ -73,7 +74,6 @@ import type {
   PlaylistFilter,
   PlaylistSortMode,
   ProgressStore,
-  ShortcutAction,
   ShortcutMap,
   SubtitleItem,
   TagMergeDecisionStore,
@@ -123,7 +123,6 @@ import {
   doubleClickFeedbackDelay,
   playlistActiveThumbnailRadius,
   playlistScrollFrameDelay,
-  defaultShortcuts,
   defaultPlayerSettings,
   defaultPlayerPreferences,
   defaultDanmakuPreferences,
@@ -157,7 +156,6 @@ import {
 import {
   clamp,
   formatShortcutKey,
-  getShortcutConflict,
   resolveInitialPlaybackTime,
   shortcutCodeFromEvent,
 } from "./playerInteractionUtils";
@@ -642,13 +640,10 @@ export default function App() {
   const [selectedSeriesKey, setSelectedSeriesKey] = useState(defaultPlayerPreferences.selectedSeriesKey);
   const [isCinemaMode, setIsCinemaMode] = useState(defaultPlayerPreferences.isCinemaMode);
   const [startFromHighEnergy, setStartFromHighEnergy] = useState(defaultPlayerPreferences.startFromHighEnergy);
-  const [recordingShortcutAction, setRecordingShortcutAction] = useState<ShortcutAction | null>(null);
-  const [shortcutMessage, setShortcutMessage] = useState("");
   const [isScanning, setIsScanning] = useState(false);
   const [isMainVideoLoading, setIsMainVideoLoading] = useState(false);
   const [isDragActive, setIsDragActive] = useState(false);
   const [isFolderDialogOpen, setIsFolderDialogOpen] = useState(false);
-  const [isShortcutDialogOpen, setIsShortcutDialogOpen] = useState(false);
   const [isSeriesMenuOpen, setIsSeriesMenuOpen] = useState(false);
   const [isMediaLibraryPanelOpen, setIsMediaLibraryPanelOpen] = useState(false);
   const [isPrivacyMode, setIsPrivacyMode] = useState(false);
@@ -3252,37 +3247,19 @@ export default function App() {
     [activateDuplicateDetectionForMode, replacePlayerPreferences],
   );
 
-  const updateShortcut = useCallback(
-    (action: ShortcutAction, nextCode: string) => {
-      const conflictAction = getShortcutConflict(playerPreferencesRef.current.shortcuts, action, nextCode);
-      if (conflictAction) {
-        const conflictItem = shortcutGroups
-          .flatMap((group) => group.items)
-          .find((item) => item.action === conflictAction);
-        setShortcutMessage(`“${formatShortcutKey(nextCode)}” 已用于 ${conflictItem?.label ?? "其他动作"}`);
-        return;
-      }
-
-      replacePlayerPreferences({
-        ...playerPreferencesRef.current,
-        shortcuts: {
-          ...playerPreferencesRef.current.shortcuts,
-          [action]: nextCode,
-        },
-      });
-      setShortcutMessage(`已设置为 ${formatShortcutKey(nextCode)}`);
-    },
-    [replacePlayerPreferences],
-  );
-
-  const resetShortcuts = useCallback(() => {
-    replacePlayerPreferences({
-      ...playerPreferencesRef.current,
-      shortcuts: defaultShortcuts,
-    });
-    setRecordingShortcutAction(null);
-    setShortcutMessage("已恢复默认快捷键");
-  }, [replacePlayerPreferences]);
+  const {
+    closeShortcutDialog,
+    handleShortcutCapture,
+    isShortcutDialogOpen,
+    recordingShortcutAction,
+    resetShortcuts,
+    shortcutMessage,
+    startShortcutRecording,
+    toggleShortcutDialog,
+  } = useShortcutSettings({
+    playerPreferencesRef,
+    replacePlayerPreferences,
+  });
 
   const toggleStartFromHighEnergy = useCallback(() => {
     replacePlayerPreferences({
@@ -3471,23 +3448,6 @@ export default function App() {
       document.removeEventListener("click", handleClick);
     };
   }, []);
-
-  const handleShortcutCapture = useCallback(
-    (event: React.KeyboardEvent<HTMLButtonElement>, action: ShortcutAction) => {
-      event.preventDefault();
-      event.stopPropagation();
-      if (event.key === "Escape") {
-        setRecordingShortcutAction(null);
-        setShortcutMessage("");
-        return;
-      }
-
-      const nextCode = shortcutCodeFromEvent(event);
-      updateShortcut(action, nextCode);
-      setRecordingShortcutAction(null);
-    },
-    [updateShortcut],
-  );
 
   const toggleFavorite = useCallback(
     (video: VideoItem) => {
@@ -6508,10 +6468,6 @@ export default function App() {
     onClearRuntimeCache: clearCurrentLibraryRuntimeData,
   });
 
-  const toggleShortcutDialog = useCallback(() => {
-    setIsShortcutDialogOpen((open) => !open);
-  }, []);
-
   const enterPrivacyMode = useCallback(() => {
     const element = videoRef.current;
     privacyResumePlaybackRef.current = currentVideo
@@ -6522,7 +6478,7 @@ export default function App() {
       : null;
     persistCurrentProgress();
     resetHoldSpeedState();
-    setIsShortcutDialogOpen(false);
+    closeShortcutDialog();
     setPhotoDeleteCandidate(null);
     setPhotoDeleteError("");
     setIsPhotoDeletePending(false);
@@ -6541,7 +6497,7 @@ export default function App() {
     }
     setIsPrivacyMode(true);
     setMessage("隐私模式已开启");
-  }, [currentVideo, persistCurrentProgress, resetHoldSpeedState]);
+  }, [closeShortcutDialog, currentVideo, persistCurrentProgress, resetHoldSpeedState]);
 
   const exitPrivacyMode = useCallback(() => {
     const resumePlayback = privacyResumePlaybackRef.current;
@@ -6784,7 +6740,7 @@ export default function App() {
 
       if (event.key === "Escape" && isShortcutDialogOpen) {
         event.preventDefault();
-        setIsShortcutDialogOpen(false);
+        closeShortcutDialog();
         return;
       }
 
@@ -6968,6 +6924,7 @@ export default function App() {
     activeView,
     autoNextPrompt,
     cancelAutoNextPrompt,
+    closeShortcutDialog,
     clearRightKeyHoldTimer,
     compatibleMediaConfirm,
     currentVideo,
@@ -8061,11 +8018,8 @@ export default function App() {
       shortcuts={shortcuts}
       recordingShortcutAction={recordingShortcutAction}
       shortcutMessage={shortcutMessage}
-      onClose={() => setIsShortcutDialogOpen(false)}
-      onStartRecording={(action, label) => {
-        setRecordingShortcutAction(action);
-        setShortcutMessage(`按下新的“${label}”快捷键`);
-      }}
+      onClose={closeShortcutDialog}
+      onStartRecording={startShortcutRecording}
       onCapture={handleShortcutCapture}
       onReset={resetShortcuts}
       formatShortcutKey={formatShortcutKey}
