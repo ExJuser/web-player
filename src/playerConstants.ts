@@ -14,6 +14,19 @@ export const collator = new Intl.Collator(undefined, { numeric: true, sensitivit
 export const rates = [0.5, 1, 1.25, 1.5, 1.75, 2, 2.5, 3];
 export const seekSteps = [5, 10, 15];
 export const holdRates = [1.5, 2, 2.5, 3, 4];
+export function createPlaybackRateOptions(effectivePlaybackRate: number) {
+  if (rates.includes(effectivePlaybackRate)) return rates;
+  return [...rates, effectivePlaybackRate].sort((a, b) => a - b);
+}
+
+export function createRateSelectOptions(values: number[]) {
+  return values.map((rate) => ({ value: rate, label: `${rate}x` }));
+}
+
+export function createSeekStepSelectOptions(values = seekSteps) {
+  return values.map((step) => ({ value: step, label: `${step}s` }));
+}
+
 export const playbackModeOptions: Array<{ value: PlaybackMode; label: string }> = [
   { value: "sequential", label: "顺序播放" },
   { value: "single-loop", label: "单集循环" },

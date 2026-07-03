@@ -113,8 +113,9 @@ import {
 import {
   PROGRESS_FILE_NAME,
   collator,
-  rates,
-  seekSteps,
+  createPlaybackRateOptions,
+  createRateSelectOptions,
+  createSeekStepSelectOptions,
   holdRates,
   playbackModeOptions,
   playlistSortOptions,
@@ -2174,20 +2175,17 @@ export default function App() {
     };
   }, [selectedSubtitle]);
   const effectivePlaybackRate = isHoldSpeedActive ? holdPlaybackRate : playbackRate;
-  const playbackRateOptions = useMemo(() => {
-    if (rates.includes(effectivePlaybackRate)) return rates;
-    return [...rates, effectivePlaybackRate].sort((a, b) => a - b);
-  }, [effectivePlaybackRate]);
+  const playbackRateOptions = useMemo(() => createPlaybackRateOptions(effectivePlaybackRate), [effectivePlaybackRate]);
   const playbackRateSelectOptions = useMemo(
-    () => playbackRateOptions.map((rate) => ({ value: rate, label: `${rate}x` })),
+    () => createRateSelectOptions(playbackRateOptions),
     [playbackRateOptions],
   );
   const holdRateSelectOptions = useMemo(
-    () => holdRates.map((rate) => ({ value: rate, label: `${rate}x` })),
+    () => createRateSelectOptions(holdRates),
     [],
   );
   const seekStepSelectOptions = useMemo(
-    () => seekSteps.map((step) => ({ value: step, label: `${step}s` })),
+    () => createSeekStepSelectOptions(),
     [],
   );
   const shellStyle = useMemo(
