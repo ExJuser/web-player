@@ -21,6 +21,7 @@ import { useEmbeddedSubtitleController } from "./useEmbeddedSubtitleController";
 import { useLibrarySearchState } from "./useLibrarySearchState";
 import { useMediaRootLocalPathDialog } from "./useMediaRootLocalPathDialog";
 import { useMediaRootPrompts } from "./useMediaRootPrompts";
+import { useMediaProbeController } from "./useMediaProbeController";
 import { useApplyPlayerDataStore, usePlayerDataRuntime } from "./usePlayerDataRuntime";
 import { usePhotoAlbumRuntime } from "./usePhotoAlbumRuntime";
 import { usePhotoAlbumTagEditor } from "./usePhotoAlbumTagEditor";
@@ -241,7 +242,6 @@ import type {
   DanmakuSourcePayload,
   LibrarySearchResult,
   LibrarySearchSurface,
-  MediaProbeResponse,
   PlaybackSourceChoice,
   TagMergePrompt,
 } from "./appTypes";
@@ -2435,46 +2435,15 @@ export default function App() {
     });
   }, []);
 
-  useEffect(() => {
-    if (!currentVideo || !currentMediaRootId || !canUseServerMediaTools) return;
-    if (currentVideo.playability || mediaProbeVideoIdRef.current === currentVideo.id) return;
-
-    let isCancelled = false;
-    const videoId = currentVideo.id;
-    mediaProbeVideoIdRef.current = videoId;
-    setMediaProbeVideoId(videoId);
-    fetchJson<MediaProbeResponse>("/api/media/probe", {
-      method: "POST",
-      body: JSON.stringify({
-        rootId: currentMediaRootId,
-        relativePath: currentVideo.relativePath,
-      }),
-    })
-      .then((payload) => {
-        if (isCancelled) return;
-        updateVideoPlayability(videoId, payload.playability);
-        if (payload.metadata) {
-          updateVideoMetadata(videoId, payload.metadata);
-        }
-      })
-      .catch((error) => {
-        if (isCancelled) return;
-        updateVideoPlayability(videoId, {
-          status: "unknown",
-          reason: error instanceof Error ? `媒体探测失败：${error.message}` : "媒体探测失败。",
-        });
-      })
-      .finally(() => {
-        if (mediaProbeVideoIdRef.current === videoId) {
-          mediaProbeVideoIdRef.current = null;
-          setMediaProbeVideoId((currentId) => (currentId === videoId ? null : currentId));
-        }
-      });
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [canUseServerMediaTools, currentMediaRootId, currentVideo, updateVideoPlayability]);
+  useMediaProbeController({
+    canUseServerMediaTools,
+    currentMediaRootId,
+    currentVideo,
+    mediaProbeVideoIdRef,
+    setMediaProbeVideoId,
+    updateVideoMetadata,
+    updateVideoPlayability,
+  });
 
   const updateProgress = useCallback(
     (video: VideoItem, currentTime: number, duration: number, completed?: boolean) => {
