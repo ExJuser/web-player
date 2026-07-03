@@ -367,6 +367,7 @@ import {
   readStoredVolume,
   type AppTheme,
 } from "./appBrowserUtils";
+import { createPrimaryHomeLabels, formatSpecialInsightVideoMetric } from "./appViewModel";
 import { AiSubtitleDialog, type AiSubtitleTab } from "./AiSubtitleDialog";
 import { DanmakuDialog } from "./DanmakuDialog";
 import {
@@ -6859,8 +6860,12 @@ export default function App() {
   };
 
   const progressPercent = duration ? Math.min(100, (currentTime / duration) * 100) : 0;
-  const primaryHomeTitle = primaryResumeCard ? "继续观看" : modeFilteredVideos.length ? "开始观看" : "准备播放";
-  const primaryHomeAction = primaryResumeCard ? "继续播放" : "播放第一个视频";
+  const primaryHomeLabels = createPrimaryHomeLabels({
+    primaryResumeCard,
+    modeFilteredVideoCount: modeFilteredVideos.length,
+  });
+  const primaryHomeTitle = primaryHomeLabels.title;
+  const primaryHomeAction = primaryHomeLabels.action;
   const markVideoThumbnailFailed = useCallback((videoId: string) => setVideoThumbnailState(videoId, "failed"), []);
   const specialInsightRankingVideos = specialModeInsights
     ? {
@@ -6870,15 +6875,10 @@ export default function App() {
         active: specialModeInsights.videosByRecentActivity,
       }[specialInsightTab]
     : [];
-  const formatSpecialInsightVideoMetric = (insight: SpecialModeVideoInsight) => {
-    if (specialInsightTab === "played") {
-      const intensity = insight.playIntensity ? ` · 约 ${insight.playIntensity.toFixed(1)} 遍` : "";
-      return `${formatCumulativeDuration(insight.stats.totalPlayedSeconds)}${intensity}`;
-    }
-    if (specialInsightTab === "count") return `${insight.stats.playCount} 次播放`;
-    if (specialInsightTab === "emission") return `${insight.stats.emissionCount} 次发射`;
-    return formatRelativeTime(insight.activeAt);
-  };
+  const formatSpecialInsightMetric = useCallback(
+    (insight: SpecialModeVideoInsight) => formatSpecialInsightVideoMetric(insight, specialInsightTab),
+    [specialInsightTab],
+  );
   const renderHomeListCard = useCallback((card: HomeVideoCard, index: number) => (
     <HomeListCard
       card={card}
@@ -7096,7 +7096,7 @@ export default function App() {
                 activeTab={specialInsightTab}
                 formatDuration={formatCumulativeDuration}
                 formatRelativeTime={formatRelativeTime}
-                formatVideoMetric={formatSpecialInsightVideoMetric}
+                formatVideoMetric={formatSpecialInsightMetric}
                 insights={specialModeInsights}
                 onOpenVideo={openVideoFromHome}
                 onSelectTag={runSpecialInsightTagSearch}
