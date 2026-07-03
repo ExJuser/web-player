@@ -5,7 +5,7 @@ import {
   formatTime,
 } from "./playerFormatUtils";
 import { fallbackMediaRootLabelForVideo } from "./mediaPathUtils";
-import { collator } from "./playerConstants";
+import { collator, playlistPageSizeOptions } from "./playerConstants";
 import { inferSeriesTitle, scopedSeriesKeyForVideo, type SeriesVideo } from "./playerSeriesUtils";
 import type { HomeMediaMode } from "./playerTypes";
 
@@ -301,6 +301,31 @@ export function countRatingFilterMatches<Video extends RatedVideoForUi>(
   threshold: number,
 ) {
   return videos.filter((video) => doesVideoMatchRatingFilter(ratings[video.id], operator, threshold)).length;
+}
+
+export function createPlaylistPageLabels(input: {
+  totalCount: number;
+  startIndex: number;
+  pageCount: number;
+}) {
+  const startLabel = input.totalCount ? input.startIndex + 1 : 0;
+  const endLabel = Math.min(input.startIndex + input.pageCount, input.totalCount);
+  return { startLabel, endLabel };
+}
+
+export function formatPlaylistVisibleCountLabel(input: {
+  totalCount: number;
+  pageSize: number;
+  startLabel: number;
+  endLabel: number;
+}) {
+  return input.totalCount > input.pageSize
+    ? `${input.startLabel}-${input.endLabel} / ${input.totalCount}`
+    : `${input.totalCount}`;
+}
+
+export function createPlaylistPageSizeSelectOptions(values = playlistPageSizeOptions) {
+  return values.map((size) => ({ value: size, label: `${size}/页` }));
 }
 
 export function getDuplicatePlaylistVideos<Video extends RatedVideoForUi>(

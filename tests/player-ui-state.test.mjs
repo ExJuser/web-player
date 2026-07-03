@@ -287,6 +287,33 @@ test("rating playlist helpers derive stats and filtered videos", () => {
   assert.equal(uiState.countRatingFilterMatches(videos, ratings, "lt", 6), 1);
 });
 
+test("playlist pagination helpers derive labels and page size options", () => {
+  assert.deepEqual(uiState.createPlaylistPageLabels({ totalCount: 0, startIndex: 0, pageCount: 0 }), {
+    startLabel: 0,
+    endLabel: 0,
+  });
+  assert.deepEqual(uiState.createPlaylistPageLabels({ totalCount: 80, startIndex: 30, pageCount: 30 }), {
+    startLabel: 31,
+    endLabel: 60,
+  });
+  assert.deepEqual(uiState.createPlaylistPageLabels({ totalCount: 45, startIndex: 30, pageCount: 30 }), {
+    startLabel: 31,
+    endLabel: 45,
+  });
+  assert.equal(
+    uiState.formatPlaylistVisibleCountLabel({ totalCount: 80, pageSize: 30, startLabel: 31, endLabel: 60 }),
+    "31-60 / 80",
+  );
+  assert.equal(
+    uiState.formatPlaylistVisibleCountLabel({ totalCount: 20, pageSize: 30, startLabel: 1, endLabel: 20 }),
+    "20",
+  );
+  assert.deepEqual(uiState.createPlaylistPageSizeSelectOptions([30, 50]), [
+    { value: 30, label: "30/页" },
+    { value: 50, label: "50/页" },
+  ]);
+});
+
 test("duplicate playlist helpers dedupe videos and build metadata", () => {
   const videos = [{ id: "a", name: "a.mp4" }, { id: "b", name: "b.mp4" }, { id: "c", name: "c.mp4" }];
   const groups = [

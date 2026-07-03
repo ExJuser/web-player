@@ -119,7 +119,6 @@ import {
   holdRates,
   playbackModeOptions,
   playlistSortOptions,
-  playlistPageSizeOptions,
   volumeStep,
   controlsAutoHideDelay,
   autoNextPromptSeconds,
@@ -249,6 +248,8 @@ import { ControlSelect } from "./ControlSelect";
 import {
   createPersistedEmbeddedSubtitles,
   createDuplicatePlaylistMetaByVideoId,
+  createPlaylistPageLabels,
+  createPlaylistPageSizeSelectOptions,
   createRatingStats,
   createSeriesOptions,
   createSeriesOptionsKey,
@@ -258,6 +259,7 @@ import {
   countRatingFilterMatches,
   filterVideosBySeries,
   filterRatingPlaylistVideos,
+  formatPlaylistVisibleCountLabel,
   getActiveSeriesOption,
   getCompatibleMediaAction,
   getCurrentSeriesKey,
@@ -1415,8 +1417,7 @@ export default function App() {
     () => visibleVideos.slice(pagedPlaylistStartIndex, pagedPlaylistStartIndex + playlistPageSize),
     [pagedPlaylistStartIndex, playlistPageSize, visibleVideos],
   );
-  const playlistPageStartLabel = visibleVideos.length ? pagedPlaylistStartIndex + 1 : 0;
-  const playlistPageEndLabel = Math.min(pagedPlaylistStartIndex + pagedPlaylistVideos.length, visibleVideos.length);
+  const { startLabel: playlistPageStartLabel, endLabel: playlistPageEndLabel } = createPlaylistPageLabels({ totalCount: visibleVideos.length, startIndex: pagedPlaylistStartIndex, pageCount: pagedPlaylistVideos.length });
   const syncPlaylistPageInput = useCallback((page: number) => {
     const nextPage = Math.min(Math.max(page, 1), playlistPageCount);
     setPlaylistPage(nextPage);
@@ -1430,12 +1431,9 @@ export default function App() {
     }
     syncPlaylistPageInput(parsedPage);
   }, [playlistPageInput, syncPlaylistPageInput, visiblePlaylistPage]);
-  const playlistVisibleCountLabel =
-    visibleVideos.length > playlistPageSize
-      ? `${playlistPageStartLabel}-${playlistPageEndLabel} / ${visibleVideos.length}`
-      : `${visibleVideos.length}`;
+  const playlistVisibleCountLabel = formatPlaylistVisibleCountLabel({ totalCount: visibleVideos.length, pageSize: playlistPageSize, startLabel: playlistPageStartLabel, endLabel: playlistPageEndLabel });
   const playlistPageSizeSelectOptions = useMemo(
-    () => playlistPageSizeOptions.map((size) => ({ value: size, label: `${size}/页` })),
+    () => createPlaylistPageSizeSelectOptions(),
     [],
   );
   const playlistThumbnailVideos = useMemo(() => {
