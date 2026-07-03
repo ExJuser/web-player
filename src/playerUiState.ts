@@ -429,6 +429,54 @@ export function getActiveRatingPlaylistLabel(mode: RatingPlaylistMode | null, fi
   return mode === "unrated" ? "未评分" : filterLabel;
 }
 
+export function getFavoritePlaylistVideos<Video extends IdentifiedVideoForUi>(videos: Video[], favoriteVideoIds: ReadonlySet<string>) {
+  return videos.filter((video) => favoriteVideoIds.has(video.id));
+}
+
+export function resolveVisiblePlaylistVideos<Video>(input: {
+  isDuplicatePlaylistActive: boolean;
+  duplicatePlaylistVideos: Video[];
+  ratingPlaylistMode: RatingPlaylistMode | null;
+  ratingPlaylistVideos: Video[];
+  playlistFilter: "all" | "favorites";
+  favoritePlaylistVideos: Video[];
+  seriesFilteredVideos: Video[];
+}) {
+  if (input.isDuplicatePlaylistActive) return input.duplicatePlaylistVideos;
+  if (input.ratingPlaylistMode) return input.ratingPlaylistVideos;
+  if (input.playlistFilter === "favorites") return input.favoritePlaylistVideos;
+  return input.seriesFilteredVideos;
+}
+
+export function createVideoIndexById<Video extends IdentifiedVideoForUi>(videos: Video[]) {
+  const indexes = new Map<string, number>();
+  videos.forEach((video, index) => indexes.set(video.id, index));
+  return indexes;
+}
+
+export function resolvePlaylistIndexVideos<Video>(input: {
+  isDuplicatePlaylistActive: boolean;
+  isRatingPlaylistActive: boolean;
+  duplicatePlaylistVideos: Video[];
+  ratingPlaylistVideos: Video[];
+  playlistVideos: Video[];
+}) {
+  if (input.isDuplicatePlaylistActive) return input.duplicatePlaylistVideos;
+  if (input.isRatingPlaylistActive) return input.ratingPlaylistVideos;
+  return input.playlistVideos;
+}
+
+export function createLibrarySearchScopeKey<Video extends IdentifiedVideoForUi>(homeVideos: Video[], playerVideos: Video[]) {
+  return [
+    homeVideos.map((video) => video.id).join("\n"),
+    playerVideos.map((video) => video.id).join("\n"),
+  ].join("\n---player---\n");
+}
+
+export function isVideoVisible<Video extends IdentifiedVideoForUi>(videoId: string | null | undefined, visibleVideos: Video[]) {
+  return Boolean(videoId && visibleVideos.some((video) => video.id === videoId));
+}
+
 export function createRatingStats<Video extends RatedVideoForUi>(
   videos: Video[],
   ratings: Record<string, number | undefined>,

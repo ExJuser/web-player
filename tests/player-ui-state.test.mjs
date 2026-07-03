@@ -322,6 +322,55 @@ test("home card helpers sort resumable recent and favorite cards", () => {
   assert.equal(uiState.createPrimaryHomeCard(null, createCard(videos[0])).video.id, "a");
 });
 
+test("playlist visibility helpers preserve playlist priority and indexes", () => {
+  const allVideos = [{ id: "all" }, { id: "fav" }, { id: "series" }];
+  const duplicateVideos = [{ id: "duplicate" }];
+  const ratingVideos = [{ id: "rating" }];
+  const favoriteVideos = uiState.getFavoritePlaylistVideos(allVideos, new Set(["fav"]));
+
+  assert.deepEqual(favoriteVideos, [allVideos[1]]);
+  assert.deepEqual(
+    uiState.resolveVisiblePlaylistVideos({
+      isDuplicatePlaylistActive: true,
+      duplicatePlaylistVideos: duplicateVideos,
+      ratingPlaylistMode: "numeric",
+      ratingPlaylistVideos: ratingVideos,
+      playlistFilter: "favorites",
+      favoritePlaylistVideos: favoriteVideos,
+      seriesFilteredVideos: allVideos,
+    }),
+    duplicateVideos,
+  );
+  assert.deepEqual(
+    uiState.resolveVisiblePlaylistVideos({
+      isDuplicatePlaylistActive: false,
+      duplicatePlaylistVideos: duplicateVideos,
+      ratingPlaylistMode: "numeric",
+      ratingPlaylistVideos: ratingVideos,
+      playlistFilter: "favorites",
+      favoritePlaylistVideos: favoriteVideos,
+      seriesFilteredVideos: allVideos,
+    }),
+    ratingVideos,
+  );
+  assert.deepEqual(
+    uiState.resolveVisiblePlaylistVideos({
+      isDuplicatePlaylistActive: false,
+      duplicatePlaylistVideos: duplicateVideos,
+      ratingPlaylistMode: null,
+      ratingPlaylistVideos: ratingVideos,
+      playlistFilter: "favorites",
+      favoritePlaylistVideos: favoriteVideos,
+      seriesFilteredVideos: allVideos,
+    }),
+    favoriteVideos,
+  );
+  assert.deepEqual(Array.from(uiState.createVideoIndexById(allVideos).entries()), [["all", 0], ["fav", 1], ["series", 2]]);
+  assert.equal(uiState.createLibrarySearchScopeKey([allVideos[0]], [ratingVideos[0]]), "all\n---player---\nrating");
+  assert.equal(uiState.isVideoVisible("fav", allVideos), true);
+  assert.equal(uiState.isVideoVisible(null, allVideos), false);
+});
+
 test("next episode helper follows the active series source", () => {
   const videos = [
     { id: "s1", relativePath: "Show/01.mkv", lastModified: 1 },

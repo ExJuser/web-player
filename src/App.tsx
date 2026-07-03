@@ -253,6 +253,7 @@ import {
   createPersistedEmbeddedSubtitles,
   createDuplicatePlaylistMetaByVideoId,
   createLibraryStats,
+  createLibrarySearchScopeKey,
   createMediaRootIdSet,
   createFavoriteHomeCards,
   createNextEpisodeCard,
@@ -271,6 +272,7 @@ import {
   createSelectedWatchActivityCards,
   createVideoMetadataRows,
   createVideoMetadataTitle,
+  createVideoIndexById,
   createWatchActivityCarouselCardsByDate,
   createWatchActivityCarouselVideoIds,
   countRatingFilterMatches,
@@ -291,8 +293,12 @@ import {
   filterMediaRootStatusesByHomeMediaMode,
   filterVideosByHomeMediaMode,
   getHomeModeMediaRoots,
+  getFavoritePlaylistVideos,
   isMediaRootInHomeMode,
+  isVideoVisible,
+  resolvePlaylistIndexVideos,
   resolveSelectedWatchActivityDay,
+  resolveVisiblePlaylistVideos,
   resolvePlayerEntrySeriesMode,
   resolveRestoredEmbeddedSubtitleSelection,
   resolveSubtitleSelection,
@@ -1362,7 +1368,7 @@ export default function App() {
   const normalizedVideoRotation = ((videoRotation % 360) + 360) % 360;
   const isVideoSideways = normalizedVideoRotation === 90 || normalizedVideoRotation === 270;
   const favoritePlaylistVideos = useMemo(
-    () => seriesFilteredVideos.filter((video) => favoriteVideoIds.has(video.id)),
+    () => getFavoritePlaylistVideos(seriesFilteredVideos, favoriteVideoIds),
     [favoriteVideoIds, seriesFilteredVideos],
   );
   const duplicatePlaylistVideos = useMemo(
@@ -1375,13 +1381,9 @@ export default function App() {
   );
   const visibleVideos = useMemo(
     () =>
-      isDuplicatePlaylistActive
-        ? duplicatePlaylistVideos
-        : ratingPlaylistMode
-          ? ratingPlaylistVideos
-        : playlistFilter === "favorites"
-          ? favoritePlaylistVideos
-          : seriesFilteredVideos,
+      resolveVisiblePlaylistVideos({
+        isDuplicatePlaylistActive, duplicatePlaylistVideos, ratingPlaylistMode, ratingPlaylistVideos, playlistFilter, favoritePlaylistVideos, seriesFilteredVideos,
+      }),
     [duplicatePlaylistVideos, favoritePlaylistVideos, isDuplicatePlaylistActive, playlistFilter, ratingPlaylistMode, ratingPlaylistVideos, seriesFilteredVideos],
   );
   const isRatingPlaylistActive = Boolean(ratingPlaylistMode);
@@ -1391,11 +1393,7 @@ export default function App() {
   const homeLibrarySearchVideos = modeFilteredVideos;
   const playerLibrarySearchVideos = isDuplicatePlaylistActive || isRatingPlaylistActive || isAnimePlaylistSearchScope ? visibleVideos : modeFilteredVideos;
   const librarySearchScopeKey = useMemo(
-    () =>
-      [
-        homeLibrarySearchVideos.map((video) => video.id).join("\n"),
-        playerLibrarySearchVideos.map((video) => video.id).join("\n"),
-      ].join("\n---player---\n"),
+    () => createLibrarySearchScopeKey(homeLibrarySearchVideos, playerLibrarySearchVideos),
     [homeLibrarySearchVideos, playerLibrarySearchVideos],
   );
   const homeLibrarySearchPlaceholder =
@@ -1416,17 +1414,16 @@ export default function App() {
   const playerLibrarySearchAnswer = isPlayerLibrarySearchSurface ? visibleLibrarySearchAnswer : "";
   const shouldShowHomeLibrarySearchStatus = Boolean(isHomeLibrarySearchLoading || homeLibrarySearchMessage || defaultLibrarySearchStatus);
   const shouldShowPlayerLibrarySearchStatus = Boolean(isPlayerLibrarySearchLoading || playerLibrarySearchMessage || defaultLibrarySearchStatus);
-  const playlistIndexById = useMemo(() => {
-    const indexes = new Map<string, number>();
-    const sourceVideos = isDuplicatePlaylistActive ? duplicatePlaylistVideos : isRatingPlaylistActive ? ratingPlaylistVideos : playlistVideos;
-    sourceVideos.forEach((video, index) => indexes.set(video.id, index));
-    return indexes;
-  }, [duplicatePlaylistVideos, isDuplicatePlaylistActive, isRatingPlaylistActive, playlistVideos, ratingPlaylistVideos]);
-  const visibleVideoIndexById = useMemo(() => {
-    const indexes = new Map<string, number>();
-    visibleVideos.forEach((video, index) => indexes.set(video.id, index));
-    return indexes;
-  }, [visibleVideos]);
+  const playlistIndexById = useMemo(
+    () =>
+      createVideoIndexById(
+        resolvePlaylistIndexVideos({
+          isDuplicatePlaylistActive, isRatingPlaylistActive, duplicatePlaylistVideos, ratingPlaylistVideos, playlistVideos,
+        }),
+      ),
+    [duplicatePlaylistVideos, isDuplicatePlaylistActive, isRatingPlaylistActive, playlistVideos, ratingPlaylistVideos],
+  );
+  const visibleVideoIndexById = useMemo(() => createVideoIndexById(visibleVideos), [visibleVideos]);
   const playlistPageCount = Math.max(1, Math.ceil(visibleVideos.length / playlistPageSize));
   const visiblePlaylistPage = Math.min(Math.max(playlistPage, 1), playlistPageCount);
   const pagedPlaylistStartIndex = visibleVideos.length ? (visiblePlaylistPage - 1) * playlistPageSize : 0;
@@ -1458,7 +1455,7 @@ export default function App() {
     [currentVideoId, pagedPlaylistVideos, visibleVideoIndexById, visibleVideos],
   );
   const isCurrentVideoVisible = useMemo(
-    () => !!currentVideoId && visibleVideos.some((video) => video.id === currentVideoId),
+    () => isVideoVisible(currentVideoId, visibleVideos),
     [currentVideoId, visibleVideos],
   );
   useEffect(() => {
