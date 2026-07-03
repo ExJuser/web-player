@@ -1,5 +1,6 @@
-import { useCallback, useRef } from "react";
+import { useCallback, useRef, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
 
+import type { AppTheme } from "./appBrowserUtils";
 import { defaultDanmakuPreferences, defaultPlayerPreferences, defaultPlayerSettings } from "./playerConstants";
 import { saveGlobalPlayerDataStore } from "./playerStorage";
 import type {
@@ -9,7 +10,9 @@ import type {
   PlayerDataStore,
   PlayerPersistentSettings,
   PlayerPreferences,
+  PlaylistSortMode,
   ProgressStore,
+  ShortcutMap,
   SubtitleItem,
   TagMergeDecisionStore,
   VideoCommentStore,
@@ -20,7 +23,7 @@ import type {
   VideoTagStore,
   WatchActivityStore,
 } from "./playerTypes";
-import { createPersistedEmbeddedSubtitles } from "./playerUiState";
+import { createPersistedEmbeddedSubtitles, type HomeMediaMode } from "./playerUiState";
 
 export function usePlayerDataRuntime(initialVolume: number) {
   const directoryRef = useRef<FileSystemDirectoryHandle | null>(null);
@@ -108,4 +111,183 @@ export function usePlayerDataRuntime(initialVolume: number) {
     videoTagsRef,
     watchActivityRef,
   };
+}
+
+type UseApplyPlayerDataStoreOptions = {
+  activateDuplicateDetectionForMode: (
+    mode: HomeMediaMode,
+    videos: VideoItem[],
+    resultsByMode: PlayerDataStore["duplicateDetections"],
+  ) => void;
+  danmakuPreferencesRef: MutableRefObject<DanmakuPreferences>;
+  danmakuSelectionsRef: MutableRefObject<DanmakuSelectionStore>;
+  duplicateDetectionResultsByModeRef: MutableRefObject<PlayerDataStore["duplicateDetections"]>;
+  favoriteVideoIdsRef: MutableRefObject<Set<string>>;
+  hasLoadedPlayerDataStoreRef: MutableRefObject<boolean>;
+  libraryMetadataRef: MutableRefObject<PlayerDataStore["metadata"] | undefined>;
+  playerPreferencesRef: MutableRefObject<PlayerPreferences>;
+  playerSettingsRef: MutableRefObject<PlayerPersistentSettings>;
+  progressStoreRef: MutableRefObject<ProgressStore>;
+  setDanmakuPreferences: Dispatch<SetStateAction<DanmakuPreferences>>;
+  setDanmakuSelections: Dispatch<SetStateAction<DanmakuSelectionStore>>;
+  setFavoriteVideoIds: Dispatch<SetStateAction<Set<string>>>;
+  setHomeMediaMode: Dispatch<SetStateAction<HomeMediaMode>>;
+  setIsCinemaMode: Dispatch<SetStateAction<boolean>>;
+  setIsPlaylistSortReversed: Dispatch<SetStateAction<boolean>>;
+  setIsSeriesMode: Dispatch<SetStateAction<boolean>>;
+  setPlaylistPage: Dispatch<SetStateAction<number>>;
+  setPlaylistPageSize: Dispatch<SetStateAction<number>>;
+  setPlaylistSortMode: Dispatch<SetStateAction<PlaylistSortMode>>;
+  setProgressStore: Dispatch<SetStateAction<ProgressStore>>;
+  setSelectedSeriesKey: Dispatch<SetStateAction<string>>;
+  setShortcuts: Dispatch<SetStateAction<ShortcutMap>>;
+  setSkipFolderAccessPrompt: Dispatch<SetStateAction<boolean>>;
+  setStartFromHighEnergy: Dispatch<SetStateAction<boolean>>;
+  setTagMergeDecisions: Dispatch<SetStateAction<TagMergeDecisionStore>>;
+  setTheme: Dispatch<SetStateAction<AppTheme>>;
+  setVideoComments: Dispatch<SetStateAction<VideoCommentStore>>;
+  setVideoHighlights: Dispatch<SetStateAction<VideoHighlightStore>>;
+  setVideoRatings: Dispatch<SetStateAction<VideoRatingStore>>;
+  setVideoTags: Dispatch<SetStateAction<VideoTagStore>>;
+  setVolume: Dispatch<SetStateAction<number>>;
+  setWatchActivityRevision: Dispatch<SetStateAction<number>>;
+  tagMergeDecisionsRef: MutableRefObject<TagMergeDecisionStore>;
+  videoCommentsRef: MutableRefObject<VideoCommentStore>;
+  videoHighlightsRef: MutableRefObject<VideoHighlightStore>;
+  videoRatingsRef: MutableRefObject<VideoRatingStore>;
+  videosRef: MutableRefObject<VideoItem[]>;
+  videoStatsRef: MutableRefObject<VideoStatsStore>;
+  videoTagsRef: MutableRefObject<VideoTagStore>;
+  watchActivityRef: MutableRefObject<WatchActivityStore>;
+};
+
+export function useApplyPlayerDataStore({
+  activateDuplicateDetectionForMode,
+  danmakuPreferencesRef,
+  danmakuSelectionsRef,
+  duplicateDetectionResultsByModeRef,
+  favoriteVideoIdsRef,
+  hasLoadedPlayerDataStoreRef,
+  libraryMetadataRef,
+  playerPreferencesRef,
+  playerSettingsRef,
+  progressStoreRef,
+  setDanmakuPreferences,
+  setDanmakuSelections,
+  setFavoriteVideoIds,
+  setHomeMediaMode,
+  setIsCinemaMode,
+  setIsPlaylistSortReversed,
+  setIsSeriesMode,
+  setPlaylistPage,
+  setPlaylistPageSize,
+  setPlaylistSortMode,
+  setProgressStore,
+  setSelectedSeriesKey,
+  setShortcuts,
+  setSkipFolderAccessPrompt,
+  setStartFromHighEnergy,
+  setTagMergeDecisions,
+  setTheme,
+  setVideoComments,
+  setVideoHighlights,
+  setVideoRatings,
+  setVideoTags,
+  setVolume,
+  setWatchActivityRevision,
+  tagMergeDecisionsRef,
+  videoCommentsRef,
+  videoHighlightsRef,
+  videoRatingsRef,
+  videosRef,
+  videoStatsRef,
+  videoTagsRef,
+  watchActivityRef,
+}: UseApplyPlayerDataStoreOptions) {
+  return useCallback((nextDataStore: PlayerDataStore) => {
+    hasLoadedPlayerDataStoreRef.current = true;
+    progressStoreRef.current = nextDataStore.progress;
+    playerPreferencesRef.current = nextDataStore.preferences;
+    playerSettingsRef.current = nextDataStore.settings;
+    favoriteVideoIdsRef.current = new Set(nextDataStore.favorites);
+    videoRatingsRef.current = nextDataStore.videoRatings;
+    videoCommentsRef.current = nextDataStore.videoComments;
+    videoTagsRef.current = nextDataStore.videoTags;
+    videoStatsRef.current = nextDataStore.videoStats;
+    watchActivityRef.current = nextDataStore.watchActivity;
+    videoHighlightsRef.current = nextDataStore.videoHighlights;
+    tagMergeDecisionsRef.current = nextDataStore.tagMergeDecisions;
+    danmakuSelectionsRef.current = nextDataStore.danmakuSelections;
+    danmakuPreferencesRef.current = nextDataStore.danmakuPreferences;
+    libraryMetadataRef.current = nextDataStore.metadata;
+    duplicateDetectionResultsByModeRef.current = nextDataStore.duplicateDetections ?? {};
+    setProgressStore(nextDataStore.progress);
+    setPlaylistSortMode(nextDataStore.preferences.playlistSortMode);
+    setIsPlaylistSortReversed(nextDataStore.preferences.isPlaylistSortReversed);
+    setPlaylistPageSize(nextDataStore.preferences.playlistPageSize);
+    setPlaylistPage(1);
+    setShortcuts(nextDataStore.preferences.shortcuts);
+    setHomeMediaMode(nextDataStore.preferences.homeMediaMode);
+    setIsSeriesMode(nextDataStore.preferences.isSeriesMode);
+    setSelectedSeriesKey(nextDataStore.preferences.selectedSeriesKey);
+    setIsCinemaMode(nextDataStore.preferences.isCinemaMode);
+    setStartFromHighEnergy(nextDataStore.preferences.startFromHighEnergy);
+    setVolume(nextDataStore.settings.volume);
+    if (nextDataStore.settings.theme === "dark" || nextDataStore.settings.theme === "light") {
+      setTheme(nextDataStore.settings.theme);
+    }
+    setSkipFolderAccessPrompt(nextDataStore.settings.skipFolderAccessPrompt);
+    setFavoriteVideoIds(new Set(nextDataStore.favorites));
+    setVideoRatings(nextDataStore.videoRatings);
+    setVideoComments(nextDataStore.videoComments);
+    setVideoTags(nextDataStore.videoTags);
+    setVideoHighlights(nextDataStore.videoHighlights);
+    setWatchActivityRevision((revision) => revision + 1);
+    setTagMergeDecisions(nextDataStore.tagMergeDecisions);
+    setDanmakuSelections(nextDataStore.danmakuSelections);
+    setDanmakuPreferences(nextDataStore.danmakuPreferences);
+    activateDuplicateDetectionForMode(nextDataStore.preferences.homeMediaMode, videosRef.current, nextDataStore.duplicateDetections);
+  }, [
+    activateDuplicateDetectionForMode,
+    danmakuPreferencesRef,
+    danmakuSelectionsRef,
+    duplicateDetectionResultsByModeRef,
+    favoriteVideoIdsRef,
+    hasLoadedPlayerDataStoreRef,
+    libraryMetadataRef,
+    playerPreferencesRef,
+    playerSettingsRef,
+    progressStoreRef,
+    setDanmakuPreferences,
+    setDanmakuSelections,
+    setFavoriteVideoIds,
+    setHomeMediaMode,
+    setIsCinemaMode,
+    setIsPlaylistSortReversed,
+    setIsSeriesMode,
+    setPlaylistPage,
+    setPlaylistPageSize,
+    setPlaylistSortMode,
+    setProgressStore,
+    setSelectedSeriesKey,
+    setShortcuts,
+    setSkipFolderAccessPrompt,
+    setStartFromHighEnergy,
+    setTagMergeDecisions,
+    setTheme,
+    setVideoComments,
+    setVideoHighlights,
+    setVideoRatings,
+    setVideoTags,
+    setVolume,
+    setWatchActivityRevision,
+    tagMergeDecisionsRef,
+    videoCommentsRef,
+    videoHighlightsRef,
+    videoRatingsRef,
+    videosRef,
+    videoStatsRef,
+    videoTagsRef,
+    watchActivityRef,
+  ]);
 }

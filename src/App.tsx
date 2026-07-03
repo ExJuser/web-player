@@ -20,7 +20,7 @@ import { useDuplicateDetectionController } from "./useDuplicateDetectionControll
 import { useLibrarySearchState } from "./useLibrarySearchState";
 import { useMediaRootLocalPathDialog } from "./useMediaRootLocalPathDialog";
 import { useMediaRootPrompts } from "./useMediaRootPrompts";
-import { usePlayerDataRuntime } from "./usePlayerDataRuntime";
+import { useApplyPlayerDataStore, usePlayerDataRuntime } from "./usePlayerDataRuntime";
 import { usePhotoAlbumRuntime } from "./usePhotoAlbumRuntime";
 import { usePhotoAlbumTagEditor } from "./usePhotoAlbumTagEditor";
 import { usePhotoObjectUrls } from "./usePhotoObjectUrls";
@@ -864,50 +864,49 @@ export default function App() {
     setPhotoAlbumMessage(options?.message ?? `已加载“${cache.rootName}”上次扫描结果，包含 ${cache.albums.length} 本相册`);
   }, []);
 
-  const applyPlayerDataStore = useCallback((nextDataStore: PlayerDataStore) => {
-    hasLoadedPlayerDataStoreRef.current = true;
-    progressStoreRef.current = nextDataStore.progress;
-    playerPreferencesRef.current = nextDataStore.preferences;
-    playerSettingsRef.current = nextDataStore.settings;
-    favoriteVideoIdsRef.current = new Set(nextDataStore.favorites);
-    videoRatingsRef.current = nextDataStore.videoRatings;
-    videoCommentsRef.current = nextDataStore.videoComments;
-    videoTagsRef.current = nextDataStore.videoTags;
-    videoStatsRef.current = nextDataStore.videoStats;
-    watchActivityRef.current = nextDataStore.watchActivity;
-    videoHighlightsRef.current = nextDataStore.videoHighlights;
-    tagMergeDecisionsRef.current = nextDataStore.tagMergeDecisions;
-    danmakuSelectionsRef.current = nextDataStore.danmakuSelections;
-    danmakuPreferencesRef.current = nextDataStore.danmakuPreferences;
-    libraryMetadataRef.current = nextDataStore.metadata;
-    duplicateDetectionResultsByModeRef.current = nextDataStore.duplicateDetections ?? {};
-    setProgressStore(nextDataStore.progress);
-    setPlaylistSortMode(nextDataStore.preferences.playlistSortMode);
-    setIsPlaylistSortReversed(nextDataStore.preferences.isPlaylistSortReversed);
-    setPlaylistPageSize(nextDataStore.preferences.playlistPageSize);
-    setPlaylistPage(1);
-    setShortcuts(nextDataStore.preferences.shortcuts);
-    setHomeMediaMode(nextDataStore.preferences.homeMediaMode);
-    setIsSeriesMode(nextDataStore.preferences.isSeriesMode);
-    setSelectedSeriesKey(nextDataStore.preferences.selectedSeriesKey);
-    setIsCinemaMode(nextDataStore.preferences.isCinemaMode);
-    setStartFromHighEnergy(nextDataStore.preferences.startFromHighEnergy);
-    setVolume(nextDataStore.settings.volume);
-    if (nextDataStore.settings.theme === "dark" || nextDataStore.settings.theme === "light") {
-      setTheme(nextDataStore.settings.theme);
-    }
-    setSkipFolderAccessPrompt(nextDataStore.settings.skipFolderAccessPrompt);
-    setFavoriteVideoIds(new Set(nextDataStore.favorites));
-    setVideoRatings(nextDataStore.videoRatings);
-    setVideoComments(nextDataStore.videoComments);
-    setVideoTags(nextDataStore.videoTags);
-    setVideoHighlights(nextDataStore.videoHighlights);
-    setWatchActivityRevision((revision) => revision + 1);
-    setTagMergeDecisions(nextDataStore.tagMergeDecisions);
-    setDanmakuSelections(nextDataStore.danmakuSelections);
-    setDanmakuPreferences(nextDataStore.danmakuPreferences);
-    activateDuplicateDetectionForMode(nextDataStore.preferences.homeMediaMode, videosRef.current, nextDataStore.duplicateDetections);
-  }, [activateDuplicateDetectionForMode]);
+  const applyPlayerDataStore = useApplyPlayerDataStore({
+    activateDuplicateDetectionForMode,
+    danmakuPreferencesRef,
+    danmakuSelectionsRef,
+    duplicateDetectionResultsByModeRef,
+    favoriteVideoIdsRef,
+    hasLoadedPlayerDataStoreRef,
+    libraryMetadataRef,
+    playerPreferencesRef,
+    playerSettingsRef,
+    progressStoreRef,
+    setDanmakuPreferences,
+    setDanmakuSelections,
+    setFavoriteVideoIds,
+    setHomeMediaMode,
+    setIsCinemaMode,
+    setIsPlaylistSortReversed,
+    setIsSeriesMode,
+    setPlaylistPage,
+    setPlaylistPageSize,
+    setPlaylistSortMode,
+    setProgressStore,
+    setSelectedSeriesKey,
+    setShortcuts,
+    setSkipFolderAccessPrompt,
+    setStartFromHighEnergy,
+    setTagMergeDecisions,
+    setTheme,
+    setVideoComments,
+    setVideoHighlights,
+    setVideoRatings,
+    setVideoTags,
+    setVolume,
+    setWatchActivityRevision,
+    tagMergeDecisionsRef,
+    videoCommentsRef,
+    videoHighlightsRef,
+    videoRatingsRef,
+    videosRef,
+    videoStatsRef,
+    videoTagsRef,
+    watchActivityRef,
+  });
 
   const loadPhotoAlbumDirectory = useCallback(
     async (directory: FileSystemDirectoryHandle, options?: { remember?: boolean }) => {
