@@ -103,6 +103,7 @@ import {
   getPagedPhotoAlbums,
   getPhotoAlbumPageBounds,
   getVisiblePhotoAlbums,
+  getVisiblePhotoThumbnails,
   loadCachedPhotoAlbumScan,
   loadPhotoAlbumStore,
   photoAlbumSortOptions,
@@ -1867,13 +1868,10 @@ export default function App() {
   );
   const isPhotoAlbumGridCompact = pagedPhotoAlbums.length <= 5;
   const photoAlbumStats = useMemo(() => createPhotoAlbumStats(photoAlbums, favoritePhotoAlbumIds, photoAlbumProgress), [favoritePhotoAlbumIds, photoAlbumProgress, photoAlbums]);
-  const visiblePhotoThumbnails = useMemo(() => {
-    if (!selectedPhotoAlbum) return [];
-    const halfWindow = Math.floor(photoThumbnailWindowSize / 2);
-    const maxStart = Math.max(selectedPhotoAlbum.images.length - photoThumbnailWindowSize, 0);
-    const start = Math.min(Math.max(currentPhotoIndex - halfWindow, 0), maxStart);
-    return selectedPhotoAlbum.images.slice(start, start + photoThumbnailWindowSize);
-  }, [currentPhotoIndex, selectedPhotoAlbum]);
+  const visiblePhotoThumbnails = useMemo(
+    () => getVisiblePhotoThumbnails(selectedPhotoAlbum, currentPhotoIndex, photoThumbnailWindowSize),
+    [currentPhotoIndex, selectedPhotoAlbum],
+  );
   useEffect(() => {
     const neededImages = new Map<string, PhotoAlbumImage>();
     const directory = photoAlbumDirectoryRef.current;

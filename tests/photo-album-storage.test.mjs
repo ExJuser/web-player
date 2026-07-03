@@ -124,6 +124,26 @@ test("photo album display helpers filter sort paginate and summarize albums", ()
   });
 });
 
+test("photo album thumbnail helper keeps a bounded visible window", () => {
+  const album = createAlbum({
+    images: Array.from({ length: 10 }, (_, index) => ({
+      id: `img-${index}`,
+      name: `${index}.jpg`,
+      relativePath: `${index}.jpg`,
+      url: "",
+      size: 1,
+      lastModified: 1,
+      mediaRootId: "photos",
+      index,
+    })),
+  });
+
+  assert.deepEqual(storage.getVisiblePhotoThumbnails(null, 3, 4), []);
+  assert.deepEqual(storage.getVisiblePhotoThumbnails(album, 0, 4).map((image) => image.id), ["img-0", "img-1", "img-2", "img-3"]);
+  assert.deepEqual(storage.getVisiblePhotoThumbnails(album, 5, 4).map((image) => image.id), ["img-3", "img-4", "img-5", "img-6"]);
+  assert.deepEqual(storage.getVisiblePhotoThumbnails(album, 9, 4).map((image) => image.id), ["img-6", "img-7", "img-8", "img-9"]);
+});
+
 test("invalid photo album scan cache is ignored", () => {
   assert.equal(storage.parseCachedPhotoAlbumScan(JSON.stringify({ version: 0 })), null);
   assert.equal(storage.parseCachedPhotoAlbumScan(JSON.stringify({

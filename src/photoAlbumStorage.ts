@@ -88,6 +88,14 @@ export function createPhotoAlbumStats(
   };
 }
 
+export function getVisiblePhotoThumbnails(album: PhotoAlbum | null | undefined, currentIndex: number, windowSize: number) {
+  if (!album) return [];
+  const halfWindow = Math.floor(windowSize / 2);
+  const maxStart = Math.max(album.images.length - windowSize, 0);
+  const start = Math.min(Math.max(currentIndex - halfWindow, 0), maxStart);
+  return album.images.slice(start, start + windowSize);
+}
+
 export function parsePhotoAlbumCoverPreferences(source: unknown): Record<string, string> {
   if (!source || typeof source !== "object" || Array.isArray(source)) return {};
 
