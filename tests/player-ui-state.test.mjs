@@ -275,7 +275,15 @@ test("rating playlist helpers derive stats and filtered videos", () => {
   const videos = [{ id: "a" }, { id: "b" }, { id: "c" }];
   const ratings = { a: 9, b: 5 };
 
+  assert.equal(uiState.getHomeMediaModeLabel("anime"), "追番模式");
+  assert.equal(uiState.getHomeMediaModeLabel("special"), "特殊模式");
+  assert.equal(uiState.getHomeMediaModeLabel("all"), "全部");
+  assert.equal(uiState.getPlayerMediaModeLabel("anime"), "追番");
+  assert.equal(uiState.getPlayerMediaModeLabel("special"), "特殊");
+  assert.equal(uiState.getPlayerMediaModeLabel("all"), "全部");
   assert.equal(uiState.getRatingFilterLabel("gt", 8), "评分 > 8");
+  assert.equal(uiState.getActiveRatingPlaylistLabel("unrated", "评分 > 8"), "未评分");
+  assert.equal(uiState.getActiveRatingPlaylistLabel("numeric", "评分 > 8"), "评分 > 8");
   assert.deepEqual(uiState.createRatingStats(videos, ratings), {
     rated: 2,
     unrated: 1,
@@ -312,6 +320,39 @@ test("playlist pagination helpers derive labels and page size options", () => {
     { value: 30, label: "30/页" },
     { value: 50, label: "50/页" },
   ]);
+});
+
+test("playlist panel labels preserve playlist title branches", () => {
+  const base = {
+    isDuplicatePlaylistActive: false,
+    isRatingPlaylistActive: false,
+    isPlaylistSeriesMode: false,
+    playlistVisibleCountLabel: "1-30 / 80",
+    duplicateGroupCount: 0,
+    activeRatingPlaylistLabel: "评分 > 8",
+    modeFilteredVideoCount: 80,
+    playlistFilter: "all",
+    homeMediaMode: "all",
+    homeMediaModeLabel: "全部",
+    totalVideoCount: 80,
+  };
+
+  assert.deepEqual(uiState.createPlaylistPanelLabels(base), {
+    ariaLabel: "播放列表",
+    title: "1-30 / 80 个视频",
+  });
+  assert.deepEqual(uiState.createPlaylistPanelLabels({ ...base, isDuplicatePlaylistActive: true, duplicateGroupCount: 3 }), {
+    ariaLabel: "重复视频列表",
+    title: "重复列表 · 1-30 / 80 个视频 · 3 组",
+  });
+  assert.deepEqual(uiState.createPlaylistPanelLabels({ ...base, isRatingPlaylistActive: true }), {
+    ariaLabel: "评分视频列表",
+    title: "评分列表 · 1-30 / 80 个视频 · 评分 > 8",
+  });
+  assert.equal(uiState.createPlaylistPanelLabels({ ...base, playlistFilter: "favorites" }).title, "1-30 / 80 / 80 个收藏");
+  assert.equal(uiState.createPlaylistPanelLabels({ ...base, homeMediaMode: "anime", homeMediaModeLabel: "追番模式" }).title, "追番模式 · 1-30 / 80 个视频");
+  assert.equal(uiState.createPlaylistPanelLabels({ ...base, modeFilteredVideoCount: 0, totalVideoCount: 2, homeMediaModeLabel: "追番模式" }).title, "当前追番模式没有视频");
+  assert.equal(uiState.createPlaylistPanelLabels({ ...base, modeFilteredVideoCount: 0, totalVideoCount: 0 }).title, "等待新增媒体库");
 });
 
 test("duplicate playlist helpers dedupe videos and build metadata", () => {

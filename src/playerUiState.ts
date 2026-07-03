@@ -247,6 +247,22 @@ export function getRatingFilterLabel(operator: RatingFilterOperator, threshold: 
   return `评分 ${symbol} ${threshold}`;
 }
 
+export function getHomeMediaModeLabel(mode: HomeMediaMode) {
+  if (mode === "anime") return "追番模式";
+  if (mode === "special") return "特殊模式";
+  return "全部";
+}
+
+export function getPlayerMediaModeLabel(mode: HomeMediaMode) {
+  if (mode === "anime") return "追番";
+  if (mode === "special") return "特殊";
+  return "全部";
+}
+
+export function getActiveRatingPlaylistLabel(mode: RatingPlaylistMode | null, filterLabel: string) {
+  return mode === "unrated" ? "未评分" : filterLabel;
+}
+
 export function createRatingStats<Video extends RatedVideoForUi>(
   videos: Video[],
   ratings: Record<string, number | undefined>,
@@ -326,6 +342,46 @@ export function formatPlaylistVisibleCountLabel(input: {
 
 export function createPlaylistPageSizeSelectOptions(values = playlistPageSizeOptions) {
   return values.map((size) => ({ value: size, label: `${size}/页` }));
+}
+
+export function createPlaylistPanelLabels(input: {
+  isDuplicatePlaylistActive: boolean;
+  isRatingPlaylistActive: boolean;
+  isPlaylistSeriesMode: boolean;
+  playlistVisibleCountLabel: string;
+  duplicateGroupCount: number;
+  activeRatingPlaylistLabel: string;
+  modeFilteredVideoCount: number;
+  playlistFilter: "all" | "favorites";
+  homeMediaMode: HomeMediaMode;
+  homeMediaModeLabel: string;
+  totalVideoCount: number;
+}) {
+  const ariaLabel = input.isDuplicatePlaylistActive
+    ? "重复视频列表"
+    : input.isRatingPlaylistActive
+      ? "评分视频列表"
+      : input.isPlaylistSeriesMode
+        ? "追番列表"
+        : "播放列表";
+
+  const title = input.isDuplicatePlaylistActive
+    ? `重复列表 · ${input.playlistVisibleCountLabel} 个视频 · ${input.duplicateGroupCount} 组`
+    : input.isRatingPlaylistActive
+      ? `评分列表 · ${input.playlistVisibleCountLabel} 个视频 · ${input.activeRatingPlaylistLabel}`
+      : input.modeFilteredVideoCount
+        ? input.playlistFilter === "favorites"
+          ? `${input.playlistVisibleCountLabel} / ${input.modeFilteredVideoCount} 个收藏`
+          : input.isPlaylistSeriesMode
+            ? `${input.playlistVisibleCountLabel} / ${input.modeFilteredVideoCount} 个视频`
+            : input.homeMediaMode === "all"
+              ? `${input.playlistVisibleCountLabel} 个视频`
+              : `${input.homeMediaModeLabel} · ${input.playlistVisibleCountLabel} 个视频`
+        : input.totalVideoCount
+          ? `当前${input.homeMediaModeLabel}没有视频`
+          : "等待新增媒体库";
+
+  return { ariaLabel, title };
 }
 
 export function getDuplicatePlaylistVideos<Video extends RatedVideoForUi>(

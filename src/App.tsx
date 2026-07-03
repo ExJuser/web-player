@@ -248,6 +248,7 @@ import { ControlSelect } from "./ControlSelect";
 import {
   createPersistedEmbeddedSubtitles,
   createDuplicatePlaylistMetaByVideoId,
+  createPlaylistPanelLabels,
   createPlaylistPageLabels,
   createPlaylistPageSizeSelectOptions,
   createRatingStats,
@@ -261,11 +262,14 @@ import {
   filterRatingPlaylistVideos,
   formatPlaylistVisibleCountLabel,
   getActiveSeriesOption,
+  getActiveRatingPlaylistLabel,
   getCompatibleMediaAction,
   getCurrentSeriesKey,
   getDuplicatePlaylistVideos,
   getRatingFilterLabel,
+  getHomeMediaModeLabel,
   getPlayableVideoUrl,
+  getPlayerMediaModeLabel,
   createSubtitleControlOptions,
   createVideoStatsKey,
   isMediaRootInHomeMode,
@@ -1251,8 +1255,8 @@ export default function App() {
         : mediaRootStatuses.filter((status) => homeModeMediaRootIds.has(status.id)),
     [homeMediaMode, homeModeMediaRootIds, mediaRootStatuses],
   );
-  const homeMediaModeLabel = homeMediaMode === "anime" ? "追番模式" : homeMediaMode === "special" ? "特殊模式" : "全部";
-  const playerMediaModeLabel = homeMediaMode === "anime" ? "追番" : homeMediaMode === "special" ? "特殊" : "全部";
+  const homeMediaModeLabel = getHomeMediaModeLabel(homeMediaMode);
+  const playerMediaModeLabel = getPlayerMediaModeLabel(homeMediaMode);
   const isRatingFilterEnabled = homeMediaMode === "special";
   const homeLibrarySearchDraftSignature = useMemo(
     () => createLibrarySearchSignature(homeLibrarySearchQuery),
@@ -1368,7 +1372,7 @@ export default function App() {
     [duplicatePlaylistVideos, favoritePlaylistVideos, isDuplicatePlaylistActive, playlistFilter, ratingPlaylistMode, ratingPlaylistVideos, seriesFilteredVideos],
   );
   const isRatingPlaylistActive = Boolean(ratingPlaylistMode);
-  const activeRatingPlaylistLabel = ratingPlaylistMode === "unrated" ? "未评分" : ratingFilterLabel;
+  const activeRatingPlaylistLabel = getActiveRatingPlaylistLabel(ratingPlaylistMode, ratingFilterLabel);
   const isPlaylistSeriesMode = isSeriesMode && !isDuplicatePlaylistActive && !isRatingPlaylistActive;
   const isAnimePlaylistSearchScope = homeMediaMode === "anime" && isPlaylistSeriesMode;
   const homeLibrarySearchVideos = modeFilteredVideos;
@@ -7912,28 +7916,7 @@ export default function App() {
     "当前视频尚未探测播放兼容性。";
   const isCurrentHighEnergyMarkPending = pendingHighEnergyStart?.videoId === currentVideo?.id;
   const pendingHighEnergyStartTime = isCurrentHighEnergyMarkPending ? pendingHighEnergyStart?.time ?? null : null;
-  const playlistPanelAriaLabel = isDuplicatePlaylistActive
-    ? "重复视频列表"
-    : isRatingPlaylistActive
-      ? "评分视频列表"
-      : isPlaylistSeriesMode
-        ? "追番列表"
-        : "播放列表";
-  const playlistPanelTitle = isDuplicatePlaylistActive
-    ? `重复列表 · ${playlistVisibleCountLabel} 个视频 · ${activeDuplicateVideoGroups.length} 组`
-    : isRatingPlaylistActive
-      ? `评分列表 · ${playlistVisibleCountLabel} 个视频 · ${activeRatingPlaylistLabel}`
-      : modeFilteredVideos.length
-        ? playlistFilter === "favorites"
-          ? `${playlistVisibleCountLabel} / ${modeFilteredVideos.length} 个收藏`
-          : isPlaylistSeriesMode
-            ? `${playlistVisibleCountLabel} / ${modeFilteredVideos.length} 个视频`
-            : homeMediaMode === "all"
-              ? `${playlistVisibleCountLabel} 个视频`
-              : `${homeMediaModeLabel} · ${playlistVisibleCountLabel} 个视频`
-        : videos.length
-          ? `当前${homeMediaModeLabel}没有视频`
-          : "等待新增媒体库";
+  const { ariaLabel: playlistPanelAriaLabel, title: playlistPanelTitle } = createPlaylistPanelLabels({ isDuplicatePlaylistActive, isRatingPlaylistActive, isPlaylistSeriesMode, playlistVisibleCountLabel, duplicateGroupCount: activeDuplicateVideoGroups.length, activeRatingPlaylistLabel, modeFilteredVideoCount: modeFilteredVideos.length, playlistFilter, homeMediaMode, homeMediaModeLabel, totalVideoCount: videos.length });
 
   return (
     <>
