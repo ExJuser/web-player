@@ -16,6 +16,7 @@ import { fetchLocalJson as fetchJson, readLocalApiStream } from "./localApiClien
 import { readAiTextStream } from "./aiStreamClient";
 import { useCacheStatusDialog } from "./useCacheStatusDialog";
 import { useLibrarySearchState } from "./useLibrarySearchState";
+import { usePhotoAlbumTagEditor } from "./usePhotoAlbumTagEditor";
 import { usePhotoObjectUrls } from "./usePhotoObjectUrls";
 import { useShortcutSettings } from "./useShortcutSettings";
 import { normalizeClientLocalConfig, shouldAutoScanGlobalMediaLibrary, supportsServerFileAccess } from "./localConfigClient";
@@ -104,8 +105,7 @@ import {
   savePhotoAlbumCoverPreference,
   savePhotoAlbumPreferences,
   savePhotoAlbumProgress,
-  savePhotoAlbumStore,
-  savePhotoAlbumTags
+  savePhotoAlbumStore
 } from "./photoAlbumStorage";
 import {
   PROGRESS_FILE_NAME,
@@ -664,9 +664,6 @@ export default function App() {
     imageCount: number;
     totalSize: number;
   } | null>(null);
-  const [photoAlbumTagEditorAlbumId, setPhotoAlbumTagEditorAlbumId] = useState<string | null>(null);
-  const [photoAlbumTagInput, setPhotoAlbumTagInput] = useState("");
-  const [photoAlbumTagMessage, setPhotoAlbumTagMessage] = useState("");
   const [photoDeleteError, setPhotoDeleteError] = useState("");
   const [isPhotoDeletePending, setIsPhotoDeletePending] = useState(false);
   const [videoDeleteCandidate, setVideoDeleteCandidate] = useState<VideoItem | null>(null);
@@ -1607,10 +1604,20 @@ export default function App() {
     () => photoAlbums.find((album) => album.id === selectedPhotoAlbumId) ?? null,
     [photoAlbums, selectedPhotoAlbumId],
   );
-  const photoAlbumTagEditorAlbum = useMemo(
-    () => photoAlbums.find((album) => album.id === photoAlbumTagEditorAlbumId) ?? null,
-    [photoAlbums, photoAlbumTagEditorAlbumId],
-  );
+  const {
+    addTags: addTagsToPhotoAlbum,
+    closeEditor: closePhotoAlbumTagEditor,
+    editorAlbum: photoAlbumTagEditorAlbum,
+    message: photoAlbumTagMessage,
+    openEditor: openPhotoAlbumTagEditor,
+    removeTag: removeTagFromPhotoAlbum,
+    setTagInput: setPhotoAlbumTagInput,
+    tagInput: photoAlbumTagInput,
+  } = usePhotoAlbumTagEditor({
+    photoAlbumTagsRef,
+    photoAlbums,
+    setPhotoAlbumTags,
+  });
   const visiblePhotoAlbums = useMemo(
     () => getVisiblePhotoAlbums({ albums: photoAlbums, favoriteAlbumIds: favoritePhotoAlbumIds, filter: photoAlbumFilter, searchQuery: photoAlbumSearchQuery, sortMode: photoAlbumSortMode, albumTags: photoAlbumTags }),
     [favoritePhotoAlbumIds, photoAlbumFilter, photoAlbumSearchQuery, photoAlbumSortMode, photoAlbumTags, photoAlbums],
@@ -4566,50 +4573,6 @@ export default function App() {
       });
     },
     [],
-  );
-
-  const openPhotoAlbumTagEditor = useCallback((album: PhotoAlbum) => {
-    setPhotoAlbumTagEditorAlbumId(album.id);
-    setPhotoAlbumTagInput("");
-    setPhotoAlbumTagMessage("");
-  }, []);
-
-  const replacePhotoAlbumTags = useCallback((album: PhotoAlbum, nextTags: string[], successMessage: string) => {
-    const parsedTags = parseTagInput(nextTags.join(" "));
-    const nextAlbumTags = {
-      ...photoAlbumTagsRef.current,
-      [album.id]: parsedTags,
-    };
-    if (!parsedTags.length) delete nextAlbumTags[album.id];
-    photoAlbumTagsRef.current = nextAlbumTags;
-    setPhotoAlbumTags(nextAlbumTags);
-    setPhotoAlbumTagMessage(successMessage);
-    void savePhotoAlbumTags(album.id, parsedTags).catch(() => {
-      setPhotoAlbumTagMessage("图集标签保存失败。");
-    });
-  }, []);
-
-  const addTagsToPhotoAlbum = useCallback(() => {
-    if (!photoAlbumTagEditorAlbum) return;
-    const incomingTags = parseTagInput(photoAlbumTagInput);
-    if (!incomingTags.length) {
-      setPhotoAlbumTagMessage("请输入至少一个标签。");
-      return;
-    }
-    const existingTags = photoAlbumTagsRef.current[photoAlbumTagEditorAlbum.id] ?? [];
-    const nextTags = mergeTags(existingTags, incomingTags);
-    replacePhotoAlbumTags(photoAlbumTagEditorAlbum, nextTags, `已保存 ${nextTags.length} 个标签。`);
-    setPhotoAlbumTagInput("");
-  }, [photoAlbumTagEditorAlbum, photoAlbumTagInput, replacePhotoAlbumTags]);
-
-  const removeTagFromPhotoAlbum = useCallback(
-    (tag: string) => {
-      if (!photoAlbumTagEditorAlbum) return;
-      const removedKey = normalizeTagKey(tag);
-      const nextTags = (photoAlbumTagsRef.current[photoAlbumTagEditorAlbum.id] ?? []).filter((item) => normalizeTagKey(item) !== removedKey);
-      replacePhotoAlbumTags(photoAlbumTagEditorAlbum, nextTags, nextTags.length ? `已移除标签“${tag}”。` : "已清空图集标签。");
-    },
-    [photoAlbumTagEditorAlbum, replacePhotoAlbumTags],
   );
 
   useEffect(() => {
@@ -7819,7 +7782,7 @@ export default function App() {
       tags={photoAlbumTagEditorAlbum ? photoAlbumTags[photoAlbumTagEditorAlbum.id] ?? [] : []}
       tagInput={photoAlbumTagInput}
       message={photoAlbumTagMessage}
-      onClose={() => setPhotoAlbumTagEditorAlbumId(null)}
+      onClose={closePhotoAlbumTagEditor}
       onAddTags={addTagsToPhotoAlbum}
       onRemoveTag={removeTagFromPhotoAlbum}
       onTagInputChange={setPhotoAlbumTagInput}
