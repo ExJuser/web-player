@@ -15,6 +15,7 @@ import {
 
 import { fetchLocalJson as fetchJson, readLocalApiStream } from "./localApiClient";
 import { readAiTextStream } from "./aiStreamClient";
+import { useCacheStatusDialog } from "./useCacheStatusDialog";
 import { usePhotoObjectUrls } from "./usePhotoObjectUrls";
 import { normalizeClientLocalConfig, shouldAutoScanGlobalMediaLibrary, supportsServerFileAccess } from "./localConfigClient";
 import {
@@ -37,14 +38,11 @@ import {
   createLocalDateKey,
   createWatchActivityKey,
   formatWatchActivityDate,
-  getWatchActivityMetricValue,
   groupWatchActivityDaysByMonth,
   watchActivityMetricOptions,
   watchActivityRangeOptions,
-  watchActivityWeekdayLabels,
   type WatchActivityMetric,
   type WatchActivityRange,
-  type WatchActivityTagInsight,
 } from "./watchActivityInsights";
 import {
   createViewedSubtitleText,
@@ -383,16 +381,6 @@ import {
   readStoredVolume,
   type AppTheme,
 } from "./appBrowserUtils";
-import {
-  getAvailableCacheItemIds,
-  getCacheStatusPageState,
-  getClearableCacheStatusItems,
-  getSelectedCacheStatusItems,
-  toggleAllCacheItemSelection,
-  toggleCacheItemSelection as toggleCacheStatusItemSelection,
-  type CacheStatus,
-  type ClearCacheResponse,
-} from "./cacheStatusUtils";
 import { AiSubtitleDialog, type AiSubtitleTab } from "./AiSubtitleDialog";
 import { DanmakuDialog } from "./DanmakuDialog";
 import {
@@ -424,7 +412,6 @@ import { PlayerUtilityDialogs } from "./PlayerUtilityDialogs";
 import { RatingDialog } from "./RatingDialog";
 import { ShortcutDialog } from "./ShortcutDialog";
 import { TagDialog } from "./TagDialog";
-import { WatchActivityMonth, WatchActivityTagButton } from "./WatchActivityCalendar";
 import { WatchActivitySection } from "./WatchActivitySection";
 
 export default function App() {
@@ -601,15 +588,6 @@ export default function App() {
   const [ratingFilterThreshold, setRatingFilterThreshold] = useState(8);
   const [ratingPlaylistMode, setRatingPlaylistMode] = useState<RatingPlaylistMode | null>(null);
   const [bangumiMatchesBySeriesKey, setBangumiMatchesBySeriesKey] = useState<Record<string, BangumiSeriesMatch>>({});
-  const [cacheStatus, setCacheStatus] = useState<CacheStatus | null>(null);
-  const [cacheStatusMessage, setCacheStatusMessage] = useState("");
-  const [isCacheStatusLoading, setIsCacheStatusLoading] = useState(false);
-  const [hasLoadedCacheStatus, setHasLoadedCacheStatus] = useState(false);
-  const [isCacheStatusDialogOpen, setIsCacheStatusDialogOpen] = useState(false);
-  const [selectedCacheItemIds, setSelectedCacheItemIds] = useState<Set<string>>(() => new Set());
-  const [cacheStatusPage, setCacheStatusPage] = useState(1);
-  const [isClearCacheConfirmOpen, setIsClearCacheConfirmOpen] = useState(false);
-  const [isClearingCache, setIsClearingCache] = useState(false);
   const [libraryId, setLibraryId] = useState<string | null>(null);
   const [currentVideoId, setCurrentVideoId] = useState<string | null>(null);
   currentVideoIdRef.current = currentVideoId;
@@ -6676,120 +6654,50 @@ export default function App() {
     visiblePlayerLibrarySearchResults.length,
   ]);
 
-  const loadCacheStatus = useCallback(async () => {
-    setIsCacheStatusLoading(true);
-    setCacheStatusMessage("");
-    try {
-      const status = await fetchJson<CacheStatus>("/api/cache-status");
-      setCacheStatus(status);
-    } catch (error) {
-      setCacheStatusMessage(error instanceof Error ? error.message : "读取缓存状态失败。");
-    } finally {
-      setHasLoadedCacheStatus(true);
-      setIsCacheStatusLoading(false);
-    }
-  }, []);
+  const clearAllCacheRuntimeData = useCallback(async () => {
+    await clearRecentFolderHandle().catch(() => undefined);
+    await clearPhotoAlbumFolderHandle().catch(() => undefined);
+    clearLoadedMedia();
+    directoryRef.current = null;
+    libraryIdRef.current = null;
+    libraryMetadataRef.current = undefined;
+    setLibraryId(null);
+    setMediaRootId(null);
+    setActiveView("home");
+  }, [clearLoadedMedia]);
 
-  const cacheStatusItems = cacheStatus?.items ?? [];
-  const clearableCacheStatusItems = useMemo(() => getClearableCacheStatusItems(cacheStatusItems), [cacheStatusItems]);
-  const selectedCacheItems = useMemo(
-    () => getSelectedCacheStatusItems(clearableCacheStatusItems, selectedCacheItemIds),
-    [clearableCacheStatusItems, selectedCacheItemIds],
-  );
-  const selectedCacheItemIdsList = useMemo(() => selectedCacheItems.map((item) => item.id), [selectedCacheItems]);
-  const selectedCacheBytes = selectedCacheItems.reduce((sum, item) => sum + item.bytes, 0);
-  const selectedCacheFiles = selectedCacheItems.reduce((sum, item) => sum + item.files, 0);
-  const isAllCacheSelected =
-    clearableCacheStatusItems.length > 0 && clearableCacheStatusItems.every((item) => selectedCacheItemIds.has(item.id));
-  const cacheStatusPageState = useMemo(
-    () => getCacheStatusPageState(cacheStatusItems, cacheStatusPage),
-    [cacheStatusItems, cacheStatusPage],
-  );
-  const cacheStatusPageCount = cacheStatusPageState.pageCount;
-  const visibleCacheStatusPage = cacheStatusPageState.visiblePage;
-  const pagedCacheStatusItems = cacheStatusPageState.items;
-  const cacheStatusPageStart = cacheStatusPageState.start;
-  const cacheStatusPageEnd = cacheStatusPageState.end;
-
-  useEffect(() => {
-    if (!cacheStatus) return;
-    const availableIds = getAvailableCacheItemIds(cacheStatus.items);
-    setSelectedCacheItemIds((previous) => {
-      const next = new Set(Array.from(previous).filter((id) => availableIds.has(id)));
-      return next.size === previous.size ? previous : next;
-    });
-  }, [cacheStatus]);
-
-  useEffect(() => {
-    setCacheStatusPage((page) => Math.min(Math.max(page, 1), cacheStatusPageCount));
-  }, [cacheStatusPageCount]);
-
-  const toggleCacheItemSelection = useCallback((id: string, checked: boolean) => {
-    setSelectedCacheItemIds((previous) => toggleCacheStatusItemSelection(previous, id, checked));
-  }, []);
-
-  const toggleAllCacheItems = useCallback(() => {
-    setSelectedCacheItemIds((previous) => toggleAllCacheItemSelection(previous, clearableCacheStatusItems));
-  }, [clearableCacheStatusItems]);
-
-  const requestClearSelectedCache = useCallback(() => {
-    if (!selectedCacheItems.length) return;
-    setIsClearCacheConfirmOpen(true);
-  }, [selectedCacheItems.length]);
-
-  const confirmClearSelectedCache = useCallback(async () => {
-    if (!selectedCacheItems.length) return;
-    const shouldClearRecentFolder = isAllCacheSelected;
-    setIsClearingCache(true);
-    setCacheStatusMessage("");
-    try {
-      const response = await fetchJson<ClearCacheResponse>("/api/cache-status/clear", {
-        method: "POST",
-        body: JSON.stringify({ ids: selectedCacheItemIdsList }),
-      });
-      setCacheStatus(response.status);
-      setSelectedCacheItemIds(new Set());
-      setIsClearCacheConfirmOpen(false);
-      if (response.cleared.some((id) => id === "global" || id === "libraries" || id === "index")) {
-        clearCurrentLibraryRuntimeData();
-      }
-      if (shouldClearRecentFolder) {
-        await clearRecentFolderHandle().catch(() => undefined);
-        await clearPhotoAlbumFolderHandle().catch(() => undefined);
-        clearLoadedMedia();
-        directoryRef.current = null;
-        libraryIdRef.current = null;
-        libraryMetadataRef.current = undefined;
-        setLibraryId(null);
-        setMediaRootId(null);
-        setActiveView("home");
-      }
-      setCacheStatusMessage(`已清除 ${response.cleared.length} 项缓存。`);
-    } catch (error) {
-      setCacheStatusMessage(error instanceof Error ? error.message : "清除缓存失败。");
-    } finally {
-      setIsClearingCache(false);
-    }
-  }, [
-    clearCurrentLibraryRuntimeData,
-    clearLoadedMedia,
-    clearPhotoAlbumFolderHandle,
-    clearRecentFolderHandle,
+  const {
+    cacheStatus,
+    cacheStatusItems,
+    cacheStatusMessage,
+    cacheStatusPageCount,
+    cacheStatusPageEnd,
+    cacheStatusPageStart,
+    closeCacheStatusDialog,
+    closeClearCacheConfirm,
+    confirmClearSelectedCache,
     isAllCacheSelected,
-    selectedCacheItemIdsList,
-    selectedCacheItems.length,
-  ]);
-
-  const openCacheStatusDialog = useCallback(() => {
-    setCacheStatusPage(1);
-    setIsCacheStatusDialogOpen(true);
-    void loadCacheStatus();
-  }, [loadCacheStatus]);
-
-  useEffect(() => {
-    if (!isHomeViewVisible || hasLoadedCacheStatus || isCacheStatusLoading) return;
-    void loadCacheStatus();
-  }, [hasLoadedCacheStatus, isCacheStatusLoading, isHomeViewVisible, loadCacheStatus]);
+    isCacheStatusDialogOpen,
+    isCacheStatusLoading,
+    isClearCacheConfirmOpen,
+    isClearingCache,
+    loadCacheStatus,
+    openCacheStatusDialog,
+    pagedCacheStatusItems,
+    requestClearSelectedCache,
+    selectedCacheBytes,
+    selectedCacheFiles,
+    selectedCacheItemIds,
+    selectedCacheItems,
+    setCacheStatusPage,
+    toggleAllCacheItems,
+    toggleCacheItemSelection,
+    visibleCacheStatusPage,
+  } = useCacheStatusDialog({
+    isHomeViewVisible,
+    onClearAllCache: clearAllCacheRuntimeData,
+    onClearRuntimeCache: clearCurrentLibraryRuntimeData,
+  });
 
   const toggleShortcutDialog = useCallback(() => {
     setIsShortcutDialogOpen((open) => !open);
@@ -7055,7 +6963,7 @@ export default function App() {
 
       if (event.key === "Escape" && isClearCacheConfirmOpen) {
         event.preventDefault();
-        setIsClearCacheConfirmOpen(false);
+        closeClearCacheConfirm();
         return;
       }
 
@@ -7413,33 +7321,6 @@ export default function App() {
     if (specialInsightTab === "emission") return `${insight.stats.emissionCount} 次发射`;
     return formatRelativeTime(insight.activeAt);
   };
-  const renderWatchActivityMonth = (month: typeof watchActivityMonthGroups[number]) => (
-    <WatchActivityMonth
-      carouselCardsByDate={watchActivityCarouselCardsByDate}
-      carouselTick={watchActivityCarouselTick}
-      formatDate={formatWatchActivityDate}
-      formatMetric={formatWatchActivityMetric}
-      getMetricValue={getWatchActivityMetricValue}
-      key={month.key}
-      maxMetricValue={watchActivityInsights.maxMetricValue}
-      metric={watchActivityMetric}
-      month={month}
-      onSelectDate={setSelectedWatchActivityDate}
-      onThumbnailError={markVideoThumbnailFailed}
-      selectedDate={selectedWatchActivityDay?.date}
-      weekdayLabels={watchActivityWeekdayLabels}
-    />
-  );
-  const renderWatchActivityTagInsight = (insight: WatchActivityTagInsight, index: number) => (
-    <WatchActivityTagButton
-      formatMetric={formatWatchActivityMetric}
-      index={index}
-      insight={insight}
-      key={insight.key}
-      metric={watchActivityMetric}
-      onSelectTag={runSpecialInsightTagSearch}
-    />
-  );
   const renderHomeListCard = useCallback((card: HomeVideoCard, index: number) => (
     <HomeListCard
       card={card}
@@ -7629,15 +7510,16 @@ export default function App() {
 
               {isRatingFilterEnabled ? (
                 <WatchActivitySection
+                  carouselCardsByDate={watchActivityCarouselCardsByDate}
+                  carouselTick={watchActivityCarouselTick}
                   cards={selectedWatchActivityCards}
                   insights={watchActivityInsights}
                   metric={watchActivityMetric}
                   metricOptions={watchActivityMetricOptions}
-                  monthNodes={watchActivityMonthGroups.map(renderWatchActivityMonth)}
+                  monthGroups={watchActivityMonthGroups}
                   range={watchActivityRange}
                   rangeOptions={watchActivityRangeOptions}
                   selectedDay={selectedWatchActivityDay}
-                  tagNodes={watchActivityInsights.topTags.map(renderWatchActivityTagInsight)}
                   watchActivityStore={watchActivityRef.current}
                   formatCumulativeDuration={formatCumulativeDuration}
                   formatDate={formatWatchActivityDate}
@@ -7646,6 +7528,8 @@ export default function App() {
                   onMetricChange={setWatchActivityMetric}
                   onOpenVideo={openVideoFromHome}
                   onRangeChange={setWatchActivityRange}
+                  onSelectDate={setSelectedWatchActivityDate}
+                  onSelectTag={runSpecialInsightTagSearch}
                   onThumbnailError={markVideoThumbnailFailed}
                 />
               ) : null}
@@ -8247,11 +8131,8 @@ export default function App() {
         cacheStatusPageEnd,
         visibleCacheStatusPage,
         cacheStatusPageCount,
-        onClose: () => {
-          setIsCacheStatusDialogOpen(false);
-          setIsClearCacheConfirmOpen(false);
-        },
-        onCloseClearConfirm: () => setIsClearCacheConfirmOpen(false),
+        onClose: closeCacheStatusDialog,
+        onCloseClearConfirm: closeClearCacheConfirm,
         onToggleAllCacheItems: toggleAllCacheItems,
         onToggleCacheItemSelection: toggleCacheItemSelection,
         onCacheStatusPageChange: setCacheStatusPage,

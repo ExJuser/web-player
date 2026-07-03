@@ -1,56 +1,64 @@
 import { CalendarDays } from "lucide-react";
-import type { ReactNode } from "react";
 
 import { HomeCardThumbnail } from "./HomeVideoCards";
 import type { HomeVideoCard, VideoItem, WatchActivityStore } from "./playerTypes";
+import { WatchActivityMonth, WatchActivityTagButton } from "./WatchActivityCalendar";
 import {
   createWatchActivityKey,
   getWatchActivityMetricValue,
   type WatchActivityDayInsight,
   type WatchActivityInsights,
   type WatchActivityMetric,
+  type WatchActivityMonthGroup,
   type WatchActivityRange,
+  watchActivityWeekdayLabels,
 } from "./watchActivityInsights";
 
 type WatchActivitySectionProps = {
+  carouselCardsByDate: Map<string, HomeVideoCard[]>;
+  carouselTick: number;
   cards: HomeVideoCard[];
   insights: WatchActivityInsights;
   metric: WatchActivityMetric;
   metricOptions: Array<{ value: WatchActivityMetric; label: string }>;
+  monthGroups: WatchActivityMonthGroup[];
   range: WatchActivityRange;
   rangeOptions: Array<{ value: WatchActivityRange; label: string }>;
   selectedDay: WatchActivityDayInsight | null;
-  tagNodes: ReactNode;
   watchActivityStore: WatchActivityStore;
   formatCumulativeDuration: (seconds: number) => string;
   formatDate: (date: string) => string;
   formatHomeMeta: (card: HomeVideoCard) => string;
   formatMetric: (value: number, metric: WatchActivityMetric) => string;
-  monthNodes: ReactNode;
   onMetricChange: (metric: WatchActivityMetric) => void;
   onOpenVideo: (video: VideoItem) => void;
   onRangeChange: (range: WatchActivityRange) => void;
+  onSelectDate: (date: string) => void;
+  onSelectTag: (tag: string) => void;
   onThumbnailError: (videoId: string) => void;
 };
 
 export function WatchActivitySection({
+  carouselCardsByDate,
+  carouselTick,
   cards,
   insights,
   metric,
   metricOptions,
+  monthGroups,
   range,
   rangeOptions,
   selectedDay,
-  tagNodes,
   watchActivityStore,
   formatCumulativeDuration,
   formatDate,
   formatHomeMeta,
   formatMetric,
-  monthNodes,
   onMetricChange,
   onOpenVideo,
   onRangeChange,
+  onSelectDate,
+  onSelectTag,
   onThumbnailError,
 }: WatchActivitySectionProps) {
   const selectedMetricLabel = selectedDay
@@ -110,7 +118,23 @@ export function WatchActivitySection({
         </div>
       </div>
       <div className="watch-activity-calendar" role="list" aria-label="最近观看分布">
-        {monthNodes}
+        {monthGroups.map((month) => (
+          <WatchActivityMonth
+            carouselCardsByDate={carouselCardsByDate}
+            carouselTick={carouselTick}
+            formatDate={formatDate}
+            formatMetric={formatMetric}
+            getMetricValue={getWatchActivityMetricValue}
+            key={month.key}
+            maxMetricValue={insights.maxMetricValue}
+            metric={metric}
+            month={month}
+            onSelectDate={onSelectDate}
+            onThumbnailError={onThumbnailError}
+            selectedDate={selectedDay?.date}
+            weekdayLabels={watchActivityWeekdayLabels}
+          />
+        ))}
       </div>
       <div className="watch-activity-detail">
         <div className="watch-activity-detail-header">
@@ -149,7 +173,20 @@ export function WatchActivitySection({
         )}
       </div>
       <div className="watch-activity-tags" aria-label="当前范围热门标签">
-        {insights.topTags.length ? tagNodes : <small>当前范围暂无可统计标签。</small>}
+        {insights.topTags.length ? (
+          insights.topTags.map((insight, index) => (
+            <WatchActivityTagButton
+              formatMetric={formatMetric}
+              index={index}
+              insight={insight}
+              key={insight.key}
+              metric={metric}
+              onSelectTag={onSelectTag}
+            />
+          ))
+        ) : (
+          <small>当前范围暂无可统计标签。</small>
+        )}
       </div>
     </section>
   );
