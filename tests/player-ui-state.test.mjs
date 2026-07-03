@@ -240,6 +240,57 @@ test("home special mode excludes media roots without AV suffix", () => {
   assert.equal(uiState.isMediaRootInHomeMode({ label: "AV资料备份" }, "special"), false);
 });
 
+test("home media mode helpers filter roots videos and statuses", () => {
+  const mediaRoots = [
+    { id: "all-a", label: "Movies" },
+    { id: "anime-a", label: "Anime" },
+    { id: "special-a", label: "JAV" },
+  ];
+  const videos = [
+    { id: "v1", mediaRootId: "all-a" },
+    { id: "v2", mediaRootId: "anime-a" },
+    { id: "v3", mediaRootId: "special-a" },
+    { id: "v4" },
+  ];
+  const statuses = [
+    { id: "all-a", status: "ready", videoCount: 1 },
+    { id: "anime-a", status: "ready", videoCount: 1 },
+    { id: "special-a", status: "ready", videoCount: 1 },
+  ];
+  const animeRoots = uiState.getHomeModeMediaRoots(mediaRoots, "anime");
+  const animeRootIds = uiState.createMediaRootIdSet(animeRoots);
+  const allRootIds = uiState.createMediaRootIdSet(uiState.getHomeModeMediaRoots(mediaRoots, "all"));
+
+  assert.deepEqual(animeRoots, [mediaRoots[1]]);
+  assert.equal(uiState.filterVideosByHomeMediaMode(videos, "all", allRootIds), videos);
+  assert.deepEqual(uiState.filterVideosByHomeMediaMode(videos, "anime", animeRootIds), [videos[1]]);
+  assert.equal(uiState.filterMediaRootStatusesByHomeMediaMode(statuses, "all", allRootIds), statuses);
+  assert.deepEqual(uiState.filterMediaRootStatusesByHomeMediaMode(statuses, "anime", animeRootIds), [statuses[1]]);
+});
+
+test("library stats helper counts total progress and favorites", () => {
+  const videos = [{ id: "a" }, { id: "b" }, { id: "c" }];
+
+  assert.deepEqual(
+    uiState.createLibraryStats({
+      videos,
+      progressStore: {
+        a: { completed: true },
+        b: { currentTime: 50, duration: 100 },
+        c: { currentTime: 99, duration: 100 },
+      },
+      favoriteVideoIds: new Set(["a", "missing"]),
+      isResumableProgress: (progress) => Boolean(progress && !progress.completed && (progress.currentTime ?? 0) > 0 && (progress.currentTime ?? 0) < 90),
+    }),
+    {
+      total: 3,
+      unfinished: 1,
+      completed: 1,
+      favorites: 1,
+    },
+  );
+});
+
 test("video stats key is stable across media roots", () => {
   const first = uiState.createVideoStatsKey({
     id: "root-a|folder-a/movie.mp4|1024|1700000000000",

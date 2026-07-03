@@ -253,6 +253,8 @@ import { ControlSelect } from "./ControlSelect";
 import {
   createPersistedEmbeddedSubtitles,
   createDuplicatePlaylistMetaByVideoId,
+  createLibraryStats,
+  createMediaRootIdSet,
   createPlaylistPanelLabels,
   createPlaylistPageLabels,
   createPlaylistPageSizeSelectOptions,
@@ -282,6 +284,9 @@ import {
   getPlayerMediaModeLabel,
   createSubtitleControlOptions,
   createVideoStatsKey,
+  filterMediaRootStatusesByHomeMediaMode,
+  filterVideosByHomeMediaMode,
+  getHomeModeMediaRoots,
   isMediaRootInHomeMode,
   resolveSelectedWatchActivityDay,
   resolvePlayerEntrySeriesMode,
@@ -1233,18 +1238,15 @@ export default function App() {
   }, [activeView, hasLoadedPhotoAlbums, isPhotoAlbumsLoading, loadPhotoAlbumDirectory]);
 
   const homeModeMediaRoots = useMemo(
-    () => (localConfig?.mediaRoots ?? []).filter((root) => isMediaRootInHomeMode(root, homeMediaMode)),
+    () => getHomeModeMediaRoots(localConfig?.mediaRoots ?? [], homeMediaMode),
     [homeMediaMode, localConfig],
   );
   const homeModeMediaRootIds = useMemo(
-    () => new Set(homeModeMediaRoots.map((root) => root.id)),
+    () => createMediaRootIdSet(homeModeMediaRoots),
     [homeModeMediaRoots],
   );
   const modeFilteredVideos = useMemo(
-    () =>
-      homeMediaMode === "all"
-        ? videos
-        : videos.filter((video) => Boolean(video.mediaRootId && homeModeMediaRootIds.has(video.mediaRootId))),
+    () => filterVideosByHomeMediaMode(videos, homeMediaMode, homeModeMediaRootIds),
     [homeMediaMode, homeModeMediaRootIds, videos],
   );
   const currentDuplicateDetectionScopeKey = useMemo(
@@ -1259,10 +1261,7 @@ export default function App() {
     [duplicateVideoGroups, isDuplicateDetectionResultCurrent],
   );
   const modeFilteredMediaRootStatuses = useMemo(
-    () =>
-      homeMediaMode === "all"
-        ? mediaRootStatuses
-        : mediaRootStatuses.filter((status) => homeModeMediaRootIds.has(status.id)),
+    () => filterMediaRootStatusesByHomeMediaMode(mediaRootStatuses, homeMediaMode, homeModeMediaRootIds),
     [homeMediaMode, homeModeMediaRootIds, mediaRootStatuses],
   );
   const homeMediaModeLabel = getHomeMediaModeLabel(homeMediaMode);
@@ -1584,17 +1583,10 @@ export default function App() {
   }, [isHomeViewVisible]);
   const firstPlayableHomeCard = playlistVideos[0] ? createHomeVideoCard(playlistVideos[0]) : null;
   const primaryHomeCard = primaryResumeCard ?? firstPlayableHomeCard;
-  const libraryStats = useMemo(() => {
-    const completed = modeFilteredVideos.filter((video) => progressStore[video.id]?.completed).length;
-    const unfinished = modeFilteredVideos.filter((video) => isResumableProgress(progressStore[video.id])).length;
-    const favorites = modeFilteredVideos.filter((video) => favoriteVideoIds.has(video.id)).length;
-    return {
-      total: modeFilteredVideos.length,
-      unfinished,
-      completed,
-      favorites,
-    };
-  }, [favoriteVideoIds, modeFilteredVideos, progressStore]);
+  const libraryStats = useMemo(
+    () => createLibraryStats({ videos: modeFilteredVideos, progressStore, favoriteVideoIds, isResumableProgress }),
+    [favoriteVideoIds, modeFilteredVideos, progressStore],
+  );
   const specialModeInsights = useMemo(
     () =>
       homeMediaMode === "special"

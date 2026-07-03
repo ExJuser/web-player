@@ -47,6 +47,10 @@ type MediaRootStatusForUi = {
   error?: string;
 };
 
+type MediaRootStatusWithIdForUi = MediaRootStatusForUi & {
+  id: string;
+};
+
 type VideoForCompatibilityUi = {
   url?: string;
   name?: string;
@@ -85,6 +89,14 @@ type RatedVideoForUi = {
 
 type IdentifiedVideoForUi = {
   id: string;
+};
+
+type ModeVideoForUi = IdentifiedVideoForUi & {
+  mediaRootId?: string;
+};
+
+type ProgressForUi = {
+  completed?: boolean;
 };
 
 type WatchActivityVideoForUi = IdentifiedVideoForUi & {
@@ -253,6 +265,55 @@ export function isMediaRootInHomeMode(root: MediaRootForUi, mode: HomeMediaMode)
   const normalizedLabel = (root.label ?? "").trim();
   if (mode === "anime") return normalizedLabel.toLowerCase() === "anime";
   return normalizedLabel.toUpperCase().endsWith("AV");
+}
+
+export function getHomeModeMediaRoots<Root extends MediaRootForUi>(roots: Root[], mode: HomeMediaMode) {
+  return roots.filter((root) => isMediaRootInHomeMode(root, mode));
+}
+
+export function createMediaRootIdSet(roots: Array<{ id?: string }>) {
+  return new Set(roots.map((root) => root.id));
+}
+
+export function filterVideosByHomeMediaMode<Video extends ModeVideoForUi>(
+  videos: Video[],
+  mode: HomeMediaMode,
+  mediaRootIds: ReadonlySet<string | undefined>,
+) {
+  if (mode === "all") return videos;
+  return videos.filter((video) => Boolean(video.mediaRootId && mediaRootIds.has(video.mediaRootId)));
+}
+
+export function filterMediaRootStatusesByHomeMediaMode<Status extends MediaRootStatusWithIdForUi>(
+  statuses: Status[],
+  mode: HomeMediaMode,
+  mediaRootIds: ReadonlySet<string | undefined>,
+) {
+  if (mode === "all") return statuses;
+  return statuses.filter((status) => mediaRootIds.has(status.id));
+}
+
+export function createLibraryStats<Video extends IdentifiedVideoForUi, Progress extends ProgressForUi>(input: {
+  videos: Video[];
+  progressStore: Record<string, Progress | undefined>;
+  favoriteVideoIds: ReadonlySet<string>;
+  isResumableProgress: (progress?: Progress) => boolean;
+}) {
+  let unfinished = 0;
+  let completed = 0;
+  let favorites = 0;
+  input.videos.forEach((video) => {
+    const progress = input.progressStore[video.id];
+    if (progress?.completed) completed += 1;
+    if (input.isResumableProgress(progress)) unfinished += 1;
+    if (input.favoriteVideoIds.has(video.id)) favorites += 1;
+  });
+  return {
+    total: input.videos.length,
+    unfinished,
+    completed,
+    favorites,
+  };
 }
 
 export function createVideoStatsKey(video: VideoForStatsUi) {
