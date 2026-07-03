@@ -1,4 +1,4 @@
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, Shuffle } from "lucide-react";
 
 import { ControlSelect } from "./ControlSelect";
 import type { PhotoAlbumSortMode } from "./playerTypes";
@@ -12,8 +12,10 @@ type PhotoAlbumToolbarProps = {
   sortMode: PhotoAlbumSortMode;
   sortOptions: Array<{ value: PhotoAlbumSortMode; label: string }>;
   onFilterChange: (filter: PhotoAlbumViewFilter) => void;
+  onRandomAlbum: () => void;
   onRefresh: () => void;
   onSortModeChange: (sortMode: PhotoAlbumSortMode) => void;
+  randomDisabled: boolean;
 };
 
 export function PhotoAlbumToolbar({
@@ -23,8 +25,10 @@ export function PhotoAlbumToolbar({
   sortMode,
   sortOptions,
   onFilterChange,
+  onRandomAlbum,
   onRefresh,
   onSortModeChange,
+  randomDisabled,
 }: PhotoAlbumToolbarProps) {
   return (
     <section className="photo-toolbar home-section">
@@ -57,6 +61,10 @@ export function PhotoAlbumToolbar({
           onChange={onSortModeChange}
           className="photo-sort-control"
         />
+        <button className="secondary-button" type="button" onClick={onRandomAlbum} disabled={randomDisabled}>
+          <Shuffle size={16} />
+          随机一本
+        </button>
         <button className="secondary-button" type="button" onClick={onRefresh} disabled={isLoading}>
           <RefreshCw size={16} className={isLoading ? "spin-icon" : undefined} />
           {isLoading ? "扫描中" : "刷新"}

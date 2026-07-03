@@ -3846,6 +3846,12 @@ export default function App() {
     [persistPhotoAlbumProgress],
   );
 
+  const openRandomPhotoAlbum = useCallback(() => {
+    if (!visiblePhotoAlbums.length) return;
+    const randomAlbum = visiblePhotoAlbums[Math.floor(Math.random() * visiblePhotoAlbums.length)];
+    openPhotoAlbum(randomAlbum);
+  }, [openPhotoAlbum, visiblePhotoAlbums]);
+
   const showPhotoAlbumList = useCallback(() => {
     setActiveView("photos");
   }, []);
@@ -7225,6 +7231,7 @@ export default function App() {
             onFilterChange={updatePhotoAlbumFilter}
             onNextPage={() => setPhotoAlbumPage((page) => Math.min(page + 1, photoAlbumPageCount))}
             onPreviousPage={() => setPhotoAlbumPage((page) => Math.max(page - 1, 1))}
+            onRandomAlbum={openRandomPhotoAlbum}
             onRefresh={() => void refreshPhotoAlbumDirectory()}
             onRenderAlbum={renderPhotoAlbumCard}
             onSearchChange={setPhotoAlbumSearchQuery}

@@ -33,6 +33,7 @@ type PhotoDashboardSectionProps = {
   onFilterChange: (filter: PhotoAlbumViewFilter) => void;
   onNextPage: () => void;
   onPreviousPage: () => void;
+  onRandomAlbum: () => void;
   onRefresh: () => void;
   onRenderAlbum: (album: PhotoAlbum) => ReactNode;
   onSearchChange: (query: string) => void;
@@ -60,6 +61,7 @@ export function PhotoDashboardSection({
   onFilterChange,
   onNextPage,
   onPreviousPage,
+  onRandomAlbum,
   onRefresh,
   onRenderAlbum,
   onSearchChange,
@@ -75,8 +77,10 @@ export function PhotoDashboardSection({
         sortMode={sortMode}
         sortOptions={sortOptions}
         onFilterChange={onFilterChange}
+        onRandomAlbum={onRandomAlbum}
         onRefresh={onRefresh}
         onSortModeChange={onSortModeChange}
+        randomDisabled={isLoading || !totalVisibleAlbums}
       />
 
       <PhotoAlbumSearchRow query={searchQuery} onChange={onSearchChange} onClear={onSearchClear} />
