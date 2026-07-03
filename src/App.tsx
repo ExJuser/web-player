@@ -17,6 +17,7 @@ import { readAiTextStream } from "./aiStreamClient";
 import { useCacheStatusDialog } from "./useCacheStatusDialog";
 import { useDraggableDialog } from "./useDraggableDialog";
 import { useLibrarySearchState } from "./useLibrarySearchState";
+import { useMediaRootLocalPathDialog } from "./useMediaRootLocalPathDialog";
 import { usePhotoAlbumTagEditor } from "./usePhotoAlbumTagEditor";
 import { usePhotoObjectUrls } from "./usePhotoObjectUrls";
 import { useRatingDialog } from "./useRatingDialog";
@@ -226,7 +227,6 @@ import {
   type MediaRootsScanResponse,
   type ScannedServerSubtitle,
   type ScannedServerVideo,
-  type UpdateMediaRootLocalPathResponse,
   type UpsertMediaRootResponse,
 } from "./mediaRootScanCache";
 import {
@@ -248,7 +248,6 @@ import type {
   LibrarySearchSurface,
   MediaProbeResponse,
   MediaRootLabelPrompt,
-  MediaRootLocalPathDialog,
   PlaybackSourceChoice,
   TagMergePrompt,
 } from "./appTypes";
@@ -690,9 +689,19 @@ export default function App() {
   const [isVideoDeletePending, setIsVideoDeletePending] = useState(false);
   const [mediaRootLabelPrompt, setMediaRootLabelPrompt] = useState<MediaRootLabelPrompt | null>(null);
   const [existingMediaRootPrompt, setExistingMediaRootPrompt] = useState<ExistingMediaRootPrompt | null>(null);
-  const [mediaRootLocalPathDialog, setMediaRootLocalPathDialog] = useState<MediaRootLocalPathDialog | null>(null);
   const [skipFolderAccessPrompt, setSkipFolderAccessPrompt] = useState(defaultPlayerSettings.skipFolderAccessPrompt);
   const [message, setMessage] = useState("新增一个媒体库开始播放");
+  const {
+    closeMediaRootLocalPathDialog,
+    mediaRootLocalPathDialog,
+    openMediaRootLocalPathDialog,
+    submitMediaRootLocalPath,
+    updateMediaRootLocalPathValue,
+  } = useMediaRootLocalPathDialog({
+    localConfigRef,
+    setLocalConfig,
+    setMessage,
+  });
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -2183,60 +2192,6 @@ export default function App() {
     if (!label) return;
     closeMediaRootLabelPrompt(label);
   }, [closeMediaRootLabelPrompt, mediaRootLabelPrompt]);
-
-  const openMediaRootLocalPathDialog = useCallback((root: LocalMediaRoot) => {
-    setMediaRootLocalPathDialog({
-      root,
-      value: root.localPath ?? "",
-      error: "",
-      isSaving: false,
-    });
-  }, []);
-
-  const closeMediaRootLocalPathDialog = useCallback(() => {
-    setMediaRootLocalPathDialog((previous) => (previous?.isSaving ? previous : null));
-  }, []);
-
-  const updateMediaRootLocalPathValue = useCallback((value: string) => {
-    setMediaRootLocalPathDialog((previous) => (previous ? { ...previous, value, error: "" } : previous));
-  }, []);
-
-  const submitMediaRootLocalPath = useCallback(async () => {
-    if (!mediaRootLocalPathDialog || mediaRootLocalPathDialog.isSaving) return;
-    const localPath = mediaRootLocalPathDialog.value.trim();
-    if (!localPath) {
-      setMediaRootLocalPathDialog((previous) =>
-        previous ? { ...previous, error: "请输入本机绝对路径。" } : previous,
-      );
-      return;
-    }
-
-    setMediaRootLocalPathDialog((previous) => (previous ? { ...previous, isSaving: true, error: "" } : previous));
-    try {
-      const response = await fetchJson<UpdateMediaRootLocalPathResponse>("/api/local-config/media-root/local-path", {
-        method: "PUT",
-        body: JSON.stringify({
-          id: mediaRootLocalPathDialog.root.id,
-          localPath,
-        }),
-      });
-      const nextConfig = normalizeClientLocalConfig(response);
-      setLocalConfig(nextConfig);
-      localConfigRef.current = nextConfig;
-      setMediaRootLocalPathDialog(null);
-      setMessage("已保存媒体库本机路径。");
-    } catch (error) {
-      setMediaRootLocalPathDialog((previous) =>
-        previous
-          ? {
-              ...previous,
-              isSaving: false,
-              error: error instanceof Error ? error.message : "保存本机路径失败。",
-            }
-          : previous,
-      );
-    }
-  }, [mediaRootLocalPathDialog]);
 
   const ensureMediaRootForDirectory = useCallback(
     async (directory: FileSystemDirectoryHandle) => {
