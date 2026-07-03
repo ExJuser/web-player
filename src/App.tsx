@@ -19,6 +19,7 @@ import { useDraggableDialog } from "./useDraggableDialog";
 import { useLibrarySearchState } from "./useLibrarySearchState";
 import { useMediaRootLocalPathDialog } from "./useMediaRootLocalPathDialog";
 import { useMediaRootPrompts } from "./useMediaRootPrompts";
+import { usePhotoAlbumRuntime } from "./usePhotoAlbumRuntime";
 import { usePhotoAlbumTagEditor } from "./usePhotoAlbumTagEditor";
 import { usePhotoObjectUrls } from "./usePhotoObjectUrls";
 import { useRatingDialog } from "./useRatingDialog";
@@ -75,7 +76,6 @@ import type {
   PhotoAlbumImage,
   PhotoAlbumProgress,
   PhotoAlbumSortMode,
-  PhotoAlbumStore,
   PlaylistFilter,
   PlaylistSortMode,
   ProgressStore,
@@ -109,7 +109,6 @@ import {
   savePhotoAlbumCoverPreference,
   savePhotoAlbumPreferences,
   savePhotoAlbumProgress,
-  savePhotoAlbumStore
 } from "./photoAlbumStorage";
 import {
   PROGRESS_FILE_NAME,
@@ -456,13 +455,7 @@ export default function App() {
   const mediaRootCacheLoadAttemptedRef = useRef(false);
   const cachedEmbeddedSubtitleLookupKeysRef = useRef(new Set<string>());
   const bangumiMatchesBySeriesKeyRef = useRef<Record<string, BangumiSeriesMatch>>({});
-  const photoAlbumProgressRef = useRef<Record<string, PhotoAlbumProgress>>({});
-  const photoAlbumCoverPreferencesRef = useRef<Record<string, string>>({});
-  const photoAlbumTagsRef = useRef<Record<string, string[]>>({});
-  const favoritePhotoAlbumIdsRef = useRef(new Set<string>());
-  const photoAlbumPreferencesRef = useRef(defaultPhotoAlbumPreferences);
   const photoAlbumAutoLoadAttemptedRef = useRef(false);
-  const photoAlbumDirectoryRef = useRef<FileSystemDirectoryHandle | null>(null);
   const bangumiMatchRunIdRef = useRef(0);
   const thumbnailLoadRunIdRef = useRef(0);
   const isScanningRef = useRef(false);
@@ -486,7 +479,6 @@ export default function App() {
   const selectedSubtitleIdRef = useRef("off");
   const playbackStatsSessionRef = useRef<{ key: string; lastTime: number | null; hasCountedPlay: boolean } | null>(null);
   const playbackActivitySessionRef = useRef<{ videoId: string; lastTime: number | null; hasCountedPlay: boolean } | null>(null);
-  const photoAlbumsRef = useRef<PhotoAlbum[]>([]);
   const photoObjectUrlsRef = useRef<Record<string, string>>({});
   const photoObjectUrlAccessRef = useRef<Record<string, number>>({});
   const decodedPhotoImageIdsRef = useRef(new Set<string>());
@@ -583,6 +575,31 @@ export default function App() {
   const [photoAlbumMessage, setPhotoAlbumMessage] = useState("选择一个看图文件夹后开始扫描图片。");
   const [isPhotoAlbumsLoading, setIsPhotoAlbumsLoading] = useState(false);
   const [hasLoadedPhotoAlbums, setHasLoadedPhotoAlbums] = useState(false);
+  const {
+    applyPhotoAlbumStore,
+    favoritePhotoAlbumIdsRef,
+    photoAlbumCoverPreferencesRef,
+    photoAlbumDirectoryRef,
+    photoAlbumPreferencesRef,
+    photoAlbumProgressRef,
+    photoAlbumTagsRef,
+    photoAlbumsRef,
+    saveCurrentPhotoAlbumStore,
+  } = usePhotoAlbumRuntime({
+    favoritePhotoAlbumIds,
+    photoAlbumCoverPreferences,
+    photoAlbumFilter,
+    photoAlbumProgress,
+    photoAlbums,
+    photoAlbumSortMode,
+    photoAlbumTags,
+    setFavoritePhotoAlbumIds,
+    setPhotoAlbumCoverPreferences,
+    setPhotoAlbumFilter,
+    setPhotoAlbumProgress,
+    setPhotoAlbumSortMode,
+    setPhotoAlbumTags,
+  });
   const [selectedSubtitleId, setSelectedSubtitleId] = useState<string>("off");
   const [progressStore, setProgressStore] = useState<ProgressStore>({});
   const [favoriteVideoIds, setFavoriteVideoIds] = useState<Set<string>>(() => new Set());
@@ -757,19 +774,10 @@ export default function App() {
   subtitlesRef.current = subtitles;
   danmakuSelectionsRef.current = danmakuSelections;
   danmakuPreferencesRef.current = danmakuPreferences;
-  photoAlbumsRef.current = photoAlbums;
   selectedSubtitleIdRef.current = selectedSubtitleId;
   localConfigRef.current = localConfig;
   bangumiMatchesBySeriesKeyRef.current = bangumiMatchesBySeriesKey;
-  photoAlbumProgressRef.current = photoAlbumProgress;
-  photoAlbumCoverPreferencesRef.current = photoAlbumCoverPreferences;
-  photoAlbumTagsRef.current = photoAlbumTags;
-  favoritePhotoAlbumIdsRef.current = favoritePhotoAlbumIds;
   videoHighlightsRef.current = videoHighlights;
-  photoAlbumPreferencesRef.current = {
-    sortMode: photoAlbumSortMode,
-    favoritesOnly: photoAlbumFilter === "favorites",
-  };
 
   const updateSelectedSubtitleId = useCallback((nextSubtitleId: string) => {
     selectedSubtitleIdRef.current = nextSubtitleId;
@@ -885,41 +893,6 @@ export default function App() {
     },
     [buildPlayerDataStore],
   );
-
-  const buildPhotoAlbumStore = useCallback(
-    (overrides?: Partial<PhotoAlbumStore>): PhotoAlbumStore => ({
-      version: 1,
-      favorites: Array.from(favoritePhotoAlbumIdsRef.current),
-      progress: photoAlbumProgressRef.current,
-      coverImageByAlbumId: photoAlbumCoverPreferencesRef.current,
-      albumTags: photoAlbumTagsRef.current,
-      preferences: photoAlbumPreferencesRef.current,
-      ...overrides,
-    }),
-    [],
-  );
-
-  const saveCurrentPhotoAlbumStore = useCallback(
-    async (overrides?: Partial<PhotoAlbumStore>) => {
-      await savePhotoAlbumStore(buildPhotoAlbumStore(overrides));
-    },
-    [buildPhotoAlbumStore],
-  );
-
-  const applyPhotoAlbumStore = useCallback((store: PhotoAlbumStore) => {
-    const favoriteIds = new Set(store.favorites);
-    favoritePhotoAlbumIdsRef.current = favoriteIds;
-    photoAlbumProgressRef.current = store.progress;
-    photoAlbumCoverPreferencesRef.current = store.coverImageByAlbumId;
-    photoAlbumTagsRef.current = store.albumTags;
-    photoAlbumPreferencesRef.current = store.preferences;
-    setFavoritePhotoAlbumIds(favoriteIds);
-    setPhotoAlbumProgress(store.progress);
-    setPhotoAlbumCoverPreferences(store.coverImageByAlbumId);
-    setPhotoAlbumTags(store.albumTags);
-    setPhotoAlbumSortMode(store.preferences.sortMode);
-    setPhotoAlbumFilter(store.preferences.favoritesOnly ? "favorites" : "all");
-  }, []);
 
   const applyCachedPhotoAlbumScan = useCallback((cache: CachedPhotoAlbumScan, options?: { status?: PlayerMediaRootStatus["status"]; message?: string; error?: string }) => {
     photoAlbumsRef.current = cache.albums;
