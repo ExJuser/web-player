@@ -22,6 +22,7 @@ import { useDraggableDialog } from "./useDraggableDialog";
 import { useDuplicateDetectionController } from "./useDuplicateDetectionController";
 import { useEmbeddedSubtitleController } from "./useEmbeddedSubtitleController";
 import { useHomeProgressRecapController } from "./useHomeProgressRecapController";
+import { useHighEnergySegmentController } from "./useHighEnergySegmentController";
 import { useLibrarySearchState } from "./useLibrarySearchState";
 import { useMediaRootLocalPathDialog } from "./useMediaRootLocalPathDialog";
 import { useMediaRootPrompts } from "./useMediaRootPrompts";
@@ -85,7 +86,6 @@ import type {
   ShortcutMap,
   SubtitleItem,
   TagMergeDecisionStore,
-  VideoHighlightSegment,
   VideoHighlightStore,
   VideoItem,
   VideoMetadata,
@@ -332,7 +332,6 @@ import {
   savePlayerSetting,
   saveTagMergeDecisions,
   savePlayerWatchActivity,
-  savePlayerVideoHighlights,
   savePlayerVideoStats,
   savePlayerVideoTags,
   writePhotoAlbumFolderHandle,
@@ -363,7 +362,7 @@ import {
 } from "./CompatibleMediaDialogs";
 import { DeletionDialogs } from "./DeletionDialogs";
 import { DuplicateVideoGroupCard } from "./DuplicateVideoGroupCard";
-import { HighEnergyTagDialog, type HighEnergyTagPrompt } from "./HighEnergyTagDialog";
+import { HighEnergyTagDialog } from "./HighEnergyTagDialog";
 import { HomeNextEpisodeSection } from "./HomeNextEpisodeSection";
 import { HomeRecentSection } from "./HomeRecentSection";
 import { HomeResumeSection } from "./HomeResumeSection";
@@ -591,8 +590,6 @@ export default function App() {
   const [videoComments, setVideoComments] = useState<VideoCommentStore>({});
   const [videoTags, setVideoTags] = useState<VideoTagStore>({});
   const [videoHighlights, setVideoHighlights] = useState<VideoHighlightStore>({});
-  const [pendingHighEnergyStart, setPendingHighEnergyStart] = useState<{ videoId: string; time: number } | null>(null);
-  const [highEnergyTagPrompt, setHighEnergyTagPrompt] = useState<HighEnergyTagPrompt | null>(null);
   const [, setTagMergeDecisions] = useState<TagMergeDecisionStore>({});
   const [isTagDialogOpen, setIsTagDialogOpen] = useState(false);
   const {
@@ -1454,6 +1451,22 @@ export default function App() {
     setPlaylistPage,
     setRatingPlaylistMode,
   });
+  const {
+    editCurrentSegment: editCurrentHighEnergySegment,
+    markCurrentSegment: markCurrentHighEnergySegment,
+    pendingStart: pendingHighEnergyStart,
+    removeCurrentSegment: removeCurrentHighEnergySegment,
+    saveTagPrompt: saveHighEnergyTagPrompt,
+    setTagPrompt: setHighEnergyTagPrompt,
+    tagPrompt: highEnergyTagPrompt,
+  } = useHighEnergySegmentController({
+    currentTime,
+    currentVideo,
+    duration,
+    setMessage,
+    setVideoHighlights,
+    videoHighlightsRef,
+  });
   const currentVideoHighlights = currentVideo ? videoHighlights[currentVideo.id] ?? [] : [];
   const selectedPhotoAlbum = useMemo(
     () => photoAlbums.find((album) => album.id === selectedPhotoAlbumId) ?? null,
@@ -1966,8 +1979,6 @@ export default function App() {
   useEffect(() => {
     playbackStatsSessionRef.current = null;
     playbackActivitySessionRef.current = null;
-    setPendingHighEnergyStart(null);
-    setHighEnergyTagPrompt(null);
   }, [currentVideoId]);
 
   useEffect(() => {
@@ -3593,91 +3604,6 @@ export default function App() {
     });
     setPhotoAlbumMessage(`已清除《${selectedPhotoAlbum.title}》的阅读进度`);
   }, [saveCurrentPhotoAlbumStore, selectedPhotoAlbum]);
-
-  const markCurrentHighEnergySegment = useCallback(() => {
-    if (!currentVideo || !duration) return;
-    const markTime = clamp(currentTime, 0, duration);
-    if (!pendingHighEnergyStart || pendingHighEnergyStart.videoId !== currentVideo.id) {
-      setPendingHighEnergyStart({ videoId: currentVideo.id, time: markTime });
-      setMessage(`已选择高能起点 ${formatTime(markTime)}，再次点击标记终点。`);
-      return;
-    }
-
-    const startTime = Math.min(pendingHighEnergyStart.time, markTime);
-    const endTime = Math.max(pendingHighEnergyStart.time, markTime);
-    setPendingHighEnergyStart(null);
-    if (endTime - startTime < 0.2) {
-      setMessage("高能片段太短，请重新选择起点和终点。");
-      return;
-    }
-    setHighEnergyTagPrompt({
-      videoId: currentVideo.id,
-      videoName: currentVideo.name,
-      startTime,
-      endTime,
-      tagInput: "",
-    });
-    setMessage(`已选择高能片段 ${formatTime(startTime)} - ${formatTime(endTime)}，请填写标签。`);
-  }, [currentTime, currentVideo, duration, pendingHighEnergyStart]);
-
-  const saveHighEnergyTagPrompt = useCallback(() => {
-    if (!highEnergyTagPrompt) return;
-    const tag = highEnergyTagPrompt.tagInput.trim().slice(0, 40);
-    if (!tag) {
-      setMessage("请输入高能片段标签。");
-      return;
-    }
-    const updatedAt = Date.now();
-    const nextHighlight: VideoHighlightSegment = {
-      id: highEnergyTagPrompt.highlightId ?? `${Math.round(highEnergyTagPrompt.startTime * 10)}-${Math.round(highEnergyTagPrompt.endTime * 10)}-${updatedAt.toString(36)}`,
-      startTime: highEnergyTagPrompt.startTime,
-      endTime: highEnergyTagPrompt.endTime,
-      tag,
-      updatedAt,
-    };
-    const currentHighlights = videoHighlightsRef.current[highEnergyTagPrompt.videoId] ?? [];
-    const nextVideoHighlights = highEnergyTagPrompt.highlightId
-      ? currentHighlights.map((highlight) => highlight.id === highEnergyTagPrompt.highlightId ? nextHighlight : highlight)
-      : [...currentHighlights, nextHighlight];
-    const nextHighlights = {
-      ...videoHighlightsRef.current,
-      [highEnergyTagPrompt.videoId]: nextVideoHighlights.sort((a, b) => a.startTime - b.startTime),
-    };
-    videoHighlightsRef.current = nextHighlights;
-    setVideoHighlights(nextHighlights);
-    setHighEnergyTagPrompt(null);
-    setMessage(highEnergyTagPrompt.highlightId ? "已更新高能片段描述。" : `已标记高能片段 ${formatTime(highEnergyTagPrompt.startTime)} - ${formatTime(highEnergyTagPrompt.endTime)}：${tag}`);
-    void savePlayerVideoHighlights(highEnergyTagPrompt.videoId, nextHighlights[highEnergyTagPrompt.videoId]).catch(() => {
-      setMessage("高能标记保存失败。");
-    });
-  }, [highEnergyTagPrompt]);
-
-  const editCurrentHighEnergySegment = useCallback((highlight: VideoHighlightSegment) => {
-    if (!currentVideo) return;
-    setHighEnergyTagPrompt({
-      videoId: currentVideo.id,
-      videoName: currentVideo.name,
-      startTime: highlight.startTime,
-      endTime: highlight.endTime,
-      highlightId: highlight.id,
-      tagInput: highlight.tag ?? "",
-    });
-  }, [currentVideo]);
-
-  const removeCurrentHighEnergySegment = useCallback((highlightId: string) => {
-    if (!currentVideo) return;
-    const nextVideoHighlights = (videoHighlightsRef.current[currentVideo.id] ?? []).filter((highlight) => highlight.id !== highlightId);
-    const nextHighlights = {
-      ...videoHighlightsRef.current,
-      [currentVideo.id]: nextVideoHighlights,
-    };
-    if (!nextVideoHighlights.length) delete nextHighlights[currentVideo.id];
-    videoHighlightsRef.current = nextHighlights;
-    setVideoHighlights(nextHighlights);
-    void savePlayerVideoHighlights(currentVideo.id, nextVideoHighlights).catch(() => {
-      setMessage("高能标记保存失败。");
-    });
-  }, [currentVideo]);
 
   const clearPhotoAlbumAccessAfterWritePermissionDenied = useCallback(async () => {
     await clearPhotoAlbumFolderHandle().catch(() => undefined);
