@@ -39,6 +39,7 @@ import { useProgressFavoritesController } from "./useProgressFavoritesController
 import { useRatingDialog } from "./useRatingDialog";
 import { useShortcutSettings } from "./useShortcutSettings";
 import { useThumbnailQueueController } from "./useThumbnailQueueController";
+import { useTimelinePreviewController } from "./useTimelinePreviewController";
 import { useVideoSelectionController } from "./useVideoSelectionController";
 import { normalizeClientLocalConfig, shouldAutoScanGlobalMediaLibrary, supportsServerFileAccess } from "./localConfigClient";
 import {
@@ -331,7 +332,6 @@ import {
 } from "./playerStorage";
 import {
   getPlayerFrameAspectRatio,
-  getVideoDisplaySize,
   getVideoElementMetadata,
   selectTrustedDuration,
 } from "./videoThumbnail";
@@ -399,8 +399,6 @@ export default function App() {
   const doubleClickFeedbackTimerRef = useRef<number | null>(null);
   const playerOverlayFeedbackTimerRef = useRef<number | null>(null);
   const launchEffectTimerRef = useRef<number | null>(null);
-  const timelineFrameTimerRef = useRef<number | null>(null);
-  const timelineFrameRequestRef = useRef(0);
   const rightKeyHoldTimerRef = useRef<number | null>(null);
   const rightMouseHoldTimerRef = useRef<number | null>(null);
   const rightMousePointerIdRef = useRef<number | null>(null);
@@ -698,14 +696,6 @@ export default function App() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [timelinePreview, setTimelinePreview] = useState({
-    time: 0,
-    left: 0,
-    isVisible: false,
-    isDragging: false,
-    imageUrl: "",
-    isLoadingFrame: false,
-  });
   const [doubleClickFeedback, setDoubleClickFeedback] = useState<{
     side: "left" | "center" | "right";
     text: string;
@@ -2682,6 +2672,22 @@ export default function App() {
     [clearPendingProgressSave, currentVideo, duration, updateProgress],
   );
 
+  const {
+    hideTimelinePreview,
+    resetTimelinePreview,
+    stopTimelineDragPreview,
+    timelinePreview,
+    updateTimelinePreview,
+    updateTimelinePreviewFromTime,
+  } = useTimelinePreviewController({
+    currentVideo,
+    duration,
+    isPrivacyMode,
+    previewCanvasRef,
+    previewVideoRef,
+    timelineRef,
+  });
+
   const resetHoldSpeedState = useCallback(() => {
     if (rightKeyHoldTimerRef.current) {
       window.clearTimeout(rightKeyHoldTimerRef.current);
@@ -2712,6 +2718,7 @@ export default function App() {
     persistCurrentProgress,
     playerPreferencesRef,
     replacePlayerPreferences,
+    resetTimelinePreview,
     resetHoldSpeedState,
     seriesTitleByVideoId,
     setActiveView,
@@ -2725,7 +2732,6 @@ export default function App() {
     setPlaylistFilter,
     setPlaylistPage,
     setRatingPlaylistMode,
-    setTimelinePreview,
     setVideoAspectRatio,
     updateSelectedSubtitleId,
     videosRef,
@@ -2988,14 +2994,7 @@ export default function App() {
           setIsPlaying(false);
           setCurrentTime(0);
           setDuration(0);
-          setTimelinePreview({
-            time: 0,
-            left: 0,
-            isVisible: false,
-            isDragging: false,
-            imageUrl: "",
-            isLoadingFrame: false,
-          });
+          resetTimelinePreview();
           updateSelectedSubtitleId("off");
           setVideoAspectRatio(16 / 9);
           focusPlayer();
@@ -3018,6 +3017,7 @@ export default function App() {
     focusPlayer,
     isVideoDeletePending,
     removeDeletedVideoFromState,
+    resetTimelinePreview,
     videoDeleteCandidate,
     visibleVideos,
     updateSelectedSubtitleId,
@@ -4458,139 +4458,9 @@ export default function App() {
     [persistCurrentProgress],
   );
 
-  const updateTimelinePreview = useCallback(
-    (clientX: number, isDragging = false) => {
-      const timeline = timelineRef.current;
-      if (isPrivacyMode || !timeline || !currentVideo || duration <= 0) {
-        setTimelinePreview((previous) => ({ ...previous, isVisible: false, isDragging: false }));
-        return;
-      }
-
-      const rect = timeline.getBoundingClientRect();
-      const ratio = rect.width ? clamp((clientX - rect.left) / rect.width, 0, 1) : 0;
-      setTimelinePreview((previous) => ({
-        ...previous,
-        time: ratio * duration,
-        left: ratio * 100,
-        isVisible: true,
-        isDragging,
-      }));
-    },
-    [currentVideo, duration, isPrivacyMode],
-  );
-
-  const updateTimelinePreviewFromTime = useCallback(
-    (time: number, isDragging = false) => {
-      if (isPrivacyMode || !currentVideo || duration <= 0) {
-        setTimelinePreview((previous) => ({ ...previous, isVisible: false, isDragging: false }));
-        return;
-      }
-
-      const nextTime = clamp(time, 0, duration);
-      setTimelinePreview((previous) => ({
-        ...previous,
-        time: nextTime,
-        left: (nextTime / duration) * 100,
-        isVisible: true,
-        isDragging,
-      }));
-    },
-    [currentVideo, duration, isPrivacyMode],
-  );
-
-  const hideTimelinePreview = useCallback(() => {
-    setTimelinePreview((previous) =>
-      previous.isDragging ? previous : { ...previous, isVisible: false, isDragging: false },
-    );
-  }, []);
-
-  const stopTimelineDragPreview = useCallback(() => {
-    setTimelinePreview((previous) => ({ ...previous, isVisible: false, isDragging: false }));
-  }, []);
-
   const returnFocusToPlayer = useCallback(() => {
     playerRef.current?.focus({ preventScroll: true });
   }, []);
-
-  const captureTimelineFrame = useCallback((time: number) => {
-    const previewVideo = previewVideoRef.current;
-    const canvas = previewCanvasRef.current;
-    if (
-      isPrivacyMode ||
-      !previewVideo ||
-      !canvas ||
-      !currentVideo ||
-      duration <= 0 ||
-      previewVideo.readyState < HTMLMediaElement.HAVE_METADATA
-    ) {
-      return;
-    }
-
-    const requestId = timelineFrameRequestRef.current + 1;
-    timelineFrameRequestRef.current = requestId;
-    const targetTime = clamp(time, 0, Math.max(0, previewVideo.duration || duration));
-    setTimelinePreview((previous) => (previous.isVisible ? { ...previous, isLoadingFrame: true } : previous));
-
-    const drawFrame = () => {
-      if (timelineFrameRequestRef.current !== requestId) return;
-      const context = canvas.getContext("2d");
-      const displaySize = getVideoDisplaySize(previewVideo.videoWidth, previewVideo.videoHeight);
-      const sourceWidth = displaySize?.width;
-      const sourceHeight = displaySize?.height;
-      if (!context || !sourceWidth || !sourceHeight) return;
-
-      const canvasWidth = canvas.width;
-      const canvasHeight = canvas.height;
-      const scale = Math.min(canvasWidth / sourceWidth, canvasHeight / sourceHeight);
-      const drawWidth = sourceWidth * scale;
-      const drawHeight = sourceHeight * scale;
-      const drawLeft = (canvasWidth - drawWidth) / 2;
-      const drawTop = (canvasHeight - drawHeight) / 2;
-
-      context.fillStyle = "#050607";
-      context.fillRect(0, 0, canvasWidth, canvasHeight);
-      context.drawImage(previewVideo, drawLeft, drawTop, drawWidth, drawHeight);
-      const imageUrl = canvas.toDataURL("image/jpeg", 0.78);
-      setTimelinePreview((previous) =>
-        previous.isVisible ? { ...previous, imageUrl, isLoadingFrame: false } : previous,
-      );
-    };
-
-    if (Math.abs(previewVideo.currentTime - targetTime) < 0.08 && previewVideo.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
-      drawFrame();
-      return;
-    }
-
-    previewVideo.addEventListener("seeked", drawFrame, { once: true });
-    previewVideo.currentTime = targetTime;
-  }, [currentVideo, duration, isPrivacyMode]);
-
-  useEffect(() => {
-    if (timelineFrameTimerRef.current) {
-      window.clearTimeout(timelineFrameTimerRef.current);
-      timelineFrameTimerRef.current = null;
-    }
-
-    if (isPrivacyMode || !timelinePreview.isVisible || !currentVideo || duration <= 0) {
-      timelineFrameRequestRef.current += 1;
-      setTimelinePreview((previous) =>
-        previous.imageUrl || previous.isLoadingFrame ? { ...previous, imageUrl: "", isLoadingFrame: false } : previous,
-      );
-      return;
-    }
-
-    timelineFrameTimerRef.current = window.setTimeout(() => {
-      timelineFrameTimerRef.current = null;
-      captureTimelineFrame(timelinePreview.time);
-    }, 80);
-
-    return () => {
-      if (timelineFrameTimerRef.current) {
-        window.clearTimeout(timelineFrameTimerRef.current);
-        timelineFrameTimerRef.current = null;
-      }
-    };
-  }, [captureTimelineFrame, currentVideo, duration, isPrivacyMode, timelinePreview.isVisible, timelinePreview.time]);
 
   const showDoubleClickFeedback = useCallback((side: "left" | "center" | "right", text: string) => {
     if (doubleClickFeedbackTimerRef.current) {
@@ -4900,21 +4770,14 @@ export default function App() {
     setPhotoDeleteError("");
     setIsPhotoDeletePending(false);
     setIsFolderDialogOpen(false);
-    setTimelinePreview({
-      time: 0,
-      left: 0,
-      isVisible: false,
-      isDragging: false,
-      imageUrl: "",
-      isLoadingFrame: false,
-    });
+    resetTimelinePreview();
     element?.pause();
     if (document.fullscreenElement) {
       void document.exitFullscreen().catch(() => undefined);
     }
     setIsPrivacyMode(true);
     setMessage("隐私模式已开启");
-  }, [closeShortcutDialog, currentVideo, persistCurrentProgress, resetHoldSpeedState]);
+  }, [closeShortcutDialog, currentVideo, persistCurrentProgress, resetHoldSpeedState, resetTimelinePreview]);
 
   const exitPrivacyMode = useCallback(() => {
     const resumePlayback = privacyResumePlaybackRef.current;

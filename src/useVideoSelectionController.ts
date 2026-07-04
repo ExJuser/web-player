@@ -4,15 +4,6 @@ import type { ActiveView, HomeMediaMode, PlayerPreferences, PlaylistFilter, Vide
 import { inferSeriesTitle, scopedSeriesKeyForVideo } from "./playerSeriesUtils";
 import { resolvePlayerEntrySeriesMode, type RatingPlaylistMode } from "./playerUiState";
 
-type TimelinePreviewState = {
-  time: number;
-  left: number;
-  isVisible: boolean;
-  isDragging: boolean;
-  imageUrl: string;
-  isLoadingFrame: boolean;
-};
-
 type SelectVideoOptions = {
   syncSeriesMode?: boolean;
   keepDuplicatePlaylist?: boolean;
@@ -29,6 +20,7 @@ type UseVideoSelectionControllerOptions = {
   persistCurrentProgress: () => void;
   playerPreferencesRef: MutableRefObject<PlayerPreferences>;
   replacePlayerPreferences: (nextPreferences: PlayerPreferences) => void;
+  resetTimelinePreview: () => void;
   resetHoldSpeedState: () => void;
   seriesTitleByVideoId: Map<string, string>;
   setActiveView: Dispatch<SetStateAction<ActiveView>>;
@@ -42,7 +34,6 @@ type UseVideoSelectionControllerOptions = {
   setPlaylistFilter: Dispatch<SetStateAction<PlaylistFilter>>;
   setPlaylistPage: Dispatch<SetStateAction<number>>;
   setRatingPlaylistMode: Dispatch<SetStateAction<RatingPlaylistMode | null>>;
-  setTimelinePreview: Dispatch<SetStateAction<TimelinePreviewState>>;
   setVideoAspectRatio: Dispatch<SetStateAction<number>>;
   updateSelectedSubtitleId: (nextSubtitleId: string) => void;
   videosRef: MutableRefObject<VideoItem[]>;
@@ -58,6 +49,7 @@ export function useVideoSelectionController({
   persistCurrentProgress,
   playerPreferencesRef,
   replacePlayerPreferences,
+  resetTimelinePreview,
   resetHoldSpeedState,
   seriesTitleByVideoId,
   setActiveView,
@@ -71,7 +63,6 @@ export function useVideoSelectionController({
   setPlaylistFilter,
   setPlaylistPage,
   setRatingPlaylistMode,
-  setTimelinePreview,
   setVideoAspectRatio,
   updateSelectedSubtitleId,
   videosRef,
@@ -138,14 +129,7 @@ export function useVideoSelectionController({
       setIsPlaying(false);
       setCurrentTime(0);
       setDuration(0);
-      setTimelinePreview({
-        time: 0,
-        left: 0,
-        isVisible: false,
-        isDragging: false,
-        imageUrl: "",
-        isLoadingFrame: false,
-      });
+      resetTimelinePreview();
       updateSelectedSubtitleId("off");
       setVideoAspectRatio(16 / 9);
       focusPlayer();
@@ -157,6 +141,7 @@ export function useVideoSelectionController({
       isMainVideoLoadingRef,
       pendingAutoPlayVideoIdRef,
       persistCurrentProgress,
+      resetTimelinePreview,
       resetHoldSpeedState,
       setActiveView,
       setCurrentTime,
@@ -167,7 +152,6 @@ export function useVideoSelectionController({
       setIsPlaying,
       setPlaylistPage,
       setRatingPlaylistMode,
-      setTimelinePreview,
       setVideoAspectRatio,
       syncSeriesModeForPlayerEntry,
       updateSelectedSubtitleId,
