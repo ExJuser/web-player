@@ -41,6 +41,7 @@ import { useRatingDialog } from "./useRatingDialog";
 import { useShortcutSettings } from "./useShortcutSettings";
 import { useThumbnailQueueController } from "./useThumbnailQueueController";
 import { useTimelinePreviewController } from "./useTimelinePreviewController";
+import { usePlayerToolActions } from "./usePlayerToolActions";
 import { useVideoSelectionController } from "./useVideoSelectionController";
 import { normalizeClientLocalConfig, shouldAutoScanGlobalMediaLibrary, supportsServerFileAccess } from "./localConfigClient";
 import {
@@ -4780,18 +4781,17 @@ export default function App() {
     }
   }, [enterPrivacyMode, exitPrivacyMode, isPrivacyMode]);
 
-  const toggleFullscreen = useCallback(async () => {
-    if (!playerRef.current || !currentVideo) return;
-    try {
-      if (document.fullscreenElement) {
-        await document.exitFullscreen();
-      } else {
-        await playerRef.current.requestFullscreen();
-      }
-    } catch {
-      setMessage("无法进入全屏模式");
-    }
-  }, [currentVideo]);
+  const {
+    rotateVideoClockwise,
+    toggleFullscreen,
+    togglePictureInPicture,
+  } = usePlayerToolActions({
+    currentVideo,
+    playerRef,
+    setMessage,
+    setVideoRotation,
+    videoRef,
+  });
 
   const handlePlayerDoubleClick = useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
@@ -5234,28 +5234,6 @@ export default function App() {
       }
     };
   }, []);
-
-  const togglePictureInPicture = async () => {
-    const element = videoRef.current;
-    if (!element || !document.pictureInPictureEnabled) {
-      setMessage("当前浏览器不支持画中画");
-      return;
-    }
-    try {
-      if (document.pictureInPictureElement) {
-        await document.exitPictureInPicture();
-      } else {
-        await element.requestPictureInPicture();
-      }
-    } catch {
-      setMessage("无法进入画中画模式");
-    }
-  };
-
-  const rotateVideoClockwise = () => {
-    if (!currentVideo) return;
-    setVideoRotation((rotation) => (rotation + 90) % 360);
-  };
 
   const handleDurationChange = (event: React.SyntheticEvent<HTMLVideoElement>) => {
     const nextDuration = selectTrustedDuration([currentVideo?.duration, event.currentTarget.duration]) || 0;
