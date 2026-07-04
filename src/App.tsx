@@ -36,6 +36,7 @@ import { usePlayerFeedbackController } from "./usePlayerFeedbackController";
 import { usePlayerPreferencesController } from "./usePlayerPreferencesController";
 import { usePhotoAlbumRuntime } from "./usePhotoAlbumRuntime";
 import { usePhotoAlbumTagEditor } from "./usePhotoAlbumTagEditor";
+import { usePlayerVolumeController } from "./usePlayerVolumeController";
 import { usePhotoObjectUrls } from "./usePhotoObjectUrls";
 import { useProgressFavoritesController } from "./useProgressFavoritesController";
 import { useRatingDialog } from "./useRatingDialog";
@@ -324,7 +325,6 @@ import {
   saveDanmakuSelection,
   saveCachedMediaRootScan,
   saveGlobalPlayerDataStore,
-  savePlayerSetting,
   saveTagMergeDecisions,
   savePlayerVideoTags,
   writePhotoAlbumFolderHandle,
@@ -681,6 +681,28 @@ export default function App() {
   const [skipFolderAccessPrompt, setSkipFolderAccessPrompt] = useState(defaultPlayerSettings.skipFolderAccessPrompt);
   const [message, setMessage] = useState("新增一个媒体库开始播放");
   const {
+    doubleClickFeedback,
+    playerOverlayFeedback,
+    showDoubleClickFeedback,
+    showPlayerOverlayFeedback,
+  } = usePlayerFeedbackController();
+  const {
+    adjustVolume,
+    changeVolume,
+    isMuted,
+    setVolume,
+    toggleMute,
+    volume,
+  } = usePlayerVolumeController({
+    currentVideoId,
+    hasLoadedPlayerDataStoreRef,
+    initialVolume: initialVolumeRef.current,
+    isCinemaMode,
+    playerSettingsRef,
+    showPlayerOverlayFeedback,
+    videoRef,
+  });
+  const {
     closeMediaRootLocalPathDialog,
     mediaRootLocalPathDialog,
     openMediaRootLocalPathDialog,
@@ -694,8 +716,6 @@ export default function App() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [volume, setVolume] = useState(initialVolumeRef.current);
-  const [isMuted, setIsMuted] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [seekStep, setSeekStep] = useState(15);
   const [holdPlaybackRate, setHoldPlaybackRate] = useState(4);
@@ -4308,22 +4328,6 @@ export default function App() {
   useEffect(() => {
     const element = videoRef.current;
     if (!element) return;
-    element.volume = volume;
-    element.muted = isMuted;
-  }, [currentVideo, isMuted, volume]);
-
-  useEffect(() => {
-    playerSettingsRef.current = {
-      ...playerSettingsRef.current,
-      volume,
-    };
-    if (!hasLoadedPlayerDataStoreRef.current) return;
-    savePlayerSetting("volume", volume).catch(() => undefined);
-  }, [volume]);
-
-  useEffect(() => {
-    const element = videoRef.current;
-    if (!element) return;
     element.playbackRate = isHoldSpeedActive ? holdPlaybackRate : playbackRate;
   }, [holdPlaybackRate, isHoldSpeedActive, playbackRate]);
 
@@ -4386,13 +4390,6 @@ export default function App() {
     playerRef.current?.focus({ preventScroll: true });
   }, []);
 
-  const {
-    doubleClickFeedback,
-    playerOverlayFeedback,
-    showDoubleClickFeedback,
-    showPlayerOverlayFeedback,
-  } = usePlayerFeedbackController();
-
   const seekBy = useCallback(
     (seconds: number) => {
       const element = videoRef.current;
@@ -4404,26 +4401,6 @@ export default function App() {
     },
     [isCinemaMode, seekTo, showPlayerOverlayFeedback],
   );
-
-  const changeVolume = useCallback((nextVolume: number) => {
-    const normalizedVolume = clamp(nextVolume, 0, 1);
-    setVolume(normalizedVolume);
-    if (normalizedVolume > 0) {
-      setIsMuted(false);
-    }
-    if (isCinemaMode) {
-      showPlayerOverlayFeedback(`音量 ${Math.round(normalizedVolume * 100)}%`);
-    }
-  }, [isCinemaMode, showPlayerOverlayFeedback]);
-
-  const adjustVolume = useCallback((delta: number) => {
-    changeVolume(volume + delta);
-  }, [changeVolume, volume]);
-
-  const toggleMute = useCallback(() => {
-    if (!currentVideo) return;
-    setIsMuted((muted) => !muted);
-  }, [currentVideo]);
 
   const chooseSubtitleFile = useCallback(async () => {
     if (!currentVideo) return;
