@@ -36,6 +36,7 @@ import { usePhotoObjectUrls } from "./usePhotoObjectUrls";
 import { useRatingDialog } from "./useRatingDialog";
 import { useShortcutSettings } from "./useShortcutSettings";
 import { useThumbnailQueueController } from "./useThumbnailQueueController";
+import { useVideoSelectionController } from "./useVideoSelectionController";
 import { normalizeClientLocalConfig, shouldAutoScanGlobalMediaLibrary, supportsServerFileAccess } from "./localConfigClient";
 import {
   buildLibrarySearchCandidates,
@@ -154,10 +155,7 @@ import {
   isSubtitleFile,
   migrateMovedVideoData,
 } from "./playerLibraryUtils";
-import {
-  inferSeriesTitle,
-  scopedSeriesKeyForVideo,
-} from "./playerSeriesUtils";
+import { inferSeriesTitle } from "./playerSeriesUtils";
 import {
   clamp,
   formatShortcutKey,
@@ -288,7 +286,6 @@ import {
   resolvePlaylistIndexVideos,
   resolveSelectedWatchActivityDay,
   resolveVisiblePlaylistVideos,
-  resolvePlayerEntrySeriesMode,
   resolveRestoredEmbeddedSubtitleSelection,
   resolveSubtitleSelection,
   shouldShowHomeRecapCard,
@@ -2968,73 +2965,34 @@ export default function App() {
     setIsHoldSpeedActive(false);
   }, []);
 
-  const syncSeriesModeForPlayerEntry = useCallback(
-    (videoId: string) => {
-      const targetVideo = videosRef.current.find((video) => video.id === videoId) ?? null;
-      const targetSeriesKey = targetVideo
-        ? scopedSeriesKeyForVideo(targetVideo, seriesTitleByVideoId.get(targetVideo.id) ?? inferSeriesTitle(targetVideo))
-        : null;
-      const nextSeriesMode = resolvePlayerEntrySeriesMode(homeMediaMode, targetSeriesKey);
-      const currentPreferences = playerPreferencesRef.current;
-
-      setIsSeriesMenuOpen(false);
-      if (nextSeriesMode.resetPlaylistFilter) {
-        setPlaylistPage(1);
-        setPlaylistFilter("all");
-      }
-
-      if (
-        currentPreferences.isSeriesMode === nextSeriesMode.isSeriesMode &&
-        currentPreferences.selectedSeriesKey === nextSeriesMode.selectedSeriesKey
-      ) {
-        return;
-      }
-
-      replacePlayerPreferences({
-        ...currentPreferences,
-        isSeriesMode: nextSeriesMode.isSeriesMode,
-        selectedSeriesKey: nextSeriesMode.selectedSeriesKey,
-      });
-    },
-    [homeMediaMode, replacePlayerPreferences, seriesTitleByVideoId],
-  );
-
-  const selectVideo = useCallback(
-    (videoId: string, options?: { syncSeriesMode?: boolean; keepDuplicatePlaylist?: boolean; keepRatingPlaylist?: boolean }) => {
-      cancelAutoNextPrompt();
-      persistCurrentProgress();
-      resetHoldSpeedState();
-      if (options?.syncSeriesMode !== false) syncSeriesModeForPlayerEntry(videoId);
-      if (!options?.keepDuplicatePlaylist) {
-        setPlaylistPage(1);
-        setIsDuplicatePlaylistActive(false);
-      }
-      if (!options?.keepRatingPlaylist) {
-        setRatingPlaylistMode(null);
-      }
-      setActiveView("player");
-      pendingAutoPlayVideoIdRef.current = videoId;
-      autoSubtitleSelectionVideoIdRef.current = videoId;
-      isMainVideoLoadingRef.current = true;
-      setIsMainVideoLoading(true);
-      setCurrentVideoId(videoId);
-      setIsPlaying(false);
-      setCurrentTime(0);
-      setDuration(0);
-      setTimelinePreview({
-        time: 0,
-        left: 0,
-        isVisible: false,
-        isDragging: false,
-        imageUrl: "",
-        isLoadingFrame: false,
-      });
-      updateSelectedSubtitleId("off");
-      setVideoAspectRatio(16 / 9);
-      focusPlayer();
-    },
-    [cancelAutoNextPrompt, focusPlayer, persistCurrentProgress, resetHoldSpeedState, syncSeriesModeForPlayerEntry],
-  );
+  const { selectVideo } = useVideoSelectionController({
+    autoSubtitleSelectionVideoIdRef,
+    cancelAutoNextPrompt,
+    focusPlayer,
+    homeMediaMode,
+    isMainVideoLoadingRef,
+    pendingAutoPlayVideoIdRef,
+    persistCurrentProgress,
+    playerPreferencesRef,
+    replacePlayerPreferences,
+    resetHoldSpeedState,
+    seriesTitleByVideoId,
+    setActiveView,
+    setCurrentTime,
+    setCurrentVideoId,
+    setDuration,
+    setIsDuplicatePlaylistActive,
+    setIsMainVideoLoading,
+    setIsPlaying,
+    setIsSeriesMenuOpen,
+    setPlaylistFilter,
+    setPlaylistPage,
+    setRatingPlaylistMode,
+    setTimelinePreview,
+    setVideoAspectRatio,
+    updateSelectedSubtitleId,
+    videosRef,
+  });
 
   const removeDeletedVideoFromState = useCallback(
     async (video: VideoItem) => {
