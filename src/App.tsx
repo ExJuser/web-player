@@ -31,6 +31,7 @@ import { useMediaProbeController } from "./useMediaProbeController";
 import { useApplyPlayerDataStore, usePlayerDataRuntime } from "./usePlayerDataRuntime";
 import { usePlaybackActivityController } from "./usePlaybackActivityController";
 import { usePlayerControlsVisibility } from "./usePlayerControlsVisibility";
+import { usePlayerFeedbackController } from "./usePlayerFeedbackController";
 import { usePlayerPreferencesController } from "./usePlayerPreferencesController";
 import { usePhotoAlbumRuntime } from "./usePhotoAlbumRuntime";
 import { usePhotoAlbumTagEditor } from "./usePhotoAlbumTagEditor";
@@ -130,7 +131,6 @@ import {
   volumeStep,
   autoNextPromptSeconds,
   rightKeyHoldDelay,
-  doubleClickFeedbackDelay,
   playlistActiveThumbnailRadius,
   playlistScrollFrameDelay,
   defaultPlayerSettings,
@@ -396,8 +396,6 @@ export default function App() {
   const saveTimerVideoIdRef = useRef<string | null>(null);
   const playlistAutoScrollTimerRef = useRef<number | null>(null);
   const autoNextTimerRef = useRef<number | null>(null);
-  const doubleClickFeedbackTimerRef = useRef<number | null>(null);
-  const playerOverlayFeedbackTimerRef = useRef<number | null>(null);
   const launchEffectTimerRef = useRef<number | null>(null);
   const rightKeyHoldTimerRef = useRef<number | null>(null);
   const rightMouseHoldTimerRef = useRef<number | null>(null);
@@ -696,11 +694,6 @@ export default function App() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [doubleClickFeedback, setDoubleClickFeedback] = useState<{
-    side: "left" | "center" | "right";
-    text: string;
-  } | null>(null);
-  const [playerOverlayFeedback, setPlayerOverlayFeedback] = useState("");
   const [autoNextPrompt, setAutoNextPrompt] = useState<AutoNextPrompt | null>(null);
   const [volume, setVolume] = useState(initialVolumeRef.current);
   const [isMuted, setIsMuted] = useState(false);
@@ -4462,27 +4455,12 @@ export default function App() {
     playerRef.current?.focus({ preventScroll: true });
   }, []);
 
-  const showDoubleClickFeedback = useCallback((side: "left" | "center" | "right", text: string) => {
-    if (doubleClickFeedbackTimerRef.current) {
-      window.clearTimeout(doubleClickFeedbackTimerRef.current);
-    }
-    setDoubleClickFeedback({ side, text });
-    doubleClickFeedbackTimerRef.current = window.setTimeout(() => {
-      setDoubleClickFeedback(null);
-      doubleClickFeedbackTimerRef.current = null;
-    }, doubleClickFeedbackDelay);
-  }, []);
-
-  const showPlayerOverlayFeedback = useCallback((text: string) => {
-    if (playerOverlayFeedbackTimerRef.current) {
-      window.clearTimeout(playerOverlayFeedbackTimerRef.current);
-    }
-    setPlayerOverlayFeedback(text);
-    playerOverlayFeedbackTimerRef.current = window.setTimeout(() => {
-      setPlayerOverlayFeedback("");
-      playerOverlayFeedbackTimerRef.current = null;
-    }, 900);
-  }, []);
+  const {
+    doubleClickFeedback,
+    playerOverlayFeedback,
+    showDoubleClickFeedback,
+    showPlayerOverlayFeedback,
+  } = usePlayerFeedbackController();
 
   const seekBy = useCallback(
     (seconds: number) => {
@@ -5248,12 +5226,6 @@ export default function App() {
 
   useEffect(() => {
     return () => {
-      if (doubleClickFeedbackTimerRef.current) {
-        window.clearTimeout(doubleClickFeedbackTimerRef.current);
-      }
-      if (playerOverlayFeedbackTimerRef.current) {
-        window.clearTimeout(playerOverlayFeedbackTimerRef.current);
-      }
       if (rightMouseHoldTimerRef.current) {
         window.clearTimeout(rightMouseHoldTimerRef.current);
       }
