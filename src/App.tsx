@@ -30,6 +30,7 @@ import { useMediaRootPrompts } from "./useMediaRootPrompts";
 import { useMediaProbeController } from "./useMediaProbeController";
 import { useApplyPlayerDataStore, usePlayerDataRuntime } from "./usePlayerDataRuntime";
 import { usePlaybackActivityController } from "./usePlaybackActivityController";
+import { usePlayerControlsVisibility } from "./usePlayerControlsVisibility";
 import { usePlayerPreferencesController } from "./usePlayerPreferencesController";
 import { usePhotoAlbumRuntime } from "./usePhotoAlbumRuntime";
 import { usePhotoAlbumTagEditor } from "./usePhotoAlbumTagEditor";
@@ -126,7 +127,6 @@ import {
   playbackModeOptions,
   playlistSortOptions,
   volumeStep,
-  controlsAutoHideDelay,
   autoNextPromptSeconds,
   rightKeyHoldDelay,
   doubleClickFeedbackDelay,
@@ -395,7 +395,6 @@ export default function App() {
   const saveTimerRef = useRef<number | null>(null);
   const saveTimerVideoIdRef = useRef<string | null>(null);
   const playlistAutoScrollTimerRef = useRef<number | null>(null);
-  const controlsHideTimerRef = useRef<number | null>(null);
   const autoNextTimerRef = useRef<number | null>(null);
   const doubleClickFeedbackTimerRef = useRef<number | null>(null);
   const playerOverlayFeedbackTimerRef = useRef<number | null>(null);
@@ -721,7 +720,6 @@ export default function App() {
   const [isHoldSpeedActive, setIsHoldSpeedActive] = useState(false);
   const [playbackMode, setPlaybackMode] = useState<PlaybackMode>("sequential");
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [areControlsVisible, setAreControlsVisible] = useState(true);
   const [videoAspectRatio, setVideoAspectRatio] = useState(16 / 9);
   const [videoRotation, setVideoRotation] = useState(0);
   const [adaptiveColumns, setAdaptiveColumns] = useState<{
@@ -1860,13 +1858,18 @@ export default function App() {
     [requestExistingMediaRootRescan, requestMediaRootLabel, resolveMediaRootId],
   );
 
-  const clearControlsHideTimer = useCallback(() => {
-    if (!controlsHideTimerRef.current) return;
-    window.clearTimeout(controlsHideTimerRef.current);
-    controlsHideTimerRef.current = null;
-  }, []);
-
-  const shouldAutoHideControls = (isFullscreen || isCinemaMode) && isPlaying && Boolean(currentVideo);
+  const {
+    areControlsVisible,
+    keepControlsVisible,
+    revealControls,
+    scheduleControlsHide,
+    showControls,
+  } = usePlayerControlsVisibility({
+    currentVideo,
+    isCinemaMode,
+    isFullscreen,
+    isPlaying,
+  });
 
   const cancelAutoNextPrompt = useCallback(() => {
     if (autoNextTimerRef.current) {
@@ -1875,20 +1878,6 @@ export default function App() {
     }
     setAutoNextPrompt(null);
   }, []);
-
-  const scheduleControlsHide = useCallback(() => {
-    clearControlsHideTimer();
-    if (!shouldAutoHideControls) return;
-    controlsHideTimerRef.current = window.setTimeout(() => {
-      setAreControlsVisible(false);
-      controlsHideTimerRef.current = null;
-    }, controlsAutoHideDelay);
-  }, [clearControlsHideTimer, shouldAutoHideControls]);
-
-  const revealControls = useCallback(() => {
-    setAreControlsVisible(true);
-    scheduleControlsHide();
-  }, [scheduleControlsHide]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -1924,11 +1913,6 @@ export default function App() {
       return nextVideos;
     });
   }, [localConfig, mediaRootId, resolveMediaRootId]);
-
-  const keepControlsVisible = useCallback(() => {
-    setAreControlsVisible(true);
-    clearControlsHideTimer();
-  }, [clearControlsHideTimer]);
 
   const focusPlayer = useCallback(() => {
     playerRef.current?.focus({ preventScroll: true });
@@ -3120,18 +3104,18 @@ export default function App() {
     videoRef.current?.pause();
     cancelAutoNextPrompt();
     resetHoldSpeedState();
-    setAreControlsVisible(true);
+    showControls();
     setActiveView("home");
-  }, [cancelAutoNextPrompt, persistCurrentProgress, resetHoldSpeedState]);
+  }, [cancelAutoNextPrompt, persistCurrentProgress, resetHoldSpeedState, showControls]);
 
   const showPhotoAlbumsView = useCallback(() => {
     persistCurrentProgress();
     videoRef.current?.pause();
     cancelAutoNextPrompt();
     resetHoldSpeedState();
-    setAreControlsVisible(true);
+    showControls();
     setActiveView("photos");
-  }, [cancelAutoNextPrompt, persistCurrentProgress, resetHoldSpeedState]);
+  }, [cancelAutoNextPrompt, persistCurrentProgress, resetHoldSpeedState, showControls]);
 
   const persistPhotoAlbumProgress = useCallback(
     (album: PhotoAlbum, imageIndex: number, completed = false) => {
@@ -4318,23 +4302,12 @@ export default function App() {
   useEffect(() => {
     const handleFullscreenChange = () => {
       setIsFullscreen(document.fullscreenElement === playerRef.current);
-      setAreControlsVisible(true);
+      showControls();
     };
 
     document.addEventListener("fullscreenchange", handleFullscreenChange);
     return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
-  }, []);
-
-  useEffect(() => {
-    if (!shouldAutoHideControls) {
-      setAreControlsVisible(true);
-      clearControlsHideTimer();
-      return;
-    }
-
-    scheduleControlsHide();
-    return clearControlsHideTimer;
-  }, [clearControlsHideTimer, scheduleControlsHide, shouldAutoHideControls]);
+  }, [showControls]);
 
   useLayoutEffect(() => {
     const element = videoRef.current;
