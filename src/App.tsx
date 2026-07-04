@@ -36,6 +36,7 @@ import { usePlayerControlsVisibility } from "./usePlayerControlsVisibility";
 import { usePlayerFeedbackController } from "./usePlayerFeedbackController";
 import { usePlayerPreferencesController } from "./usePlayerPreferencesController";
 import { usePlaylistScrollController } from "./usePlaylistScrollController";
+import { usePhotoAlbumActionsController } from "./usePhotoAlbumActionsController";
 import { usePhotoAlbumRuntime } from "./usePhotoAlbumRuntime";
 import { usePhotoAlbumTagEditor } from "./usePhotoAlbumTagEditor";
 import { usePlayerVolumeController } from "./usePlayerVolumeController";
@@ -118,10 +119,7 @@ import {
   loadPhotoAlbumStore,
   photoAlbumSortOptions,
   saveCachedPhotoAlbumScan,
-  savePhotoAlbumFavorite,
-  savePhotoAlbumCoverPreference,
   savePhotoAlbumPreferences,
-  savePhotoAlbumProgress,
 } from "./photoAlbumStorage";
 import {
   PROGRESS_FILE_NAME,
@@ -3151,112 +3149,32 @@ export default function App() {
     setActiveView("photos");
   }, [cancelAutoNextPrompt, persistCurrentProgress, resetHoldSpeedState, showControls]);
 
-  const persistPhotoAlbumProgress = useCallback(
-    (album: PhotoAlbum, imageIndex: number, completed = false) => {
-      const safeIndex = Math.min(Math.max(imageIndex, 0), Math.max(album.images.length - 1, 0));
-      const nextProgress = {
-        ...photoAlbumProgressRef.current,
-        [album.id]: {
-          imageIndex: safeIndex,
-          updatedAt: Date.now(),
-          completed,
-        },
-      };
-      photoAlbumProgressRef.current = nextProgress;
-      setPhotoAlbumProgress(nextProgress);
-      void savePhotoAlbumProgress(album.id, nextProgress[album.id]).catch(() => {
-        setPhotoAlbumMessage("看图进度保存失败。");
-      });
-    },
-    [],
-  );
-
-  const openPhotoAlbum = useCallback(
-    (album: PhotoAlbum, options?: { fromBeginning?: boolean }) => {
-      const storedIndex = photoAlbumProgressRef.current[album.id]?.imageIndex ?? 0;
-      const nextIndex = options?.fromBeginning ? 0 : Math.min(storedIndex, Math.max(album.images.length - 1, 0));
-      setSelectedPhotoAlbumId(album.id);
-      setCurrentPhotoIndex(nextIndex);
-      setActiveView("photoViewer");
-      persistPhotoAlbumProgress(album, nextIndex, false);
-    },
-    [persistPhotoAlbumProgress],
-  );
-
-  const openRandomPhotoAlbum = useCallback(() => {
-    if (!visiblePhotoAlbums.length) return;
-    const randomAlbum = visiblePhotoAlbums[Math.floor(Math.random() * visiblePhotoAlbums.length)];
-    openPhotoAlbum(randomAlbum);
-  }, [openPhotoAlbum, visiblePhotoAlbums]);
-
-  const showPhotoAlbumList = useCallback(() => {
-    setActiveView("photos");
-  }, []);
-
-  const movePhoto = useCallback(
-    (delta: number) => {
-      if (!selectedPhotoAlbum) return;
-      const maxIndex = Math.max(selectedPhotoAlbum.images.length - 1, 0);
-      const nextIndex = Math.min(Math.max(currentPhotoIndex + delta, 0), maxIndex);
-      if (nextIndex === currentPhotoIndex) return;
-      setCurrentPhotoIndex(nextIndex);
-      persistPhotoAlbumProgress(selectedPhotoAlbum, nextIndex, nextIndex === maxIndex);
-    },
-    [currentPhotoIndex, persistPhotoAlbumProgress, selectedPhotoAlbum],
-  );
-
-  const togglePhotoAlbumFavorite = useCallback(
-    (album: PhotoAlbum) => {
-      const nextFavorites = new Set(favoritePhotoAlbumIdsRef.current);
-      if (nextFavorites.has(album.id)) {
-        nextFavorites.delete(album.id);
-        setPhotoAlbumMessage(`已取消收藏《${album.title}》`);
-      } else {
-        nextFavorites.add(album.id);
-        setPhotoAlbumMessage(`已收藏《${album.title}》`);
-      }
-      favoritePhotoAlbumIdsRef.current = nextFavorites;
-      setFavoritePhotoAlbumIds(nextFavorites);
-      void savePhotoAlbumFavorite(album.id, nextFavorites.has(album.id)).catch(() => {
-        setPhotoAlbumMessage("看图收藏保存失败。");
-      });
-    },
-    [],
-  );
-
-  const setPhotoAlbumCover = useCallback((album: PhotoAlbum, image: PhotoAlbumImage) => {
-    const nextPreferences = {
-      ...photoAlbumCoverPreferencesRef.current,
-      [album.id]: image.id,
-    };
-    photoAlbumCoverPreferencesRef.current = nextPreferences;
-    setPhotoAlbumCoverPreferences(nextPreferences);
-    setPhotoAlbumMessage(`已将《${image.name}》设为《${album.title}》封面`);
-    void savePhotoAlbumCoverPreference(album.id, image.id).catch(() => {
-      setPhotoAlbumMessage("看图封面偏好保存失败。");
-    });
-  }, []);
-
-  const markSelectedPhotoAlbumCompleted = useCallback(() => {
-    if (!selectedPhotoAlbum) return;
-    const lastIndex = Math.max(selectedPhotoAlbum.images.length - 1, 0);
-    setCurrentPhotoIndex(lastIndex);
-    persistPhotoAlbumProgress(selectedPhotoAlbum, lastIndex, true);
-    setPhotoAlbumMessage(`已标记《${selectedPhotoAlbum.title}》为已读完`);
-  }, [persistPhotoAlbumProgress, selectedPhotoAlbum]);
-
-  const resetSelectedPhotoAlbumProgress = useCallback(() => {
-    if (!selectedPhotoAlbum) return;
-    const nextProgress = { ...photoAlbumProgressRef.current };
-    delete nextProgress[selectedPhotoAlbum.id];
-    photoAlbumProgressRef.current = nextProgress;
-    setPhotoAlbumProgress(nextProgress);
-    setCurrentPhotoIndex(0);
-    void saveCurrentPhotoAlbumStore({ progress: nextProgress }).catch(() => {
-      setPhotoAlbumMessage("看图进度保存失败。");
-    });
-    setPhotoAlbumMessage(`已清除《${selectedPhotoAlbum.title}》的阅读进度`);
-  }, [saveCurrentPhotoAlbumStore, selectedPhotoAlbum]);
+  const {
+    markSelectedPhotoAlbumCompleted,
+    movePhoto,
+    openPhotoAlbum,
+    openRandomPhotoAlbum,
+    persistPhotoAlbumProgress,
+    resetSelectedPhotoAlbumProgress,
+    setPhotoAlbumCover,
+    showPhotoAlbumList,
+    togglePhotoAlbumFavorite,
+  } = usePhotoAlbumActionsController({
+    currentPhotoIndex,
+    favoritePhotoAlbumIdsRef,
+    photoAlbumCoverPreferencesRef,
+    photoAlbumProgressRef,
+    saveCurrentPhotoAlbumStore,
+    selectedPhotoAlbum,
+    setActiveView,
+    setCurrentPhotoIndex,
+    setFavoritePhotoAlbumIds,
+    setPhotoAlbumCoverPreferences,
+    setPhotoAlbumMessage,
+    setPhotoAlbumProgress,
+    setSelectedPhotoAlbumId,
+    visiblePhotoAlbums,
+  });
 
   const clearPhotoAlbumAccessAfterWritePermissionDenied = useCallback(async () => {
     await clearPhotoAlbumFolderHandle().catch(() => undefined);
