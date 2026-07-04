@@ -35,6 +35,7 @@ import { usePlaybackActivityController } from "./usePlaybackActivityController";
 import { usePlayerControlsVisibility } from "./usePlayerControlsVisibility";
 import { usePlayerFeedbackController } from "./usePlayerFeedbackController";
 import { usePlayerPreferencesController } from "./usePlayerPreferencesController";
+import { usePlaylistScrollController } from "./usePlaylistScrollController";
 import { usePhotoAlbumRuntime } from "./usePhotoAlbumRuntime";
 import { usePhotoAlbumTagEditor } from "./usePhotoAlbumTagEditor";
 import { usePlayerVolumeController } from "./usePlayerVolumeController";
@@ -134,7 +135,6 @@ import {
   volumeStep,
   rightKeyHoldDelay,
   playlistActiveThumbnailRadius,
-  playlistScrollFrameDelay,
   defaultPlayerSettings,
   defaultPlayerPreferences,
   defaultDanmakuPreferences,
@@ -395,7 +395,6 @@ export default function App() {
   const playbackClockFrameRef = useRef<number | null>(null);
   const saveTimerRef = useRef<number | null>(null);
   const saveTimerVideoIdRef = useRef<string | null>(null);
-  const playlistAutoScrollTimerRef = useRef<number | null>(null);
   const launchEffectTimerRef = useRef<number | null>(null);
   const rightKeyHoldTimerRef = useRef<number | null>(null);
   const rightMouseHoldTimerRef = useRef<number | null>(null);
@@ -432,10 +431,6 @@ export default function App() {
   const isMainVideoLoadingRef = useRef(false);
   const pendingAutoPlayVideoIdRef = useRef<string | null>(null);
   const privacyResumePlaybackRef = useRef<{ videoId: string; shouldResume: boolean } | null>(null);
-  const playlistScrollFrameRef = useRef<number | null>(null);
-  const lastPlaylistUserScrollAtRef = useRef(0);
-  const lastPlaylistAutoScrollKeyRef = useRef("");
-  const isPlaylistAutoScrollingRef = useRef(false);
   const clearedProgressVideoIdsRef = useRef(new Set<string>());
   const isRightKeyDownRef = useRef(false);
   const didRightKeyHoldRef = useRef(false);
@@ -729,7 +724,6 @@ export default function App() {
     playerHeight: number;
     playlistWidth: number;
   } | null>(null);
-  const [playlistViewport, setPlaylistViewport] = useState({ scrollTop: 0, height: 0 });
   const playbackRateRef = useRef(playbackRate);
   const holdPlaybackRateRef = useRef(holdPlaybackRate);
   const isHoldSpeedActiveRef = useRef(isHoldSpeedActive);
@@ -1224,6 +1218,19 @@ export default function App() {
     () => createPlaylistThumbnailVideos({ visibleVideos, pagedVideos: pagedPlaylistVideos, visibleVideoIndexById, currentVideoId, activeRadius: playlistActiveThumbnailRadius }),
     [currentVideoId, pagedPlaylistVideos, visibleVideoIndexById, visibleVideos],
   );
+  const {
+    markPlaylistUserScroll,
+    playlistViewport,
+    scrollPlaylistToTop,
+    scrollToCurrentPlaylistItem,
+  } = usePlaylistScrollController({
+    currentVideoId,
+    isScanning,
+    playlistPageSize,
+    playlistRef,
+    setPlaylistPage,
+    visibleVideoIndexById,
+  });
   const isCurrentVideoVisible = useMemo(
     () => isVideoVisible(currentVideoId, visibleVideos),
     [currentVideoId, visibleVideos],
@@ -4073,100 +4080,6 @@ export default function App() {
     videosRef,
   });
 
-  const scrollPlaylistItemIntoView = useCallback((videoId: string, behavior: ScrollBehavior) => {
-    const playlist = playlistRef.current;
-    if (!playlist) return;
-    const target = Array.from(playlist.querySelectorAll<HTMLElement>(".playlist-item")).find(
-      (item) => item.dataset.videoId === videoId,
-    );
-    if (!target) return;
-    const playlistRect = playlist.getBoundingClientRect();
-    const targetRect = target.getBoundingClientRect();
-    const top = Math.max(
-      0,
-      playlist.scrollTop + targetRect.top - playlistRect.top - playlist.clientHeight / 2 + targetRect.height / 2,
-    );
-    playlist.scrollTo({ top, behavior });
-    setPlaylistViewport({ scrollTop: top, height: playlist.clientHeight });
-  }, []);
-
-  const scrollToCurrentPlaylistItem = useCallback((behavior: ScrollBehavior = "smooth") => {
-    const playlist = playlistRef.current;
-    if (!playlist || !currentVideoId) return;
-    const index = visibleVideoIndexById.get(currentVideoId);
-    if (index === undefined) return;
-    isPlaylistAutoScrollingRef.current = true;
-    const targetPage = Math.floor(index / playlistPageSize) + 1;
-    setPlaylistPage(targetPage);
-    window.requestAnimationFrame(() => {
-      window.requestAnimationFrame(() => scrollPlaylistItemIntoView(currentVideoId, behavior));
-    });
-
-    if (playlistAutoScrollTimerRef.current) {
-      window.clearTimeout(playlistAutoScrollTimerRef.current);
-    }
-    playlistAutoScrollTimerRef.current = window.setTimeout(() => {
-      isPlaylistAutoScrollingRef.current = false;
-      playlistAutoScrollTimerRef.current = null;
-    }, 700);
-  }, [currentVideoId, playlistPageSize, scrollPlaylistItemIntoView, visibleVideoIndexById]);
-
-  const scrollPlaylistToTop = useCallback((behavior: ScrollBehavior = "smooth") => {
-    const playlist = playlistRef.current;
-    if (!playlist) return;
-    isPlaylistAutoScrollingRef.current = true;
-    playlist.scrollTo({ top: 0, behavior });
-    setPlaylistViewport((previous) => ({ ...previous, scrollTop: 0 }));
-
-    if (playlistAutoScrollTimerRef.current) {
-      window.clearTimeout(playlistAutoScrollTimerRef.current);
-    }
-    playlistAutoScrollTimerRef.current = window.setTimeout(() => {
-      isPlaylistAutoScrollingRef.current = false;
-      playlistAutoScrollTimerRef.current = null;
-    }, 700);
-  }, []);
-
-  useEffect(() => {
-    if (!currentVideoId || !playlistRef.current) return;
-    if (isScanning) return;
-    const autoScrollKey = currentVideoId;
-    if (lastPlaylistAutoScrollKeyRef.current === autoScrollKey) return;
-    lastPlaylistAutoScrollKeyRef.current = autoScrollKey;
-    if (Date.now() - lastPlaylistUserScrollAtRef.current < 800) return;
-
-    scrollToCurrentPlaylistItem();
-  }, [currentVideoId, isScanning, scrollToCurrentPlaylistItem]);
-
-  const markPlaylistUserScroll = useCallback((event?: React.UIEvent<HTMLDivElement>) => {
-    const element = event?.currentTarget ?? playlistRef.current;
-    if (element && playlistScrollFrameRef.current === null) {
-      playlistScrollFrameRef.current = window.setTimeout(() => {
-        playlistScrollFrameRef.current = null;
-        const playlist = playlistRef.current;
-        if (playlist) {
-          setPlaylistViewport({ scrollTop: playlist.scrollTop, height: playlist.clientHeight });
-        }
-      }, playlistScrollFrameDelay);
-    }
-    if (isPlaylistAutoScrollingRef.current) return;
-    lastPlaylistUserScrollAtRef.current = Date.now();
-  }, []);
-
-  useLayoutEffect(() => {
-    const playlist = playlistRef.current;
-    if (!playlist) return;
-
-    const updatePlaylistViewport = () => {
-      setPlaylistViewport({ scrollTop: playlist.scrollTop, height: playlist.clientHeight });
-    };
-
-    updatePlaylistViewport();
-    const observer = new ResizeObserver(updatePlaylistViewport);
-    observer.observe(playlist);
-    return () => observer.disconnect();
-  }, []);
-
   useEffect(() => {
     if (!localConfig?.mediaRoots.length) {
       clearRecentFolderHandle().catch(() => undefined);
@@ -4175,12 +4088,6 @@ export default function App() {
 
   useEffect(() => {
     return () => {
-      if (playlistAutoScrollTimerRef.current) {
-        window.clearTimeout(playlistAutoScrollTimerRef.current);
-      }
-      if (playlistScrollFrameRef.current) {
-        window.clearTimeout(playlistScrollFrameRef.current);
-      }
       duplicateDetectionAbortRef.current?.abort();
       revokeVideoUrls(videosRef.current);
       subtitlesRef.current.forEach((subtitle) => {
