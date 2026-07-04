@@ -14,6 +14,7 @@ import {
 
 import { fetchLocalJson as fetchJson } from "./localApiClient";
 import { useAiSubtitleController } from "./useAiSubtitleController";
+import { useAutoNextController } from "./useAutoNextController";
 import { useBangumiMatchController } from "./useBangumiMatchController";
 import { useCacheStatusDialog } from "./useCacheStatusDialog";
 import { useCompatibleMediaController } from "./useCompatibleMediaController";
@@ -65,7 +66,6 @@ import {
 } from "./watchActivityInsights";
 import type {
   ActiveView,
-  AutoNextPrompt,
   DanmakuComment,
   DanmakuPreferences,
   DanmakuSelectionStore,
@@ -130,7 +130,6 @@ import {
   playbackModeOptions,
   playlistSortOptions,
   volumeStep,
-  autoNextPromptSeconds,
   rightKeyHoldDelay,
   playlistActiveThumbnailRadius,
   playlistScrollFrameDelay,
@@ -392,11 +391,11 @@ export default function App() {
   const controlBarRef = useRef<HTMLDivElement | null>(null);
   const playlistRef = useRef<HTMLDivElement | null>(null);
   const currentVideoIdRef = useRef<string | null>(null);
+  const selectVideoRef = useRef<(videoId: string) => void>(() => undefined);
   const playbackClockFrameRef = useRef<number | null>(null);
   const saveTimerRef = useRef<number | null>(null);
   const saveTimerVideoIdRef = useRef<string | null>(null);
   const playlistAutoScrollTimerRef = useRef<number | null>(null);
-  const autoNextTimerRef = useRef<number | null>(null);
   const launchEffectTimerRef = useRef<number | null>(null);
   const rightKeyHoldTimerRef = useRef<number | null>(null);
   const rightMouseHoldTimerRef = useRef<number | null>(null);
@@ -695,7 +694,6 @@ export default function App() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [autoNextPrompt, setAutoNextPrompt] = useState<AutoNextPrompt | null>(null);
   const [volume, setVolume] = useState(initialVolumeRef.current);
   const [isMuted, setIsMuted] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
@@ -1855,13 +1853,24 @@ export default function App() {
     isPlaying,
   });
 
-  const cancelAutoNextPrompt = useCallback(() => {
-    if (autoNextTimerRef.current) {
-      window.clearTimeout(autoNextTimerRef.current);
-      autoNextTimerRef.current = null;
-    }
-    setAutoNextPrompt(null);
-  }, []);
+  const {
+    autoNextPrompt,
+    canPlayNext,
+    cancelAutoNextPrompt,
+    confirmAutoNext,
+    getNextVideoId,
+    playNext,
+    startAutoNextPrompt,
+  } = useAutoNextController({
+    currentVideoId,
+    favoritePlaylistVideos,
+    playbackMode,
+    playlistFilter,
+    selectVideoRef,
+    seriesFilteredVideos,
+    setMessage,
+    videosRef,
+  });
 
   useEffect(() => {
     let isCancelled = false;
@@ -2730,6 +2739,10 @@ export default function App() {
     updateSelectedSubtitleId,
     videosRef,
   });
+
+  useEffect(() => {
+    selectVideoRef.current = selectVideo;
+  }, [selectVideo]);
 
   const removeDeletedVideoFromState = useCallback(
     async (video: VideoItem) => {
@@ -3727,89 +3740,6 @@ export default function App() {
       window.removeEventListener("resize", updateDanmakuLayerHeight);
     };
   }, [activeDanmakuComments.length, isDanmakuAvailable]);
-
-  const getNextVideoId = useCallback(
-    (mode: PlaybackMode) => {
-      if (mode === "single-loop") {
-        return currentVideoId;
-      }
-
-      const queueVideos =
-        mode === "favorites-only" || playlistFilter === "favorites" ? favoritePlaylistVideos : seriesFilteredVideos;
-      if (!queueVideos.length) return null;
-
-      const queueCurrentIndex = queueVideos.findIndex((video) => video.id === currentVideoId);
-
-      if (mode === "shuffle") {
-        if (queueVideos.length === 1) return queueVideos[0].id;
-        const candidates = queueVideos.filter((video) => video.id !== currentVideoId);
-        return candidates[Math.floor(Math.random() * candidates.length)]?.id ?? null;
-      }
-
-      if (queueCurrentIndex < 0) {
-        return queueVideos[0].id;
-      }
-
-      if (queueCurrentIndex < queueVideos.length - 1) {
-        return queueVideos[queueCurrentIndex + 1].id;
-      }
-
-      return mode === "list-loop" ? queueVideos[0].id : null;
-    },
-    [currentVideoId, favoritePlaylistVideos, playlistFilter, seriesFilteredVideos],
-  );
-
-  const playNext = useCallback(() => {
-    const nextVideoId = getNextVideoId(playbackMode);
-    if (!nextVideoId) {
-      if ((playbackMode === "favorites-only" || playlistFilter === "favorites") && !favoritePlaylistVideos.length) {
-        setMessage("还没有收藏的视频，无法只播放收藏。");
-      }
-      return;
-    }
-    selectVideo(nextVideoId);
-  }, [favoritePlaylistVideos.length, getNextVideoId, playbackMode, playlistFilter, selectVideo]);
-
-  const canPlayNext = useMemo(() => Boolean(getNextVideoId(playbackMode)), [getNextVideoId, playbackMode]);
-
-  const confirmAutoNext = useCallback(
-    (nextVideoId: string) => {
-      cancelAutoNextPrompt();
-      selectVideo(nextVideoId);
-    },
-    [cancelAutoNextPrompt, selectVideo],
-  );
-
-  const startAutoNextPrompt = useCallback(
-    (nextVideoId: string) => {
-      const nextVideo = videosRef.current.find((video) => video.id === nextVideoId);
-      cancelAutoNextPrompt();
-      setAutoNextPrompt({
-        nextVideoId,
-        nextVideoName: nextVideo?.name ?? "下一集",
-        remainingSeconds: autoNextPromptSeconds,
-      });
-
-      const tick = (remainingSeconds: number) => {
-        autoNextTimerRef.current = window.setTimeout(() => {
-          const nextRemainingSeconds = remainingSeconds - 1;
-          if (nextRemainingSeconds <= 0) {
-            confirmAutoNext(nextVideoId);
-            return;
-          }
-          setAutoNextPrompt((previous) =>
-            previous?.nextVideoId === nextVideoId
-              ? { ...previous, remainingSeconds: nextRemainingSeconds }
-              : previous,
-          );
-          tick(nextRemainingSeconds);
-        }, 1000);
-      };
-
-      tick(autoNextPromptSeconds);
-    },
-    [cancelAutoNextPrompt, confirmAutoNext],
-  );
 
   const loadDirectoryMedia = useCallback(
     async (
@@ -5228,9 +5158,6 @@ export default function App() {
     return () => {
       if (rightMouseHoldTimerRef.current) {
         window.clearTimeout(rightMouseHoldTimerRef.current);
-      }
-      if (autoNextTimerRef.current) {
-        window.clearTimeout(autoNextTimerRef.current);
       }
     };
   }, []);
