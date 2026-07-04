@@ -48,6 +48,7 @@ import { useThumbnailQueueController } from "./useThumbnailQueueController";
 import { useTimelinePreviewController } from "./useTimelinePreviewController";
 import { usePlayerToolActions } from "./usePlayerToolActions";
 import { useVideoSelectionController } from "./useVideoSelectionController";
+import { useVideoTagController } from "./useVideoTagController";
 import { normalizeClientLocalConfig, shouldAutoScanGlobalMediaLibrary, supportsServerFileAccess } from "./localConfigClient";
 import {
   buildLibrarySearchCandidates,
@@ -229,7 +230,6 @@ import {
   shouldStartLegacyThumbnailMigration,
 } from "./appConfig";
 import type {
-  AiTagMergeSuggestionResponse,
   AutoTagSuggestionResponse,
   LibrarySearchResult,
   LibrarySearchSurface,
@@ -296,17 +296,7 @@ import {
   type RatingFilterOperator,
   type RatingPlaylistMode,
 } from "./playerUiState";
-import {
-  createTagPairKey,
-  createTagInputSuggestions,
-  findTagMergeSuggestion,
-  getActiveTagInputSegment,
-  mergeTags,
-  normalizeTagKey,
-  parseTagInput,
-  splitTagsByExistingMatch,
-  type TagMergeSuggestion
-} from "./tagUtils";
+import { normalizeTagKey } from "./tagUtils";
 import {
   clearPhotoAlbumFolderHandle,
   clearRecentFolderHandle,
@@ -323,8 +313,6 @@ import {
   saveDanmakuSelection,
   saveCachedMediaRootScan,
   saveGlobalPlayerDataStore,
-  saveTagMergeDecisions,
-  savePlayerVideoTags,
   writePhotoAlbumFolderHandle,
   writeRecentFolderHandle
 } from "./playerStorage";
@@ -1100,19 +1088,37 @@ export default function App() {
   const currentVideoHasCompatibleMedia = Boolean(currentVideo?.playability?.compatibleUrl);
   const currentVideoTags = currentVideo ? videoTags[currentVideo.id] ?? [] : [];
   const currentVideoRating = currentVideo ? videoRatings[currentVideo.id] : undefined;
-  const activeTagInputSegment = useMemo(() => getActiveTagInputSegment(tagInput), [tagInput]);
-  const tagInputSuggestions = useMemo(() => {
-    if (!isTagDialogOpen || !currentVideo || !activeTagInputSegment) return [];
-    return createTagInputSuggestions({
-      query: activeTagInputSegment,
-      allVideoTags: videoTags,
-      currentTags: currentVideoTags,
-    });
-  }, [activeTagInputSegment, currentVideo, currentVideoTags, isTagDialogOpen, videoTags]);
-  const resolvedActiveTagSuggestionIndex = tagInputSuggestions.length
-    ? Math.min(activeTagSuggestionIndex, tagInputSuggestions.length - 1)
-    : 0;
-  const activeTagSuggestionId = tagInputSuggestions.length ? `tag-input-suggestion-${resolvedActiveTagSuggestionIndex}` : undefined;
+  const {
+    activeTagSuggestionId,
+    addTagsToCurrentVideo,
+    applyTagMergeSuggestion,
+    getAllLibraryTags,
+    keepTagMergeSuggestion,
+    removeTagFromCurrentVideo,
+    resolvedActiveTagSuggestionIndex,
+    submitTagInput,
+    submitTagInputSuggestion,
+    tagInputSuggestions,
+  } = useVideoTagController({
+    activeTagSuggestionIndex,
+    currentVideo,
+    currentVideoTags,
+    isTagDialogOpen,
+    isTagSuggestionLoading,
+    localConfig,
+    setActiveTagSuggestionIndex,
+    setIsTagSuggestionLoading,
+    setTagInput,
+    setTagMergeDecisions,
+    setTagMergePrompt,
+    setTagMessage,
+    setVideoTags,
+    tagInput,
+    tagMergeDecisionsRef,
+    tagMergePrompt,
+    videoTags,
+    videoTagsRef,
+  });
   const currentVideoMediaRootLabel = useMemo(() => {
     if (!currentVideo) return "";
     const mediaRoot = localConfig?.mediaRoots.find((root) => root.id === currentVideo.mediaRootId);
@@ -2315,119 +2321,6 @@ export default function App() {
     videoRef,
   });
 
-  const replaceVideoTags = useCallback((nextVideoTags: VideoTagStore, successMessage?: string) => {
-    const previousVideoTags = videoTagsRef.current;
-    videoTagsRef.current = nextVideoTags;
-    setVideoTags(nextVideoTags);
-
-    Promise.all(
-      Array.from(new Set([...Object.keys(previousVideoTags), ...Object.keys(nextVideoTags)])).map((videoId) =>
-        savePlayerVideoTags(videoId, nextVideoTags[videoId] ?? []),
-      ),
-    )
-      .then(() => {
-        if (successMessage) setTagMessage(successMessage);
-      })
-      .catch(() => {
-        setTagMessage("无法写入项目数据目录，请确认通过 npm run dev 或 npm run preview 启动。");
-      });
-  }, []);
-
-  const replaceTagMergeDecisions = useCallback((nextDecisions: TagMergeDecisionStore) => {
-    tagMergeDecisionsRef.current = nextDecisions;
-    setTagMergeDecisions(nextDecisions);
-    saveTagMergeDecisions(nextDecisions).catch(() => {
-      setTagMessage("无法保存标签合并选择。");
-    });
-  }, []);
-
-  const getAllLibraryTags = useCallback(() => {
-    const seen = new Set<string>();
-    const tags: string[] = [];
-    Object.values(videoTagsRef.current).flat().forEach((tag) => {
-      const key = normalizeTagKey(tag);
-      if (!key || seen.has(key)) return;
-      seen.add(key);
-      tags.push(tag);
-    });
-    return tags;
-  }, []);
-
-  const addTagsToCurrentVideo = useCallback(async (tags: string[], options?: { skipPrompt?: boolean }) => {
-    if (!currentVideo) return;
-    const existingVideoTags = videoTagsRef.current[currentVideo.id] ?? [];
-    const allTags = getAllLibraryTags();
-    const incomingTags = parseTagInput(tags.join(" "));
-    if (!incomingTags.length) {
-      setTagMessage("请输入至少一个标签。");
-      return;
-    }
-
-    const { resolvedTags, unmatchedTags } = splitTagsByExistingMatch(incomingTags, allTags);
-
-    if (!options?.skipPrompt && unmatchedTags.length) {
-      const suggestion = unmatchedTags
-        .map((tag) => findTagMergeSuggestion(tag, allTags, tagMergeDecisionsRef.current))
-        .find((item): item is TagMergeSuggestion => Boolean(item));
-      if (suggestion) {
-        setTagMergePrompt({ pendingTags: resolvedTags, suggestion });
-        setTagMessage("");
-        return;
-      }
-
-      if (localConfig?.ai.configured && allTags.length) {
-        setIsTagSuggestionLoading(true);
-        try {
-          const aiSuggestion = await fetchJson<AiTagMergeSuggestionResponse>("/api/ai/tags/merge-suggestion", {
-            method: "POST",
-            body: JSON.stringify({ newTags: unmatchedTags, existingTags: allTags }),
-          });
-          if (aiSuggestion.newTag && aiSuggestion.existingTag) {
-            setTagMergePrompt({
-              pendingTags: resolvedTags,
-              suggestion: {
-                newTag: aiSuggestion.newTag,
-                existingTag: aiSuggestion.existingTag,
-                reason: "相似标签",
-                score: 0.86,
-              },
-            });
-            setTagMessage(aiSuggestion.reason || "");
-            return;
-          }
-        } catch {
-          setTagMessage("AI 标签合并建议不可用，已使用离线规则。");
-        } finally {
-          setIsTagSuggestionLoading(false);
-        }
-      }
-    }
-
-    const nextTags = mergeTags(existingVideoTags, resolvedTags);
-    const nextVideoTags = {
-      ...videoTagsRef.current,
-      [currentVideo.id]: nextTags,
-    };
-    replaceVideoTags(nextVideoTags, `已保存 ${nextTags.length} 个标签。`);
-    setTagInput("");
-    setTagMergePrompt(null);
-  }, [currentVideo, getAllLibraryTags, localConfig, replaceVideoTags]);
-
-  const submitTagInput = useCallback(() => {
-    if (isTagSuggestionLoading) return;
-    void addTagsToCurrentVideo(parseTagInput(tagInput));
-  }, [addTagsToCurrentVideo, isTagSuggestionLoading, tagInput]);
-
-  const submitTagInputSuggestion = useCallback((tag: string) => {
-    if (isTagSuggestionLoading) return;
-    const resolvedInput = tagInput.replace(/[^\s,，、;；|]*$/u, tag);
-    void addTagsToCurrentVideo(parseTagInput(resolvedInput));
-  }, [addTagsToCurrentVideo, isTagSuggestionLoading, tagInput]);
-
-  useEffect(() => {
-    setActiveTagSuggestionIndex(0);
-  }, [activeTagInputSegment, tagInputSuggestions.length]);
-
   const generateAutoTagsForCurrentVideo = useCallback(async () => {
     setAutoTagSuggestions([]);
     setSelectedAutoTags(new Set());
@@ -2514,57 +2407,6 @@ export default function App() {
     setAutoTagMessage("");
     void addTagsToCurrentVideo(tags);
   }, [addTagsToCurrentVideo, autoTagSuggestions, selectedAutoTags]);
-
-  const removeTagFromCurrentVideo = useCallback((tag: string) => {
-    if (!currentVideo) return;
-    const tagKey = normalizeTagKey(tag);
-    const nextTags = (videoTagsRef.current[currentVideo.id] ?? []).filter((item) => normalizeTagKey(item) !== tagKey);
-    const nextVideoTags = { ...videoTagsRef.current };
-    if (nextTags.length) {
-      nextVideoTags[currentVideo.id] = nextTags;
-    } else {
-      delete nextVideoTags[currentVideo.id];
-    }
-    replaceVideoTags(nextVideoTags, "标签已移除。");
-  }, [currentVideo, replaceVideoTags]);
-
-  const applyTagMergeSuggestion = useCallback(() => {
-    if (!tagMergePrompt || !currentVideo) return;
-    const { suggestion, pendingTags } = tagMergePrompt;
-    const pairKey = createTagPairKey(suggestion.newTag, suggestion.existingTag);
-    const nextDecisions = {
-      ...tagMergeDecisionsRef.current,
-      [pairKey]: {
-        from: suggestion.newTag,
-        to: suggestion.existingTag,
-        decision: "merge" as const,
-        updatedAt: Date.now(),
-      },
-    };
-    tagMergeDecisionsRef.current = nextDecisions;
-    setTagMergeDecisions(nextDecisions);
-    const mergedTags = pendingTags.map((tag) =>
-      normalizeTagKey(tag) === normalizeTagKey(suggestion.newTag) ? suggestion.existingTag : tag,
-    );
-    void addTagsToCurrentVideo(mergedTags, { skipPrompt: true });
-    saveTagMergeDecisions(nextDecisions).catch(() => setTagMessage("无法保存标签合并选择。"));
-  }, [addTagsToCurrentVideo, currentVideo, tagMergePrompt]);
-
-  const keepTagMergeSuggestion = useCallback(() => {
-    if (!tagMergePrompt) return;
-    const { suggestion, pendingTags } = tagMergePrompt;
-    const pairKey = createTagPairKey(suggestion.newTag, suggestion.existingTag);
-    replaceTagMergeDecisions({
-      ...tagMergeDecisionsRef.current,
-      [pairKey]: {
-        from: suggestion.newTag,
-        to: suggestion.existingTag,
-        decision: "keep",
-        updatedAt: Date.now(),
-      },
-    });
-    void addTagsToCurrentVideo(pendingTags, { skipPrompt: true });
-  }, [addTagsToCurrentVideo, replaceTagMergeDecisions, tagMergePrompt]);
 
   const clearCurrentLibraryRuntimeData = useCallback(() => {
     progressStoreRef.current = {};
