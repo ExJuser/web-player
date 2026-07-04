@@ -29,6 +29,7 @@ import { useMediaRootLocalPathDialog } from "./useMediaRootLocalPathDialog";
 import { useMediaRootPrompts } from "./useMediaRootPrompts";
 import { useMediaProbeController } from "./useMediaProbeController";
 import { useApplyPlayerDataStore, usePlayerDataRuntime } from "./usePlayerDataRuntime";
+import { usePlaybackActivityController } from "./usePlaybackActivityController";
 import { usePlayerPreferencesController } from "./usePlayerPreferencesController";
 import { usePhotoAlbumRuntime } from "./usePhotoAlbumRuntime";
 import { usePhotoAlbumTagEditor } from "./usePhotoAlbumTagEditor";
@@ -50,7 +51,6 @@ import {
 } from "./specialInsights";
 import {
   buildWatchActivityInsights,
-  createLocalDateKey,
   createWatchActivityKey,
   formatWatchActivityDate,
   groupWatchActivityDaysByMonth,
@@ -325,8 +325,6 @@ import {
   saveGlobalPlayerDataStore,
   savePlayerSetting,
   saveTagMergeDecisions,
-  savePlayerWatchActivity,
-  savePlayerVideoStats,
   savePlayerVideoTags,
   writePhotoAlbumFolderHandle,
   writeRecentFolderHandle
@@ -1775,172 +1773,27 @@ export default function App() {
     };
   }, [currentVideo, videoStatsRevision]);
 
-  const updateSpecialVideoStats = useCallback(
-    (
-      video: VideoItem,
-      updater: (current: VideoStatsStore[string]) => VideoStatsStore[string],
-      options?: { saveMessage?: string },
-    ) => {
-      const root = video.mediaRootId
-        ? localConfigRef.current?.mediaRoots.find((item) => item.id === video.mediaRootId) ?? null
-        : null;
-      if (!root || !isMediaRootInHomeMode(root, "special")) return;
-
-      const statsKey = createVideoStatsKey(video);
-      const currentStats = videoStatsRef.current[statsKey] ?? {
-        totalPlayedSeconds: 0,
-        playCount: 0,
-        durationSeconds: 0,
-        emissionCount: 0,
-        updatedAt: Date.now(),
-      };
-      const nextStats = updater(currentStats);
-      const nextStore = {
-        ...videoStatsRef.current,
-        [statsKey]: nextStats,
-      };
-      videoStatsRef.current = nextStore;
-      setVideoStatsRevision((revision) => revision + 1);
-
-      savePlayerVideoStats(statsKey, nextStats)
-        .then(() => {
-          if (options?.saveMessage) setMessage(options.saveMessage);
-        })
-        .catch(() => {
-          setMessage("无法写入项目数据目录，请确认通过 npm run dev 或 npm run preview 启动。");
-        });
-    },
-    [],
-  );
-
-  const updateWatchActivity = useCallback(
-    (
-      video: VideoItem,
-      increments: { watchedSeconds?: number; playCount?: number; completedCount?: number; emissionCount?: number },
-      timestamp = Date.now(),
-    ) => {
-      const date = createLocalDateKey(timestamp);
-      const key = createWatchActivityKey(date, video.id);
-      const currentActivity = watchActivityRef.current[key] ?? {
-        date,
-        videoId: video.id,
-        watchedSeconds: 0,
-        playCount: 0,
-        completedCount: 0,
-        emissionCount: 0,
-        updatedAt: timestamp,
-      };
-      const nextActivity = {
-        ...currentActivity,
-        watchedSeconds: currentActivity.watchedSeconds + Math.max(0, increments.watchedSeconds ?? 0),
-        playCount: currentActivity.playCount + Math.max(0, Math.floor(increments.playCount ?? 0)),
-        completedCount: currentActivity.completedCount + Math.max(0, Math.floor(increments.completedCount ?? 0)),
-        emissionCount: currentActivity.emissionCount + Math.max(0, Math.floor(increments.emissionCount ?? 0)),
-        updatedAt: timestamp,
-      };
-      const nextStore = {
-        ...watchActivityRef.current,
-        [key]: nextActivity,
-      };
-      watchActivityRef.current = nextStore;
-      setWatchActivityRevision((revision) => revision + 1);
-      savePlayerWatchActivity(nextActivity).catch(() => {
-        setMessage("无法写入项目数据目录，请确认通过 npm run dev 或 npm run preview 启动。");
-      });
-    },
-    [],
-  );
-
-  const recordPlaybackStartForActivity = useCallback(
-    (video: VideoItem) => {
-      const session = playbackActivitySessionRef.current;
-      if (session?.videoId === video.id && session.hasCountedPlay) return;
-
-      playbackActivitySessionRef.current = {
-        videoId: video.id,
-        lastTime: videoRef.current?.currentTime ?? null,
-        hasCountedPlay: true,
-      };
-      updateWatchActivity(video, { playCount: 1 });
-    },
-    [updateWatchActivity],
-  );
-
-  const recordPlaybackStartForStats = useCallback(
-    (video: VideoItem) => {
-      const statsKey = createVideoStatsKey(video);
-      const session = playbackStatsSessionRef.current;
-      if (session?.key === statsKey && session.hasCountedPlay) return;
-
-      playbackStatsSessionRef.current = {
-        key: statsKey,
-        lastTime: videoRef.current?.currentTime ?? null,
-        hasCountedPlay: true,
-      };
-      updateSpecialVideoStats(video, (stats) => ({
-        ...stats,
-        playCount: stats.playCount + 1,
-        durationSeconds: videoRef.current?.duration && Number.isFinite(videoRef.current.duration)
-          ? videoRef.current.duration
-          : stats.durationSeconds,
-        updatedAt: Date.now(),
-      }));
-    },
-    [updateSpecialVideoStats],
-  );
-
-  const recordPlaybackProgressForStats = useCallback(
-    (video: VideoItem, nextTime: number, nextDuration: number) => {
-      const statsKey = createVideoStatsKey(video);
-      const session = playbackStatsSessionRef.current;
-      const nextSession =
-        session?.key === statsKey
-          ? session
-          : { key: statsKey, lastTime: null, hasCountedPlay: false };
-      const previousTime = nextSession.lastTime;
-      nextSession.lastTime = nextTime;
-      playbackStatsSessionRef.current = nextSession;
-      if (previousTime === null || !Number.isFinite(previousTime) || !Number.isFinite(nextTime)) return;
-
-      const delta = nextTime - previousTime;
-      if (delta <= 0 || delta > 10) return;
-
-      updateSpecialVideoStats(video, (stats) => ({
-        ...stats,
-        totalPlayedSeconds: stats.totalPlayedSeconds + delta,
-        durationSeconds: Number.isFinite(nextDuration) && nextDuration > 0 ? nextDuration : stats.durationSeconds,
-        updatedAt: Date.now(),
-      }));
-    },
-    [updateSpecialVideoStats],
-  );
-
-  const recordPlaybackProgressForActivity = useCallback(
-    (video: VideoItem, nextTime: number) => {
-      const session = playbackActivitySessionRef.current;
-      const nextSession =
-        session?.videoId === video.id
-          ? session
-          : { videoId: video.id, lastTime: null, hasCountedPlay: false };
-      const previousTime = nextSession.lastTime;
-      nextSession.lastTime = nextTime;
-      playbackActivitySessionRef.current = nextSession;
-      if (previousTime === null || !Number.isFinite(previousTime) || !Number.isFinite(nextTime)) return;
-
-      const delta = nextTime - previousTime;
-      if (delta <= 0 || delta > 10) return;
-      updateWatchActivity(video, { watchedSeconds: delta });
-    },
-    [updateWatchActivity],
-  );
-
-  const recordPlaybackEndedForStats = useCallback(() => {
-    playbackStatsSessionRef.current = null;
-  }, []);
-
-  const recordPlaybackEndedForActivity = useCallback(() => {
-    playbackActivitySessionRef.current = null;
-  }, []);
+  const {
+    recordPlaybackEndedForActivity,
+    recordPlaybackEndedForStats,
+    recordPlaybackProgressForActivity,
+    recordPlaybackProgressForStats,
+    recordPlaybackStartForActivity,
+    recordPlaybackStartForStats,
+    updateSpecialVideoStats,
+    updateWatchActivity,
+  } = usePlaybackActivityController({
+    currentVideoId,
+    localConfigRef,
+    playbackActivitySessionRef,
+    playbackStatsSessionRef,
+    setMessage,
+    setVideoStatsRevision,
+    setWatchActivityRevision,
+    videoRef,
+    videoStatsRef,
+    watchActivityRef,
+  });
 
   const recordEmissionForCurrentVideo = useCallback(() => {
     if (!currentVideo || !canRecordEmission) return;
@@ -1965,11 +1818,6 @@ export default function App() {
     );
     updateWatchActivity(currentVideo, { emissionCount: 1 });
   }, [canRecordEmission, currentVideo, duration, updateSpecialVideoStats, updateWatchActivity]);
-
-  useEffect(() => {
-    playbackStatsSessionRef.current = null;
-    playbackActivitySessionRef.current = null;
-  }, [currentVideoId]);
 
   useEffect(() => {
     return () => {
