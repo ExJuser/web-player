@@ -33,6 +33,7 @@ import { usePlayerPreferencesController } from "./usePlayerPreferencesController
 import { usePhotoAlbumRuntime } from "./usePhotoAlbumRuntime";
 import { usePhotoAlbumTagEditor } from "./usePhotoAlbumTagEditor";
 import { usePhotoObjectUrls } from "./usePhotoObjectUrls";
+import { useProgressFavoritesController } from "./useProgressFavoritesController";
 import { useRatingDialog } from "./useRatingDialog";
 import { useShortcutSettings } from "./useShortcutSettings";
 import { useThumbnailQueueController } from "./useThumbnailQueueController";
@@ -310,9 +311,7 @@ import {
   clearPhotoAlbumFolderHandle,
   clearRecentFolderHandle,
   createDefaultPlayerDataStore,
-  createProgress,
   deleteLegacyPlayerDataStore,
-  deletePlayerProgress,
   hasDirectoryWritePermission,
   isPlayerGlobalMetadata,
   loadCachedMediaRootScan,
@@ -324,8 +323,6 @@ import {
   saveDanmakuSelection,
   saveCachedMediaRootScan,
   saveGlobalPlayerDataStore,
-  savePlayerFavorite,
-  savePlayerProgress,
   savePlayerSetting,
   saveTagMergeDecisions,
   savePlayerWatchActivity,
@@ -2449,78 +2446,24 @@ export default function App() {
     updateVideoPlayability,
   });
 
-  const updateProgress = useCallback(
-    (video: VideoItem, currentTime: number, duration: number, completed?: boolean) => {
-      if (!completed && clearedProgressVideoIdsRef.current.has(video.id)) {
-        if (currentTime < 0.5) return;
-        clearedProgressVideoIdsRef.current.delete(video.id);
-      }
-
-      const previous = progressStoreRef.current[video.id];
-      const nextDuration =
-        Number.isFinite(duration) && duration > 0
-          ? duration
-          : previous?.duration && previous.duration > 0
-            ? previous.duration
-            : video.duration && video.duration > 0
-              ? video.duration
-              : 0;
-      const progress = createProgress(currentTime, nextDuration, completed ?? previous?.completed ?? false);
-      if (!progress) return;
-
-      const nextStore = {
-        ...progressStoreRef.current,
-        [video.id]: progress,
-      };
-      progressStoreRef.current = nextStore;
-      setProgressStore(nextStore);
-
-      if (progress.completed && !previous?.completed) {
-        updateWatchActivity(video, { completedCount: 1 }, progress.updatedAt);
-      }
-
-      savePlayerProgress(video.id, progress).catch(() => {
-        setMessage("无法写入项目数据目录，请确认通过 npm run dev 或 npm run preview 启动。");
-      });
-    },
-    [updateWatchActivity],
-  );
-
-  const replaceProgressStore = useCallback((nextStore: ProgressStore, successMessage?: string) => {
-    const previousStore = progressStoreRef.current;
-    progressStoreRef.current = nextStore;
-    setProgressStore(nextStore);
-
-    Promise.all(
-      Array.from(new Set([...Object.keys(previousStore), ...Object.keys(nextStore)])).map((videoId) =>
-        nextStore[videoId] ? savePlayerProgress(videoId, nextStore[videoId]) : deletePlayerProgress(videoId),
-      ),
-    )
-      .then(() => {
-        if (successMessage) setMessage(successMessage);
-      })
-      .catch(() => {
-        setMessage("无法写入项目数据目录，请确认通过 npm run dev 或 npm run preview 启动。");
-      });
-  }, []);
-
-  const replaceFavorites = useCallback((nextFavorites: Set<string>, successMessage?: string) => {
-    const previousFavorites = favoriteVideoIdsRef.current;
-    favoriteVideoIdsRef.current = nextFavorites;
-    setFavoriteVideoIds(new Set(nextFavorites));
-
-    Promise.all(
-      Array.from(new Set([...previousFavorites, ...nextFavorites])).map((videoId) =>
-        savePlayerFavorite(videoId, nextFavorites.has(videoId)),
-      ),
-    )
-      .then(() => {
-        if (successMessage) setMessage(successMessage);
-      })
-      .catch(() => {
-        setMessage("无法写入项目数据目录，请确认通过 npm run dev 或 npm run preview 启动。");
-      });
-  }, []);
+  const {
+    resetVideoProgress,
+    toggleCurrentFavorite,
+    toggleFavorite,
+    updateProgress,
+  } = useProgressFavoritesController({
+    clearedProgressVideoIdsRef,
+    currentVideo,
+    currentVideoId,
+    favoriteVideoIdsRef,
+    progressStoreRef,
+    setCurrentTime,
+    setFavoriteVideoIds,
+    setMessage,
+    setProgressStore,
+    updateWatchActivity,
+    videoRef,
+  });
 
   const replaceVideoTags = useCallback((nextVideoTags: VideoTagStore, successMessage?: string) => {
     const previousVideoTags = videoTagsRef.current;
@@ -2883,44 +2826,6 @@ export default function App() {
       document.removeEventListener("click", handleClick);
     };
   }, []);
-
-  const toggleFavorite = useCallback(
-    (video: VideoItem) => {
-      const nextFavorites = new Set(favoriteVideoIdsRef.current);
-      if (nextFavorites.has(video.id)) {
-        nextFavorites.delete(video.id);
-        replaceFavorites(nextFavorites, `已取消收藏《${video.name}》`);
-      } else {
-        nextFavorites.add(video.id);
-        replaceFavorites(nextFavorites, `已收藏《${video.name}》`);
-      }
-    },
-    [replaceFavorites],
-  );
-
-  const toggleCurrentFavorite = useCallback(() => {
-    if (!currentVideo) return;
-    toggleFavorite(currentVideo);
-  }, [currentVideo, toggleFavorite]);
-
-  const resetVideoProgress = useCallback(
-    (video: VideoItem) => {
-      clearedProgressVideoIdsRef.current.add(video.id);
-      const nextStore = { ...progressStoreRef.current };
-      delete nextStore[video.id];
-
-      if (video.id === currentVideoId) {
-        const element = videoRef.current;
-        if (element && Number.isFinite(element.duration)) {
-          element.currentTime = 0;
-        }
-        setCurrentTime(0);
-      }
-
-      replaceProgressStore(nextStore, `已清除《${video.name}》的播放进度`);
-    },
-    [currentVideoId, replaceProgressStore],
-  );
 
   const requestDeleteVideo = useCallback((video: VideoItem) => {
     setVideoDeleteCandidate(video);
