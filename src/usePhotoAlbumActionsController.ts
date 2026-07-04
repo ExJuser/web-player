@@ -1,16 +1,27 @@
 import { useCallback, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
 
+import type { PhotoAlbumViewFilter } from "./PhotoAlbumToolbar";
 import {
   savePhotoAlbumCoverPreference,
   savePhotoAlbumFavorite,
+  savePhotoAlbumPreferences,
   savePhotoAlbumProgress,
 } from "./photoAlbumStorage";
-import type { ActiveView, PhotoAlbum, PhotoAlbumImage, PhotoAlbumProgress, PhotoAlbumStore } from "./playerTypes";
+import type {
+  ActiveView,
+  PhotoAlbum,
+  PhotoAlbumImage,
+  PhotoAlbumPreferences,
+  PhotoAlbumProgress,
+  PhotoAlbumSortMode,
+  PhotoAlbumStore,
+} from "./playerTypes";
 
 type UsePhotoAlbumActionsControllerOptions = {
   currentPhotoIndex: number;
   favoritePhotoAlbumIdsRef: MutableRefObject<Set<string>>;
   photoAlbumCoverPreferencesRef: MutableRefObject<Record<string, string>>;
+  photoAlbumPreferencesRef: MutableRefObject<PhotoAlbumPreferences>;
   photoAlbumProgressRef: MutableRefObject<Record<string, PhotoAlbumProgress>>;
   saveCurrentPhotoAlbumStore: (overrides?: Partial<PhotoAlbumStore>) => Promise<void>;
   selectedPhotoAlbum: PhotoAlbum | null;
@@ -18,8 +29,11 @@ type UsePhotoAlbumActionsControllerOptions = {
   setCurrentPhotoIndex: Dispatch<SetStateAction<number>>;
   setFavoritePhotoAlbumIds: Dispatch<SetStateAction<Set<string>>>;
   setPhotoAlbumCoverPreferences: Dispatch<SetStateAction<Record<string, string>>>;
+  setPhotoAlbumFilter: Dispatch<SetStateAction<PhotoAlbumViewFilter>>;
   setPhotoAlbumMessage: Dispatch<SetStateAction<string>>;
+  setPhotoAlbumPage: Dispatch<SetStateAction<number>>;
   setPhotoAlbumProgress: Dispatch<SetStateAction<Record<string, PhotoAlbumProgress>>>;
+  setPhotoAlbumSortMode: Dispatch<SetStateAction<PhotoAlbumSortMode>>;
   setSelectedPhotoAlbumId: Dispatch<SetStateAction<string | null>>;
   visiblePhotoAlbums: PhotoAlbum[];
 };
@@ -28,6 +42,7 @@ export function usePhotoAlbumActionsController({
   currentPhotoIndex,
   favoritePhotoAlbumIdsRef,
   photoAlbumCoverPreferencesRef,
+  photoAlbumPreferencesRef,
   photoAlbumProgressRef,
   saveCurrentPhotoAlbumStore,
   selectedPhotoAlbum,
@@ -35,8 +50,11 @@ export function usePhotoAlbumActionsController({
   setCurrentPhotoIndex,
   setFavoritePhotoAlbumIds,
   setPhotoAlbumCoverPreferences,
+  setPhotoAlbumFilter,
   setPhotoAlbumMessage,
+  setPhotoAlbumPage,
   setPhotoAlbumProgress,
+  setPhotoAlbumSortMode,
   setSelectedPhotoAlbumId,
   visiblePhotoAlbums,
 }: UsePhotoAlbumActionsControllerOptions) {
@@ -154,6 +172,38 @@ export function usePhotoAlbumActionsController({
     setPhotoAlbumProgress,
   ]);
 
+  const updatePhotoAlbumSortMode = useCallback(
+    (nextSortMode: PhotoAlbumSortMode) => {
+      const nextPreferences = {
+        ...photoAlbumPreferencesRef.current,
+        sortMode: nextSortMode,
+      };
+      photoAlbumPreferencesRef.current = nextPreferences;
+      setPhotoAlbumSortMode(nextSortMode);
+      setPhotoAlbumPage(1);
+      void savePhotoAlbumPreferences(nextPreferences).catch(() => {
+        setPhotoAlbumMessage("看图偏好保存失败。");
+      });
+    },
+    [photoAlbumPreferencesRef, setPhotoAlbumMessage, setPhotoAlbumPage, setPhotoAlbumSortMode],
+  );
+
+  const updatePhotoAlbumFilter = useCallback(
+    (nextFilter: PhotoAlbumViewFilter) => {
+      const nextPreferences = {
+        ...photoAlbumPreferencesRef.current,
+        favoritesOnly: nextFilter === "favorites",
+      };
+      photoAlbumPreferencesRef.current = nextPreferences;
+      setPhotoAlbumFilter(nextFilter);
+      setPhotoAlbumPage(1);
+      void savePhotoAlbumPreferences(nextPreferences).catch(() => {
+        setPhotoAlbumMessage("看图偏好保存失败。");
+      });
+    },
+    [photoAlbumPreferencesRef, setPhotoAlbumFilter, setPhotoAlbumMessage, setPhotoAlbumPage],
+  );
+
   return {
     markSelectedPhotoAlbumCompleted,
     movePhoto,
@@ -164,5 +214,7 @@ export function usePhotoAlbumActionsController({
     setPhotoAlbumCover,
     showPhotoAlbumList,
     togglePhotoAlbumFavorite,
+    updatePhotoAlbumFilter,
+    updatePhotoAlbumSortMode,
   };
 }

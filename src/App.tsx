@@ -120,7 +120,6 @@ import {
   loadPhotoAlbumStore,
   photoAlbumSortOptions,
   saveCachedPhotoAlbumScan,
-  savePhotoAlbumPreferences,
 } from "./photoAlbumStorage";
 import {
   PROGRESS_FILE_NAME,
@@ -3001,10 +3000,13 @@ export default function App() {
     setPhotoAlbumCover,
     showPhotoAlbumList,
     togglePhotoAlbumFavorite,
+    updatePhotoAlbumFilter,
+    updatePhotoAlbumSortMode,
   } = usePhotoAlbumActionsController({
     currentPhotoIndex,
     favoritePhotoAlbumIdsRef,
     photoAlbumCoverPreferencesRef,
+    photoAlbumPreferencesRef,
     photoAlbumProgressRef,
     saveCurrentPhotoAlbumStore,
     selectedPhotoAlbum,
@@ -3012,8 +3014,11 @@ export default function App() {
     setCurrentPhotoIndex,
     setFavoritePhotoAlbumIds,
     setPhotoAlbumCoverPreferences,
+    setPhotoAlbumFilter,
     setPhotoAlbumMessage,
+    setPhotoAlbumPage,
     setPhotoAlbumProgress,
+    setPhotoAlbumSortMode,
     setSelectedPhotoAlbumId,
     visiblePhotoAlbums,
   });
@@ -3383,38 +3388,6 @@ export default function App() {
     saveCurrentPhotoAlbumStore,
     selectedPhotoAlbumId,
   ]);
-
-  const updatePhotoAlbumSortMode = useCallback(
-    (nextSortMode: PhotoAlbumSortMode) => {
-      const nextPreferences = {
-        ...photoAlbumPreferencesRef.current,
-        sortMode: nextSortMode,
-      };
-      photoAlbumPreferencesRef.current = nextPreferences;
-      setPhotoAlbumSortMode(nextSortMode);
-      setPhotoAlbumPage(1);
-      void savePhotoAlbumPreferences(nextPreferences).catch(() => {
-        setPhotoAlbumMessage("看图偏好保存失败。");
-      });
-    },
-    [],
-  );
-
-  const updatePhotoAlbumFilter = useCallback(
-    (nextFilter: PhotoAlbumViewFilter) => {
-      const nextPreferences = {
-        ...photoAlbumPreferencesRef.current,
-        favoritesOnly: nextFilter === "favorites",
-      };
-      photoAlbumPreferencesRef.current = nextPreferences;
-      setPhotoAlbumFilter(nextFilter);
-      setPhotoAlbumPage(1);
-      void savePhotoAlbumPreferences(nextPreferences).catch(() => {
-        setPhotoAlbumMessage("看图偏好保存失败。");
-      });
-    },
-    [],
-  );
 
   useEffect(() => {
     setPhotoAlbumPage(1);
