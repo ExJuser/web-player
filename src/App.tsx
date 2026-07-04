@@ -29,6 +29,7 @@ import { useMediaRootLocalPathDialog } from "./useMediaRootLocalPathDialog";
 import { useMediaRootPrompts } from "./useMediaRootPrompts";
 import { useMediaProbeController } from "./useMediaProbeController";
 import { useApplyPlayerDataStore, usePlayerDataRuntime } from "./usePlayerDataRuntime";
+import { usePlayerPreferencesController } from "./usePlayerPreferencesController";
 import { usePhotoAlbumRuntime } from "./usePhotoAlbumRuntime";
 import { usePhotoAlbumTagEditor } from "./usePhotoAlbumTagEditor";
 import { usePhotoObjectUrls } from "./usePhotoObjectUrls";
@@ -327,7 +328,6 @@ import {
   saveCachedMediaRootScan,
   saveGlobalPlayerDataStore,
   savePlayerFavorite,
-  savePlayerPreference,
   savePlayerProgress,
   savePlayerSetting,
   saveTagMergeDecisions,
@@ -2806,72 +2806,40 @@ export default function App() {
     setCurrentTime(0);
   }, []);
 
-  const replacePlayerPreferences = useCallback((nextPreferences: PlayerPreferences) => {
-    playerPreferencesRef.current = nextPreferences;
-    setPlaylistSortMode(nextPreferences.playlistSortMode);
-    setIsPlaylistSortReversed(nextPreferences.isPlaylistSortReversed);
-    setPlaylistPageSize(nextPreferences.playlistPageSize);
-    setShortcuts(nextPreferences.shortcuts);
-    setHomeMediaMode(nextPreferences.homeMediaMode);
-    setIsSeriesMode(nextPreferences.isSeriesMode);
-    setSelectedSeriesKey(nextPreferences.selectedSeriesKey);
-    setIsCinemaMode(nextPreferences.isCinemaMode);
-    setStartFromHighEnergy(nextPreferences.startFromHighEnergy);
-
-    Promise.all(
-      (Object.keys(nextPreferences) as Array<keyof PlayerPreferences>).map((key) =>
-        savePlayerPreference(key, nextPreferences[key]),
-      ),
-    ).catch(() => {
-      setMessage("无法写入项目数据目录，请确认通过 npm run dev 或 npm run preview 启动。");
-    });
-  }, []);
-
-  const updatePlaylistSortMode = useCallback(
-    (nextMode: PlaylistSortMode) => {
-      setPlaylistPage(1);
-      replacePlayerPreferences({
-        ...playerPreferencesRef.current,
-        playlistSortMode: nextMode,
-      });
-    },
-    [replacePlayerPreferences],
-  );
-
-  const togglePlaylistSortDirection = useCallback(() => {
-    setPlaylistPage(1);
-    replacePlayerPreferences({
-      ...playerPreferencesRef.current,
-      isPlaylistSortReversed: !playerPreferencesRef.current.isPlaylistSortReversed,
-    });
-  }, [replacePlayerPreferences]);
-
-  const updatePlaylistPageSize = useCallback(
-    (nextPageSize: number) => {
-      setPlaylistPage(1);
-      replacePlayerPreferences({
-        ...playerPreferencesRef.current,
-        playlistPageSize: nextPageSize,
-      });
-    },
-    [replacePlayerPreferences],
-  );
-
-  const updateHomeMediaMode = useCallback(
-    (nextMode: HomeMediaMode) => {
-      setPlaylistPage(1);
-      duplicateDetectionAbortRef.current?.abort();
-      duplicateDetectionAbortRef.current = null;
-      duplicateDetectionRunIdRef.current += 1;
-      setIsDuplicateDetectionRunning(false);
-      activateDuplicateDetectionForMode(nextMode, videosRef.current);
-      replacePlayerPreferences({
-        ...playerPreferencesRef.current,
-        homeMediaMode: nextMode,
-      });
-    },
-    [activateDuplicateDetectionForMode, replacePlayerPreferences],
-  );
+  const {
+    replacePlayerPreferences,
+    toggleCinemaMode,
+    togglePlaylistSortDirection,
+    toggleStartFromHighEnergy,
+    toggleTheme,
+    updateHomeMediaMode,
+    updatePlaylistPageSize,
+    updatePlaylistSortMode,
+    updateSelectedSeries,
+  } = usePlayerPreferencesController({
+    activateDuplicateDetectionForMode,
+    duplicateDetectionAbortRef,
+    duplicateDetectionRunIdRef,
+    focusPlayer,
+    playerPreferencesRef,
+    playerSettingsRef,
+    setHomeMediaMode,
+    setIsCinemaMode,
+    setIsDuplicateDetectionRunning,
+    setIsPlaylistSortReversed,
+    setIsSeriesMenuOpen,
+    setIsSeriesMode,
+    setMessage,
+    setPlaylistPage,
+    setPlaylistPageSize,
+    setPlaylistSortMode,
+    setSelectedSeriesKey,
+    setShortcuts,
+    setStartFromHighEnergy,
+    setTheme,
+    theme,
+    videosRef,
+  });
 
   const {
     closeShortcutDialog,
@@ -2886,25 +2854,6 @@ export default function App() {
     playerPreferencesRef,
     replacePlayerPreferences,
   });
-
-  const toggleStartFromHighEnergy = useCallback(() => {
-    replacePlayerPreferences({
-      ...playerPreferencesRef.current,
-      startFromHighEnergy: !playerPreferencesRef.current.startFromHighEnergy,
-    });
-  }, [replacePlayerPreferences]);
-
-  const updateSelectedSeries = useCallback(
-    (nextSeriesKey: string) => {
-      setPlaylistPage(1);
-      replacePlayerPreferences({
-        ...playerPreferencesRef.current,
-        selectedSeriesKey: nextSeriesKey,
-      });
-      setIsSeriesMenuOpen(false);
-    },
-    [replacePlayerPreferences],
-  );
 
   useEffect(() => {
     if (!isSeriesMenuOpen) return;
@@ -2926,27 +2875,6 @@ export default function App() {
       document.removeEventListener("keydown", closeSeriesMenuOnEscape);
     };
   }, [isSeriesMenuOpen]);
-
-  const toggleCinemaMode = useCallback(() => {
-    replacePlayerPreferences({
-      ...playerPreferencesRef.current,
-      isCinemaMode: !playerPreferencesRef.current.isCinemaMode,
-    });
-    focusPlayer();
-  }, [focusPlayer, replacePlayerPreferences]);
-
-  const toggleTheme = useCallback(() => {
-    setTheme((currentTheme) => (currentTheme === "dark" ? "light" : "dark"));
-  }, []);
-
-  useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-    playerSettingsRef.current = {
-      ...playerSettingsRef.current,
-      theme,
-    };
-    savePlayerSetting("theme", theme).catch(() => undefined);
-  }, [theme]);
 
   useEffect(() => {
     const handleClick = (event: MouseEvent) => {
