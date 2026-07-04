@@ -34,6 +34,7 @@ import { usePhotoAlbumTagEditor } from "./usePhotoAlbumTagEditor";
 import { usePhotoObjectUrls } from "./usePhotoObjectUrls";
 import { useRatingDialog } from "./useRatingDialog";
 import { useShortcutSettings } from "./useShortcutSettings";
+import { useThumbnailQueueController } from "./useThumbnailQueueController";
 import { normalizeClientLocalConfig, shouldAutoScanGlobalMediaLibrary, supportsServerFileAccess } from "./localConfigClient";
 import {
   buildLibrarySearchCandidates,
@@ -340,7 +341,6 @@ import {
   getPlayerFrameAspectRatio,
   getVideoDisplaySize,
   getVideoElementMetadata,
-  loadVideoThumbnail,
   selectTrustedDuration,
 } from "./videoThumbnail";
 import {
@@ -441,7 +441,6 @@ export default function App() {
   const mediaRootCacheLoadAttemptedRef = useRef(false);
   const cachedEmbeddedSubtitleLookupKeysRef = useRef(new Set<string>());
   const photoAlbumAutoLoadAttemptedRef = useRef(false);
-  const thumbnailLoadRunIdRef = useRef(0);
   const isScanningRef = useRef(false);
   const isMainVideoLoadingRef = useRef(false);
   const pendingAutoPlayVideoIdRef = useRef<string | null>(null);
@@ -4497,58 +4496,15 @@ export default function App() {
     skipFolderAccessPrompt,
   });
 
-  useEffect(() => {
-    const runId = thumbnailLoadRunIdRef.current + 1;
-    thumbnailLoadRunIdRef.current = runId;
-    let isCancelled = false;
-    const orderedVideoIds = thumbnailQueueVideoIdsKey ? thumbnailQueueVideoIdsKey.split("\n") : [];
-    const videoById = new Map(videosRef.current.map((video) => [video.id, video]));
-
-    if (isScanning || isMainVideoLoading || !orderedVideoIds.length) {
-      return () => {
-        isCancelled = true;
-      };
-    }
-
-    const loadThumbnailsInOrder = async () => {
-      for (const videoId of orderedVideoIds) {
-        if (isCancelled || thumbnailLoadRunIdRef.current !== runId) return;
-
-        const video = videoById.get(videoId);
-        if (!video || video.thumbnailStatus === "ready" || video.thumbnailStatus === "loading") {
-          continue;
-        }
-
-        setVideoThumbnailState(video.id, "loading");
-
-        try {
-          const { thumbnailUrl, metadata } = await loadVideoThumbnail(libraryIdRef.current, video);
-          if (isCancelled || thumbnailLoadRunIdRef.current !== runId) {
-            revokeObjectUrl(thumbnailUrl);
-            const currentVideo = videosRef.current.find((item) => item.id === video.id);
-            if (currentVideo?.thumbnailStatus === "loading") {
-              setVideoThumbnailState(video.id, "idle");
-            }
-            return;
-          }
-          if (metadata) {
-            updateVideoMetadata(video.id, metadata);
-          }
-          setVideoThumbnailState(video.id, "ready", thumbnailUrl);
-        } catch {
-          if (!isCancelled && thumbnailLoadRunIdRef.current === runId) {
-            setVideoThumbnailState(video.id, "failed");
-          }
-        }
-      }
-    };
-
-    void loadThumbnailsInOrder();
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [isMainVideoLoading, isScanning, setVideoThumbnailState, thumbnailQueueVideoIdsKey, updateVideoMetadata]);
+  useThumbnailQueueController({
+    isMainVideoLoading,
+    isScanning,
+    libraryIdRef,
+    setVideoThumbnailState,
+    thumbnailQueueVideoIdsKey,
+    updateVideoMetadata,
+    videosRef,
+  });
 
   const scrollPlaylistItemIntoView = useCallback((videoId: string, behavior: ScrollBehavior) => {
     const playlist = playlistRef.current;
@@ -4659,7 +4615,6 @@ export default function App() {
         window.clearTimeout(playlistScrollFrameRef.current);
       }
       duplicateDetectionAbortRef.current?.abort();
-      thumbnailLoadRunIdRef.current += 1;
       revokeVideoUrls(videosRef.current);
       subtitlesRef.current.forEach((subtitle) => {
         revokeObjectUrl(subtitle.url);
