@@ -295,10 +295,6 @@ export function PlayerControlBar({
           onOpenTagDialog={onOpenTagDialog}
           onProbeEmbeddedSubtitles={onProbeEmbeddedSubtitles}
         />
-        {canRecordEmission ? (
-          <SpecialStatsControl disabled={!hasCurrentVideo} stats={currentVideoSpecialStats} onRecordEmission={onRecordEmission} />
-        ) : null}
-
         <span className="control-spacer" />
 
         <PlayerViewControls
@@ -315,6 +311,10 @@ export function PlayerControlBar({
           onToggleShortcutDialog={onToggleShortcutDialog}
           onToggleStartFromHighEnergy={onToggleStartFromHighEnergy}
         />
+
+        {canRecordEmission ? (
+          <SpecialStatsControl disabled={!hasCurrentVideo} stats={currentVideoSpecialStats} onRecordEmission={onRecordEmission} />
+        ) : null}
       </div>
     </div>
   );

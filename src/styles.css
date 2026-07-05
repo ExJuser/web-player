@@ -7794,6 +7794,7 @@ button {
   }
 
   .control-row {
+    align-content: flex-start;
     flex-wrap: wrap;
     gap: 8px 10px;
   }
@@ -7804,6 +7805,17 @@ button {
 
   .volume-control input {
     width: 88px;
+  }
+
+  .special-stats-control {
+    flex: 1 0 100%;
+    flex-wrap: nowrap;
+    justify-content: flex-end;
+    overflow: hidden;
+  }
+
+  .special-stat-pill {
+    max-width: 150px;
   }
 
   .playlist-panel {
