@@ -9,6 +9,13 @@ const photoExtensions = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif", ".avi
 const mediaExtensions = new Set([...videoExtensions, ...subtitleExtensions, ...photoExtensions]);
 const smallVideoFileThresholdBytes = 50 * 1024 * 1024;
 const ignoredVideoBasenames = new Set(["theme_video", "trailer"]);
+const fixedPhotoAlbumsRoot = {
+  id: "photo-albums-local",
+  label: "写真集",
+  path: "I:\\写真集",
+  basename: "写真集",
+  source: "local",
+};
 
 function compareRelativePath(a, b) {
   return a.relativePath.localeCompare(b.relativePath, undefined, { numeric: true, sensitivity: "base" });
@@ -48,6 +55,10 @@ export function normalizeMediaRoots(config) {
       };
     })
     .filter(Boolean);
+}
+
+function mediaRootsForPathResolution(config) {
+  return [fixedPhotoAlbumsRoot, ...normalizeMediaRoots(config)];
 }
 
 function createMediaRootId(rootPath, existingRoots) {
@@ -414,7 +425,7 @@ async function scanPhotoAlbumsRoot(root) {
 }
 
 export async function scanConfiguredPhotoAlbums(config) {
-  const roots = normalizeMediaRoots(config);
+  const roots = [fixedPhotoAlbumsRoot];
   const rootsResult = await Promise.all(roots.map((root) => scanPhotoAlbumsRoot(root)));
   const albums = rootsResult.flatMap((result) => result.albums);
   const scannedFiles = rootsResult.reduce((sum, result) => sum + result.status.scannedFiles, 0);
@@ -434,7 +445,7 @@ export async function scanConfiguredPhotoAlbums(config) {
 }
 
 export function resolveMediaPath(config, rootId, relativePath, allowedExtensions = mediaExtensions) {
-  const root = normalizeMediaRoots(config).find((item) => item.id === rootId);
+  const root = mediaRootsForPathResolution(config).find((item) => item.id === rootId);
   if (!root) throw new Error("Unknown media root.");
   const rootPath = serverPathForRoot(root);
   if (!rootPath || !path.isAbsolute(rootPath)) {

@@ -164,7 +164,7 @@ test("media path resolver supports subtitles but rejects escaping root", async (
   });
 });
 
-test("photo album scan groups image folders and skips empty folders", async () => {
+test("photo album scan uses the fixed photo directory and server media urls", async () => {
   await withTempConfig(async ({ directory }) => {
     const albumPath = path.join(directory, "Model", "Set 01");
     await mkdir(albumPath, { recursive: true });
@@ -181,16 +181,12 @@ test("photo album scan groups image folders and skips empty folders", async () =
       },
     });
 
-    assert.equal(result.albums.length, 1);
-    assert.equal(result.albums[0].id, "photos|Model/Set 01");
-    assert.equal(result.albums[0].title, "Set 01");
-    assert.equal(result.albums[0].imageCount, 2);
-    assert.equal(result.albums[0].coverImageUrl, "/api/media/photos/Model/Set%2001/001.jpg");
-    assert.deepEqual(result.albums[0].images.map((image) => image.name), ["001.jpg", "002.webp"]);
-    assert.deepEqual(result.albums[0].images.map((image) => image.url), [
-      "/api/media/photos/Model/Set%2001/001.jpg",
-      "/api/media/photos/Model/Set%2001/002.webp",
-    ]);
+    assert.deepEqual(result.metadata.mediaRoots.map((root) => root.id), ["photo-albums-local"]);
+    assert.equal(result.albums.some((album) => album.id === "photos|Model/Set 01"), false);
+    result.albums.forEach((album) => {
+      assert.match(album.coverImageUrl, /^\/api\/media\/photo-albums-local\//);
+      album.images.forEach((image) => assert.match(image.url, /^\/api\/media\/photo-albums-local\//));
+    });
   });
 });
 
@@ -210,10 +206,14 @@ test("photo path resolver accepts images and rejects escaping or non-images", as
     );
     assert.throws(() => resolvePhotoPath(config, "photos", "../001.jpg"), /Invalid relative path/);
     assert.throws(() => resolvePhotoPath(config, "photos", "Set/movie.mkv"), /Unsupported photo file/);
+    assert.equal(
+      resolvePhotoPath(config, "photo-albums-local", "Set/001.jpg"),
+      path.resolve("I:\\写真集", "Set/001.jpg"),
+    );
   });
 });
 
-test("browser media root without localPath is reported as needsAccess for photo albums", async () => {
+test("browser media root without localPath does not affect fixed photo albums root", async () => {
   const result = await scanConfiguredPhotoAlbums({
     media: {
       roots: [
@@ -222,6 +222,25 @@ test("browser media root without localPath is reported as needsAccess for photo 
     },
   });
 
-  assert.equal(result.albums.length, 0);
-  assert.equal(result.metadata.mediaRoots[0].status, "needsAccess");
+  assert.deepEqual(result.metadata.mediaRoots.map((root) => root.id), ["photo-albums-local"]);
+  assert.notEqual(result.metadata.mediaRoots[0].id, "photos");
+});
+
+test("photo album scan ignores media roots and uses the fixed photo directory", async () => {
+  await withTempConfig(async ({ directory }) => {
+    const albumPath = path.join(directory, "Should Not Scan");
+    await mkdir(albumPath, { recursive: true });
+    await writeFile(path.join(albumPath, "001.jpg"), "jpg");
+
+    const result = await scanConfiguredPhotoAlbums({
+      media: {
+        roots: [
+          { id: "videos", label: "Videos", path: directory },
+        ],
+      },
+    });
+
+    assert.deepEqual(result.metadata.mediaRoots.map((root) => root.id), ["photo-albums-local"]);
+    assert.equal(result.albums.some((album) => album.id === "videos|Should Not Scan"), false);
+  });
 });
