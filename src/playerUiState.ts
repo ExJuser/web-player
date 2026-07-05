@@ -588,7 +588,7 @@ export function createPlaylistPanelLabels(input: {
           ? `${input.playlistVisibleCountLabel} / ${input.modeFilteredVideoCount} 个收藏`
           : input.isPlaylistSeriesMode
             ? `${input.playlistVisibleCountLabel} / ${input.modeFilteredVideoCount} 个视频`
-            : input.homeMediaMode === "all"
+            : input.homeMediaMode === "all" || input.homeMediaMode === "special"
               ? `${input.playlistVisibleCountLabel} 个视频`
               : `${input.homeMediaModeLabel} · ${input.playlistVisibleCountLabel} 个视频`
         : input.totalVideoCount

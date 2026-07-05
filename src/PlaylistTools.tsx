@@ -5,14 +5,13 @@ import { ControlSelect } from "./ControlSelect";
 import { PlaylistFilterControl } from "./PlaylistFilterControl";
 import { SeriesMenu } from "./SeriesMenu";
 import type { PlaylistFilter, PlaylistSortMode } from "./playerTypes";
-import type { HomeMediaMode, SeriesOption } from "./playerUiState";
+import type { SeriesOption } from "./playerUiState";
 
 type PlaylistToolsProps = {
   bangumiButtonTitle: string;
   canOpenBangumiSubject: boolean;
   hasModeFilteredVideos: boolean;
   hasVisibleVideos: boolean;
-  homeMediaMode: HomeMediaMode;
   isBangumiLoading: boolean;
   isCurrentVideoVisible: boolean;
   isDuplicatePlaylistActive: boolean;
@@ -20,7 +19,6 @@ type PlaylistToolsProps = {
   isPlaylistSortReversed: boolean;
   isRatingPlaylistActive: boolean;
   isSeriesMenuOpen: boolean;
-  playerMediaModeLabel: string;
   playlistFilter: PlaylistFilter;
   playlistSortMode: PlaylistSortMode;
   playlistSortOptions: Array<{ value: PlaylistSortMode; label: string }>;
@@ -44,7 +42,6 @@ export function PlaylistTools({
   canOpenBangumiSubject,
   hasModeFilteredVideos,
   hasVisibleVideos,
-  homeMediaMode,
   isBangumiLoading,
   isCurrentVideoVisible,
   isDuplicatePlaylistActive,
@@ -52,7 +49,6 @@ export function PlaylistTools({
   isPlaylistSortReversed,
   isRatingPlaylistActive,
   isSeriesMenuOpen,
-  playerMediaModeLabel,
   playlistFilter,
   playlistScrollTop,
   playlistSortMode,
@@ -74,9 +70,6 @@ export function PlaylistTools({
 
   return (
     <div className={`playlist-tools ${isPlaylistSeriesMode ? "series-mode" : ""}`}>
-      <span className={`player-mode-indicator mode-${homeMediaMode}`} title={`当前播放模式：${playerMediaModeLabel}`}>
-        {isDuplicatePlaylistActive ? "重复" : isRatingPlaylistActive ? "评分" : playerMediaModeLabel}
-      </span>
       {isPlaylistSeriesMode ? (
         <SeriesMenu
           isOpen={isSeriesMenuOpen}

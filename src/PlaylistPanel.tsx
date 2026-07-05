@@ -206,14 +206,16 @@ export function PlaylistPanel({
     <aside className="playlist-panel" aria-label={ariaLabel}>
       <div className="playlist-header">
         <div className="playlist-title-row">
-          <span>{playlistTitle}</span>
+          <span className={`player-mode-indicator mode-${homeMediaMode}`} title={`当前播放模式：${playerMediaModeLabel}`}>
+            {isDuplicatePlaylistActive ? "重复" : isRatingPlaylistActive ? "评分" : playerMediaModeLabel}
+          </span>
+          <span className="playlist-title-text">{playlistTitle}</span>
         </div>
         <PlaylistTools
           bangumiButtonTitle={bangumiButtonTitle}
           canOpenBangumiSubject={canOpenBangumiSubject}
           hasModeFilteredVideos={hasModeFilteredVideos}
           hasVisibleVideos={hasVisibleVideos}
-          homeMediaMode={homeMediaMode}
           isBangumiLoading={isBangumiLoading}
           isCurrentVideoVisible={isCurrentVideoVisible}
           isDuplicatePlaylistActive={isDuplicatePlaylistActive}
@@ -221,7 +223,6 @@ export function PlaylistPanel({
           isPlaylistSortReversed={isPlaylistSortReversed}
           isRatingPlaylistActive={isRatingPlaylistActive}
           isSeriesMenuOpen={isSeriesMenuOpen}
-          playerMediaModeLabel={playerMediaModeLabel}
           playlistFilter={playlistFilter}
           playlistScrollTop={playlistScrollTop}
           playlistSortMode={playlistSortMode}
