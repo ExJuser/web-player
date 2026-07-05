@@ -1014,6 +1014,8 @@ export default function App() {
   useEffect(() => {
     if (activeView !== "photos" || hasLoadedPhotoAlbums || isPhotoAlbumsLoading || photoAlbumAutoLoadAttemptedRef.current) return;
     photoAlbumAutoLoadAttemptedRef.current = true;
+    setIsPhotoAlbumsLoading(true);
+    setPhotoAlbumMessage("正在恢复看图文件夹...");
     void (async () => {
       let fallbackRootStatuses: PlayerMediaRootStatus[] = [];
       let fallbackMessage = "";
@@ -1079,6 +1081,8 @@ export default function App() {
       } catch (error) {
         await clearPhotoAlbumFolderHandle().catch(() => undefined);
         setPhotoAlbumMessage(error instanceof Error ? error.message : "读取已保存的看图文件夹失败，请重新选择。");
+      } finally {
+        setIsPhotoAlbumsLoading(false);
       }
     })();
   }, [
