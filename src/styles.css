@@ -3357,7 +3357,9 @@ button {
 .control-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  align-content: flex-start;
+  flex-wrap: wrap;
+  gap: 8px 12px;
 }
 
 .timeline-row > span {
@@ -7791,12 +7793,6 @@ button {
   .top-actions {
     flex-wrap: wrap;
     justify-content: flex-end;
-  }
-
-  .control-row {
-    align-content: flex-start;
-    flex-wrap: wrap;
-    gap: 8px 10px;
   }
 
   .highlight-control-row {
