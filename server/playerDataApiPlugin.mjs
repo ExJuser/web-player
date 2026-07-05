@@ -72,6 +72,9 @@ let bilibiliDanmaku;
 let bahamutDanmaku;
 let embeddedSubtitles;
 
+const serverPhotoAlbumCacheRootId = "server-photo-albums";
+const serverPhotoAlbumCacheRootName = "媒体库看图";
+
 function initializeApiServices(projectRoot) {
   dataRoot = path.resolve(projectRoot, ".local-web-player-data");
   librariesRoot = path.join(dataRoot, "libraries");
@@ -750,7 +753,18 @@ export function playerDataApiPlugin({ projectRoot, env }) {
   };
   const scanPhotoAlbumsOnce = async () => {
     if (!photoAlbumsScanPromise) {
-      photoAlbumsScanPromise = (async () => scanConfiguredPhotoAlbums(await loadAppConfig()))().finally(() => {
+      photoAlbumsScanPromise = (async () => {
+        const scan = await scanConfiguredPhotoAlbums(await loadAppConfig());
+        const store = await getLocalDataStore();
+        store.savePhotoAlbumScanCache({
+          rootId: serverPhotoAlbumCacheRootId,
+          rootName: serverPhotoAlbumCacheRootName,
+          albums: scan.albums,
+          scannedFiles: scan.scannedFiles,
+          updatedAt: scan.metadata?.updatedAt ?? Date.now(),
+        });
+        return scan;
+      })().finally(() => {
         photoAlbumsScanPromise = null;
       });
     }

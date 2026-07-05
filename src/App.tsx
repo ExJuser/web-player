@@ -371,6 +371,8 @@ import { WatchActivitySection } from "./WatchActivitySection";
 const playlistResizeMinWidth = 280;
 const playlistResizeDefaultWidth = 360;
 const playlistResizeMaxWidth = 560;
+const serverPhotoAlbumCacheRootId = "server-photo-albums";
+const serverPhotoAlbumCacheRootName = "媒体库看图";
 
 function isServerPhotoImage(image: PhotoAlbumImage) {
   return Boolean(image.url && !image.file && !image.parentDirectory);
@@ -1020,11 +1022,9 @@ export default function App() {
       let fallbackRootStatuses: PlayerMediaRootStatus[] = [];
       let fallbackMessage = "";
       try {
-        const [serverScan, store] = await Promise.all([
-          loadServerPhotoAlbumScan(fetchJson).catch((error) => {
-            fallbackMessage = error instanceof Error ? error.message : "扫描媒体库看图资源失败。";
-            return null;
-          }),
+        const [directory, cachedScan, store] = await Promise.all([
+          readPhotoAlbumFolderHandle(),
+          loadCachedPhotoAlbumScan(),
           loadPhotoAlbumStore().catch(() => ({
             version: 1,
             favorites: [],
@@ -1035,6 +1035,41 @@ export default function App() {
           })),
         ]);
         applyPhotoAlbumStore(store);
+        if (cachedScan) {
+          const isServerPhotoAlbumCache = cachedScan.rootId === serverPhotoAlbumCacheRootId;
+          let canReadDirectory = isServerPhotoAlbumCache;
+          if (!isServerPhotoAlbumCache && directory) {
+            canReadDirectory = await hasDirectoryReadPermission(directory);
+            photoAlbumDirectoryRef.current = canReadDirectory ? directory : null;
+          } else if (isServerPhotoAlbumCache) {
+            photoAlbumDirectoryRef.current = null;
+          }
+          const isStale = Date.now() - cachedScan.updatedAt > photoAlbumScanCacheStaleMs;
+          applyCachedPhotoAlbumScan(cachedScan, {
+            status: canReadDirectory ? "ready" : "needsAccess",
+            message: isServerPhotoAlbumCache
+              ? isStale
+                ? `已加载${serverPhotoAlbumCacheRootName}上次扫描结果，超过 24 小时未刷新，正在后台刷新`
+                : `已加载${serverPhotoAlbumCacheRootName}上次扫描结果，正在后台刷新`
+              : canReadDirectory
+              ? isStale
+                ? `已加载“${cachedScan.rootName}”上次扫描结果，超过 24 小时未刷新，可手动刷新`
+                : `已加载“${cachedScan.rootName}”上次扫描结果，未重新扫描磁盘`
+              : `已加载“${cachedScan.rootName}”上次扫描结果；如需查看图片或刷新，请重新授权文件夹`,
+            error: canReadDirectory ? undefined : "需要重新授权浏览器目录。",
+          });
+          setIsPhotoAlbumsLoading(false);
+          const serverScan = await loadServerPhotoAlbumScan(fetchJson).catch(() => null);
+          if (serverScan && hasReadyPhotoAlbumRoot(serverScan)) {
+            applyServerPhotoAlbumScan(serverScan);
+          }
+          return;
+        }
+
+        const serverScan = await loadServerPhotoAlbumScan(fetchJson).catch((error) => {
+          fallbackMessage = error instanceof Error ? error.message : "扫描媒体库看图资源失败。";
+          return null;
+        });
         if (serverScan) {
           fallbackRootStatuses = serverScan.metadata.mediaRoots;
           if (hasReadyPhotoAlbumRoot(serverScan)) {
@@ -1044,28 +1079,6 @@ export default function App() {
           fallbackMessage = "媒体库暂无可直接访问的看图目录，将尝试浏览器目录。";
         }
 
-        const [directory, cachedScan] = await Promise.all([
-          readPhotoAlbumFolderHandle(),
-          loadCachedPhotoAlbumScan(),
-        ]);
-        if (cachedScan) {
-          let canReadDirectory = false;
-          if (directory) {
-            canReadDirectory = await hasDirectoryReadPermission(directory);
-            photoAlbumDirectoryRef.current = canReadDirectory ? directory : null;
-          }
-          const isStale = Date.now() - cachedScan.updatedAt > photoAlbumScanCacheStaleMs;
-          applyCachedPhotoAlbumScan(cachedScan, {
-            status: canReadDirectory ? "ready" : "needsAccess",
-            message: canReadDirectory
-              ? isStale
-                ? `已加载“${cachedScan.rootName}”上次扫描结果，超过 24 小时未刷新，可手动刷新`
-                : `已加载“${cachedScan.rootName}”上次扫描结果，未重新扫描磁盘`
-              : `已加载“${cachedScan.rootName}”上次扫描结果；如需查看图片或刷新，请重新授权文件夹`,
-            error: canReadDirectory ? undefined : "需要重新授权浏览器目录。",
-          });
-          return;
-        }
         if (!directory) {
           if (fallbackRootStatuses.length) setPhotoRootStatuses(fallbackRootStatuses);
           setPhotoAlbumMessage(fallbackMessage || "首次选择看图文件夹后，下次进入会自动复用。");
