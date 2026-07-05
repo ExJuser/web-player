@@ -362,6 +362,10 @@ import { ShortcutDialog } from "./ShortcutDialog";
 import { TagDialog } from "./TagDialog";
 import { WatchActivitySection } from "./WatchActivitySection";
 
+const playlistResizeMinWidth = 280;
+const playlistResizeDefaultWidth = 360;
+const playlistResizeMaxWidth = 560;
+
 export default function App() {
   const initialVolumeRef = useRef(readStoredVolume());
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -709,6 +713,7 @@ export default function App() {
     playerHeight: number;
     playlistWidth: number;
   } | null>(null);
+  const [playlistWidthOverride, setPlaylistWidthOverride] = useState<number | null>(null);
   const playbackRateRef = useRef(playbackRate);
   const holdPlaybackRateRef = useRef(holdPlaybackRate);
   const isHoldSpeedActiveRef = useRef(isHoldSpeedActive);
@@ -1711,9 +1716,47 @@ export default function App() {
       ({
         "--player-column-width": adaptiveColumns ? `${adaptiveColumns.playerWidth}px` : "1fr",
         "--player-frame-height": adaptiveColumns ? `${adaptiveColumns.playerHeight}px` : "100%",
-        "--playlist-width": adaptiveColumns ? `${adaptiveColumns.playlistWidth}px` : "360px",
-      }) as React.CSSProperties,
-    [adaptiveColumns],
+        "--playlist-width": `${
+          adaptiveColumns?.playlistWidth ?? playlistWidthOverride ?? playlistResizeDefaultWidth
+        }px`,
+      }) as CSSProperties,
+    [adaptiveColumns, playlistWidthOverride],
+  );
+  const updatePlaylistWidthFromPointer = useCallback((clientX: number) => {
+    const shell = appShellRef.current;
+    if (!shell) return;
+
+    const shellRect = shell.getBoundingClientRect();
+    const shellStyles = window.getComputedStyle(shell);
+    const paddingRight = Number.parseFloat(shellStyles.paddingRight) || 0;
+    const gap = Number.parseFloat(shellStyles.columnGap) || 12;
+    const minPlayerWidth = 420;
+    const maxWidth = Math.max(
+      playlistResizeMinWidth,
+      Math.min(playlistResizeMaxWidth, shell.clientWidth - gap - minPlayerWidth),
+    );
+    const pointerWidth = shellRect.right - clientX - paddingRight;
+    setPlaylistWidthOverride(Math.round(clamp(pointerWidth, playlistResizeMinWidth, maxWidth)));
+  }, []);
+  const handlePlaylistResizePointerDown = useCallback(
+    (event: ReactPointerEvent<HTMLButtonElement>) => {
+      if (event.button !== 0 || window.innerWidth <= 980) return;
+      event.preventDefault();
+      event.currentTarget.setPointerCapture(event.pointerId);
+      updatePlaylistWidthFromPointer(event.clientX);
+
+      const handlePointerMove = (moveEvent: PointerEvent) => {
+        updatePlaylistWidthFromPointer(moveEvent.clientX);
+      };
+      const handlePointerUp = () => {
+        document.removeEventListener("pointermove", handlePointerMove);
+        document.removeEventListener("pointerup", handlePointerUp);
+      };
+
+      document.addEventListener("pointermove", handlePointerMove);
+      document.addEventListener("pointerup", handlePointerUp, { once: true });
+    },
+    [updatePlaylistWidthFromPointer],
   );
   const currentMediaRootId = currentVideo?.mediaRootId ?? mediaRootId;
   const isDanmakuAvailable = Boolean(currentVideo && homeMediaMode === "anime" && isSeriesMode);
@@ -3431,7 +3474,7 @@ export default function App() {
       const maxFrameHeight = Math.max(240, Math.floor(playerColumn.clientHeight - topBarHeight - playerColumnGap));
       const maxVideoHeight = Math.max(180, Math.floor(maxFrameHeight - controlsHeight - frameBorderY));
       const minPlayerWidth = 420;
-      const minPlaylistWidth = 280;
+      const minPlaylistWidth = playlistResizeMinWidth;
       const activeVideoAspectRatio = Number.isFinite(videoAspectRatio) && videoAspectRatio > 0 ? videoAspectRatio : 16 / 9;
       const minVideoWidth = Math.max(1, Math.round(minPlayerWidth - frameBorderX));
       const maxVideoWidth = Math.max(minVideoWidth, Math.floor(availableWidth - gap - minPlaylistWidth - frameBorderX));
@@ -3446,11 +3489,12 @@ export default function App() {
         videoHeight = Math.round(videoWidth / activeVideoAspectRatio);
       }
       const remainingPlaylistWidth = Math.round(availableWidth - gap - (videoWidth + frameBorderX));
-      const maxPlaylistWidth = 420;
-      const playlistWidth = Math.min(
-        Math.max(minPlaylistWidth, remainingPlaylistWidth),
-        Math.max(minPlaylistWidth, maxPlaylistWidth),
+      const maxPlaylistWidth = Math.max(
+        minPlaylistWidth,
+        Math.min(playlistResizeMaxWidth, availableWidth - gap - minPlayerWidth),
       );
+      const targetPlaylistWidth = playlistWidthOverride ?? remainingPlaylistWidth;
+      const playlistWidth = Math.round(clamp(targetPlaylistWidth, minPlaylistWidth, maxPlaylistWidth));
       const playerWidth = Math.max(minPlayerWidth, Math.round(availableWidth - gap - playlistWidth));
       const playerHeight = videoHeight + controlsHeight + frameBorderY;
 
@@ -3481,7 +3525,7 @@ export default function App() {
       resizeObserver.disconnect();
       window.removeEventListener("resize", updateAdaptiveColumns);
     };
-  }, [activeView, isFullscreen, videoAspectRatio]);
+  }, [activeView, isFullscreen, playlistWidthOverride, videoAspectRatio]);
 
   useLayoutEffect(() => {
     const layer = danmakuLayerRef.current;
@@ -5381,6 +5425,14 @@ export default function App() {
       </section>
 
       {!isNonPlayerViewVisible && !isPrivacyMode && !isCinemaMode ? (
+        <>
+        <button
+          className="playlist-resize-handle"
+          type="button"
+          aria-label="拖动调整侧边栏宽度"
+          title="拖动调整侧边栏宽度"
+          onPointerDown={handlePlaylistResizePointerDown}
+        />
         <PlaylistPanel
           ariaLabel={playlistPanelAriaLabel}
           bangumiButtonTitle={bangumiButtonTitle}
@@ -5500,6 +5552,7 @@ export default function App() {
           onTogglePlaylistSortDirection={togglePlaylistSortDirection}
           onToggleSeriesMenu={() => setIsSeriesMenuOpen((isOpen) => !isOpen)}
         />
+        </>
       ) : null}
     </main>
     <HighEnergyTagDialog

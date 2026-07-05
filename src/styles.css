@@ -58,13 +58,14 @@ button {
   --player-column-width: 1fr;
   --player-frame-height: 100%;
   --playlist-width: 360px;
+  --app-shell-padding: 12px;
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, var(--player-column-width)) minmax(280px, var(--playlist-width));
   gap: 12px;
   height: 100vh;
   min-height: 0;
-  padding: 12px;
+  padding: var(--app-shell-padding);
   overflow: hidden;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 240px),
@@ -3900,6 +3901,50 @@ button {
   padding-left: 16px;
 }
 
+.playlist-resize-handle {
+  position: absolute;
+  top: var(--app-shell-padding);
+  bottom: var(--app-shell-padding);
+  right: calc(var(--playlist-width) + var(--app-shell-padding) + 1px);
+  z-index: 5;
+  width: 12px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.playlist-resize-handle::before {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 2px;
+  height: 48px;
+  border-radius: 999px;
+  background: rgba(142, 151, 165, 0.46);
+  content: "";
+  transform: translate(-50%, -50%);
+}
+
+.playlist-resize-handle:hover::before,
+.playlist-resize-handle:focus-visible::before {
+  background: rgba(0, 161, 214, 0.9);
+}
+
+.app-shell.theme-light .playlist-resize-handle::before,
+:root[data-theme="light"] .playlist-resize-handle::before {
+  background: rgba(102, 112, 133, 0.5);
+}
+
+.app-shell.theme-light .playlist-resize-handle:hover::before,
+.app-shell.theme-light .playlist-resize-handle:focus-visible::before,
+:root[data-theme="light"] .playlist-resize-handle:hover::before,
+:root[data-theme="light"] .playlist-resize-handle:focus-visible::before {
+  background: rgba(0, 161, 214, 0.92);
+}
+
 .playlist-tools {
   display: inline-flex;
   align-items: center;
@@ -7729,6 +7774,10 @@ button {
     overflow: auto;
   }
 
+  .playlist-resize-handle {
+    display: none;
+  }
+
   .player-frame {
     flex: 1;
     margin: 0;
@@ -7792,8 +7841,8 @@ button {
 
 @media (max-width: 1280px) and (min-width: 981px) {
   .app-shell {
+    --app-shell-padding: 10px;
     gap: 10px;
-    padding: 10px;
   }
 
   .top-bar {
