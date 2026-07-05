@@ -12,6 +12,7 @@ import {
   ensureFileExists,
   normalizeMediaRoots as normalizeMediaRootsFromConfig,
   resolveMediaPath as resolveMediaPathFromConfig,
+  resolvePhotoPath as resolvePhotoPathFromConfig,
   resolveVideoPath as resolveVideoPathFromConfig,
   scanConfiguredPhotoAlbums,
   scanConfiguredMediaRoots,
@@ -323,6 +324,24 @@ async function deleteMediaVideo(config, payload) {
     throw error;
   }
   await rm(videoPath, { force: false });
+  return { deleted: true };
+}
+
+async function deletePhotoImage(config, payload) {
+  const root = findMediaRoot(config, payload?.rootId);
+  if (!root) throw new Error("Unknown media root.");
+  if (root.source === "browser" && !root.localPath) {
+    throw new Error("浏览器添加的媒体库需要重新授权目录后才能删除磁盘图片。");
+  }
+
+  const photoPath = resolvePhotoPathFromConfig(config, payload?.rootId, payload?.relativePath);
+  try {
+    await ensureFileExists(photoPath);
+  } catch (error) {
+    if (error?.code === "ENOENT") return { deleted: false, missing: true };
+    throw error;
+  }
+  await rm(photoPath, { force: false });
   return { deleted: true };
 }
 
@@ -873,6 +892,12 @@ export function playerDataApiPlugin({ projectRoot, env }) {
       if (url.pathname === "/api/media/video" && request.method === "DELETE") {
         const payload = await parseJsonBody(request);
         sendJson(response, 200, await deleteMediaVideo(await loadAppConfig(), payload));
+        return;
+      }
+
+      if (url.pathname === "/api/photo-albums/photo" && request.method === "DELETE") {
+        const payload = await parseJsonBody(request);
+        sendJson(response, 200, await deletePhotoImage(await loadAppConfig(), payload));
         return;
       }
 

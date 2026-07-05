@@ -185,7 +185,12 @@ test("photo album scan groups image folders and skips empty folders", async () =
     assert.equal(result.albums[0].id, "photos|Model/Set 01");
     assert.equal(result.albums[0].title, "Set 01");
     assert.equal(result.albums[0].imageCount, 2);
+    assert.equal(result.albums[0].coverImageUrl, "/api/media/photos/Model/Set%2001/001.jpg");
     assert.deepEqual(result.albums[0].images.map((image) => image.name), ["001.jpg", "002.webp"]);
+    assert.deepEqual(result.albums[0].images.map((image) => image.url), [
+      "/api/media/photos/Model/Set%2001/001.jpg",
+      "/api/media/photos/Model/Set%2001/002.webp",
+    ]);
   });
 });
 

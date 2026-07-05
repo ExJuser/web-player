@@ -201,6 +201,12 @@ import {
   resolvePhotoParentDirectory,
 } from "./photoAlbumScan";
 import {
+  deleteServerPhotoImage,
+  hasReadyPhotoAlbumRoot,
+  loadServerPhotoAlbumScan,
+  type PhotoAlbumScanResponse,
+} from "./photoAlbumServerClient";
+import {
   browserVideoFileExists,
   collectVideos,
   collectVideosFromFiles,
@@ -365,6 +371,10 @@ import { WatchActivitySection } from "./WatchActivitySection";
 const playlistResizeMinWidth = 280;
 const playlistResizeDefaultWidth = 360;
 const playlistResizeMaxWidth = 560;
+
+function isServerPhotoImage(image: PhotoAlbumImage) {
+  return Boolean(image.url && !image.file && !image.parentDirectory);
+}
 
 export default function App() {
   const initialVolumeRef = useRef(readStoredVolume());
@@ -819,6 +829,26 @@ export default function App() {
     setPhotoAlbumMessage(options?.message ?? `已加载“${cache.rootName}”上次扫描结果，包含 ${cache.albums.length} 本相册`);
   }, []);
 
+  const applyServerPhotoAlbumScan = useCallback((scan: PhotoAlbumScanResponse) => {
+    photoAlbumDirectoryRef.current = null;
+    revokeObjectUrls(Object.values(photoObjectUrlsRef.current));
+    photoObjectUrlsRef.current = {};
+    photoObjectUrlAccessRef.current = {};
+    photoImageFilePromisesRef.current = {};
+    decodedPhotoImageIdsRef.current.clear();
+    setPhotoObjectUrls({});
+    photoAlbumsRef.current = scan.albums;
+    setPhotoAlbums(scan.albums);
+    setPhotoAlbumPage(1);
+    setPhotoRootStatuses(scan.metadata.mediaRoots);
+    setHasLoadedPhotoAlbums(true);
+    setPhotoAlbumMessage(
+      scan.albums.length
+        ? `已从媒体库加载 ${scan.albums.length} 本相册，扫描 ${scan.scannedFiles} 张图片`
+        : "已扫描媒体库，未找到包含图片的图集",
+    );
+  }, []);
+
   const applyPlayerDataStore = useApplyPlayerDataStore({
     activateDuplicateDetectionForMode,
     danmakuPreferencesRef,
@@ -946,7 +976,27 @@ export default function App() {
 
   const refreshPhotoAlbumDirectory = useCallback(async () => {
     if (isPhotoAlbumsLoading) return;
-    const directory = photoAlbumDirectoryRef.current ?? (await readPhotoAlbumFolderHandle().catch(() => null));
+    const activeBrowserDirectory = photoAlbumDirectoryRef.current;
+    if (!activeBrowserDirectory) {
+      setIsPhotoAlbumsLoading(true);
+      setPhotoAlbumMessage("正在扫描媒体库看图资源...");
+      try {
+        const scan = await loadServerPhotoAlbumScan(fetchJson);
+        if (hasReadyPhotoAlbumRoot(scan)) {
+          applyServerPhotoAlbumScan(scan);
+        } else {
+          setPhotoRootStatuses(scan.metadata.mediaRoots);
+          setPhotoAlbumMessage("媒体库暂无可直接访问的看图目录，请选择看图文件夹。");
+        }
+      } catch (error) {
+        setPhotoAlbumMessage(error instanceof Error ? error.message : "扫描媒体库看图资源失败。");
+      } finally {
+        setIsPhotoAlbumsLoading(false);
+      }
+      return;
+    }
+
+    const directory = activeBrowserDirectory ?? (await readPhotoAlbumFolderHandle().catch(() => null));
     if (!directory) {
       setPhotoAlbumMessage("请先选择看图文件夹。");
       return;
@@ -959,16 +1009,20 @@ export default function App() {
     }
 
     await loadPhotoAlbumDirectory(directory, { remember: true });
-  }, [isPhotoAlbumsLoading, loadPhotoAlbumDirectory]);
+  }, [applyServerPhotoAlbumScan, isPhotoAlbumsLoading, loadPhotoAlbumDirectory]);
 
   useEffect(() => {
     if (activeView !== "photos" || hasLoadedPhotoAlbums || isPhotoAlbumsLoading || photoAlbumAutoLoadAttemptedRef.current) return;
     photoAlbumAutoLoadAttemptedRef.current = true;
     void (async () => {
+      let fallbackRootStatuses: PlayerMediaRootStatus[] = [];
+      let fallbackMessage = "";
       try {
-        const [directory, cachedScan, store] = await Promise.all([
-          readPhotoAlbumFolderHandle(),
-          loadCachedPhotoAlbumScan(),
+        const [serverScan, store] = await Promise.all([
+          loadServerPhotoAlbumScan(fetchJson).catch((error) => {
+            fallbackMessage = error instanceof Error ? error.message : "扫描媒体库看图资源失败。";
+            return null;
+          }),
           loadPhotoAlbumStore().catch(() => ({
             version: 1,
             favorites: [],
@@ -979,6 +1033,19 @@ export default function App() {
           })),
         ]);
         applyPhotoAlbumStore(store);
+        if (serverScan) {
+          fallbackRootStatuses = serverScan.metadata.mediaRoots;
+          if (hasReadyPhotoAlbumRoot(serverScan)) {
+            applyServerPhotoAlbumScan(serverScan);
+            return;
+          }
+          fallbackMessage = "媒体库暂无可直接访问的看图目录，将尝试浏览器目录。";
+        }
+
+        const [directory, cachedScan] = await Promise.all([
+          readPhotoAlbumFolderHandle(),
+          loadCachedPhotoAlbumScan(),
+        ]);
         if (cachedScan) {
           let canReadDirectory = false;
           if (directory) {
@@ -998,11 +1065,13 @@ export default function App() {
           return;
         }
         if (!directory) {
-          setPhotoAlbumMessage("首次选择看图文件夹后，下次进入会自动复用。");
+          if (fallbackRootStatuses.length) setPhotoRootStatuses(fallbackRootStatuses);
+          setPhotoAlbumMessage(fallbackMessage || "首次选择看图文件夹后，下次进入会自动复用。");
           return;
         }
         const canReadDirectory = await ensureDirectoryReadPermission(directory);
         if (!canReadDirectory) {
+          if (fallbackRootStatuses.length) setPhotoRootStatuses(fallbackRootStatuses);
           setPhotoAlbumMessage(`浏览器需要重新授权“${directory.name}”，请重新选择看图文件夹。`);
           return;
         }
@@ -1012,7 +1081,15 @@ export default function App() {
         setPhotoAlbumMessage(error instanceof Error ? error.message : "读取已保存的看图文件夹失败，请重新选择。");
       }
     })();
-  }, [activeView, hasLoadedPhotoAlbums, isPhotoAlbumsLoading, loadPhotoAlbumDirectory]);
+  }, [
+    activeView,
+    applyCachedPhotoAlbumScan,
+    applyPhotoAlbumStore,
+    applyServerPhotoAlbumScan,
+    hasLoadedPhotoAlbums,
+    isPhotoAlbumsLoading,
+    loadPhotoAlbumDirectory,
+  ]);
 
   const homeModeMediaRoots = useMemo(
     () => getHomeModeMediaRoots(localConfig?.mediaRoots ?? [], homeMediaMode),
@@ -3134,25 +3211,29 @@ export default function App() {
     }
 
     try {
-      const rootDirectory = photoAlbumDirectoryRef.current ?? (await readPhotoAlbumFolderHandle().catch(() => null));
-      const parentDirectory = photo.parentDirectory ?? photoDeleteCandidate.parentDirectory ?? (rootDirectory ? await resolvePhotoParentDirectory(rootDirectory, photo.relativePath) : null);
-      if (!parentDirectory?.removeEntry) {
-        setPhotoDeleteError("当前图片来源不支持直接删除，请刷新看图文件夹或在文件管理器中删除。");
-        setIsPhotoDeletePending(false);
-        return;
-      }
+      if (isServerPhotoImage(photo)) {
+        await deleteServerPhotoImage(fetchJson, photo);
+      } else {
+        const rootDirectory = photoAlbumDirectoryRef.current ?? (await readPhotoAlbumFolderHandle().catch(() => null));
+        const parentDirectory = photo.parentDirectory ?? photoDeleteCandidate.parentDirectory ?? (rootDirectory ? await resolvePhotoParentDirectory(rootDirectory, photo.relativePath) : null);
+        if (!parentDirectory?.removeEntry) {
+          setPhotoDeleteError("当前图片来源不支持直接删除，请刷新看图文件夹或在文件管理器中删除。");
+          setIsPhotoDeletePending(false);
+          return;
+        }
 
-      if (!(await hasDirectoryWritePermission(parentDirectory))) {
-        await clearPhotoAlbumAccessAfterWritePermissionDenied();
-        setIsPhotoDeletePending(false);
-        return;
-      }
+        if (!(await hasDirectoryWritePermission(parentDirectory))) {
+          await clearPhotoAlbumAccessAfterWritePermissionDenied();
+          setIsPhotoDeletePending(false);
+          return;
+        }
 
-      await parentDirectory.removeEntry(photo.name);
-      if (await photoFileExists(parentDirectory, photo.name)) {
-        setPhotoDeleteError("浏览器没有删除这个本地文件，请确认文件未被占用，并重新选择看图文件夹授予写入权限。");
-        setIsPhotoDeletePending(false);
-        return;
+        await parentDirectory.removeEntry(photo.name);
+        if (await photoFileExists(parentDirectory, photo.name)) {
+          setPhotoDeleteError("浏览器没有删除这个本地文件，请确认文件未被占用，并重新选择看图文件夹授予写入权限。");
+          setIsPhotoDeletePending(false);
+          return;
+        }
       }
 
       setPhotoDeleteCandidate(null);
@@ -3281,7 +3362,11 @@ export default function App() {
           : `已删除《${photo.name}》，《${album.title}》已无图片`,
       );
     } catch {
-      setPhotoDeleteError("删除图片失败，请确认浏览器仍有文件夹写入权限，或重新选择看图文件夹。");
+      setPhotoDeleteError(
+        photo && isServerPhotoImage(photo)
+          ? "删除服务端图片失败，请确认媒体库路径仍可访问。"
+          : "删除图片失败，请确认浏览器仍有文件夹写入权限，或重新选择看图文件夹。",
+      );
     } finally {
       setIsPhotoDeletePending(false);
     }
@@ -3301,42 +3386,49 @@ export default function App() {
     }
 
     try {
-      const rootDirectory = photoAlbumDirectoryRef.current ?? (await readPhotoAlbumFolderHandle().catch(() => null));
-      if (!rootDirectory?.removeEntry) {
-        setPhotoDeleteError("当前图集来源不支持直接删除，请刷新看图文件夹或在文件管理器中删除。");
-        setIsPhotoDeletePending(false);
-        return;
-      }
-
-      const albumDirectory = await resolvePhotoAlbumDirectory(rootDirectory, album.relativePath);
-      if (!albumDirectory.removeEntry) {
-        setPhotoDeleteError("当前图集来源不支持直接删除，请刷新看图文件夹或在文件管理器中删除。");
-        setIsPhotoDeletePending(false);
-        return;
-      }
-
-      if (!(await hasDirectoryWritePermission(albumDirectory))) {
-        await clearPhotoAlbumAccessAfterWritePermissionDenied();
-        setIsPhotoDeletePending(false);
-        return;
-      }
-
-      for (const image of album.images) {
-        await albumDirectory.removeEntry(image.name);
-        if (await photoFileExists(albumDirectory, image.name)) {
-          setPhotoDeleteError("浏览器没有删除这个图集中的部分图片，请确认文件未被占用，并重新选择看图文件夹授予写入权限。");
+      const isServerAlbum = album.images.every(isServerPhotoImage);
+      if (isServerAlbum) {
+        for (const image of album.images) {
+          await deleteServerPhotoImage(fetchJson, image);
+        }
+      } else {
+        const rootDirectory = photoAlbumDirectoryRef.current ?? (await readPhotoAlbumFolderHandle().catch(() => null));
+        if (!rootDirectory?.removeEntry) {
+          setPhotoDeleteError("当前图集来源不支持直接删除，请刷新看图文件夹或在文件管理器中删除。");
           setIsPhotoDeletePending(false);
           return;
         }
-      }
 
-      const albumPathParts = album.relativePath.replace(/\\/g, "/").split("/").filter(Boolean);
-      if (albumPathParts.length) {
-        try {
-          const parentDirectory = await resolvePhotoAlbumDirectory(rootDirectory, albumPathParts.slice(0, -1).join("/"));
-          await parentDirectory.removeEntry?.(albumPathParts[albumPathParts.length - 1]);
-        } catch {
-          // The album folder may contain non-photo files; removing the images is the required destructive action.
+        const albumDirectory = await resolvePhotoAlbumDirectory(rootDirectory, album.relativePath);
+        if (!albumDirectory.removeEntry) {
+          setPhotoDeleteError("当前图集来源不支持直接删除，请刷新看图文件夹或在文件管理器中删除。");
+          setIsPhotoDeletePending(false);
+          return;
+        }
+
+        if (!(await hasDirectoryWritePermission(albumDirectory))) {
+          await clearPhotoAlbumAccessAfterWritePermissionDenied();
+          setIsPhotoDeletePending(false);
+          return;
+        }
+
+        for (const image of album.images) {
+          await albumDirectory.removeEntry(image.name);
+          if (await photoFileExists(albumDirectory, image.name)) {
+            setPhotoDeleteError("浏览器没有删除这个图集中的部分图片，请确认文件未被占用，并重新选择看图文件夹授予写入权限。");
+            setIsPhotoDeletePending(false);
+            return;
+          }
+        }
+
+        const albumPathParts = album.relativePath.replace(/\\/g, "/").split("/").filter(Boolean);
+        if (albumPathParts.length) {
+          try {
+            const parentDirectory = await resolvePhotoAlbumDirectory(rootDirectory, albumPathParts.slice(0, -1).join("/"));
+            await parentDirectory.removeEntry?.(albumPathParts[albumPathParts.length - 1]);
+          } catch {
+            // The album folder may contain non-photo files; removing the images is the required destructive action.
+          }
         }
       }
 
@@ -3420,7 +3512,11 @@ export default function App() {
 
       setPhotoAlbumMessage(`已删除《${album.title}》及其中 ${album.imageCount} 张图片`);
     } catch {
-      setPhotoDeleteError("删除整个图集失败，请确认浏览器仍有文件夹写入权限，或重新选择看图文件夹。");
+      setPhotoDeleteError(
+        album.images.every(isServerPhotoImage)
+          ? "删除服务端图集失败，请确认媒体库路径仍可访问。"
+          : "删除整个图集失败，请确认浏览器仍有文件夹写入权限，或重新选择看图文件夹。",
+      );
     } finally {
       setIsPhotoDeletePending(false);
     }
