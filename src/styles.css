@@ -7799,6 +7799,26 @@ button {
     gap: 8px 10px;
   }
 
+  .highlight-control-row {
+    overflow: hidden;
+    flex-wrap: nowrap;
+  }
+
+  .highlight-chip-list {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 2px;
+  }
+
+  .highlight-chip {
+    flex: 0 0 auto;
+    max-width: min(360px, 32vw);
+  }
+
+  .highlight-chip button:first-child {
+    max-width: min(260px, 24vw);
+  }
+
   .control-spacer {
     display: none;
   }
@@ -7808,14 +7828,25 @@ button {
   }
 
   .special-stats-control {
-    flex: 1 0 100%;
+    order: 2;
+    flex: 0 1 auto;
     flex-wrap: nowrap;
-    justify-content: flex-end;
+    justify-content: flex-start;
     overflow: hidden;
   }
 
   .special-stat-pill {
-    max-width: 150px;
+    max-width: 132px;
+  }
+
+  .control-toggle {
+    max-width: 108px;
+  }
+
+  .control-toggle span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .playlist-panel {
