@@ -122,11 +122,6 @@ export type HighlightMontageResult = {
   lastModified: number;
 };
 
-export type HighlightMontageStreamEvent =
-  | { type: "progress"; percent?: number; message?: string }
-  | { type: "done"; result: HighlightMontageResult }
-  | { type: "error"; error: string };
-
 export type LadaRestorationResult = {
   fileName: string;
   relativePath: string;
@@ -134,10 +129,21 @@ export type LadaRestorationResult = {
   lastModified: number;
 };
 
-export type LadaRestorationStreamEvent =
-  | { type: "progress"; percent?: number; message?: string }
-  | { type: "done"; result: LadaRestorationResult }
-  | { type: "error"; error: string };
+export type MediaProcessingTaskRunState = "running" | "cancelling" | "completed" | "failed" | "cancelled";
+
+type MediaProcessingTaskSnapshotBase = {
+  id: string;
+  videoName: string;
+  progress: number;
+  status: string;
+  state: MediaProcessingTaskRunState;
+  error: string | null;
+};
+
+export type MediaProcessingTaskSnapshot = MediaProcessingTaskSnapshotBase & (
+  | { kind: "montage"; result: HighlightMontageResult | null }
+  | { kind: "lada"; result: LadaRestorationResult | null }
+);
 
 export type MediaProbeResponse = {
   playability: VideoPlayability;

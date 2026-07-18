@@ -29,6 +29,7 @@ import { useLadaRestorationController } from "./useLadaRestorationController";
 import { useLibrarySearchState } from "./useLibrarySearchState";
 import { useManualSubtitleController } from "./useManualSubtitleController";
 import { useMediaLibraryInputController } from "./useMediaLibraryInputController";
+import { useMediaProcessingTaskSync } from "./useMediaProcessingTaskSync";
 import { useMediaRootLocalPathDialog } from "./useMediaRootLocalPathDialog";
 import { useMediaRootPrompts } from "./useMediaRootPrompts";
 import { useMediaProbeController } from "./useMediaProbeController";
@@ -506,10 +507,8 @@ export default function App() {
   const [highlightMontageConfirm, setHighlightMontageConfirm] = useState<HighlightMontageConfirmState | null>(null);
   const [mediaProcessingTask, setMediaProcessingTask] = useState<MediaProcessingTaskState | null>(null);
   const [highlightMontageResult, setHighlightMontageResult] = useState<HighlightMontageResultState | null>(null);
-  const highlightMontageAbortControllerRef = useRef<AbortController | null>(null);
   const [ladaRestorationConfirm, setLadaRestorationConfirm] = useState<LadaRestorationConfirmState | null>(null);
   const [ladaRestorationResult, setLadaRestorationResult] = useState<LadaRestorationResultState | null>(null);
-  const ladaRestorationAbortControllerRef = useRef<AbortController | null>(null);
   const [isDeletingCompatibleMedia, setIsDeletingCompatibleMedia] = useState(false);
   const [playbackSourceChoices, setPlaybackSourceChoices] = useState<Record<string, PlaybackSourceChoice>>({});
   const [isAiPanelOpen, setIsAiPanelOpen] = useState(false);
@@ -4408,11 +4407,7 @@ export default function App() {
     updateVideoPlayability,
   });
 
-  const {
-    cancelMontage: cancelHighlightMontage,
-    createMontage: createHighlightMontage,
-  } = useHighlightMontageController({
-    abortControllerRef: highlightMontageAbortControllerRef,
+  const { createMontage: createHighlightMontage } = useHighlightMontageController({
     confirm: highlightMontageConfirm,
     task: mediaProcessingTask,
     setConfirm: setHighlightMontageConfirm,
@@ -4421,16 +4416,20 @@ export default function App() {
     setMessage,
   });
 
-  const {
-    cancelRestoration: cancelLadaRestoration,
-    createRestoration: createLadaRestoration,
-  } = useLadaRestorationController({
-    abortControllerRef: ladaRestorationAbortControllerRef,
+  const { createRestoration: createLadaRestoration } = useLadaRestorationController({
     confirm: ladaRestorationConfirm,
     task: mediaProcessingTask,
     setConfirm: setLadaRestorationConfirm,
     setResult: setLadaRestorationResult,
     setTask: setMediaProcessingTask,
+    setMessage,
+  });
+
+  const { cancelTask: cancelMediaProcessingTask } = useMediaProcessingTaskSync({
+    task: mediaProcessingTask,
+    setTask: setMediaProcessingTask,
+    setHighlightMontageResult,
+    setLadaRestorationResult,
     setMessage,
   });
 
@@ -4441,11 +4440,6 @@ export default function App() {
   const runMediaProcessingInBackground = useCallback(() => {
     setMediaProcessingTask((current) => current ? { ...current, isDialogOpen: false } : current);
   }, []);
-
-  const cancelMediaProcessingTask = useCallback(() => {
-    if (mediaProcessingTask?.kind === "lada") cancelLadaRestoration();
-    else if (mediaProcessingTask?.kind === "montage") cancelHighlightMontage();
-  }, [cancelHighlightMontage, cancelLadaRestoration, mediaProcessingTask?.kind]);
 
   const {
     fetchDanmakuFromUrl,

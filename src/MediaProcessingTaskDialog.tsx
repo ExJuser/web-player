@@ -1,10 +1,8 @@
 import { Scissors, Sparkles } from "lucide-react";
 
-export type MediaProcessingTaskState = {
-  kind: "montage" | "lada";
-  videoName: string;
-  progress: number;
-  status: string;
+import type { MediaProcessingTaskSnapshot } from "./appTypes";
+
+export type MediaProcessingTaskState = MediaProcessingTaskSnapshot & {
   isDialogOpen: boolean;
 };
 
@@ -27,7 +25,7 @@ export function MediaProcessingTaskDialog({ task, onCancel, onRunInBackground }:
         <div className="dialog-icon"><Icon size={28} className="spin-icon" /></div>
         <div className="dialog-copy">
           <h2 id="media-processing-task-title">{title}</h2>
-          <p>可以收起到后台继续使用播放器；刷新或关闭页面会取消任务。</p>
+          <p>可以收起到后台继续使用播放器；刷新或关闭页面不会取消任务。</p>
         </div>
         <div className="compatible-media-dialog-file"><strong>{task.videoName}</strong><span>{task.status}</span></div>
         <div className="compatible-media-progress" aria-label={`${progressLabel} ${Math.round(task.progress)}%`}>
@@ -35,7 +33,9 @@ export function MediaProcessingTaskDialog({ task, onCancel, onRunInBackground }:
           <small>{Math.round(task.progress)}%</small>
         </div>
         <div className="dialog-actions">
-          <button className="secondary-button" type="button" onClick={onCancel}>取消任务</button>
+          <button className="secondary-button" type="button" onClick={onCancel} disabled={task.state === "cancelling"}>
+            {task.state === "cancelling" ? "正在取消" : "取消任务"}
+          </button>
           <button className="primary-button" type="button" onClick={onRunInBackground}>后台运行</button>
         </div>
       </section>
