@@ -57,7 +57,7 @@ import { hashValue } from "./hashUtils.mjs";
 import { sendBlob, sendJson, sendMediaFile, sendNdjson, writeStreamEvent } from "./httpResponses.mjs";
 import { readJsonFile, writeJsonFile } from "./jsonFiles.mjs";
 import { createPublicLocalConfig, defaultAppConfig } from "./localConfig.mjs";
-import { createMediaProcessingTaskGate } from "./mediaProcessingTask.mjs";
+import { createMediaProcessingTaskApi, createMediaProcessingTaskManager } from "./mediaProcessingTask.mjs";
 import { detectTools, runProcess } from "./processRunner.mjs";
 import { formatRemoteFetchError, requestExternalJson, requestExternalText } from "./remoteFetch.mjs";
 import { parseJsonBody, readBody, sanitizeStorageId } from "./requestUtils.mjs";
@@ -757,7 +757,7 @@ export function playerDataApiPlugin({ projectRoot, env }) {
     return ladaAvailablePromise;
   };
   const loadLadaCapabilities = createLadaCapabilitiesLoader(runProcess);
-  const mediaProcessingTaskGate = createMediaProcessingTaskGate();
+  const mediaProcessingTaskApi = createMediaProcessingTaskApi(createMediaProcessingTaskManager());
   const scanMediaRootsOnce = async () => {
     if (!mediaRootsScanPromise) {
       mediaRootsScanPromise = (async () => scanConfiguredMediaRoots(await loadAppConfig()))().finally(() => {
@@ -922,63 +922,51 @@ export function playerDataApiPlugin({ projectRoot, env }) {
         return;
       }
 
+      if (url.pathname === "/api/media/processing-task" && request.method === "GET") {
+        sendJson(response, 200, mediaProcessingTaskApi.get());
+        return;
+      }
+
+      if (url.pathname === "/api/media/processing-task" && request.method === "DELETE") {
+        const payload = await parseJsonBody(request);
+        try {
+          sendJson(response, 200, mediaProcessingTaskApi.cancel(payload));
+        } catch (error) {
+          sendJson(response, 404, { error: error instanceof Error ? error.message : "媒体处理任务不存在或已结束。" });
+        }
+        return;
+      }
+
       if (url.pathname === "/api/media/highlight-montage" && request.method === "POST") {
         const payload = await parseJsonBody(request);
         const config = await loadAppConfig();
         const root = findMediaRoot(config, payload?.rootId);
-        sendNdjson(response, 200);
-        let releaseMediaProcessingTask;
-        try {
-          releaseMediaProcessingTask = mediaProcessingTaskGate.acquire("montage");
-        } catch (error) {
-          writeStreamEvent(response, { type: "error", error: error instanceof Error ? error.message : "已有影片处理任务正在运行。" });
-          response.end();
-          return;
-        }
-        let sourcePath;
-        try {
-          assertMontageMediaRoot(root);
-          sourcePath = resolveVideoPathFromConfig(config, root.id, payload?.relativePath);
-        } catch (error) {
-          releaseMediaProcessingTask();
-          writeStreamEvent(response, { type: "error", error: error instanceof Error ? error.message : "媒体路径不可用。" });
-          response.end();
-          return;
-        }
-
+        assertMontageMediaRoot(root);
+        const sourcePath = resolveVideoPathFromConfig(config, root.id, payload?.relativePath);
+        await ensureFileExists(sourcePath);
         const sourceVideoId = typeof payload?.sourceVideoId === "string" ? payload.sourceVideoId : "";
         const sourceHighlights = Array.isArray(payload?.highlights)
           ? payload.highlights
           : store.loadPlayerDataStore("global").videoHighlights[sourceVideoId] ?? [];
-        const controller = new AbortController();
-        let finished = false;
-        response.on("close", () => {
-          if (!finished) controller.abort();
-        });
         try {
-          await ensureFileExists(sourcePath);
-          writeStreamEvent(response, { type: "progress", percent: 0, message: "正在准备剪辑任务..." });
-          const result = await createHighlightMontage({
-            runProcess,
-            sourcePath,
-            rootId: root.id,
-            relativePath: payload?.relativePath,
-            segments: payload?.segments,
-            sourceHighlights,
-            signal: controller.signal,
-            onProgress: (progress) => writeStreamEvent(response, { type: "progress", ...progress }),
-            persistHighlights: (videoId, highlights) => store.replaceVideoHighlights("global", videoId, highlights),
-          });
-          writeStreamEvent(response, { type: "done", result });
+          sendJson(response, 202, mediaProcessingTaskApi.start({
+            kind: "montage",
+            videoName: path.basename(sourcePath),
+            initialStatus: "正在准备剪辑任务...",
+            run: ({ signal, onProgress }) => createHighlightMontage({
+              runProcess,
+              sourcePath,
+              rootId: root.id,
+              relativePath: payload?.relativePath,
+              segments: payload?.segments,
+              sourceHighlights,
+              signal,
+              onProgress,
+              persistHighlights: (videoId, highlights) => store.replaceVideoHighlights("global", videoId, highlights),
+            }),
+          }));
         } catch (error) {
-          writeStreamEvent(response, {
-            type: "error",
-            error: error instanceof Error ? error.message : "生成剪辑版失败。",
-          });
-        } finally {
-          finished = true;
-          releaseMediaProcessingTask();
-          response.end();
+          sendJson(response, 409, { error: error instanceof Error ? error.message : "已有影片处理任务正在运行。" });
         }
         return;
       }
@@ -987,47 +975,28 @@ export function playerDataApiPlugin({ projectRoot, env }) {
         const payload = await parseJsonBody(request);
         const config = await loadAppConfig();
         const root = findMediaRoot(config, payload?.rootId);
-        sendNdjson(response, 200);
-        let releaseMediaProcessingTask;
+        if (!await getLadaAvailable()) throw new Error("未找到 D:\\lada\\lada-cli.exe。");
+        assertLadaMediaRoot(root);
+        const sourcePath = resolveVideoPathFromConfig(config, root.id, payload?.relativePath);
+        await ensureFileExists(sourcePath);
+        const capabilities = await loadLadaCapabilities();
         try {
-          releaseMediaProcessingTask = mediaProcessingTaskGate.acquire("lada");
+          sendJson(response, 202, mediaProcessingTaskApi.start({
+            kind: "lada",
+            videoName: path.basename(sourcePath),
+            initialStatus: "正在准备马赛克修复...",
+            run: ({ signal, onProgress }) => restoreVideoWithLada({
+              runProcess,
+              sourcePath,
+              relativePath: payload?.relativePath,
+              options: payload?.options,
+              capabilities,
+              signal,
+              onProgress,
+            }),
+          }));
         } catch (error) {
-          writeStreamEvent(response, { type: "error", error: error instanceof Error ? error.message : "已有影片处理任务正在运行。" });
-          response.end();
-          return;
-        }
-
-        const controller = new AbortController();
-        let finished = false;
-        response.on("close", () => {
-          if (!finished) controller.abort();
-        });
-        try {
-          if (!await getLadaAvailable()) throw new Error("未找到 D:\\lada\\lada-cli.exe。");
-          assertLadaMediaRoot(root);
-          const sourcePath = resolveVideoPathFromConfig(config, root.id, payload?.relativePath);
-          await ensureFileExists(sourcePath);
-          const capabilities = await loadLadaCapabilities();
-          writeStreamEvent(response, { type: "progress", percent: 0, message: "正在准备马赛克修复..." });
-          const result = await restoreVideoWithLada({
-            runProcess,
-            sourcePath,
-            relativePath: payload?.relativePath,
-            options: payload?.options,
-            capabilities,
-            signal: controller.signal,
-            onProgress: (progress) => writeStreamEvent(response, { type: "progress", ...progress }),
-          });
-          writeStreamEvent(response, { type: "done", result });
-        } catch (error) {
-          writeStreamEvent(response, {
-            type: "error",
-            error: error instanceof Error ? error.message : "马赛克修复失败。",
-          });
-        } finally {
-          finished = true;
-          releaseMediaProcessingTask();
-          response.end();
+          sendJson(response, 409, { error: error instanceof Error ? error.message : "已有影片处理任务正在运行。" });
         }
         return;
       }

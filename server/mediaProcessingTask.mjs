@@ -34,14 +34,17 @@ export function createMediaProcessingTaskManager({ createId = randomUUID } = {})
     current = task;
 
     Promise.resolve()
-      .then(() => run({
-        signal: controller.signal,
-        onProgress: ({ percent, message }) => {
-          if (current !== task || task.state !== "running") return;
-          task.progress = Math.max(0, Math.min(100, Number(percent) || 0));
-          if (message) task.status = message;
-        },
-      }))
+      .then(() => {
+        if (controller.signal.aborted) throw new Error("媒体处理任务已取消。");
+        return run({
+          signal: controller.signal,
+          onProgress: ({ percent, message }) => {
+            if (current !== task || task.state !== "running") return;
+            task.progress = Math.max(0, Math.min(100, Number(percent) || 0));
+            if (message) task.status = message;
+          },
+        });
+      })
       .then((result) => {
         if (current !== task) return;
         task.progress = 100;
@@ -72,19 +75,16 @@ export function createMediaProcessingTaskManager({ createId = randomUUID } = {})
   };
 }
 
-export function createMediaProcessingTaskGate() {
-  let activeTask = null;
+export function createMediaProcessingTaskApi(manager) {
   return {
-    acquire(kind) {
-      if (activeTask) throw new Error("已有影片处理任务正在运行。");
-      const token = Symbol(kind);
-      activeTask = { kind, token };
-      return () => {
-        if (activeTask?.token === token) activeTask = null;
-      };
+    start(input) {
+      return { task: manager.start(input) };
     },
-    activeKind() {
-      return activeTask?.kind ?? null;
+    get() {
+      return { task: manager.get() };
+    },
+    cancel(payload) {
+      return { task: manager.cancel(payload?.id) };
     },
   };
 }

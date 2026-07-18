@@ -57,3 +57,25 @@ test("only explicit cancellation aborts the active runner", async () => {
   await flushPromises();
   assert.equal(manager.get().state, "cancelled");
 });
+
+test("wraps task manager operations in api response payloads", async () => {
+  const manager = mediaTasks.createMediaProcessingTaskManager({ createId: () => "task-api" });
+  const api = mediaTasks.createMediaProcessingTaskApi(manager);
+
+  assert.deepEqual(api.get(), { task: null });
+  const created = api.start({
+    kind: "lada",
+    videoName: "Movie.mp4",
+    initialStatus: "正在准备马赛克修复...",
+    run: ({ signal }) => new Promise((resolve, reject) => {
+      signal.addEventListener("abort", () => reject(new Error("已取消马赛克修复。")), { once: true });
+    }),
+  });
+  assert.equal(created.task.id, "task-api");
+  assert.equal(api.get().task.state, "running");
+
+  const cancelling = api.cancel({ id: "task-api" });
+  assert.equal(cancelling.task.state, "cancelling");
+  await flushPromises();
+  assert.equal(api.get().task.state, "cancelled");
+});

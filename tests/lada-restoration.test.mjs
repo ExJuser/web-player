@@ -13,7 +13,6 @@ import {
   parseLadaOptionTable,
   restoreVideoWithLada,
 } from "../server/ladaRestoration.mjs";
-import { createMediaProcessingTaskGate } from "../server/mediaProcessingTask.mjs";
 import {
   readStoredLadaOptions,
   resolveLadaOptions,
@@ -158,20 +157,6 @@ test("requires a server-accessible media root", () => {
   assert.throws(() => assertLadaMediaRoot(null), /未找到/);
   assert.throws(() => assertLadaMediaRoot({ source: "browser" }), /配置本机路径/);
   assert.doesNotThrow(() => assertLadaMediaRoot({ source: "browser", localPath: "D:/Media" }));
-});
-
-test("allows only one media processing task at a time", () => {
-  const gate = createMediaProcessingTaskGate();
-  const releaseLada = gate.acquire("lada");
-
-  assert.equal(gate.activeKind(), "lada");
-  assert.throws(() => gate.acquire("montage"), /已有影片处理任务/);
-  releaseLada();
-  assert.equal(gate.activeKind(), null);
-
-  const releaseMontage = gate.acquire("montage");
-  assert.equal(gate.activeKind(), "montage");
-  releaseMontage();
 });
 
 test("restores to an incremented file and removes all temporary content", async () => {
