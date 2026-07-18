@@ -284,7 +284,6 @@ import {
   formatPlaylistVisibleCountLabel,
   getActiveSeriesOption,
   getActiveRatingPlaylistLabel,
-  getCompatibleMediaAction,
   getCurrentSeriesKey,
   getDuplicatePlaylistVideos,
   getRatingFilterLabel,
@@ -1950,10 +1949,6 @@ export default function App() {
             ? "未检测到 D:\\lada\\lada-cli.exe。"
             : "";
   const canRestoreWithLada = !ladaRestorationDisabledReason;
-  const compatibleMediaAction = getCompatibleMediaAction(currentVideo, {
-    canUseServerTools: canUseServerMediaTools,
-  });
-  const canCreateCompatibleMedia = compatibleMediaAction.canCreate;
   const isCurrentVideoSpecialMedia = Boolean(
     currentVideo && currentMediaLibraryRoot && isMediaRootInHomeMode(currentMediaLibraryRoot, "special"),
   );
@@ -3183,15 +3178,6 @@ export default function App() {
     setActiveView("home");
   }, [cancelAutoNextPrompt, persistCurrentProgress, resetHoldSpeedState, showControls]);
 
-  const showPhotoAlbumsView = useCallback(() => {
-    persistCurrentProgress();
-    videoRef.current?.pause();
-    cancelAutoNextPrompt();
-    resetHoldSpeedState();
-    showControls();
-    setActiveView("photos");
-  }, [cancelAutoNextPrompt, persistCurrentProgress, resetHoldSpeedState, showControls]);
-
   const {
     markSelectedPhotoAlbumCompleted,
     movePhoto,
@@ -4316,18 +4302,6 @@ export default function App() {
     }
   }, [currentMediaRootId, currentVideo, localConfig, probeEmbeddedSubtitleTracksForVideo]);
 
-  const openCompatibleMediaConfirm = useCallback(() => {
-    if (!currentVideo || !currentMediaRootId) return;
-    if (!canCreateCompatibleMedia || compatibleMediaVideoId) return;
-    setCompatibleMediaConfirm({
-      label: compatibleMediaAction.label || "生成兼容 MP4",
-      rootId: currentMediaRootId,
-      relativePath: currentVideo.relativePath,
-      videoId: currentVideo.id,
-      videoName: currentVideo.name,
-    });
-  }, [canCreateCompatibleMedia, compatibleMediaAction.label, compatibleMediaVideoId, currentMediaRootId, currentVideo]);
-
   const openCompatibleMediaDeleteConfirm = useCallback(() => {
     if (!currentVideo || !currentMediaRootId || !currentVideo.playability?.compatibleUrl || isDeletingCompatibleMedia) return;
     setCompatibleMediaDeleteConfirm({
@@ -4539,7 +4513,6 @@ export default function App() {
     isClearCacheConfirmOpen,
     isClearingCache,
     loadCacheStatus,
-    openCacheStatusDialog,
     pagedCacheStatusItems,
     requestClearSelectedCache,
     selectedCacheBytes,
@@ -5242,10 +5215,7 @@ export default function App() {
       : currentVideo
         ? currentVideo.relativePath
         : message;
-  const currentVideoPlayabilityMessage =
-    currentVideo?.playability?.performanceWarning ??
-    currentVideo?.playability?.reason ??
-    "当前视频尚未探测播放兼容性。";
+  const currentVideoPlayabilityMessage = currentVideo?.playability?.performanceWarning ?? "";
   const isCurrentHighEnergyMarkPending = pendingHighEnergyStart?.videoId === currentVideo?.id;
   const pendingHighEnergyStartTime = isCurrentHighEnergyMarkPending ? pendingHighEnergyStart?.time ?? null : null;
   const isCurrentEditSegmentMarkPending = pendingEditSegmentStart?.videoId === currentVideo?.id;
@@ -5270,31 +5240,18 @@ export default function App() {
       <section className="player-column" ref={playerColumnRef}>
         <PlayerTopBar
           ref={topBarRef}
-          activeView={activeView}
-          canCreateCompatibleMedia={canCreateCompatibleMedia}
-          compatibleMediaActionLabel={compatibleMediaAction.label}
-          compatibleMediaActionVisible={compatibleMediaAction.visible}
-          compatibleMediaMessage={compatibleMediaMessage}
-          compatibleMediaVideoId={compatibleMediaVideoId}
           currentVideoId={currentVideo?.id ?? null}
           mediaProcessingTask={mediaProcessingTask}
           isHomeViewVisible={isHomeViewVisible}
           isNonPlayerViewVisible={isNonPlayerViewVisible}
-          isPhotoAlbumViewVisible={isPhotoAlbumViewVisible}
           isPrivacyMode={isPrivacyMode}
-          isScanning={isScanning}
-          mediaProbeVideoId={mediaProbeVideoId}
           metadataRows={currentVideoMetadataRows}
           playabilityMessage={currentVideoPlayabilityMessage}
           summaryFallbackText={currentVideoSummaryFallbackText}
           theme={theme}
           videoCount={videos.length}
-          onAddMediaLibrary={requestAddMediaLibrary}
-          onOpenCacheStatus={openCacheStatusDialog}
-          onOpenCompatibleMediaConfirm={openCompatibleMediaConfirm}
           onOpenMediaProcessingTask={reopenMediaProcessingTask}
           onShowHome={showHomeView}
-          onShowPhotoAlbums={showPhotoAlbumsView}
           onToggleTheme={toggleTheme}
         />
 

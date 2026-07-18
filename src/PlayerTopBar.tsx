@@ -1,109 +1,95 @@
-import { FolderOpen, HardDrive, Images, Moon, RefreshCw, Scissors, Sparkles, Sun } from "lucide-react";
-import { forwardRef } from "react";
+import { Info, Moon, Scissors, Sparkles, Sun } from "lucide-react";
+import { forwardRef, useEffect, useRef, useState } from "react";
 
-import type { ActiveView } from "./playerTypes";
 import type { MediaProcessingTaskState } from "./MediaProcessingTaskDialog";
 
 type VideoMetadataRow = readonly [string, string];
 
 type PlayerTopBarProps = {
-  activeView: ActiveView;
-  canCreateCompatibleMedia: boolean;
-  compatibleMediaActionLabel: string;
-  compatibleMediaActionVisible: boolean;
-  compatibleMediaMessage: string;
-  compatibleMediaVideoId: string | null;
   currentVideoId: string | null;
   mediaProcessingTask: MediaProcessingTaskState | null;
   isHomeViewVisible: boolean;
   isNonPlayerViewVisible: boolean;
-  isPhotoAlbumViewVisible: boolean;
   isPrivacyMode: boolean;
-  isScanning: boolean;
-  mediaProbeVideoId: string | null;
   metadataRows: readonly VideoMetadataRow[];
   summaryFallbackText: string;
   theme: "dark" | "light";
   videoCount: number;
   playabilityMessage: string;
-  onAddMediaLibrary: () => void;
-  onOpenCacheStatus: () => void;
-  onOpenCompatibleMediaConfirm: () => void;
   onOpenMediaProcessingTask: () => void;
   onShowHome: () => void;
-  onShowPhotoAlbums: () => void;
   onToggleTheme: () => void;
 };
 
 export const PlayerTopBar = forwardRef<HTMLElement, PlayerTopBarProps>(function PlayerTopBar(
   {
-    activeView,
-    canCreateCompatibleMedia,
-    compatibleMediaActionLabel,
-    compatibleMediaActionVisible,
-    compatibleMediaMessage,
-    compatibleMediaVideoId,
     currentVideoId,
     mediaProcessingTask,
     isHomeViewVisible,
     isNonPlayerViewVisible,
-    isPhotoAlbumViewVisible,
     isPrivacyMode,
-    isScanning,
-    mediaProbeVideoId,
     metadataRows,
     summaryFallbackText,
     theme,
     videoCount,
     playabilityMessage,
-    onAddMediaLibrary,
-    onOpenCacheStatus,
-    onOpenCompatibleMediaConfirm,
     onOpenMediaProcessingTask,
     onShowHome,
-    onShowPhotoAlbums,
     onToggleTheme,
   },
   ref
 ) {
+  const [isMetadataPinnedOpen, setIsMetadataPinnedOpen] = useState(false);
+  const metadataCardRef = useRef<HTMLButtonElement>(null);
   const shouldShowMetadata = Boolean(currentVideoId) && !isPrivacyMode && !isNonPlayerViewVisible;
-  const shouldShowCompatibleMediaStatus = Boolean(
-    currentVideoId && (compatibleMediaActionVisible || mediaProbeVideoId === currentVideoId)
-  );
-  const isCreatingCompatibleMedia = Boolean(currentVideoId && compatibleMediaVideoId === currentVideoId);
   const themeToggleLabel = theme === "dark" ? "切换到白天模式" : "切换到黑夜模式";
+
+  useEffect(() => {
+    if (!isMetadataPinnedOpen) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (metadataCardRef.current?.contains(event.target as Node)) return;
+      setIsMetadataPinnedOpen(false);
+      metadataCardRef.current?.blur();
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [isMetadataPinnedOpen]);
 
   return (
     <header className="top-bar" ref={ref}>
       <div className="video-summary">
         {shouldShowMetadata ? (
-          <>
-            <dl className="current-video-meta">
-              {metadataRows.map(([label, value]) => (
-                <div key={label} className={label === "文件名" ? "current-video-file-chip" : undefined}>
-                  <dt>{label}</dt>
-                  <dd>{value}</dd>
-                </div>
-              ))}
-            </dl>
-            {shouldShowCompatibleMediaStatus ? (
-              <div className="compatible-media-status">
-                <span>{mediaProbeVideoId === currentVideoId ? "正在探测媒体兼容性..." : playabilityMessage}</span>
-                {canCreateCompatibleMedia ? (
-                  <button
-                    className="secondary-button"
-                    type="button"
-                    onClick={onOpenCompatibleMediaConfirm}
-                    disabled={isCreatingCompatibleMedia}
-                  >
-                    <RefreshCw size={15} className={isCreatingCompatibleMedia ? "spin-icon" : undefined} />
-                    {isCreatingCompatibleMedia ? "生成中" : compatibleMediaActionLabel}
-                  </button>
-                ) : null}
-                {compatibleMediaMessage ? <small>{compatibleMediaMessage}</small> : null}
-              </div>
-            ) : null}
-          </>
+          <button
+            ref={metadataCardRef}
+            className={`video-metadata-card${isMetadataPinnedOpen ? " is-expanded" : ""}`}
+            type="button"
+            aria-expanded={isMetadataPinnedOpen}
+            aria-label={isMetadataPinnedOpen ? "收起影片信息详情" : "展开影片信息详情"}
+            onClick={() => setIsMetadataPinnedOpen((isOpen) => !isOpen)}
+            onKeyDown={(event) => {
+              if (event.key !== "Escape") return;
+              setIsMetadataPinnedOpen(false);
+              event.currentTarget.blur();
+            }}
+          >
+            <span className="video-metadata-summary">
+              <Info size={14} />
+              <span>影片信息</span>
+            </span>
+            <span className="video-metadata-details">
+              <span className="current-video-meta">
+                {metadataRows.map(([label, value]) => (
+                  <span key={label} className={label === "文件名" ? "current-video-file-chip" : undefined}>
+                    <span className="current-video-meta-label">{label}</span>
+                    <strong className="current-video-meta-value">{value}</strong>
+                  </span>
+                ))}
+              </span>
+              {playabilityMessage ? <span className="compatible-media-status">{playabilityMessage}</span> : null}
+            </span>
+          </button>
         ) : isHomeViewVisible ? null : (
           <p className="current-video-title">{summaryFallbackText}</p>
         )}
@@ -116,37 +102,9 @@ export const PlayerTopBar = forwardRef<HTMLElement, PlayerTopBarProps>(function 
             <small>{mediaProcessingTask.videoName}</small>
           </button>
         ) : null}
-        {!isPrivacyMode && !isPhotoAlbumViewVisible ? (
-          <button
-            className="secondary-button top-cache-status-button"
-            type="button"
-            onClick={onOpenCacheStatus}
-            title="查看本地缓存"
-          >
-            <HardDrive size={17} />
-            本地缓存
-          </button>
-        ) : null}
-        {!isPrivacyMode && !isPhotoAlbumViewVisible ? (
-          <button
-            className="primary-button top-add-library-button"
-            type="button"
-            onClick={onAddMediaLibrary}
-            disabled={isScanning}
-          >
-            <FolderOpen size={18} />
-            {isScanning ? "扫描中" : "新增媒体库"}
-          </button>
-        ) : null}
         {!isPrivacyMode && videoCount && !isHomeViewVisible ? (
           <button className="secondary-button top-home-button" type="button" onClick={onShowHome}>
             首页
-          </button>
-        ) : null}
-        {!isPrivacyMode && activeView !== "photos" && activeView !== "photoViewer" ? (
-          <button className="secondary-button top-home-button" type="button" onClick={onShowPhotoAlbums}>
-            <Images size={17} />
-            看图
           </button>
         ) : null}
         <button
