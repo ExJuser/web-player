@@ -70,7 +70,7 @@ export function RocketLaunchEffect({ effectKey }: RocketLaunchEffectProps) {
       const deltaMs = now - previousFrameAt;
       previousFrameAt = now;
       context.globalCompositeOperation = "source-over";
-      context.fillStyle = "rgba(4, 6, 16, 0.22)";
+      context.fillStyle = "rgba(4, 6, 16, 0.11)";
       context.fillRect(0, 0, width, height);
       context.globalCompositeOperation = "lighter";
       drawRocket(elapsed);
@@ -86,13 +86,23 @@ export function RocketLaunchEffect({ effectKey }: RocketLaunchEffectProps) {
         activeParticles = activeParticles.filter((particle) => {
           const alive = advanceFireworkParticle(particle, deltaMs);
           if (!alive) return false;
-          context.globalAlpha = particle.alpha;
           context.strokeStyle = particle.color;
+          context.globalAlpha = particle.alpha * 0.28;
+          context.lineWidth = particle.size * 3.2;
+          context.beginPath();
+          context.moveTo(particle.previousX, particle.previousY);
+          context.lineTo(particle.x, particle.y);
+          context.stroke();
+          context.globalAlpha = particle.alpha;
           context.lineWidth = particle.size;
           context.beginPath();
           context.moveTo(particle.previousX, particle.previousY);
           context.lineTo(particle.x, particle.y);
           context.stroke();
+          context.fillStyle = particle.color;
+          context.beginPath();
+          context.arc(particle.x, particle.y, particle.size * 0.7, 0, Math.PI * 2);
+          context.fill();
           return true;
         });
       }

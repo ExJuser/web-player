@@ -27,12 +27,12 @@ export type FireworkParticle = {
 };
 
 export const FIREWORK_CUES: readonly FireworkCue[] = [
-  { at: 520, x: 0.5, y: 0.38, colors: ["#fff4bd", "#ffb52e", "#ffffff"], particleCount: 108, speed: 7.2 },
-  { at: 850, x: 0.22, y: 0.3, colors: ["#c084fc", "#7c3aed", "#f0abfc"], particleCount: 66, speed: 5.5 },
-  { at: 1040, x: 0.78, y: 0.27, colors: ["#67e8f9", "#3b82f6", "#dbeafe"], particleCount: 68, speed: 5.8 },
-  { at: 1350, x: 0.34, y: 0.54, colors: ["#fb7185", "#f472b6", "#fde68a"], particleCount: 72, speed: 5.3 },
-  { at: 1570, x: 0.68, y: 0.5, colors: ["#a78bfa", "#fbbf24", "#f5d0fe"], particleCount: 72, speed: 5.6 },
-  { at: 1940, x: 0.5, y: 0.28, colors: ["#ffffff", "#fbbf24", "#22d3ee", "#c084fc", "#fb7185"], particleCount: 96, speed: 7.5 },
+  { at: 520, x: 0.5, y: 0.38, colors: ["#fff4bd", "#ffb52e", "#ffffff"], particleCount: 180, speed: 10.4 },
+  { at: 850, x: 0.2, y: 0.28, colors: ["#c084fc", "#7c3aed", "#f0abfc"], particleCount: 116, speed: 8.3 },
+  { at: 1040, x: 0.8, y: 0.25, colors: ["#67e8f9", "#3b82f6", "#dbeafe"], particleCount: 120, speed: 8.6 },
+  { at: 1350, x: 0.31, y: 0.56, colors: ["#fb7185", "#f472b6", "#fde68a"], particleCount: 128, speed: 8 },
+  { at: 1570, x: 0.71, y: 0.52, colors: ["#a78bfa", "#fbbf24", "#f5d0fe"], particleCount: 128, speed: 8.3 },
+  { at: 1940, x: 0.5, y: 0.27, colors: ["#ffffff", "#fbbf24", "#22d3ee", "#c084fc", "#fb7185"], particleCount: 160, speed: 10.8 },
 ] as const;
 
 export function createFireworkParticles(
@@ -43,10 +43,11 @@ export function createFireworkParticles(
 ): FireworkParticle[] {
   const originX = width * cue.x;
   const originY = height * cue.y;
+  const viewportScale = Math.min(Math.max(Math.min(width, height) / 800, 0.9), 1.35);
 
   return Array.from({ length: cue.particleCount }, (_, index) => {
     const angle = (index / cue.particleCount) * Math.PI * 2 + (random() - 0.5) * 0.1;
-    const speed = cue.speed * (0.58 + random() * 0.54);
+    const speed = cue.speed * viewportScale * (0.5 + random() * 0.7);
     return {
       x: originX,
       y: originY,
@@ -55,11 +56,11 @@ export function createFireworkParticles(
       velocityX: Math.cos(angle) * speed,
       velocityY: Math.sin(angle) * speed,
       alpha: 1,
-      decay: 0.012 + random() * 0.009,
+      decay: 0.01 + random() * 0.006,
       drag: 0.982 + random() * 0.006,
       gravity: 0.035 + random() * 0.025,
       color: cue.colors[index % cue.colors.length],
-      size: 1.3 + random() * 1.9,
+      size: (2.1 + random() * 2.4) * viewportScale,
     };
   });
 }

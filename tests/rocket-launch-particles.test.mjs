@@ -12,7 +12,7 @@ test("defines a dense three-second firework timeline", () => {
     particles.FIREWORK_CUES.map((cue) => cue.at),
     [...particles.FIREWORK_CUES.map((cue) => cue.at)].sort((a, b) => a - b),
   );
-  assert.equal(particles.FIREWORK_CUES.reduce((sum, cue) => sum + cue.particleCount, 0), 482);
+  assert.equal(particles.FIREWORK_CUES.reduce((sum, cue) => sum + cue.particleCount, 0), 832);
 });
 
 test("creates particles at the cue origin with bounded visual properties", () => {
