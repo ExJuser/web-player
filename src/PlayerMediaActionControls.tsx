@@ -1,10 +1,11 @@
-import { Scissors, Star, Subtitles, Tags, Zap } from "lucide-react";
+import { Scissors, Sparkles, Star, Subtitles, Tags, Zap } from "lucide-react";
 
 import { ControlSelect } from "./ControlSelect";
 import type { HomeMediaMode } from "./playerUiState";
 
 type PlayerMediaActionControlsProps = {
   canUseEmbeddedSubtitles: boolean;
+  canRestoreWithLada: boolean;
   currentVideoRating: number | null | undefined;
   hasCurrentVideo: boolean;
   hasSelectedSubtitle: boolean;
@@ -17,6 +18,7 @@ type PlayerMediaActionControlsProps = {
   isEditSegmentMarkDisabled: boolean;
   isEditSegmentMarkPending: boolean;
   isSeriesMode: boolean;
+  ladaDisabledReason: string;
   selectedSubtitleId: string;
   subtitleControlOptions: Array<{ value: string; label: string }>;
   videoTagCount: number;
@@ -26,12 +28,14 @@ type PlayerMediaActionControlsProps = {
   onOpenAiPanel: () => void;
   onOpenDanmakuDialog: () => void;
   onOpenRatingDialog: () => void;
+  onOpenLadaRestoration: () => void;
   onOpenTagDialog: () => void;
   onProbeEmbeddedSubtitles: () => void;
 };
 
 export function PlayerMediaActionControls({
   canUseEmbeddedSubtitles,
+  canRestoreWithLada,
   currentVideoRating,
   hasCurrentVideo,
   hasSelectedSubtitle,
@@ -44,6 +48,7 @@ export function PlayerMediaActionControls({
   isEditSegmentMarkDisabled,
   isEditSegmentMarkPending,
   isSeriesMode,
+  ladaDisabledReason,
   selectedSubtitleId,
   subtitleControlOptions,
   videoTagCount,
@@ -53,6 +58,7 @@ export function PlayerMediaActionControls({
   onOpenAiPanel,
   onOpenDanmakuDialog,
   onOpenRatingDialog,
+  onOpenLadaRestoration,
   onOpenTagDialog,
   onProbeEmbeddedSubtitles,
 }: PlayerMediaActionControlsProps) {
@@ -123,6 +129,16 @@ export function PlayerMediaActionControls({
         aria-label="给视频评分"
       >
         <Star size={18} fill={hasRating ? "currentColor" : "none"} />
+      </button>
+      <button
+        className="icon-button lada-restoration-button"
+        type="button"
+        onClick={onOpenLadaRestoration}
+        disabled={!canRestoreWithLada}
+        title={canRestoreWithLada ? "修复当前影片马赛克" : ladaDisabledReason}
+        aria-label="修复当前影片马赛克"
+      >
+        <Sparkles size={18} />
       </button>
       <button
         className={`icon-button highlight-mark-button ${isHighEnergyMarkPending ? "active" : ""}`}

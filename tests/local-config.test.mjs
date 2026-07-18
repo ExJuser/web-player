@@ -25,6 +25,7 @@ test("public local config exposes safe media roots and service status", () => {
       BANGUMI_ACCESS_TOKEN: "token",
       BANGUMI_LENS_PROXY: "http://127.0.0.1:7897",
     },
+    true,
   );
 
   assert.deepEqual(result, {
@@ -47,6 +48,7 @@ test("public local config exposes safe media roots and service status", () => {
       },
     ],
     ffmpeg: { ffmpeg: true, ffprobe: false },
+    lada: { available: true },
     ai: { configured: true, model: "deepseek-reasoner" },
     bangumi: { configured: true, proxyConfigured: true },
   });
@@ -55,6 +57,7 @@ test("public local config exposes safe media roots and service status", () => {
 test("public local config reports unconfigured optional services", () => {
   const result = createPublicLocalConfig(defaultAppConfig, {}, {});
 
+  assert.deepEqual(result.lada, { available: false });
   assert.deepEqual(result.ai, { configured: false, model: "deepseek-chat" });
   assert.deepEqual(result.bangumi, { configured: false, proxyConfigured: false });
 });

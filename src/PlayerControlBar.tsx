@@ -32,6 +32,7 @@ type PlayerControlBarProps = {
   canPlayNext: boolean;
   canRecordEmission: boolean;
   canUseEmbeddedSubtitles: boolean;
+  canRestoreWithLada: boolean;
   canGenerateMontage: boolean;
   controlBarRef: Ref<HTMLDivElement>;
   currentTime: number;
@@ -62,6 +63,7 @@ type PlayerControlBarProps = {
   isPlaying: boolean;
   isPrivacyMode: boolean;
   isSeriesMode: boolean;
+  ladaDisabledReason: string;
   normalizedVideoRotation: number;
   pendingHighlightStartTime: number | null;
   montageDisabledReason: string;
@@ -96,6 +98,7 @@ type PlayerControlBarProps = {
   onOpenAiPanel: () => void;
   onOpenDanmakuDialog: () => void;
   onOpenRatingDialog: () => void;
+  onOpenLadaRestoration: () => void;
   onOpenTagDialog: () => void;
   onPlayNext: () => void;
   onProbeEmbeddedSubtitles: () => void;
@@ -123,6 +126,7 @@ export function PlayerControlBar({
   canPlayNext,
   canRecordEmission,
   canUseEmbeddedSubtitles,
+  canRestoreWithLada,
   canGenerateMontage,
   controlBarRef,
   currentTime,
@@ -153,6 +157,7 @@ export function PlayerControlBar({
   isPlaying,
   isPrivacyMode,
   isSeriesMode,
+  ladaDisabledReason,
   normalizedVideoRotation,
   pendingHighlightStartTime,
   montageDisabledReason,
@@ -187,6 +192,7 @@ export function PlayerControlBar({
   onOpenAiPanel,
   onOpenDanmakuDialog,
   onOpenRatingDialog,
+  onOpenLadaRestoration,
   onOpenTagDialog,
   onPlayNext,
   onProbeEmbeddedSubtitles,
@@ -295,6 +301,7 @@ export function PlayerControlBar({
 
         <PlayerMediaActionControls
           canUseEmbeddedSubtitles={canUseEmbeddedSubtitles}
+          canRestoreWithLada={canRestoreWithLada}
           currentVideoRating={currentVideoRating}
           hasCurrentVideo={hasCurrentVideo}
           hasSelectedSubtitle={hasSelectedSubtitle}
@@ -307,6 +314,7 @@ export function PlayerControlBar({
           isEditSegmentMarkDisabled={isEditSegmentMarkDisabled}
           isEditSegmentMarkPending={isEditSegmentMarkPending}
           isSeriesMode={isSeriesMode}
+          ladaDisabledReason={ladaDisabledReason}
           selectedSubtitleId={selectedSubtitleId}
           subtitleControlOptions={subtitleControlOptions}
           videoTagCount={currentVideoTagsCount}
@@ -316,6 +324,7 @@ export function PlayerControlBar({
           onOpenAiPanel={onOpenAiPanel}
           onOpenDanmakuDialog={onOpenDanmakuDialog}
           onOpenRatingDialog={onOpenRatingDialog}
+          onOpenLadaRestoration={onOpenLadaRestoration}
           onOpenTagDialog={onOpenTagDialog}
           onProbeEmbeddedSubtitles={onProbeEmbeddedSubtitles}
         />

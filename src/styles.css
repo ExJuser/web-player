@@ -5139,6 +5139,100 @@ button {
   text-align: right;
 }
 
+.lada-options-status,
+.lada-options-error,
+.lada-options-grid {
+  grid-column: 1 / -1;
+}
+
+.lada-restoration-dialog {
+  max-height: calc(100vh - 36px);
+  overflow-y: auto;
+  scrollbar-color: rgba(0, 161, 214, 0.78) rgba(15, 18, 23, 0.7);
+  scrollbar-width: thin;
+}
+
+.lada-restoration-dialog::-webkit-scrollbar {
+  width: 8px;
+}
+
+.lada-restoration-dialog::-webkit-scrollbar-track {
+  background: rgba(15, 18, 23, 0.7);
+}
+
+.lada-restoration-dialog::-webkit-scrollbar-thumb {
+  border: 2px solid rgba(15, 18, 23, 0.7);
+  border-radius: 999px;
+  background: rgba(0, 161, 214, 0.78);
+}
+
+.lada-options-status,
+.lada-options-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid #303743;
+  border-radius: 8px;
+  background: #20252d;
+  color: #c9d1dc;
+  font-size: 13px;
+}
+
+.lada-options-error {
+  border-color: rgba(255, 107, 107, 0.45);
+  background: rgba(255, 107, 107, 0.1);
+  color: #ffb3b3;
+}
+
+.lada-options-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  min-width: 0;
+}
+
+.lada-option-field {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  color: #dce2ec;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.lada-option-field .control-select,
+.lada-option-field .control-select-trigger {
+  width: 100%;
+  min-width: 0;
+}
+
+.lada-option-field .control-group {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  width: 100%;
+  min-width: 0;
+  margin-left: 0;
+}
+
+.lada-option-toggles {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+}
+
+@media (max-width: 640px) {
+  .lada-options-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .lada-option-toggles {
+    grid-column: auto;
+  }
+}
+
 .dialog-close {
   position: absolute;
   top: 12px;
@@ -7899,6 +7993,43 @@ button {
 .app-shell.theme-light .compatible-media-progress-track,
 :root[data-theme="light"] .compatible-media-progress-track {
   background: #d7e0ea;
+}
+
+.app-shell.theme-light .lada-options-status,
+.app-shell.theme-light .lada-options-error,
+:root[data-theme="light"] .lada-options-status,
+:root[data-theme="light"] .lada-options-error {
+  border-color: #cfd8e3;
+  background: #ffffff;
+  color: #243044;
+}
+
+.app-shell.theme-light .lada-options-error,
+:root[data-theme="light"] .lada-options-error {
+  border-color: #f4b4b4;
+  background: #fff1f1;
+  color: #b42318;
+}
+
+.app-shell.theme-light .lada-option-field,
+:root[data-theme="light"] .lada-option-field {
+  color: #344054;
+}
+
+.app-shell.theme-light .lada-restoration-dialog,
+:root[data-theme="light"] .lada-restoration-dialog {
+  scrollbar-color: rgba(0, 119, 182, 0.72) #eef2f6;
+}
+
+.app-shell.theme-light .lada-restoration-dialog::-webkit-scrollbar-track,
+:root[data-theme="light"] .lada-restoration-dialog::-webkit-scrollbar-track {
+  background: #eef2f6;
+}
+
+.app-shell.theme-light .lada-restoration-dialog::-webkit-scrollbar-thumb,
+:root[data-theme="light"] .lada-restoration-dialog::-webkit-scrollbar-thumb {
+  border-color: #eef2f6;
+  background: rgba(0, 119, 182, 0.72);
 }
 
 :root[data-theme="light"] .secondary-button:hover,

@@ -3,12 +3,15 @@ export type ClientBangumiConfig = {
   proxyConfigured: boolean;
 };
 
-export function normalizeClientLocalConfig<T extends { bangumi?: ClientBangumiConfig }>(
+export type ClientLadaConfig = { available: boolean };
+
+export function normalizeClientLocalConfig<T extends { bangumi?: ClientBangumiConfig; lada?: ClientLadaConfig }>(
   config: T,
-): T & { bangumi: ClientBangumiConfig } {
+): T & { bangumi: ClientBangumiConfig; lada: ClientLadaConfig } {
   return {
     ...config,
     bangumi: config.bangumi ?? { configured: false, proxyConfigured: false },
+    lada: config.lada ?? { available: false },
   };
 }
 

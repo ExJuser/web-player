@@ -25,6 +25,7 @@ import { useEmbeddedSubtitleController } from "./useEmbeddedSubtitleController";
 import { useHomeProgressRecapController } from "./useHomeProgressRecapController";
 import { useHighEnergySegmentController } from "./useHighEnergySegmentController";
 import { useHighlightMontageController } from "./useHighlightMontageController";
+import { useLadaRestorationController } from "./useLadaRestorationController";
 import { useLibrarySearchState } from "./useLibrarySearchState";
 import { useManualSubtitleController } from "./useManualSubtitleController";
 import { useMediaLibraryInputController } from "./useMediaLibraryInputController";
@@ -53,7 +54,10 @@ import { useVideoEditSegmentController } from "./useVideoEditSegmentController";
 import { useVideoTagController } from "./useVideoTagController";
 import { normalizeClientLocalConfig, shouldAutoScanGlobalMediaLibrary, supportsServerFileAccess } from "./localConfigClient";
 import { summarizeVideoEditSegments } from "./videoEditUtils";
-import type { HighlightMontageConfirmState, HighlightMontageResultState, HighlightMontageTaskState } from "./HighlightMontageDialogs";
+import type { HighlightMontageConfirmState, HighlightMontageResultState } from "./HighlightMontageDialogs";
+import type { LadaRestorationConfirmState, LadaRestorationResultState } from "./LadaRestorationDialogs";
+import { readStoredLadaOptions, resolveLadaOptions, type LadaCapabilities, type LadaRestoreOptions } from "./ladaPreferences";
+import type { MediaProcessingTaskState } from "./MediaProcessingTaskDialog";
 import {
   buildLibrarySearchCandidates,
   type LibrarySearchCandidate,
@@ -500,9 +504,12 @@ export default function App() {
   const compatibleMediaAbortControllerRef = useRef<AbortController | null>(null);
   const [compatibleMediaMessage, setCompatibleMediaMessage] = useState("");
   const [highlightMontageConfirm, setHighlightMontageConfirm] = useState<HighlightMontageConfirmState | null>(null);
-  const [highlightMontageTask, setHighlightMontageTask] = useState<HighlightMontageTaskState | null>(null);
+  const [mediaProcessingTask, setMediaProcessingTask] = useState<MediaProcessingTaskState | null>(null);
   const [highlightMontageResult, setHighlightMontageResult] = useState<HighlightMontageResultState | null>(null);
   const highlightMontageAbortControllerRef = useRef<AbortController | null>(null);
+  const [ladaRestorationConfirm, setLadaRestorationConfirm] = useState<LadaRestorationConfirmState | null>(null);
+  const [ladaRestorationResult, setLadaRestorationResult] = useState<LadaRestorationResultState | null>(null);
+  const ladaRestorationAbortControllerRef = useRef<AbortController | null>(null);
   const [isDeletingCompatibleMedia, setIsDeletingCompatibleMedia] = useState(false);
   const [playbackSourceChoices, setPlaybackSourceChoices] = useState<Record<string, PlaybackSourceChoice>>({});
   const [isAiPanelOpen, setIsAiPanelOpen] = useState(false);
@@ -1918,8 +1925,8 @@ export default function App() {
       localConfig?.ffmpeg.ffmpeg &&
       localConfig.ffmpeg.ffprobe,
   );
-  const highlightMontageDisabledReason = highlightMontageTask
-    ? "已有剪辑任务正在运行。"
+  const highlightMontageDisabledReason = mediaProcessingTask
+    ? "已有影片处理任务正在运行。"
     : !currentVideo
       ? "请先选择影片。"
       : !currentVideoEditSegments.length
@@ -1932,6 +1939,18 @@ export default function App() {
               ? "需要先安装 ffmpeg 和 ffprobe。"
               : "";
   const canGenerateHighlightMontage = !highlightMontageDisabledReason;
+  const ladaRestorationDisabledReason = mediaProcessingTask
+    ? "已有影片处理任务正在运行。"
+    : !currentVideo
+      ? "请先选择影片。"
+      : !currentMediaRootId || !currentMediaLibraryRoot
+        ? "当前影片没有可解析的媒体根目录。"
+        : !supportsServerFileAccess(currentMediaLibraryRoot)
+          ? "浏览器添加的媒体库需要先配置本机路径。"
+          : !localConfig?.lada.available
+            ? "未检测到 D:\\lada\\lada-cli.exe。"
+            : "";
+  const canRestoreWithLada = !ladaRestorationDisabledReason;
   const compatibleMediaAction = getCompatibleMediaAction(currentVideo, {
     canUseServerTools: canUseServerMediaTools,
   });
@@ -2094,6 +2113,7 @@ export default function App() {
         setLocalConfig({
           mediaRoots: [],
           ffmpeg: { ffmpeg: false, ffprobe: false },
+          lada: { available: false },
           ai: { configured: false, model: "deepseek-chat" },
           bangumi: { configured: false, proxyConfigured: false },
         });
@@ -4335,6 +4355,37 @@ export default function App() {
     });
   }, [canGenerateHighlightMontage, currentMediaRootId, currentVideo, currentVideoEditSegments, currentVideoHighlights]);
 
+  const openLadaRestorationConfirm = useCallback(async () => {
+    if (!currentVideo || !currentMediaRootId || !canRestoreWithLada) return;
+    const requestKey = `${currentMediaRootId}|${currentVideo.relativePath}`;
+    setLadaRestorationResult(null);
+    setLadaRestorationConfirm({
+      rootId: currentMediaRootId,
+      relativePath: currentVideo.relativePath,
+      videoName: currentVideo.name,
+      capabilities: null,
+      options: null,
+      isLoading: true,
+      error: "",
+    });
+    try {
+      const capabilities = await fetchJson<LadaCapabilities>("/api/media/lada/options");
+      const options = resolveLadaOptions(readStoredLadaOptions(), capabilities);
+      setLadaRestorationConfirm((current) => current && `${current.rootId}|${current.relativePath}` === requestKey
+        ? { ...current, capabilities, options, isLoading: false }
+        : current);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "读取 LADA 设备和编码预设失败。";
+      setLadaRestorationConfirm((current) => current && `${current.rootId}|${current.relativePath}` === requestKey
+        ? { ...current, isLoading: false, error: message }
+        : current);
+    }
+  }, [canRestoreWithLada, currentMediaRootId, currentVideo]);
+
+  const updateLadaRestorationOptions = useCallback((options: LadaRestoreOptions) => {
+    setLadaRestorationConfirm((current) => current ? { ...current, options } : current);
+  }, []);
+
   const {
     cancelCompatibleMediaGeneration,
     createCompatibleMedia,
@@ -4360,17 +4411,41 @@ export default function App() {
   const {
     cancelMontage: cancelHighlightMontage,
     createMontage: createHighlightMontage,
-    reopenTask: reopenHighlightMontageTask,
-    runInBackground: runHighlightMontageInBackground,
   } = useHighlightMontageController({
     abortControllerRef: highlightMontageAbortControllerRef,
     confirm: highlightMontageConfirm,
-    task: highlightMontageTask,
+    task: mediaProcessingTask,
     setConfirm: setHighlightMontageConfirm,
     setResult: setHighlightMontageResult,
-    setTask: setHighlightMontageTask,
+    setTask: setMediaProcessingTask,
     setMessage,
   });
+
+  const {
+    cancelRestoration: cancelLadaRestoration,
+    createRestoration: createLadaRestoration,
+  } = useLadaRestorationController({
+    abortControllerRef: ladaRestorationAbortControllerRef,
+    confirm: ladaRestorationConfirm,
+    task: mediaProcessingTask,
+    setConfirm: setLadaRestorationConfirm,
+    setResult: setLadaRestorationResult,
+    setTask: setMediaProcessingTask,
+    setMessage,
+  });
+
+  const reopenMediaProcessingTask = useCallback(() => {
+    setMediaProcessingTask((current) => current ? { ...current, isDialogOpen: true } : current);
+  }, []);
+
+  const runMediaProcessingInBackground = useCallback(() => {
+    setMediaProcessingTask((current) => current ? { ...current, isDialogOpen: false } : current);
+  }, []);
+
+  const cancelMediaProcessingTask = useCallback(() => {
+    if (mediaProcessingTask?.kind === "lada") cancelLadaRestoration();
+    else if (mediaProcessingTask?.kind === "montage") cancelHighlightMontage();
+  }, [cancelHighlightMontage, cancelLadaRestoration, mediaProcessingTask?.kind]);
 
   const {
     fetchDanmakuFromUrl,
@@ -5208,7 +5283,7 @@ export default function App() {
           compatibleMediaMessage={compatibleMediaMessage}
           compatibleMediaVideoId={compatibleMediaVideoId}
           currentVideoId={currentVideo?.id ?? null}
-          highlightMontageTask={highlightMontageTask}
+          mediaProcessingTask={mediaProcessingTask}
           isHomeViewVisible={isHomeViewVisible}
           isNonPlayerViewVisible={isNonPlayerViewVisible}
           isPhotoAlbumViewVisible={isPhotoAlbumViewVisible}
@@ -5223,7 +5298,7 @@ export default function App() {
           onAddMediaLibrary={requestAddMediaLibrary}
           onOpenCacheStatus={openCacheStatusDialog}
           onOpenCompatibleMediaConfirm={openCompatibleMediaConfirm}
-          onOpenHighlightMontageTask={reopenHighlightMontageTask}
+          onOpenMediaProcessingTask={reopenMediaProcessingTask}
           onShowHome={showHomeView}
           onShowPhotoAlbums={showPhotoAlbumsView}
           onToggleTheme={toggleTheme}
@@ -5519,6 +5594,7 @@ export default function App() {
             canPlayNext={canPlayNext}
             canRecordEmission={canRecordEmission}
             canUseEmbeddedSubtitles={canUseEmbeddedSubtitles}
+            canRestoreWithLada={canRestoreWithLada}
             canGenerateMontage={canGenerateHighlightMontage}
             controlBarRef={controlBarRef}
             currentTime={currentTime}
@@ -5549,6 +5625,7 @@ export default function App() {
             isPlaying={isPlaying}
             isPrivacyMode={isPrivacyMode}
             isSeriesMode={isSeriesMode}
+            ladaDisabledReason={ladaRestorationDisabledReason}
             normalizedVideoRotation={normalizedVideoRotation}
             pendingHighlightStartTime={pendingHighEnergyStartTime}
             montageDisabledReason={highlightMontageDisabledReason}
@@ -5596,6 +5673,7 @@ export default function App() {
               setDanmakuMessage((message) => message || "匹配或拉取弹幕后显示在视频上方。");
             }}
             onOpenRatingDialog={() => currentVideo && openVideoRatingDialog(currentVideo)}
+            onOpenLadaRestoration={() => void openLadaRestorationConfirm()}
             onOpenTagDialog={() => {
               setIsTagDialogOpen(true);
               setTagMessage("");
@@ -5858,14 +5936,25 @@ export default function App() {
     <PlayerUtilityDialogs
       highlightMontage={{
         confirm: highlightMontageConfirm,
-        task: highlightMontageTask,
         result: highlightMontageResult,
         formatTime,
         onCloseConfirm: () => setHighlightMontageConfirm(null),
         onCreate: () => void createHighlightMontage(),
-        onCancelTask: cancelHighlightMontage,
-        onRunInBackground: runHighlightMontageInBackground,
         onCloseResult: () => setHighlightMontageResult(null),
+      }}
+      ladaRestoration={{
+        confirm: ladaRestorationConfirm,
+        result: ladaRestorationResult,
+        formatFileSize,
+        onChangeOptions: updateLadaRestorationOptions,
+        onCloseConfirm: () => setLadaRestorationConfirm(null),
+        onCreate: () => void createLadaRestoration(),
+        onCloseResult: () => setLadaRestorationResult(null),
+      }}
+      mediaProcessingTask={{
+        task: mediaProcessingTask,
+        onCancel: cancelMediaProcessingTask,
+        onRunInBackground: runMediaProcessingInBackground,
       }}
       compatibleMedia={{
         confirm: compatibleMediaConfirm,

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
 
-import { detectTools, runProcess } from "../server/processRunner.mjs";
+import { detectTools, runProcess, terminateChildProcess } from "../server/processRunner.mjs";
 
 const projectRoot = resolve(import.meta.dirname, "..");
 
@@ -61,6 +61,59 @@ test("runProcess rejects with the configured abort message", async () => {
   controller.abort();
 
   await assert.rejects(() => promise, /custom abort/);
+});
+
+test("runProcess supports disabling the timeout", async () => {
+  const output = await runProcess(process.execPath, ["-e", "setTimeout(() => process.stdout.write('done'), 30)"], {
+    timeoutMs: 0,
+  });
+
+  assert.equal(output, "done");
+});
+
+test("runProcess keeps only the configured stderr tail", async () => {
+  await assert.rejects(
+    () => runProcess(process.execPath, ["-e", "process.stderr.write('1234567890TAIL'); process.exit(2)"], {
+      stderrTailBytes: 8,
+    }),
+    (error) => {
+      assert.equal(error.message, "7890TAIL");
+      return true;
+    },
+  );
+});
+
+test("runProcess can use stdout as the error message when stderr is empty", async () => {
+  await assert.rejects(
+    () => runProcess(process.execPath, ["-e", "process.stdout.write('GPU is unavailable'); process.exit(2)"], {
+      includeStdoutOnError: true,
+    }),
+    /GPU is unavailable/,
+  );
+});
+
+test("terminateChildProcess uses taskkill for a Windows process tree", async () => {
+  const calls = [];
+  const fakeTaskkill = {
+    once(event, callback) {
+      if (event === "close") callback(0);
+      return this;
+    },
+  };
+  const child = { pid: 4321, kill: () => { throw new Error("parent-only kill should not be used"); } };
+
+  await terminateChildProcess(child, {
+    killTree: true,
+    platform: "win32",
+    spawnImpl: (command, args, options) => {
+      calls.push({ command, args, options });
+      return fakeTaskkill;
+    },
+  });
+
+  assert.deepEqual(calls[0].command, "taskkill.exe");
+  assert.deepEqual(calls[0].args, ["/PID", "4321", "/T", "/F"]);
+  assert.equal(calls[0].options.windowsHide, true);
 });
 
 test("detectTools reports each tool independently", async () => {

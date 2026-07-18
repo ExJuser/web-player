@@ -2,7 +2,7 @@ import { normalizeMediaRoots } from "./mediaRoots.mjs";
 
 export const defaultAppConfig = { server: { port: 3001 }, media: { roots: [] } };
 
-export function createPublicLocalConfig(config, tools, env = {}) {
+export function createPublicLocalConfig(config, tools, env = {}, ladaAvailable = false) {
   const roots = normalizeMediaRoots(config).map((root) => ({
     id: root.id,
     label: root.label,
@@ -14,6 +14,7 @@ export function createPublicLocalConfig(config, tools, env = {}) {
   return {
     mediaRoots: roots,
     ffmpeg: tools,
+    lada: { available: Boolean(ladaAvailable) },
     ai: {
       configured: Boolean(env.DEEPSEEK_API_KEY),
       model: env.DEEPSEEK_MODEL || "deepseek-chat",

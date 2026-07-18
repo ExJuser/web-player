@@ -10,6 +10,12 @@ import {
 } from "./mediaCompatibility.mjs";
 import { assertMontageMediaRoot, createHighlightMontage } from "./highlightMontage.mjs";
 import {
+  assertLadaMediaRoot,
+  createLadaCapabilitiesLoader,
+  detectLadaExecutable,
+  restoreVideoWithLada,
+} from "./ladaRestoration.mjs";
+import {
   ensureFileExists,
   normalizeMediaRoots as normalizeMediaRootsFromConfig,
   resolveMediaPath as resolveMediaPathFromConfig,
@@ -51,6 +57,7 @@ import { hashValue } from "./hashUtils.mjs";
 import { sendBlob, sendJson, sendMediaFile, sendNdjson, writeStreamEvent } from "./httpResponses.mjs";
 import { readJsonFile, writeJsonFile } from "./jsonFiles.mjs";
 import { createPublicLocalConfig, defaultAppConfig } from "./localConfig.mjs";
+import { createMediaProcessingTaskGate } from "./mediaProcessingTask.mjs";
 import { detectTools, runProcess } from "./processRunner.mjs";
 import { formatRemoteFetchError, requestExternalJson, requestExternalText } from "./remoteFetch.mjs";
 import { parseJsonBody, readBody, sanitizeStorageId } from "./requestUtils.mjs";
@@ -732,6 +739,7 @@ async function updateIndex(libraryId, metadata) {
 export function playerDataApiPlugin({ projectRoot, env }) {
   initializeApiServices(projectRoot);
   let toolsPromise = null;
+  let ladaAvailablePromise = null;
   let mediaRootsScanPromise = null;
   let photoAlbumsScanPromise = null;
   let localDataStoreReadyPromise = null;
@@ -744,6 +752,12 @@ export function playerDataApiPlugin({ projectRoot, env }) {
     toolsPromise ??= detectTools();
     return toolsPromise;
   };
+  const getLadaAvailable = () => {
+    ladaAvailablePromise ??= detectLadaExecutable();
+    return ladaAvailablePromise;
+  };
+  const loadLadaCapabilities = createLadaCapabilitiesLoader(runProcess);
+  const mediaProcessingTaskGate = createMediaProcessingTaskGate();
   const scanMediaRootsOnce = async () => {
     if (!mediaRootsScanPromise) {
       mediaRootsScanPromise = (async () => scanConfiguredMediaRoots(await loadAppConfig()))().finally(() => {
@@ -803,7 +817,16 @@ export function playerDataApiPlugin({ projectRoot, env }) {
       const store = await getLocalDataStore();
 
       if (url.pathname === "/api/local-config" && request.method === "GET") {
-        sendJson(response, 200, createPublicLocalConfig(await loadAppConfig(), await getTools(), env));
+        sendJson(response, 200, createPublicLocalConfig(await loadAppConfig(), await getTools(), env, await getLadaAvailable()));
+        return;
+      }
+
+      if (url.pathname === "/api/media/lada/options" && request.method === "GET") {
+        if (!await getLadaAvailable()) {
+          sendJson(response, 404, { error: "未找到 D:\\lada\\lada-cli.exe。" });
+          return;
+        }
+        sendJson(response, 200, await loadLadaCapabilities());
         return;
       }
 
@@ -846,7 +869,7 @@ export function playerDataApiPlugin({ projectRoot, env }) {
         const payload = await parseJsonBody(request);
         const mediaRoot = await upsertMediaRoot(payload);
         sendJson(response, 200, {
-          ...createPublicLocalConfig(await loadAppConfig(), await getTools(), env),
+          ...createPublicLocalConfig(await loadAppConfig(), await getTools(), env, await getLadaAvailable()),
           mediaRoot,
         });
         return;
@@ -856,7 +879,7 @@ export function playerDataApiPlugin({ projectRoot, env }) {
         const payload = await parseJsonBody(request);
         const result = await updateMediaRootLocalPath(payload);
         sendJson(response, 200, {
-          ...createPublicLocalConfig(result.config, await getTools(), env),
+          ...createPublicLocalConfig(result.config, await getTools(), env, await getLadaAvailable()),
           mediaRoot: result.mediaRoot,
         });
         return;
@@ -904,11 +927,20 @@ export function playerDataApiPlugin({ projectRoot, env }) {
         const config = await loadAppConfig();
         const root = findMediaRoot(config, payload?.rootId);
         sendNdjson(response, 200);
+        let releaseMediaProcessingTask;
+        try {
+          releaseMediaProcessingTask = mediaProcessingTaskGate.acquire("montage");
+        } catch (error) {
+          writeStreamEvent(response, { type: "error", error: error instanceof Error ? error.message : "已有影片处理任务正在运行。" });
+          response.end();
+          return;
+        }
         let sourcePath;
         try {
           assertMontageMediaRoot(root);
           sourcePath = resolveVideoPathFromConfig(config, root.id, payload?.relativePath);
         } catch (error) {
+          releaseMediaProcessingTask();
           writeStreamEvent(response, { type: "error", error: error instanceof Error ? error.message : "媒体路径不可用。" });
           response.end();
           return;
@@ -945,6 +977,56 @@ export function playerDataApiPlugin({ projectRoot, env }) {
           });
         } finally {
           finished = true;
+          releaseMediaProcessingTask();
+          response.end();
+        }
+        return;
+      }
+
+      if (url.pathname === "/api/media/lada/restore" && request.method === "POST") {
+        const payload = await parseJsonBody(request);
+        const config = await loadAppConfig();
+        const root = findMediaRoot(config, payload?.rootId);
+        sendNdjson(response, 200);
+        let releaseMediaProcessingTask;
+        try {
+          releaseMediaProcessingTask = mediaProcessingTaskGate.acquire("lada");
+        } catch (error) {
+          writeStreamEvent(response, { type: "error", error: error instanceof Error ? error.message : "已有影片处理任务正在运行。" });
+          response.end();
+          return;
+        }
+
+        const controller = new AbortController();
+        let finished = false;
+        response.on("close", () => {
+          if (!finished) controller.abort();
+        });
+        try {
+          if (!await getLadaAvailable()) throw new Error("未找到 D:\\lada\\lada-cli.exe。");
+          assertLadaMediaRoot(root);
+          const sourcePath = resolveVideoPathFromConfig(config, root.id, payload?.relativePath);
+          await ensureFileExists(sourcePath);
+          const capabilities = await loadLadaCapabilities();
+          writeStreamEvent(response, { type: "progress", percent: 0, message: "正在准备马赛克修复..." });
+          const result = await restoreVideoWithLada({
+            runProcess,
+            sourcePath,
+            relativePath: payload?.relativePath,
+            options: payload?.options,
+            capabilities,
+            signal: controller.signal,
+            onProgress: (progress) => writeStreamEvent(response, { type: "progress", ...progress }),
+          });
+          writeStreamEvent(response, { type: "done", result });
+        } catch (error) {
+          writeStreamEvent(response, {
+            type: "error",
+            error: error instanceof Error ? error.message : "马赛克修复失败。",
+          });
+        } finally {
+          finished = true;
+          releaseMediaProcessingTask();
           response.end();
         }
         return;

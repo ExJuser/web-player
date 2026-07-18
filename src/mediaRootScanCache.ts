@@ -19,6 +19,7 @@ export type LocalMediaRoot = {
 export type LocalConfig = {
   mediaRoots: LocalMediaRoot[];
   ffmpeg: { ffmpeg: boolean; ffprobe: boolean };
+  lada: { available: boolean };
   ai: { configured: boolean; model: string };
   bangumi: { configured: boolean; proxyConfigured: boolean };
 };

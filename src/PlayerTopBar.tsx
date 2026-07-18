@@ -1,7 +1,8 @@
-import { FolderOpen, HardDrive, Images, Moon, RefreshCw, Scissors, Sun } from "lucide-react";
+import { FolderOpen, HardDrive, Images, Moon, RefreshCw, Scissors, Sparkles, Sun } from "lucide-react";
 import { forwardRef } from "react";
 
 import type { ActiveView } from "./playerTypes";
+import type { MediaProcessingTaskState } from "./MediaProcessingTaskDialog";
 
 type VideoMetadataRow = readonly [string, string];
 
@@ -13,7 +14,7 @@ type PlayerTopBarProps = {
   compatibleMediaMessage: string;
   compatibleMediaVideoId: string | null;
   currentVideoId: string | null;
-  highlightMontageTask: { videoName: string; progress: number; status: string } | null;
+  mediaProcessingTask: MediaProcessingTaskState | null;
   isHomeViewVisible: boolean;
   isNonPlayerViewVisible: boolean;
   isPhotoAlbumViewVisible: boolean;
@@ -28,7 +29,7 @@ type PlayerTopBarProps = {
   onAddMediaLibrary: () => void;
   onOpenCacheStatus: () => void;
   onOpenCompatibleMediaConfirm: () => void;
-  onOpenHighlightMontageTask: () => void;
+  onOpenMediaProcessingTask: () => void;
   onShowHome: () => void;
   onShowPhotoAlbums: () => void;
   onToggleTheme: () => void;
@@ -43,7 +44,7 @@ export const PlayerTopBar = forwardRef<HTMLElement, PlayerTopBarProps>(function 
     compatibleMediaMessage,
     compatibleMediaVideoId,
     currentVideoId,
-    highlightMontageTask,
+    mediaProcessingTask,
     isHomeViewVisible,
     isNonPlayerViewVisible,
     isPhotoAlbumViewVisible,
@@ -58,7 +59,7 @@ export const PlayerTopBar = forwardRef<HTMLElement, PlayerTopBarProps>(function 
     onAddMediaLibrary,
     onOpenCacheStatus,
     onOpenCompatibleMediaConfirm,
-    onOpenHighlightMontageTask,
+    onOpenMediaProcessingTask,
     onShowHome,
     onShowPhotoAlbums,
     onToggleTheme,
@@ -108,11 +109,11 @@ export const PlayerTopBar = forwardRef<HTMLElement, PlayerTopBarProps>(function 
         )}
       </div>
       <div className="top-actions">
-        {highlightMontageTask ? (
-          <button className="secondary-button highlight-montage-top-status" type="button" onClick={onOpenHighlightMontageTask} title={highlightMontageTask.status}>
-            <Scissors size={16} className="spin-icon" />
-            <span>{Math.round(highlightMontageTask.progress)}%</span>
-            <small>{highlightMontageTask.videoName}</small>
+        {mediaProcessingTask ? (
+          <button className="secondary-button highlight-montage-top-status" type="button" onClick={onOpenMediaProcessingTask} title={mediaProcessingTask.status}>
+            {mediaProcessingTask.kind === "lada" ? <Sparkles size={16} className="spin-icon" /> : <Scissors size={16} className="spin-icon" />}
+            <span>{Math.round(mediaProcessingTask.progress)}%</span>
+            <small>{mediaProcessingTask.videoName}</small>
           </button>
         ) : null}
         {!isPrivacyMode && !isPhotoAlbumViewVisible ? (

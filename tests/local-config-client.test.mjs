@@ -5,7 +5,7 @@ import { importTsModule } from "./importTsModule.mjs";
 
 const localConfigClient = await importTsModule(new URL("../src/localConfigClient.ts", import.meta.url));
 
-test("normalizeClientLocalConfig adds a default bangumi config", () => {
+test("normalizeClientLocalConfig adds default optional service configs", () => {
   const result = localConfigClient.normalizeClientLocalConfig({
     mediaRoots: [],
     ffmpeg: { ffmpeg: false, ffprobe: false },
@@ -13,6 +13,7 @@ test("normalizeClientLocalConfig adds a default bangumi config", () => {
   });
 
   assert.deepEqual(result.bangumi, { configured: false, proxyConfigured: false });
+  assert.deepEqual(result.lada, { available: false });
 });
 
 test("normalizeClientLocalConfig preserves existing bangumi config", () => {
@@ -21,9 +22,11 @@ test("normalizeClientLocalConfig preserves existing bangumi config", () => {
     ffmpeg: { ffmpeg: true, ffprobe: true },
     ai: { configured: true, model: "deepseek-chat" },
     bangumi: { configured: true, proxyConfigured: true },
+    lada: { available: true },
   });
 
   assert.deepEqual(result.bangumi, { configured: true, proxyConfigured: true });
+  assert.deepEqual(result.lada, { available: true });
 });
 
 test("global media library does not auto-scan configured roots on page load", () => {

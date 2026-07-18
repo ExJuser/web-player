@@ -4,18 +4,18 @@ import type { HighlightMontageResult, HighlightMontageStreamEvent } from "./appT
 import type {
   HighlightMontageConfirmState,
   HighlightMontageResultState,
-  HighlightMontageTaskState,
 } from "./HighlightMontageDialogs";
+import type { MediaProcessingTaskState } from "./MediaProcessingTaskDialog";
 import { readLocalApiStream } from "./localApiClient";
 import { clamp } from "./playerInteractionUtils";
 
 type UseHighlightMontageControllerOptions = {
   abortControllerRef: MutableRefObject<AbortController | null>;
   confirm: HighlightMontageConfirmState | null;
-  task: HighlightMontageTaskState | null;
+  task: MediaProcessingTaskState | null;
   setConfirm: Dispatch<SetStateAction<HighlightMontageConfirmState | null>>;
   setResult: Dispatch<SetStateAction<HighlightMontageResultState | null>>;
-  setTask: Dispatch<SetStateAction<HighlightMontageTaskState | null>>;
+  setTask: Dispatch<SetStateAction<MediaProcessingTaskState | null>>;
   setMessage: (message: string) => void;
 };
 
@@ -25,7 +25,7 @@ export function useHighlightMontageController({ abortControllerRef, confirm, tas
     const request = confirm;
     setConfirm(null);
     setResult(null);
-    setTask({ videoName: request.videoName, progress: 0, status: "正在准备剪辑任务...", isDialogOpen: true });
+    setTask({ kind: "montage", videoName: request.videoName, progress: 0, status: "正在准备剪辑任务...", isDialogOpen: true });
     const controller = new AbortController();
     abortControllerRef.current = controller;
     let montageResult: HighlightMontageResult | null = null;
@@ -42,7 +42,7 @@ export function useHighlightMontageController({ abortControllerRef, confirm, tas
         }),
       }, (event) => {
         if (event.type === "progress") {
-          setTask((current) => current ? {
+          setTask((current) => current?.kind === "montage" ? {
             ...current,
             progress: clamp(Number(event.percent) || 0, 0, 100),
             status: event.message || current.status,
@@ -53,14 +53,14 @@ export function useHighlightMontageController({ abortControllerRef, confirm, tas
       });
       const result = montageResult as HighlightMontageResult | null;
       if (!result) throw new Error("生成剪辑版未返回结果。");
-      setTask(null);
+      setTask((current) => current?.kind === "montage" ? null : current);
       setResult({ fileName: result.fileName, relativePath: result.relativePath, durationSeconds: result.durationSeconds });
       setMessage(`已生成剪辑版 ${result.fileName}。`);
     } catch (error) {
       const message = controller.signal.aborted
         ? "已取消生成剪辑版。"
         : error instanceof Error ? error.message : "生成剪辑版失败。";
-      setTask(null);
+      setTask((current) => current?.kind === "montage" ? null : current);
       setMessage(message);
     } finally {
       if (abortControllerRef.current === controller) abortControllerRef.current = null;
@@ -69,16 +69,8 @@ export function useHighlightMontageController({ abortControllerRef, confirm, tas
 
   const cancelMontage = useCallback(() => {
     abortControllerRef.current?.abort();
-    setTask((current) => current ? { ...current, status: "正在取消剪辑任务..." } : current);
+    setTask((current) => current?.kind === "montage" ? { ...current, status: "正在取消剪辑任务..." } : current);
   }, [abortControllerRef, setTask]);
 
-  const runInBackground = useCallback(() => {
-    setTask((current) => current ? { ...current, isDialogOpen: false } : current);
-  }, [setTask]);
-
-  const reopenTask = useCallback(() => {
-    setTask((current) => current ? { ...current, isDialogOpen: true } : current);
-  }, [setTask]);
-
-  return { cancelMontage, createMontage, reopenTask, runInBackground };
+  return { cancelMontage, createMontage };
 }
