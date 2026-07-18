@@ -1,5 +1,5 @@
 import { Scissors, X } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { VideoEditSegment } from "./playerTypes";
 
@@ -15,8 +15,31 @@ type PlayerEditSegmentMenuProps = {
 
 export function PlayerEditSegmentMenu({ segments, canGenerate, disabledReason, formatTime, onGenerate, onRemove, onSeek }: PlayerEditSegmentMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const closeOnPointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node) || !menuRef.current?.contains(target)) {
+        setIsOpen(false);
+      }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsOpen(false);
+    };
+
+    document.addEventListener("pointerdown", closeOnPointerDown);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnPointerDown);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [isOpen]);
+
   return (
-    <div className="timeline-edit-menu">
+    <div className="timeline-edit-menu" ref={menuRef}>
       <button
         className={`timeline-edit-menu-button ${segments.length ? "active" : ""}`}
         type="button"
