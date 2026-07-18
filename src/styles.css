@@ -4149,7 +4149,7 @@ button {
   justify-content: flex-end;
   gap: 6px;
   width: 100%;
-  min-width: max-content;
+  min-width: 0;
   opacity: 0;
   pointer-events: none;
   transform: translateX(10px);
