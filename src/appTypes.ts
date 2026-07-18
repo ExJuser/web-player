@@ -122,22 +122,12 @@ export type HighlightMontageResult = {
   lastModified: number;
 };
 
-export type HighlightMontageStreamEvent =
-  | { type: "progress"; percent?: number; message?: string }
-  | { type: "done"; result: HighlightMontageResult }
-  | { type: "error"; error: string };
-
 export type LadaRestorationResult = {
   fileName: string;
   relativePath: string;
   size: number;
   lastModified: number;
 };
-
-export type LadaRestorationStreamEvent =
-  | { type: "progress"; percent?: number; message?: string }
-  | { type: "done"; result: LadaRestorationResult }
-  | { type: "error"; error: string };
 
 export type MediaProcessingTaskRunState = "running" | "cancelling" | "completed" | "failed" | "cancelled";
 
