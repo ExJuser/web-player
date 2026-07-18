@@ -3178,6 +3178,15 @@ export default function App() {
     setActiveView("home");
   }, [cancelAutoNextPrompt, persistCurrentProgress, resetHoldSpeedState, showControls]);
 
+  const showPhotoAlbumsView = useCallback(() => {
+    persistCurrentProgress();
+    videoRef.current?.pause();
+    cancelAutoNextPrompt();
+    resetHoldSpeedState();
+    showControls();
+    setActiveView("photos");
+  }, [cancelAutoNextPrompt, persistCurrentProgress, resetHoldSpeedState, showControls]);
+
   const {
     markSelectedPhotoAlbumCompleted,
     movePhoto,
@@ -4515,6 +4524,7 @@ export default function App() {
     isClearCacheConfirmOpen,
     isClearingCache,
     loadCacheStatus,
+    openCacheStatusDialog,
     pagedCacheStatusItems,
     requestClearSelectedCache,
     selectedCacheBytes,
@@ -5247,13 +5257,17 @@ export default function App() {
           isHomeViewVisible={isHomeViewVisible}
           isNonPlayerViewVisible={isNonPlayerViewVisible}
           isPrivacyMode={isPrivacyMode}
+          isScanning={isScanning}
           metadataRows={currentVideoMetadataRows}
           playabilityMessage={currentVideoPlayabilityMessage}
           summaryFallbackText={currentVideoSummaryFallbackText}
           theme={theme}
           videoCount={videos.length}
+          onAddMediaLibrary={requestAddMediaLibrary}
+          onOpenCacheStatus={openCacheStatusDialog}
           onOpenMediaProcessingTask={reopenMediaProcessingTask}
           onShowHome={showHomeView}
+          onShowPhotoAlbums={showPhotoAlbumsView}
           onToggleTheme={toggleTheme}
         />
 

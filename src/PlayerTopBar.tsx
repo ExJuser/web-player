@@ -1,4 +1,4 @@
-import { Info, Moon, Scissors, Sparkles, Sun } from "lucide-react";
+import { FolderOpen, HardDrive, Images, Info, Moon, Scissors, Sparkles, Sun } from "lucide-react";
 import { forwardRef, useEffect, useRef, useState } from "react";
 
 import type { MediaProcessingTaskState } from "./MediaProcessingTaskDialog";
@@ -11,13 +11,17 @@ type PlayerTopBarProps = {
   isHomeViewVisible: boolean;
   isNonPlayerViewVisible: boolean;
   isPrivacyMode: boolean;
+  isScanning: boolean;
   metadataRows: readonly VideoMetadataRow[];
   summaryFallbackText: string;
   theme: "dark" | "light";
   videoCount: number;
   playabilityMessage: string;
+  onAddMediaLibrary: () => void;
+  onOpenCacheStatus: () => void;
   onOpenMediaProcessingTask: () => void;
   onShowHome: () => void;
+  onShowPhotoAlbums: () => void;
   onToggleTheme: () => void;
 };
 
@@ -28,13 +32,17 @@ export const PlayerTopBar = forwardRef<HTMLElement, PlayerTopBarProps>(function 
     isHomeViewVisible,
     isNonPlayerViewVisible,
     isPrivacyMode,
+    isScanning,
     metadataRows,
     summaryFallbackText,
     theme,
     videoCount,
     playabilityMessage,
+    onAddMediaLibrary,
+    onOpenCacheStatus,
     onOpenMediaProcessingTask,
     onShowHome,
+    onShowPhotoAlbums,
     onToggleTheme,
   },
   ref
@@ -102,9 +110,37 @@ export const PlayerTopBar = forwardRef<HTMLElement, PlayerTopBarProps>(function 
             <small>{mediaProcessingTask.videoName}</small>
           </button>
         ) : null}
+        {!isPrivacyMode && isHomeViewVisible ? (
+          <button
+            className="secondary-button top-cache-status-button"
+            type="button"
+            onClick={onOpenCacheStatus}
+            title="查看本地缓存"
+          >
+            <HardDrive size={17} />
+            本地缓存
+          </button>
+        ) : null}
+        {!isPrivacyMode && isHomeViewVisible ? (
+          <button
+            className="primary-button top-add-library-button"
+            type="button"
+            onClick={onAddMediaLibrary}
+            disabled={isScanning}
+          >
+            <FolderOpen size={18} />
+            {isScanning ? "扫描中" : "新增媒体库"}
+          </button>
+        ) : null}
         {!isPrivacyMode && videoCount && !isHomeViewVisible ? (
           <button className="secondary-button top-home-button" type="button" onClick={onShowHome}>
             首页
+          </button>
+        ) : null}
+        {!isPrivacyMode && isHomeViewVisible ? (
+          <button className="secondary-button top-home-button" type="button" onClick={onShowPhotoAlbums}>
+            <Images size={17} />
+            看图
           </button>
         ) : null}
         <button

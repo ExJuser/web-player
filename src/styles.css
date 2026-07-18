@@ -395,6 +395,12 @@ button {
   height: 34px;
 }
 
+.top-cache-status-button {
+  min-width: 96px;
+  height: 34px;
+  padding: 0 11px;
+}
+
 .icon-button.privacy-toggle.active {
   border-color: #00a1d6;
   background: #07394a;
@@ -8517,6 +8523,10 @@ button {
 
   .top-home-button {
     flex: 0 0 78px;
+  }
+
+  .top-cache-status-button {
+    flex: 0 0 auto;
   }
 
   .top-actions .primary-button {
