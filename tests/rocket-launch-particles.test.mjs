@@ -45,3 +45,23 @@ test("advances particles with drag, gravity, and finite lifetime", () => {
   }
   assert.equal(alive, false);
 });
+
+test("keeps alpha and velocity consistent across equivalent frame time", () => {
+  const seedParticle = particles.createFireworkParticles(
+    { at: 0, x: 0.5, y: 0.5, colors: ["#fff"], particleCount: 1, speed: 5 },
+    100,
+    100,
+    () => 0.5,
+  )[0];
+  const fullFrame = { ...seedParticle };
+  const halfFrames = { ...seedParticle };
+  const standardFrameMs = 1000 / 60;
+
+  particles.advanceFireworkParticle(fullFrame, standardFrameMs);
+  particles.advanceFireworkParticle(halfFrames, standardFrameMs / 2);
+  particles.advanceFireworkParticle(halfFrames, standardFrameMs / 2);
+
+  assert.ok(Math.abs(fullFrame.alpha - halfFrames.alpha) < 0.000001);
+  assert.ok(Math.abs(fullFrame.velocityX - halfFrames.velocityX) < 0.000001);
+  assert.ok(Math.abs(fullFrame.velocityY - halfFrames.velocityY) < 0.001);
+});

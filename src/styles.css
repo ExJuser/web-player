@@ -8776,9 +8776,11 @@ button {
 
 @media (prefers-reduced-motion: reduce) {
   .rocket-launch-effect {
-    animation-duration: 900ms;
+    background: none;
+    animation: none;
   }
 
+  .rocket-launch-effect__atmosphere,
   .rocket-launch-effect__canvas,
   .rocket-launch-effect__shockwave {
     display: none;

@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 
 import {
   FIREWORK_CUES,
@@ -27,6 +28,7 @@ export function RocketLaunchEffect({ effectKey }: RocketLaunchEffectProps) {
     let nextCueIndex = 0;
     let activeParticles: FireworkParticle[] = [];
     const startedAt = performance.now();
+    let previousFrameAt = startedAt;
 
     const resizeCanvas = () => {
       const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
@@ -65,6 +67,8 @@ export function RocketLaunchEffect({ effectKey }: RocketLaunchEffectProps) {
 
     const render = (now: number) => {
       const elapsed = now - startedAt;
+      const deltaMs = now - previousFrameAt;
+      previousFrameAt = now;
       context.globalCompositeOperation = "source-over";
       context.fillStyle = "rgba(4, 6, 16, 0.22)";
       context.fillRect(0, 0, width, height);
@@ -80,7 +84,7 @@ export function RocketLaunchEffect({ effectKey }: RocketLaunchEffectProps) {
 
       if (!document.hidden) {
         activeParticles = activeParticles.filter((particle) => {
-          const alive = advanceFireworkParticle(particle);
+          const alive = advanceFireworkParticle(particle, deltaMs);
           if (!alive) return false;
           context.globalAlpha = particle.alpha;
           context.strokeStyle = particle.color;
@@ -107,13 +111,14 @@ export function RocketLaunchEffect({ effectKey }: RocketLaunchEffectProps) {
     };
   }, [effectKey]);
 
-  return (
+  return createPortal(
     <div key={effectKey} className="rocket-launch-effect" aria-hidden="true">
       <div className="rocket-launch-effect__atmosphere" />
       <canvas ref={canvasRef} className="rocket-launch-effect__canvas" />
       <span className="rocket-launch-effect__flash" />
       <span className="rocket-launch-effect__shockwave shockwave-primary" />
       <span className="rocket-launch-effect__shockwave shockwave-secondary" />
-    </div>
+    </div>,
+    document.body,
   );
 }

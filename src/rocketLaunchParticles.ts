@@ -1,4 +1,6 @@
 export const ROCKET_LAUNCH_EFFECT_DURATION_MS = 3000;
+const FIREWORK_FRAME_DURATION_MS = 1000 / 60;
+const MAX_FIREWORK_DELTA_MS = 100;
 
 export type FireworkCue = {
   at: number;
@@ -62,13 +64,19 @@ export function createFireworkParticles(
   });
 }
 
-export function advanceFireworkParticle(particle: FireworkParticle): boolean {
+export function advanceFireworkParticle(
+  particle: FireworkParticle,
+  deltaMs: number = FIREWORK_FRAME_DURATION_MS,
+): boolean {
+  const frameScale = Math.min(Math.max(deltaMs, 0), MAX_FIREWORK_DELTA_MS) / FIREWORK_FRAME_DURATION_MS;
+  const drag = particle.drag ** frameScale;
+  const gravity = particle.gravity * frameScale;
   particle.previousX = particle.x;
   particle.previousY = particle.y;
-  particle.velocityX *= particle.drag;
-  particle.velocityY = particle.velocityY * particle.drag + particle.gravity;
-  particle.x += particle.velocityX;
-  particle.y += particle.velocityY;
-  particle.alpha = Math.max(0, particle.alpha - particle.decay);
+  particle.velocityX *= drag;
+  particle.velocityY = particle.velocityY * drag + gravity;
+  particle.x += particle.velocityX * frameScale;
+  particle.y += particle.velocityY * frameScale;
+  particle.alpha = Math.max(0, particle.alpha - particle.decay * frameScale);
   return particle.alpha > 0;
 }
