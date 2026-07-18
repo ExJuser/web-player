@@ -215,9 +215,6 @@ button {
   color: inherit;
   font: inherit;
   cursor: pointer;
-  transition:
-    width 180ms ease,
-    max-height 180ms ease;
 }
 
 .video-metadata-card:focus-visible,
