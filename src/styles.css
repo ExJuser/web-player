@@ -5146,6 +5146,7 @@ button {
 }
 
 .lada-restoration-dialog {
+  width: min(760px, 100%);
   max-height: calc(100vh - 36px);
   overflow-y: auto;
   scrollbar-color: rgba(0, 161, 214, 0.78) rgba(15, 18, 23, 0.7);
