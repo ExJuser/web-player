@@ -65,6 +65,7 @@ type PlayerControlBarProps = {
   isSeriesMode: boolean;
   ladaDisabledReason: string;
   normalizedVideoRotation: number;
+  pendingEditSegmentStartTime: number | null;
   pendingHighlightStartTime: number | null;
   montageDisabledReason: string;
   playbackMode: PlaybackMode;
@@ -159,6 +160,7 @@ export function PlayerControlBar({
   isSeriesMode,
   ladaDisabledReason,
   normalizedVideoRotation,
+  pendingEditSegmentStartTime,
   pendingHighlightStartTime,
   montageDisabledReason,
   playbackMode,
@@ -256,6 +258,7 @@ export function PlayerControlBar({
       {hasCurrentVideo ? (
         <PlayerHighlightControls
           highlights={currentVideoHighlights}
+          pendingEditSegmentStartTime={pendingEditSegmentStartTime}
           pendingStartTime={pendingHighlightStartTime}
           formatTime={formatTime}
           onEditHighlight={onEditHighlight}

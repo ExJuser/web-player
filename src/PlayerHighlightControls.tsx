@@ -4,6 +4,7 @@ import type { VideoHighlightSegment } from "./playerTypes";
 
 type PlayerHighlightControlsProps = {
   highlights: VideoHighlightSegment[];
+  pendingEditSegmentStartTime: number | null;
   pendingStartTime: number | null;
   formatTime: (time: number) => string;
   onEditHighlight: (highlight: VideoHighlightSegment) => void;
@@ -13,17 +14,21 @@ type PlayerHighlightControlsProps = {
 
 export function PlayerHighlightControls({
   highlights,
+  pendingEditSegmentStartTime,
   pendingStartTime,
   formatTime,
   onEditHighlight,
   onRemoveHighlight,
   onSeekToHighlight,
 }: PlayerHighlightControlsProps) {
-  if (!highlights.length && pendingStartTime === null) return null;
+  if (!highlights.length && pendingEditSegmentStartTime === null && pendingStartTime === null) return null;
 
   return (
     <div className="highlight-control-row">
       {pendingStartTime !== null ? <span className="highlight-pending-chip">起点 {formatTime(pendingStartTime)}</span> : null}
+      {pendingEditSegmentStartTime !== null ? (
+        <span className="highlight-pending-chip">剪辑起点 {formatTime(pendingEditSegmentStartTime)}</span>
+      ) : null}
       {highlights.length ? (
         <div className="highlight-chip-list" aria-label="高能片段">
           {highlights.map((highlight) => (

@@ -5231,6 +5231,7 @@ export default function App() {
   const isCurrentHighEnergyMarkPending = pendingHighEnergyStart?.videoId === currentVideo?.id;
   const pendingHighEnergyStartTime = isCurrentHighEnergyMarkPending ? pendingHighEnergyStart?.time ?? null : null;
   const isCurrentEditSegmentMarkPending = pendingEditSegmentStart?.videoId === currentVideo?.id;
+  const pendingEditSegmentStartTime = isCurrentEditSegmentMarkPending ? pendingEditSegmentStart?.time ?? null : null;
   const { ariaLabel: playlistPanelAriaLabel, title: playlistPanelTitle } = createPlaylistPanelLabels({ isDuplicatePlaylistActive, isRatingPlaylistActive, isPlaylistSeriesMode, playlistVisibleCountLabel, duplicateGroupCount: activeDuplicateVideoGroups.length, activeRatingPlaylistLabel, modeFilteredVideoCount: modeFilteredVideos.length, playlistFilter, homeMediaMode, homeMediaModeLabel, totalVideoCount: videos.length });
 
   return (
@@ -5594,6 +5595,7 @@ export default function App() {
             isSeriesMode={isSeriesMode}
             ladaDisabledReason={ladaRestorationDisabledReason}
             normalizedVideoRotation={normalizedVideoRotation}
+            pendingEditSegmentStartTime={pendingEditSegmentStartTime}
             pendingHighlightStartTime={pendingHighEnergyStartTime}
             montageDisabledReason={highlightMontageDisabledReason}
             playbackMode={playbackMode}
