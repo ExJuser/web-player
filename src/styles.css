@@ -4139,12 +4139,10 @@ button {
   right: 0;
   bottom: calc(100% + 6px);
   z-index: 5;
-  align-items: stretch;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
-  width: max-content;
-  min-width: 100%;
-  max-width: calc(100vw - 80px);
+  width: min(240px, calc(100vw - 32px));
   opacity: 0;
   pointer-events: none;
   transform: translateY(10px);
@@ -4201,9 +4199,46 @@ button {
   text-overflow: ellipsis;
 }
 
-.special-stats-details .special-stat-pill {
+.special-stats-details > .special-stat-pill {
   width: 100%;
   max-width: none;
+}
+
+.special-stats-details > .special-stat-pill:first-child {
+  grid-column: 1 / -1;
+  justify-content: flex-start;
+}
+
+.special-stats-details > .special-stat-pill:first-child strong {
+  margin-left: auto;
+  max-width: none;
+  overflow: visible;
+}
+
+.special-stats-details > .special-stat-pill:nth-child(n + 2) {
+  display: grid;
+  height: 54px;
+  grid-template-rows: auto 1fr;
+  align-content: center;
+  justify-items: center;
+  gap: 4px;
+  padding: 6px;
+}
+
+.special-stats-details > .special-stat-pill:nth-child(n + 2) svg {
+  display: none;
+}
+
+.special-stats-details > .special-stat-pill:nth-child(n + 2) span {
+  font-size: 11px;
+  line-height: 1;
+}
+
+.special-stats-details > .special-stat-pill:nth-child(n + 2) strong {
+  max-width: 100%;
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
 }
 
 .emission-stat-pill {
