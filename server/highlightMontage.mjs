@@ -3,6 +3,15 @@ import path from "node:path";
 
 import { probeMediaFile } from "./mediaCompatibility.mjs";
 
+const SOFTWARE_VIDEO_ENCODER = "libx264";
+const HARDWARE_VIDEO_ENCODERS = ["h264_nvenc", "h264_qsv", "h264_amf"];
+const VIDEO_ENCODER_ARGS = {
+  libx264: ["-c:v", "libx264", "-preset", "fast", "-crf", "20"],
+  h264_nvenc: ["-c:v", "h264_nvenc", "-preset", "p4", "-cq", "20", "-b:v", "0"],
+  h264_qsv: ["-c:v", "h264_qsv", "-preset", "fast", "-global_quality", "20"],
+  h264_amf: ["-c:v", "h264_amf", "-quality", "balanced", "-rc", "cqp", "-qp_i", "20", "-qp_p", "20"],
+};
+
 function asTimestamp(value) {
   return Number(Number(value).toFixed(3));
 }
@@ -95,7 +104,42 @@ export function mapHighlightsToMontage(source, segments, updatedAt = Date.now())
   });
 }
 
-export function createHighlightMontageArgs(sourcePath, outputPath, segments, { hasAudio }) {
+function videoEncoderArgs(videoEncoder) {
+  return VIDEO_ENCODER_ARGS[videoEncoder] ?? VIDEO_ENCODER_ARGS[SOFTWARE_VIDEO_ENCODER];
+}
+
+export async function selectHighlightMontageVideoEncoder(runProcess, { signal } = {}) {
+  for (const videoEncoder of HARDWARE_VIDEO_ENCODERS) {
+    try {
+      await runProcess(
+        "ffmpeg",
+        [
+          "-v", "error",
+          "-f", "lavfi",
+          "-i", "color=c=black:s=64x64:r=1:d=1",
+          "-frames:v", "1",
+          "-an",
+          ...videoEncoderArgs(videoEncoder),
+          "-pix_fmt", "yuv420p",
+          "-f", "null",
+          "-",
+        ],
+        {
+          timeoutMs: 10_000,
+          timeoutMessage: "GPU 编码器探测超时。",
+          signal,
+          abortMessage: "已取消生成剪辑版。",
+        },
+      );
+      return videoEncoder;
+    } catch (error) {
+      if (signal?.aborted) throw error;
+    }
+  }
+  return SOFTWARE_VIDEO_ENCODER;
+}
+
+export function createHighlightMontageArgs(sourcePath, outputPath, segments, { hasAudio, videoEncoder = SOFTWARE_VIDEO_ENCODER }) {
   const filters = [];
   const concatInputs = [];
   segments.forEach((segment, index) => {
@@ -115,9 +159,7 @@ export function createHighlightMontageArgs(sourcePath, outputPath, segments, { h
     "-filter_complex", filters.join(";"),
     "-map", "[vout]",
     ...(hasAudio ? ["-map", "[aout]"] : []),
-    "-c:v", "libx264",
-    "-preset", "fast",
-    "-crf", "20",
+    ...videoEncoderArgs(videoEncoder),
     "-pix_fmt", "yuv420p",
     ...(hasAudio ? ["-c:a", "aac", "-b:a", "192k"] : []),
     "-map_metadata", "-1",
@@ -216,10 +258,12 @@ export async function createHighlightMontage({
   try {
     const progressState = { buffer: "", lastPercent: 0 };
     await rm(temporaryPath, { force: true });
+    const videoEncoder = await selectHighlightMontageVideoEncoder(runProcess, { signal });
     await runProcess(
       "ffmpeg",
       createHighlightMontageArgs(sourcePath, temporaryPath, normalizedSegments, {
         hasAudio: streams.some((stream) => stream?.codec_type === "audio"),
+        videoEncoder,
       }),
       {
         timeoutMs: 2 * 60 * 60 * 1000,

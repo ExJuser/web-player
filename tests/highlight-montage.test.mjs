@@ -86,6 +86,62 @@ test("creates precise H.264 AAC montage arguments for media with audio", () => {
   assert.equal(args.at(-1), "output.tmp.mp4");
 });
 
+test("creates hardware-specific H.264 encoder arguments", () => {
+  const segments = [{ startTime: 5, endTime: 10 }];
+  const nvencArgs = createHighlightMontageArgs("input.mkv", "output.mp4", segments, {
+    hasAudio: false,
+    videoEncoder: "h264_nvenc",
+  });
+  const qsvArgs = createHighlightMontageArgs("input.mkv", "output.mp4", segments, {
+    hasAudio: false,
+    videoEncoder: "h264_qsv",
+  });
+  const amfArgs = createHighlightMontageArgs("input.mkv", "output.mp4", segments, {
+    hasAudio: false,
+    videoEncoder: "h264_amf",
+  });
+
+  assert.deepEqual(nvencArgs.slice(nvencArgs.indexOf("-c:v"), nvencArgs.indexOf("-pix_fmt")), [
+    "-c:v", "h264_nvenc", "-preset", "p4", "-cq", "20", "-b:v", "0",
+  ]);
+  assert.deepEqual(qsvArgs.slice(qsvArgs.indexOf("-c:v"), qsvArgs.indexOf("-pix_fmt")), [
+    "-c:v", "h264_qsv", "-preset", "fast", "-global_quality", "20",
+  ]);
+  assert.deepEqual(amfArgs.slice(amfArgs.indexOf("-c:v"), amfArgs.indexOf("-pix_fmt")), [
+    "-c:v", "h264_amf", "-quality", "balanced", "-rc", "cqp", "-qp_i", "20", "-qp_p", "20",
+  ]);
+});
+
+test("selects the first hardware encoder that initializes successfully", async () => {
+  const montageModule = await import("../server/highlightMontage.mjs");
+  assert.equal(typeof montageModule.selectHighlightMontageVideoEncoder, "function");
+  const attempts = [];
+
+  const selected = await montageModule.selectHighlightMontageVideoEncoder(async (command, args) => {
+    assert.equal(command, "ffmpeg");
+    const encoder = args[args.indexOf("-c:v") + 1];
+    attempts.push(encoder);
+    if (encoder !== "h264_qsv") throw new Error("encoder unavailable");
+  });
+
+  assert.equal(selected, "h264_qsv");
+  assert.deepEqual(attempts, ["h264_nvenc", "h264_qsv"]);
+});
+
+test("falls back to libx264 when hardware encoders cannot initialize", async () => {
+  const montageModule = await import("../server/highlightMontage.mjs");
+  assert.equal(typeof montageModule.selectHighlightMontageVideoEncoder, "function");
+  const attempts = [];
+
+  const selected = await montageModule.selectHighlightMontageVideoEncoder(async (_command, args) => {
+    attempts.push(args[args.indexOf("-c:v") + 1]);
+    throw new Error("encoder unavailable");
+  });
+
+  assert.equal(selected, "libx264");
+  assert.deepEqual(attempts, ["h264_nvenc", "h264_qsv", "h264_amf"]);
+});
+
 test("creates video-only montage arguments when the source has no audio", () => {
   const args = createHighlightMontageArgs("input.mp4", "output.tmp.mp4", [
     { startTime: 0, endTime: 8 },
@@ -104,6 +160,7 @@ test("writes an incremented edit file and persists mapped highlights", async () 
   await writeFile(path.join(directory, "霸王别姬.1993-edit.mp4"), "existing");
   const persisted = [];
   const progressEvents = [];
+  let montageArgs = null;
 
   try {
     const result = await createHighlightMontage({
@@ -114,6 +171,11 @@ test("writes an incremented edit file and persists mapped highlights", async () 
             streams: [{ codec_type: "video" }, { codec_type: "audio" }],
           });
         }
+        if (args.at(-1) === "-") {
+          if (args.includes("h264_nvenc")) return "";
+          throw new Error("encoder unavailable");
+        }
+        montageArgs = args;
         await writeFile(args.at(-1), "montage-output");
         options.onStdout(Buffer.from("out_time=00:00:10.000000\nprogress=continue\n"));
         return "";
@@ -132,6 +194,7 @@ test("writes an incremented edit file and persists mapped highlights", async () 
     assert.equal(result.relativePath, "Classics/霸王别姬.1993-edit-2.mp4");
     assert.equal(result.segmentCount, 1);
     assert.equal(result.durationSeconds, 20);
+    assert.equal(montageArgs.includes("h264_nvenc"), true);
     assert.match(result.videoId, /^movies\|Classics\/霸王别姬\.1993-edit-2\.mp4\|/);
     assert.equal(await readFile(path.join(directory, result.fileName), "utf8"), "montage-output");
     assert.deepEqual(persisted[0].highlights, [
@@ -155,6 +218,7 @@ test("cleans temporary and final output when generation or persistence fails", a
         if (command === "ffprobe") {
           return JSON.stringify({ format: { duration: "20" }, streams: [{ codec_type: "video" }] });
         }
+        if (args.at(-1) === "-") throw new Error("encoder unavailable");
         await writeFile(args.at(-1), "partial");
         throw new Error("cancelled");
       },
@@ -170,6 +234,7 @@ test("cleans temporary and final output when generation or persistence fails", a
         if (command === "ffprobe") {
           return JSON.stringify({ format: { duration: "20" }, streams: [{ codec_type: "video" }] });
         }
+        if (args.at(-1) === "-") throw new Error("encoder unavailable");
         await writeFile(args.at(-1), "complete");
         return "";
       },
