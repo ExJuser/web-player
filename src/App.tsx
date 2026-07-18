@@ -13,6 +13,7 @@ import {
 } from "react";
 
 import { fetchLocalJson as fetchJson } from "./localApiClient";
+import { ROCKET_LAUNCH_EFFECT_DURATION_MS } from "./rocketLaunchParticles";
 import { useAiSubtitleController } from "./useAiSubtitleController";
 import { useAutoNextController } from "./useAutoNextController";
 import { useBangumiMatchController } from "./useBangumiMatchController";
@@ -2005,7 +2006,7 @@ export default function App() {
     launchEffectTimerRef.current = window.setTimeout(() => {
       setLaunchEffectKey(0);
       launchEffectTimerRef.current = null;
-    }, 1800);
+    }, ROCKET_LAUNCH_EFFECT_DURATION_MS);
     updateSpecialVideoStats(
       currentVideo,
       (stats) => ({
