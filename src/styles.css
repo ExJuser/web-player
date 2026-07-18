@@ -4100,21 +4100,13 @@ button {
   max-width: calc(100vw - 80px);
   min-height: 30px;
   max-height: 30px;
-  overflow: hidden;
+  overflow: visible;
   padding: 0;
   border: 0;
   background: transparent;
   color: inherit;
   font: inherit;
   cursor: pointer;
-  transition:
-    width 180ms ease,
-    max-height 180ms ease;
-}
-
-.special-stats-card:focus-visible,
-.special-stats-card.is-expanded {
-  width: min(452px, calc(100vw - 80px));
 }
 
 .special-stats-card:focus-visible {
@@ -4146,40 +4138,33 @@ button {
 }
 
 .special-stats-details {
-  justify-content: flex-end;
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 6px);
+  z-index: 5;
+  align-items: stretch;
+  flex-direction: column;
   gap: 6px;
-  width: 100%;
-  min-width: 0;
+  width: max-content;
+  min-width: 100%;
+  max-width: calc(100vw - 80px);
   opacity: 0;
   pointer-events: none;
-  transform: translateX(10px);
-}
-
-.special-stats-card:focus-visible .special-stats-summary,
-.special-stats-card.is-expanded .special-stats-summary {
-  opacity: 0;
-  transform: translateX(10px);
+  transform: translateY(10px);
 }
 
 .special-stats-card:focus-visible .special-stats-details,
 .special-stats-card.is-expanded .special-stats-details {
   opacity: 1;
-  transform: translateX(0);
+  pointer-events: auto;
+  transform: translateY(0);
 }
 
 @media (hover: hover) {
-  .special-stats-card:hover {
-    width: min(452px, calc(100vw - 80px));
-  }
-
-  .special-stats-card:hover .special-stats-summary {
-    opacity: 0;
-    transform: translateX(10px);
-  }
-
   .special-stats-card:hover .special-stats-details {
     opacity: 1;
-    transform: translateX(0);
+    pointer-events: auto;
+    transform: translateY(0);
   }
 }
 
@@ -4217,6 +4202,11 @@ button {
   color: #f5f7fb;
   font-weight: 800;
   text-overflow: ellipsis;
+}
+
+.special-stats-details .special-stat-pill {
+  width: 100%;
+  max-width: none;
 }
 
 .emission-stat-pill {
@@ -8710,25 +8700,6 @@ button {
     margin-left: 0;
   }
 
-  .special-stats-card:focus-visible,
-  .special-stats-card.is-expanded {
-    width: calc(100% - 36px);
-    max-height: 66px;
-  }
-
-  .special-stats-card:focus-visible .special-stats-details,
-  .special-stats-card.is-expanded .special-stats-details {
-    display: grid;
-    width: 100%;
-    min-width: 0;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .special-stats-card:focus-visible .special-stat-pill,
-  .special-stats-card.is-expanded .special-stat-pill {
-    max-width: none;
-  }
-
   .playlist-page-size-control {
     flex: 0 1 76px;
   }
@@ -8869,21 +8840,6 @@ button {
     max-height: 180px;
   }
 
-  .special-stats-card:hover {
-    width: calc(100% - 36px);
-    max-height: 66px;
-  }
-
-  .special-stats-card:hover .special-stats-details {
-    display: grid;
-    width: 100%;
-    min-width: 0;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .special-stats-card:hover .special-stat-pill {
-    max-width: none;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
