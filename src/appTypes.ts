@@ -139,6 +139,22 @@ export type LadaRestorationStreamEvent =
   | { type: "done"; result: LadaRestorationResult }
   | { type: "error"; error: string };
 
+export type MediaProcessingTaskRunState = "running" | "cancelling" | "completed" | "failed" | "cancelled";
+
+type MediaProcessingTaskSnapshotBase = {
+  id: string;
+  videoName: string;
+  progress: number;
+  status: string;
+  state: MediaProcessingTaskRunState;
+  error: string | null;
+};
+
+export type MediaProcessingTaskSnapshot = MediaProcessingTaskSnapshotBase & (
+  | { kind: "montage"; result: HighlightMontageResult | null }
+  | { kind: "lada"; result: LadaRestorationResult | null }
+);
+
 export type MediaProbeResponse = {
   playability: VideoPlayability;
   metadata?: VideoMetadata;

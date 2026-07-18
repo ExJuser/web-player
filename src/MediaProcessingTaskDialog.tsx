@@ -1,10 +1,8 @@
 import { Scissors, Sparkles } from "lucide-react";
 
-export type MediaProcessingTaskState = {
-  kind: "montage" | "lada";
-  videoName: string;
-  progress: number;
-  status: string;
+import type { MediaProcessingTaskSnapshot } from "./appTypes";
+
+export type MediaProcessingTaskState = MediaProcessingTaskSnapshot & {
   isDialogOpen: boolean;
 };
 
