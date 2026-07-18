@@ -16,6 +16,7 @@ import type {
   SubtitleItem,
   TagMergeDecisionStore,
   VideoCommentStore,
+  VideoEditSegmentStore,
   VideoHighlightStore,
   VideoItem,
   VideoRatingStore,
@@ -44,6 +45,7 @@ export function usePlayerDataRuntime(initialVolume: number) {
   const videoStatsRef = useRef<VideoStatsStore>({});
   const watchActivityRef = useRef<WatchActivityStore>({});
   const videoHighlightsRef = useRef<VideoHighlightStore>({});
+  const videoEditSegmentsRef = useRef<VideoEditSegmentStore>({});
   const tagMergeDecisionsRef = useRef<TagMergeDecisionStore>({});
   const videosRef = useRef<VideoItem[]>([]);
   const subtitlesRef = useRef<SubtitleItem[]>([]);
@@ -62,6 +64,7 @@ export function usePlayerDataRuntime(initialVolume: number) {
       videoStats: videoStatsRef.current,
       watchActivity: watchActivityRef.current,
       videoHighlights: videoHighlightsRef.current,
+      videoEditSegments: videoEditSegmentsRef.current,
       tagMergeDecisions: tagMergeDecisionsRef.current,
       embeddedSubtitles: createPersistedEmbeddedSubtitles(subtitlesRef.current),
       danmakuSelections: danmakuSelectionsRef.current,
@@ -105,6 +108,7 @@ export function usePlayerDataRuntime(initialVolume: number) {
     tagMergeDecisionsRef,
     videoCommentsRef,
     videoHighlightsRef,
+    videoEditSegmentsRef,
     videoRatingsRef,
     videosRef,
     videoStatsRef,
@@ -146,6 +150,7 @@ type UseApplyPlayerDataStoreOptions = {
   setTagMergeDecisions: Dispatch<SetStateAction<TagMergeDecisionStore>>;
   setTheme: Dispatch<SetStateAction<AppTheme>>;
   setVideoComments: Dispatch<SetStateAction<VideoCommentStore>>;
+  setVideoEditSegments: Dispatch<SetStateAction<VideoEditSegmentStore>>;
   setVideoHighlights: Dispatch<SetStateAction<VideoHighlightStore>>;
   setVideoRatings: Dispatch<SetStateAction<VideoRatingStore>>;
   setVideoTags: Dispatch<SetStateAction<VideoTagStore>>;
@@ -153,6 +158,7 @@ type UseApplyPlayerDataStoreOptions = {
   setWatchActivityRevision: Dispatch<SetStateAction<number>>;
   tagMergeDecisionsRef: MutableRefObject<TagMergeDecisionStore>;
   videoCommentsRef: MutableRefObject<VideoCommentStore>;
+  videoEditSegmentsRef: MutableRefObject<VideoEditSegmentStore>;
   videoHighlightsRef: MutableRefObject<VideoHighlightStore>;
   videoRatingsRef: MutableRefObject<VideoRatingStore>;
   videosRef: MutableRefObject<VideoItem[]>;
@@ -190,6 +196,7 @@ export function useApplyPlayerDataStore({
   setTagMergeDecisions,
   setTheme,
   setVideoComments,
+  setVideoEditSegments,
   setVideoHighlights,
   setVideoRatings,
   setVideoTags,
@@ -197,6 +204,7 @@ export function useApplyPlayerDataStore({
   setWatchActivityRevision,
   tagMergeDecisionsRef,
   videoCommentsRef,
+  videoEditSegmentsRef,
   videoHighlightsRef,
   videoRatingsRef,
   videosRef,
@@ -216,6 +224,7 @@ export function useApplyPlayerDataStore({
     videoStatsRef.current = nextDataStore.videoStats;
     watchActivityRef.current = nextDataStore.watchActivity;
     videoHighlightsRef.current = nextDataStore.videoHighlights;
+    videoEditSegmentsRef.current = nextDataStore.videoEditSegments;
     tagMergeDecisionsRef.current = nextDataStore.tagMergeDecisions;
     danmakuSelectionsRef.current = nextDataStore.danmakuSelections;
     danmakuPreferencesRef.current = nextDataStore.danmakuPreferences;
@@ -242,6 +251,7 @@ export function useApplyPlayerDataStore({
     setVideoComments(nextDataStore.videoComments);
     setVideoTags(nextDataStore.videoTags);
     setVideoHighlights(nextDataStore.videoHighlights);
+    setVideoEditSegments(nextDataStore.videoEditSegments);
     setWatchActivityRevision((revision) => revision + 1);
     setTagMergeDecisions(nextDataStore.tagMergeDecisions);
     setDanmakuSelections(nextDataStore.danmakuSelections);
@@ -276,6 +286,7 @@ export function useApplyPlayerDataStore({
     setTagMergeDecisions,
     setTheme,
     setVideoComments,
+    setVideoEditSegments,
     setVideoHighlights,
     setVideoRatings,
     setVideoTags,
@@ -283,6 +294,7 @@ export function useApplyPlayerDataStore({
     setWatchActivityRevision,
     tagMergeDecisionsRef,
     videoCommentsRef,
+    videoEditSegmentsRef,
     videoHighlightsRef,
     videoRatingsRef,
     videosRef,

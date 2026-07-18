@@ -198,6 +198,16 @@ export class LocalDataSqliteStore {
         PRIMARY KEY (library_id, video_id, highlight_id)
       );
 
+      CREATE TABLE IF NOT EXISTS video_edit_segments (
+        library_id TEXT NOT NULL,
+        video_id TEXT NOT NULL,
+        segment_id TEXT NOT NULL,
+        start_time REAL NOT NULL,
+        end_time REAL NOT NULL,
+        updated_at INTEGER NOT NULL,
+        PRIMARY KEY (library_id, video_id, segment_id)
+      );
+
       CREATE TABLE IF NOT EXISTS tag_merge_decisions (
         library_id TEXT NOT NULL,
         decision_key TEXT NOT NULL,
@@ -436,6 +446,7 @@ export class LocalDataSqliteStore {
       "video_stats",
       "watch_activity",
       "video_highlights",
+      "video_edit_segments",
       "tag_merge_decisions",
       "embedded_subtitles",
       "danmaku_selections",
@@ -549,6 +560,29 @@ export class LocalDataSqliteStore {
       }
     }
 
+    const editSegmentInsert = this.db.prepare(`
+      INSERT INTO video_edit_segments (library_id, video_id, segment_id, start_time, end_time, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `);
+    for (const [videoId, segments] of Object.entries(asObject(store.videoEditSegments))) {
+      if (!Array.isArray(segments)) continue;
+      for (const segment of segments) {
+        const startTime = Number(segment?.startTime);
+        const endTime = Number(segment?.endTime);
+        const updatedAt = Number(segment?.updatedAt);
+        if (
+          typeof segment?.id !== "string" ||
+          !segment.id ||
+          !Number.isFinite(startTime) ||
+          !Number.isFinite(endTime) ||
+          !Number.isFinite(updatedAt) ||
+          startTime < 0 ||
+          endTime <= startTime
+        ) continue;
+        editSegmentInsert.run(libraryId, videoId, segment.id, startTime, endTime, updatedAt);
+      }
+    }
+
     const decisionInsert = this.db.prepare(`
       INSERT INTO tag_merge_decisions (library_id, decision_key, from_label, to_label, decision, updated_at)
       VALUES (?, ?, ?, ?, ?, ?)
@@ -620,6 +654,7 @@ export class LocalDataSqliteStore {
       || Boolean(this.db.prepare("SELECT 1 FROM video_ratings WHERE library_id = ? LIMIT 1").get(libraryId))
       || Boolean(this.db.prepare("SELECT 1 FROM watch_activity WHERE library_id = ? LIMIT 1").get(libraryId))
       || Boolean(this.db.prepare("SELECT 1 FROM video_highlights WHERE library_id = ? LIMIT 1").get(libraryId))
+      || Boolean(this.db.prepare("SELECT 1 FROM video_edit_segments WHERE library_id = ? LIMIT 1").get(libraryId))
       || Boolean(this.db.prepare("SELECT 1 FROM duplicate_detections WHERE library_id = ? LIMIT 1").get(libraryId))
       || Boolean(this.db.prepare("SELECT 1 FROM player_preferences WHERE library_id = ? LIMIT 1").get(libraryId));
     if (!hasData) return null;
@@ -689,6 +724,17 @@ export class LocalDataSqliteStore {
       });
     }
 
+    const videoEditSegments = {};
+    for (const row of allRows(this.db.prepare("SELECT * FROM video_edit_segments WHERE library_id = ? ORDER BY video_id, start_time, end_time"), libraryId)) {
+      videoEditSegments[row.video_id] ??= [];
+      videoEditSegments[row.video_id].push({
+        id: row.segment_id,
+        startTime: row.start_time,
+        endTime: row.end_time,
+        updatedAt: row.updated_at,
+      });
+    }
+
     const tagMergeDecisions = {};
     for (const row of allRows(this.db.prepare("SELECT * FROM tag_merge_decisions WHERE library_id = ?"), libraryId)) {
       tagMergeDecisions[row.decision_key] = {
@@ -728,6 +774,7 @@ export class LocalDataSqliteStore {
       videoStats,
       watchActivity,
       videoHighlights,
+      videoEditSegments,
       tagMergeDecisions,
       embeddedSubtitles,
       danmakuSelections,
@@ -936,6 +983,27 @@ export class LocalDataSqliteStore {
           ? highlight.tag.trim().slice(0, 40)
           : null;
         insert.run(libraryId, videoId, highlight.id, startTime, endTime, tagLabel, updatedAt);
+      }
+    });
+  }
+
+  replaceVideoEditSegments(libraryId, videoId, segments) {
+    return this.transaction(() => {
+      this.db.prepare("DELETE FROM video_edit_segments WHERE library_id = ? AND video_id = ?").run(libraryId, videoId);
+      const insert = this.db.prepare("INSERT INTO video_edit_segments (library_id, video_id, segment_id, start_time, end_time, updated_at) VALUES (?, ?, ?, ?, ?, ?)");
+      for (const segment of Array.isArray(segments) ? segments : []) {
+        const startTime = Number(segment?.startTime);
+        const endTime = Number(segment?.endTime);
+        const updatedAt = Number(segment?.updatedAt) || now();
+        if (
+          typeof segment?.id !== "string" ||
+          !segment.id ||
+          !Number.isFinite(startTime) ||
+          !Number.isFinite(endTime) ||
+          startTime < 0 ||
+          endTime <= startTime
+        ) continue;
+        insert.run(libraryId, videoId, segment.id, startTime, endTime, updatedAt);
       }
     });
   }

@@ -171,6 +171,13 @@ export type VideoHighlightSegment = {
   updatedAt: number;
 };
 export type VideoHighlightStore = Record<string, VideoHighlightSegment[]>;
+export type VideoEditSegment = {
+  id: string;
+  startTime: number;
+  endTime: number;
+  updatedAt: number;
+};
+export type VideoEditSegmentStore = Record<string, VideoEditSegment[]>;
 export type VideoTagStore = Record<string, string[]>;
 export type VideoRatingStore = Record<string, number>;
 export type VideoCommentStore = Record<string, string>;
@@ -262,6 +269,7 @@ export type PlayerDataStore = {
   videoStats: VideoStatsStore;
   watchActivity: WatchActivityStore;
   videoHighlights: VideoHighlightStore;
+  videoEditSegments: VideoEditSegmentStore;
   tagMergeDecisions: TagMergeDecisionStore;
   embeddedSubtitles: PersistedEmbeddedSubtitle[];
   danmakuSelections: DanmakuSelectionStore;

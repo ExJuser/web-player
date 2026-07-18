@@ -8,6 +8,7 @@ import {
   remuxCompatibleMedia,
   resolveCompatibleMediaPath,
 } from "./mediaCompatibility.mjs";
+import { assertMontageMediaRoot, createHighlightMontage } from "./highlightMontage.mjs";
 import {
   ensureFileExists,
   normalizeMediaRoots as normalizeMediaRootsFromConfig,
@@ -789,6 +790,7 @@ export function playerDataApiPlugin({ projectRoot, env }) {
     const commentMatch = url.pathname.match(/^\/api\/player-data\/comments\/(.+)$/);
     const statsMatch = url.pathname.match(/^\/api\/player-data\/stats\/(.+)$/);
     const highlightsMatch = url.pathname.match(/^\/api\/player-data\/highlights\/(.+)$/);
+    const editSegmentsMatch = url.pathname.match(/^\/api\/player-data\/edit-segments\/(.+)$/);
     const preferenceMatch = url.pathname.match(/^\/api\/player-data\/preferences\/([^/]+)$/);
     const settingMatch = url.pathname.match(/^\/api\/player-data\/settings\/([^/]+)$/);
     const danmakuSelectionMatch = url.pathname.match(/^\/api\/player-data\/danmaku-selection\/(.+)$/);
@@ -894,6 +896,57 @@ export function playerDataApiPlugin({ projectRoot, env }) {
       if (url.pathname === "/api/media/compatible/remux" && request.method === "POST") {
         const payload = await parseJsonBody(request);
         await streamRemuxMediaToCompatibleMp4(await loadAppConfig(), payload, request, response);
+        return;
+      }
+
+      if (url.pathname === "/api/media/highlight-montage" && request.method === "POST") {
+        const payload = await parseJsonBody(request);
+        const config = await loadAppConfig();
+        const root = findMediaRoot(config, payload?.rootId);
+        sendNdjson(response, 200);
+        let sourcePath;
+        try {
+          assertMontageMediaRoot(root);
+          sourcePath = resolveVideoPathFromConfig(config, root.id, payload?.relativePath);
+        } catch (error) {
+          writeStreamEvent(response, { type: "error", error: error instanceof Error ? error.message : "媒体路径不可用。" });
+          response.end();
+          return;
+        }
+
+        const sourceVideoId = typeof payload?.sourceVideoId === "string" ? payload.sourceVideoId : "";
+        const sourceHighlights = Array.isArray(payload?.highlights)
+          ? payload.highlights
+          : store.loadPlayerDataStore("global").videoHighlights[sourceVideoId] ?? [];
+        const controller = new AbortController();
+        let finished = false;
+        response.on("close", () => {
+          if (!finished) controller.abort();
+        });
+        try {
+          await ensureFileExists(sourcePath);
+          writeStreamEvent(response, { type: "progress", percent: 0, message: "正在准备剪辑任务..." });
+          const result = await createHighlightMontage({
+            runProcess,
+            sourcePath,
+            rootId: root.id,
+            relativePath: payload?.relativePath,
+            segments: payload?.segments,
+            sourceHighlights,
+            signal: controller.signal,
+            onProgress: (progress) => writeStreamEvent(response, { type: "progress", ...progress }),
+            persistHighlights: (videoId, highlights) => store.replaceVideoHighlights("global", videoId, highlights),
+          });
+          writeStreamEvent(response, { type: "done", result });
+        } catch (error) {
+          writeStreamEvent(response, {
+            type: "error",
+            error: error instanceof Error ? error.message : "生成剪辑版失败。",
+          });
+        } finally {
+          finished = true;
+          response.end();
+        }
         return;
       }
 
@@ -1093,6 +1146,14 @@ export function playerDataApiPlugin({ projectRoot, env }) {
         const videoId = decodeURIComponent(highlightsMatch[1]);
         const payload = await parseJsonBody(request);
         store.replaceVideoHighlights("global", videoId, payload?.highlights ?? payload);
+        sendJson(response, 200, { ok: true });
+        return;
+      }
+
+      if (editSegmentsMatch && request.method === "PUT") {
+        const videoId = decodeURIComponent(editSegmentsMatch[1]);
+        const payload = await parseJsonBody(request);
+        store.replaceVideoEditSegments("global", videoId, payload?.segments ?? payload);
         sendJson(response, 200, { ok: true });
         return;
       }

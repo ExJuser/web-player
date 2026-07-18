@@ -1,4 +1,4 @@
-import { Star, Subtitles, Tags, Zap } from "lucide-react";
+import { Scissors, Star, Subtitles, Tags, Zap } from "lucide-react";
 
 import { ControlSelect } from "./ControlSelect";
 import type { HomeMediaMode } from "./playerUiState";
@@ -14,12 +14,15 @@ type PlayerMediaActionControlsProps = {
   isEmbeddedSubtitleLoading: boolean;
   isHighEnergyMarkDisabled: boolean;
   isHighEnergyMarkPending: boolean;
+  isEditSegmentMarkDisabled: boolean;
+  isEditSegmentMarkPending: boolean;
   isSeriesMode: boolean;
   selectedSubtitleId: string;
   subtitleControlOptions: Array<{ value: string; label: string }>;
   videoTagCount: number;
   onChangeSubtitle: (subtitleId: string) => void;
   onMarkHighEnergySegment: () => void;
+  onMarkEditSegment: () => void;
   onOpenAiPanel: () => void;
   onOpenDanmakuDialog: () => void;
   onOpenRatingDialog: () => void;
@@ -38,12 +41,15 @@ export function PlayerMediaActionControls({
   isEmbeddedSubtitleLoading,
   isHighEnergyMarkDisabled,
   isHighEnergyMarkPending,
+  isEditSegmentMarkDisabled,
+  isEditSegmentMarkPending,
   isSeriesMode,
   selectedSubtitleId,
   subtitleControlOptions,
   videoTagCount,
   onChangeSubtitle,
   onMarkHighEnergySegment,
+  onMarkEditSegment,
   onOpenAiPanel,
   onOpenDanmakuDialog,
   onOpenRatingDialog,
@@ -128,6 +134,17 @@ export function PlayerMediaActionControls({
         aria-pressed={isHighEnergyMarkPending}
       >
         <Zap size={18} />
+      </button>
+      <button
+        className={`icon-button edit-segment-mark-button ${isEditSegmentMarkPending ? "active" : ""}`}
+        type="button"
+        onClick={onMarkEditSegment}
+        disabled={isEditSegmentMarkDisabled}
+        title={isEditSegmentMarkPending ? "标记剪辑保留终点" : "标记剪辑保留起点"}
+        aria-label={isEditSegmentMarkPending ? "标记剪辑保留终点" : "标记剪辑保留起点"}
+        aria-pressed={isEditSegmentMarkPending}
+      >
+        <Scissors size={18} />
       </button>
     </>
   );

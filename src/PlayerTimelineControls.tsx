@@ -1,7 +1,8 @@
 import type { CSSProperties, ChangeEvent, PointerEvent as ReactPointerEvent, Ref } from "react";
 
 import { clamp } from "./playerInteractionUtils";
-import type { VideoHighlightSegment } from "./playerTypes";
+import { PlayerEditSegmentMenu } from "./PlayerEditSegmentMenu";
+import type { VideoEditSegment, VideoHighlightSegment } from "./playerTypes";
 
 type TimelinePreviewState = {
   time: number;
@@ -18,11 +19,16 @@ type PlayerTimelineControlsProps = {
   formatTime: (time: number) => string;
   hasCurrentVideo: boolean;
   highlights: VideoHighlightSegment[];
+  editSegments: VideoEditSegment[];
+  canGenerateMontage: boolean;
+  montageDisabledReason: string;
   isPrivacyMode: boolean;
   progressPercent: number;
   timelinePreview: TimelinePreviewState;
   timelineRef: Ref<HTMLInputElement>;
   onHideTimelinePreview: () => void;
+  onGenerateMontage: () => void;
+  onRemoveEditSegment: (segmentId: string) => void;
   onReturnFocusToPlayer: () => void;
   onSeek: (time: number) => void;
   onStopTimelineDragPreview: () => void;
@@ -36,11 +42,16 @@ export function PlayerTimelineControls({
   formatTime,
   hasCurrentVideo,
   highlights,
+  editSegments,
+  canGenerateMontage,
+  montageDisabledReason,
   isPrivacyMode,
   progressPercent,
   timelinePreview,
   timelineRef,
   onHideTimelinePreview,
+  onGenerateMontage,
+  onRemoveEditSegment,
   onReturnFocusToPlayer,
   onSeek,
   onStopTimelineDragPreview,
@@ -115,6 +126,16 @@ export function PlayerTimelineControls({
             ))}
           </div>
         ) : null}
+        {duration && editSegments.length ? (
+          <div className="timeline-edit-segments" aria-hidden="true">
+            {editSegments.map((segment) => (
+              <span key={segment.id} style={{
+                left: `${clamp((segment.startTime / duration) * 100, 0, 100)}%`,
+                width: `${clamp(((segment.endTime - segment.startTime) / duration) * 100, 0.5, 100)}%`,
+              }} />
+            ))}
+          </div>
+        ) : null}
         <input
           ref={timelineRef}
           aria-label="播放进度"
@@ -137,6 +158,15 @@ export function PlayerTimelineControls({
         />
       </div>
       <span>{formatTime(duration)}</span>
+      <PlayerEditSegmentMenu
+        segments={editSegments}
+        canGenerate={canGenerateMontage}
+        disabledReason={montageDisabledReason}
+        formatTime={formatTime}
+        onGenerate={onGenerateMontage}
+        onRemove={onRemoveEditSegment}
+        onSeek={onSeek}
+      />
     </div>
   );
 }

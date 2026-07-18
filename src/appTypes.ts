@@ -112,6 +112,21 @@ export type CompatibleRemuxStreamEvent =
   | { type: "done"; result: CompatibleRemuxResponse }
   | { type: "error"; error: string };
 
+export type HighlightMontageResult = {
+  fileName: string;
+  relativePath: string;
+  segmentCount: number;
+  durationSeconds: number;
+  videoId: string;
+  size: number;
+  lastModified: number;
+};
+
+export type HighlightMontageStreamEvent =
+  | { type: "progress"; percent?: number; message?: string }
+  | { type: "done"; result: HighlightMontageResult }
+  | { type: "error"; error: string };
+
 export type MediaProbeResponse = {
   playability: VideoPlayability;
   metadata?: VideoMetadata;

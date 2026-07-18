@@ -24,6 +24,7 @@ test("old player data stores load with empty video tags and merge decisions", ()
   assert.deepEqual(parsed.watchActivity, {});
   assert.deepEqual(parsed.tagMergeDecisions, {});
   assert.deepEqual(parsed.videoHighlights, {});
+  assert.deepEqual(parsed.videoEditSegments, {});
   assert.deepEqual(parsed.danmakuSelections, {});
   assert.equal(parsed.danmakuPreferences.enabled, true);
 });
@@ -487,5 +488,27 @@ test("player data stores parse valid high energy highlight segments", () => {
 
   assert.deepEqual(parsed.videoHighlights, {
     video1: [{ id: "h1", startTime: 10, endTime: 25, tag: "名场面", updatedAt: 100 }],
+  });
+});
+
+test("player data stores parse valid edit retention segments", () => {
+  const parsed = storage.parsePlayerDataStore(JSON.stringify({
+    version: 5,
+    items: {},
+    favorites: [],
+    videoEditSegments: {
+      video1: [
+        { id: "edit-2", startTime: 30, endTime: 40, updatedAt: 102 },
+        { id: "edit-1", startTime: 5, endTime: 20, updatedAt: 100 },
+        { id: "bad", startTime: 12, endTime: 8, updatedAt: 101 },
+      ],
+    },
+  }));
+
+  assert.deepEqual(parsed.videoEditSegments, {
+    video1: [
+      { id: "edit-1", startTime: 5, endTime: 20, updatedAt: 100 },
+      { id: "edit-2", startTime: 30, endTime: 40, updatedAt: 102 },
+    ],
   });
 });

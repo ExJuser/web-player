@@ -24,6 +24,7 @@ import { useDuplicateDetectionController } from "./useDuplicateDetectionControll
 import { useEmbeddedSubtitleController } from "./useEmbeddedSubtitleController";
 import { useHomeProgressRecapController } from "./useHomeProgressRecapController";
 import { useHighEnergySegmentController } from "./useHighEnergySegmentController";
+import { useHighlightMontageController } from "./useHighlightMontageController";
 import { useLibrarySearchState } from "./useLibrarySearchState";
 import { useManualSubtitleController } from "./useManualSubtitleController";
 import { useMediaLibraryInputController } from "./useMediaLibraryInputController";
@@ -48,8 +49,11 @@ import { useThumbnailQueueController } from "./useThumbnailQueueController";
 import { useTimelinePreviewController } from "./useTimelinePreviewController";
 import { usePlayerToolActions } from "./usePlayerToolActions";
 import { useVideoSelectionController } from "./useVideoSelectionController";
+import { useVideoEditSegmentController } from "./useVideoEditSegmentController";
 import { useVideoTagController } from "./useVideoTagController";
 import { normalizeClientLocalConfig, shouldAutoScanGlobalMediaLibrary, supportsServerFileAccess } from "./localConfigClient";
+import { summarizeVideoEditSegments } from "./videoEditUtils";
+import type { HighlightMontageConfirmState, HighlightMontageResultState, HighlightMontageTaskState } from "./HighlightMontageDialogs";
 import {
   buildLibrarySearchCandidates,
   type LibrarySearchCandidate,
@@ -99,6 +103,7 @@ import type {
   SubtitleItem,
   TagMergeDecisionStore,
   VideoHighlightStore,
+  VideoEditSegmentStore,
   VideoItem,
   VideoMetadata,
   VideoCommentStore,
@@ -418,6 +423,7 @@ export default function App() {
     tagMergeDecisionsRef,
     videoCommentsRef,
     videoHighlightsRef,
+    videoEditSegmentsRef,
     videoRatingsRef,
     videosRef,
     videoStatsRef,
@@ -493,6 +499,10 @@ export default function App() {
   const [compatibleMediaTask, setCompatibleMediaTask] = useState<CompatibleMediaTaskState | null>(null);
   const compatibleMediaAbortControllerRef = useRef<AbortController | null>(null);
   const [compatibleMediaMessage, setCompatibleMediaMessage] = useState("");
+  const [highlightMontageConfirm, setHighlightMontageConfirm] = useState<HighlightMontageConfirmState | null>(null);
+  const [highlightMontageTask, setHighlightMontageTask] = useState<HighlightMontageTaskState | null>(null);
+  const [highlightMontageResult, setHighlightMontageResult] = useState<HighlightMontageResultState | null>(null);
+  const highlightMontageAbortControllerRef = useRef<AbortController | null>(null);
   const [isDeletingCompatibleMedia, setIsDeletingCompatibleMedia] = useState(false);
   const [playbackSourceChoices, setPlaybackSourceChoices] = useState<Record<string, PlaybackSourceChoice>>({});
   const [isAiPanelOpen, setIsAiPanelOpen] = useState(false);
@@ -571,6 +581,7 @@ export default function App() {
   const [videoComments, setVideoComments] = useState<VideoCommentStore>({});
   const [videoTags, setVideoTags] = useState<VideoTagStore>({});
   const [videoHighlights, setVideoHighlights] = useState<VideoHighlightStore>({});
+  const [videoEditSegments, setVideoEditSegments] = useState<VideoEditSegmentStore>({});
   const [, setTagMergeDecisions] = useState<TagMergeDecisionStore>({});
   const [isTagDialogOpen, setIsTagDialogOpen] = useState(false);
   const {
@@ -742,6 +753,7 @@ export default function App() {
   selectedSubtitleIdRef.current = selectedSubtitleId;
   localConfigRef.current = localConfig;
   videoHighlightsRef.current = videoHighlights;
+  videoEditSegmentsRef.current = videoEditSegments;
 
   const updateSelectedSubtitleId = useCallback((nextSubtitleId: string) => {
     selectedSubtitleIdRef.current = nextSubtitleId;
@@ -880,6 +892,7 @@ export default function App() {
     setTagMergeDecisions,
     setTheme,
     setVideoComments,
+    setVideoEditSegments,
     setVideoHighlights,
     setVideoRatings,
     setVideoTags,
@@ -887,6 +900,7 @@ export default function App() {
     setWatchActivityRevision,
     tagMergeDecisionsRef,
     videoCommentsRef,
+    videoEditSegmentsRef,
     videoHighlightsRef,
     videoRatingsRef,
     videosRef,
@@ -1564,7 +1578,20 @@ export default function App() {
     setVideoHighlights,
     videoHighlightsRef,
   });
+  const {
+    markCurrentSegment: markCurrentEditSegment,
+    pendingStart: pendingEditSegmentStart,
+    removeCurrentSegment: removeCurrentEditSegment,
+  } = useVideoEditSegmentController({
+    currentTime,
+    currentVideo,
+    duration,
+    setMessage,
+    setVideoEditSegments,
+    videoEditSegmentsRef,
+  });
   const currentVideoHighlights = currentVideo ? videoHighlights[currentVideo.id] ?? [] : [];
+  const currentVideoEditSegments = currentVideo ? videoEditSegments[currentVideo.id] ?? [] : [];
   const selectedPhotoAlbum = useMemo(
     () => photoAlbums.find((album) => album.id === selectedPhotoAlbumId) ?? null,
     [photoAlbums, selectedPhotoAlbumId],
@@ -1891,6 +1918,20 @@ export default function App() {
       localConfig?.ffmpeg.ffmpeg &&
       localConfig.ffmpeg.ffprobe,
   );
+  const highlightMontageDisabledReason = highlightMontageTask
+    ? "已有剪辑任务正在运行。"
+    : !currentVideo
+      ? "请先选择影片。"
+      : !currentVideoEditSegments.length
+        ? "请先用剪刀标记要保留的片段。"
+        : !currentMediaRootId || !currentMediaLibraryRoot
+          ? "当前影片没有可解析的媒体根目录。"
+          : !supportsServerFileAccess(currentMediaLibraryRoot)
+            ? "浏览器添加的媒体库需要先配置本机路径。"
+            : !localConfig?.ffmpeg.ffmpeg || !localConfig.ffmpeg.ffprobe
+              ? "需要先安装 ffmpeg 和 ffprobe。"
+              : "";
+  const canGenerateHighlightMontage = !highlightMontageDisabledReason;
   const compatibleMediaAction = getCompatibleMediaAction(currentVideo, {
     canUseServerTools: canUseServerMediaTools,
   });
@@ -2760,6 +2801,7 @@ export default function App() {
         Object.entries(watchActivityRef.current).filter(([, activity]) => activity.videoId !== video.id),
       );
       const nextVideoHighlights = { ...videoHighlightsRef.current };
+      const nextVideoEditSegments = { ...videoEditSegmentsRef.current };
       const nextDanmakuSelections = { ...danmakuSelectionsRef.current };
       const nextFavorites = new Set(favoriteVideoIdsRef.current);
       const nextSubtitles = subtitlesRef.current.filter((subtitle) => subtitle.videoId !== video.id);
@@ -2770,6 +2812,7 @@ export default function App() {
       delete nextVideoComments[video.id];
       delete nextVideoStats[createVideoStatsKey(video)];
       delete nextVideoHighlights[video.id];
+      delete nextVideoEditSegments[video.id];
       delete nextDanmakuSelections[video.id];
       nextFavorites.delete(video.id);
 
@@ -2784,6 +2827,7 @@ export default function App() {
       videoStatsRef.current = nextVideoStats;
       watchActivityRef.current = nextWatchActivity;
       videoHighlightsRef.current = nextVideoHighlights;
+      videoEditSegmentsRef.current = nextVideoEditSegments;
       danmakuSelectionsRef.current = nextDanmakuSelections;
       favoriteVideoIdsRef.current = nextFavorites;
       subtitlesRef.current = nextSubtitles;
@@ -2794,6 +2838,7 @@ export default function App() {
       setVideoRatings(nextVideoRatings);
       setVideoComments(nextVideoComments);
       setVideoHighlights(nextVideoHighlights);
+      setVideoEditSegments(nextVideoEditSegments);
       setVideoStatsRevision((revision) => revision + 1);
       setWatchActivityRevision((revision) => revision + 1);
       setDanmakuSelections(nextDanmakuSelections);
@@ -2882,6 +2927,7 @@ export default function App() {
           videoStats: nextVideoStats,
           watchActivity: nextWatchActivity,
           videoHighlights: nextVideoHighlights,
+          videoEditSegments: nextVideoEditSegments,
           danmakuSelections: nextDanmakuSelections,
           embeddedSubtitles: createPersistedEmbeddedSubtitles(subtitlesRef.current),
           duplicateDetection: null,
@@ -4273,6 +4319,22 @@ export default function App() {
     });
   }, [currentMediaRootId, currentVideo, isDeletingCompatibleMedia]);
 
+  const openHighlightMontageConfirm = useCallback(() => {
+    if (!currentVideo || !currentMediaRootId || !canGenerateHighlightMontage) return;
+    const summary = summarizeVideoEditSegments(currentVideoEditSegments);
+    setHighlightMontageConfirm({
+      rootId: currentMediaRootId,
+      relativePath: currentVideo.relativePath,
+      sourceVideoId: currentVideo.id,
+      videoName: currentVideo.name,
+      segments: currentVideoEditSegments,
+      highlights: currentVideoHighlights,
+      originalSegmentCount: currentVideoEditSegments.length,
+      mergedSegmentCount: summary.mergedSegmentCount,
+      durationSeconds: summary.durationSeconds,
+    });
+  }, [canGenerateHighlightMontage, currentMediaRootId, currentVideo, currentVideoEditSegments, currentVideoHighlights]);
+
   const {
     cancelCompatibleMediaGeneration,
     createCompatibleMedia,
@@ -4293,6 +4355,21 @@ export default function App() {
     setMessage,
     setPlaybackSourceChoices,
     updateVideoPlayability,
+  });
+
+  const {
+    cancelMontage: cancelHighlightMontage,
+    createMontage: createHighlightMontage,
+    reopenTask: reopenHighlightMontageTask,
+    runInBackground: runHighlightMontageInBackground,
+  } = useHighlightMontageController({
+    abortControllerRef: highlightMontageAbortControllerRef,
+    confirm: highlightMontageConfirm,
+    task: highlightMontageTask,
+    setConfirm: setHighlightMontageConfirm,
+    setResult: setHighlightMontageResult,
+    setTask: setHighlightMontageTask,
+    setMessage,
   });
 
   const {
@@ -5102,6 +5179,7 @@ export default function App() {
     "当前视频尚未探测播放兼容性。";
   const isCurrentHighEnergyMarkPending = pendingHighEnergyStart?.videoId === currentVideo?.id;
   const pendingHighEnergyStartTime = isCurrentHighEnergyMarkPending ? pendingHighEnergyStart?.time ?? null : null;
+  const isCurrentEditSegmentMarkPending = pendingEditSegmentStart?.videoId === currentVideo?.id;
   const { ariaLabel: playlistPanelAriaLabel, title: playlistPanelTitle } = createPlaylistPanelLabels({ isDuplicatePlaylistActive, isRatingPlaylistActive, isPlaylistSeriesMode, playlistVisibleCountLabel, duplicateGroupCount: activeDuplicateVideoGroups.length, activeRatingPlaylistLabel, modeFilteredVideoCount: modeFilteredVideos.length, playlistFilter, homeMediaMode, homeMediaModeLabel, totalVideoCount: videos.length });
 
   return (
@@ -5130,6 +5208,7 @@ export default function App() {
           compatibleMediaMessage={compatibleMediaMessage}
           compatibleMediaVideoId={compatibleMediaVideoId}
           currentVideoId={currentVideo?.id ?? null}
+          highlightMontageTask={highlightMontageTask}
           isHomeViewVisible={isHomeViewVisible}
           isNonPlayerViewVisible={isNonPlayerViewVisible}
           isPhotoAlbumViewVisible={isPhotoAlbumViewVisible}
@@ -5144,6 +5223,7 @@ export default function App() {
           onAddMediaLibrary={requestAddMediaLibrary}
           onOpenCacheStatus={openCacheStatusDialog}
           onOpenCompatibleMediaConfirm={openCompatibleMediaConfirm}
+          onOpenHighlightMontageTask={reopenHighlightMontageTask}
           onShowHome={showHomeView}
           onShowPhotoAlbums={showPhotoAlbumsView}
           onToggleTheme={toggleTheme}
@@ -5439,10 +5519,12 @@ export default function App() {
             canPlayNext={canPlayNext}
             canRecordEmission={canRecordEmission}
             canUseEmbeddedSubtitles={canUseEmbeddedSubtitles}
+            canGenerateMontage={canGenerateHighlightMontage}
             controlBarRef={controlBarRef}
             currentTime={currentTime}
             currentVideoHasCompatibleMedia={currentVideoHasCompatibleMedia}
             currentVideoHighlights={currentVideoHighlights}
+            currentVideoEditSegments={currentVideoEditSegments}
             currentVideoRating={currentVideoRating}
             currentVideoSpecialStats={currentVideoSpecialStats}
             currentVideoSourceChoice={currentVideoSourceChoice}
@@ -5459,6 +5541,8 @@ export default function App() {
             isCinemaMode={isCinemaMode}
             isDeletingCompatibleMedia={isDeletingCompatibleMedia}
             isEmbeddedSubtitleLoading={isEmbeddedSubtitleLoading}
+            isEditSegmentMarkDisabled={!currentVideo || !duration || isPrivacyMode}
+            isEditSegmentMarkPending={isCurrentEditSegmentMarkPending}
             isHighEnergyMarkDisabled={!currentVideo || !duration || isPrivacyMode}
             isHighEnergyMarkPending={isCurrentHighEnergyMarkPending}
             isMuted={isMuted}
@@ -5467,6 +5551,7 @@ export default function App() {
             isSeriesMode={isSeriesMode}
             normalizedVideoRotation={normalizedVideoRotation}
             pendingHighlightStartTime={pendingHighEnergyStartTime}
+            montageDisabledReason={highlightMontageDisabledReason}
             playbackMode={playbackMode}
             playbackModeOptions={playbackModeOptions}
             playbackRateOptions={playbackRateSelectOptions}
@@ -5501,8 +5586,10 @@ export default function App() {
             onDeleteCompatibleMedia={openCompatibleMediaDeleteConfirm}
             onEditHighlight={editCurrentHighEnergySegment}
             onHideTimelinePreview={hideTimelinePreview}
+            onGenerateMontage={openHighlightMontageConfirm}
             onKeepControlsVisible={keepControlsVisible}
             onMarkHighEnergySegment={markCurrentHighEnergySegment}
+            onMarkEditSegment={markCurrentEditSegment}
             onOpenAiPanel={() => setIsAiPanelOpen(true)}
             onOpenDanmakuDialog={() => {
               setIsDanmakuDialogOpen(true);
@@ -5518,6 +5605,7 @@ export default function App() {
             onProbeEmbeddedSubtitles={probeEmbeddedSubtitles}
             onRecordEmission={recordEmissionForCurrentVideo}
             onRemoveHighlight={removeCurrentHighEnergySegment}
+            onRemoveEditSegment={removeCurrentEditSegment}
             onReturnFocusToPlayer={returnFocusToPlayer}
             onRotateVideo={rotateVideoClockwise}
             onScheduleControlsHide={scheduleControlsHide}
@@ -5768,6 +5856,17 @@ export default function App() {
       }}
     />
     <PlayerUtilityDialogs
+      highlightMontage={{
+        confirm: highlightMontageConfirm,
+        task: highlightMontageTask,
+        result: highlightMontageResult,
+        formatTime,
+        onCloseConfirm: () => setHighlightMontageConfirm(null),
+        onCreate: () => void createHighlightMontage(),
+        onCancelTask: cancelHighlightMontage,
+        onRunInBackground: runHighlightMontageInBackground,
+        onCloseResult: () => setHighlightMontageResult(null),
+      }}
       compatibleMedia={{
         confirm: compatibleMediaConfirm,
         task: compatibleMediaTask,

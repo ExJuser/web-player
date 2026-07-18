@@ -18,6 +18,8 @@ import type {
   ShortcutMap,
   SubtitleItem,
   VideoItem,
+  VideoEditSegment,
+  VideoEditSegmentStore,
   VideoHighlightSegment,
   VideoHighlightStore,
   VideoCommentStore,
@@ -233,6 +235,43 @@ export function parseVideoHighlights(source: unknown): VideoHighlightStore {
     });
     if (highlights.length) {
       store[videoId] = highlights.sort((a, b) => a.startTime - b.startTime || a.endTime - b.endTime);
+    }
+  }
+  return store;
+}
+
+export function parseVideoEditSegments(source: unknown): VideoEditSegmentStore {
+  if (!source || typeof source !== "object" || Array.isArray(source)) return {};
+
+  const store: VideoEditSegmentStore = {};
+  for (const [videoId, value] of Object.entries(source)) {
+    if (!videoId || !Array.isArray(value)) continue;
+    const segments = value.flatMap((item): VideoEditSegment[] => {
+      if (!item || typeof item !== "object" || Array.isArray(item)) return [];
+      const segment = item as Partial<VideoEditSegment>;
+      if (
+        typeof segment.id !== "string" ||
+        !segment.id.trim() ||
+        typeof segment.startTime !== "number" ||
+        typeof segment.endTime !== "number" ||
+        typeof segment.updatedAt !== "number" ||
+        !Number.isFinite(segment.startTime) ||
+        !Number.isFinite(segment.endTime) ||
+        !Number.isFinite(segment.updatedAt) ||
+        segment.startTime < 0 ||
+        segment.endTime <= segment.startTime
+      ) {
+        return [];
+      }
+      return [{
+        id: segment.id,
+        startTime: segment.startTime,
+        endTime: segment.endTime,
+        updatedAt: segment.updatedAt,
+      }];
+    });
+    if (segments.length) {
+      store[videoId] = segments.sort((a, b) => a.startTime - b.startTime || a.endTime - b.endTime);
     }
   }
   return store;
@@ -529,6 +568,7 @@ export function parsePlayerDataStore(raw: string): PlayerDataStore {
     videoStats?: unknown;
     watchActivity?: unknown;
     videoHighlights?: unknown;
+    videoEditSegments?: unknown;
     tagMergeDecisions?: unknown;
     embeddedSubtitles?: unknown;
     danmakuSelections?: unknown;
@@ -553,6 +593,7 @@ export function parsePlayerDataStore(raw: string): PlayerDataStore {
     videoStats: parseVideoStats(parsed?.videoStats),
     watchActivity: parseWatchActivity(parsed?.watchActivity),
     videoHighlights: parseVideoHighlights(parsed?.videoHighlights),
+    videoEditSegments: parseVideoEditSegments(parsed?.videoEditSegments),
     tagMergeDecisions: parseTagMergeDecisions(parsed?.tagMergeDecisions),
     embeddedSubtitles: parsePersistedEmbeddedSubtitles(parsed?.embeddedSubtitles),
     danmakuSelections: parseDanmakuSelectionStore(parsed?.danmakuSelections),
@@ -579,6 +620,7 @@ export function createDefaultPlayerDataStore(metadata?: PlayerDataStore["metadat
     videoStats: {},
     watchActivity: {},
     videoHighlights: {},
+    videoEditSegments: {},
     tagMergeDecisions: {},
     embeddedSubtitles: [],
     danmakuSelections: {},
@@ -846,6 +888,7 @@ function createPersistedPlayerDataPayload(store: PlayerDataStore) {
     videoStats: parseVideoStats(store.videoStats),
     watchActivity: parseWatchActivity(store.watchActivity),
     videoHighlights: parseVideoHighlights(store.videoHighlights),
+    videoEditSegments: parseVideoEditSegments(store.videoEditSegments),
     tagMergeDecisions: parseTagMergeDecisions(store.tagMergeDecisions),
     embeddedSubtitles: parsePersistedEmbeddedSubtitles(store.embeddedSubtitles),
     danmakuSelections: parseDanmakuSelectionStore(store.danmakuSelections),
@@ -1070,6 +1113,18 @@ export async function savePlayerVideoHighlights(videoId: string, highlights: Vid
       Accept: "application/json",
     },
     body: JSON.stringify({ highlights }),
+  });
+  if (!response.ok) throw new Error(await readApiError(response));
+}
+
+export async function savePlayerVideoEditSegments(videoId: string, segments: VideoEditSegment[]) {
+  const response = await fetch(createApiUrl(`edit-segments/${encodeURIComponent(videoId)}`), {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify({ segments }),
   });
   if (!response.ok) throw new Error(await readApiError(response));
 }

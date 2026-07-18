@@ -8,7 +8,7 @@ import { PlayerTimelineControls } from "./PlayerTimelineControls";
 import { PlayerViewControls } from "./PlayerViewControls";
 import { SpecialStatsControl } from "./SpecialStatsControl";
 import type { HomeMediaMode } from "./playerUiState";
-import type { PlaybackMode, VideoHighlightSegment } from "./playerTypes";
+import type { PlaybackMode, VideoEditSegment, VideoHighlightSegment } from "./playerTypes";
 
 type PlaybackSourceChoice = "compatible" | "original";
 
@@ -32,10 +32,12 @@ type PlayerControlBarProps = {
   canPlayNext: boolean;
   canRecordEmission: boolean;
   canUseEmbeddedSubtitles: boolean;
+  canGenerateMontage: boolean;
   controlBarRef: Ref<HTMLDivElement>;
   currentTime: number;
   currentVideoHasCompatibleMedia: boolean;
   currentVideoHighlights: VideoHighlightSegment[];
+  currentVideoEditSegments: VideoEditSegment[];
   currentVideoRating: number | null | undefined;
   currentVideoSpecialStats: SpecialVideoStats;
   currentVideoSourceChoice: PlaybackSourceChoice;
@@ -52,6 +54,8 @@ type PlayerControlBarProps = {
   isCinemaMode: boolean;
   isDeletingCompatibleMedia: boolean;
   isEmbeddedSubtitleLoading: boolean;
+  isEditSegmentMarkDisabled: boolean;
+  isEditSegmentMarkPending: boolean;
   isHighEnergyMarkDisabled: boolean;
   isHighEnergyMarkPending: boolean;
   isMuted: boolean;
@@ -60,6 +64,7 @@ type PlayerControlBarProps = {
   isSeriesMode: boolean;
   normalizedVideoRotation: number;
   pendingHighlightStartTime: number | null;
+  montageDisabledReason: string;
   playbackMode: PlaybackMode;
   playbackModeOptions: Array<{ value: PlaybackMode; label: string }>;
   playbackRateOptions: Array<{ value: number; label: string }>;
@@ -84,8 +89,10 @@ type PlayerControlBarProps = {
   onDeleteCompatibleMedia: () => void;
   onEditHighlight: (highlight: VideoHighlightSegment) => void;
   onHideTimelinePreview: () => void;
+  onGenerateMontage: () => void;
   onKeepControlsVisible: () => void;
   onMarkHighEnergySegment: () => void;
+  onMarkEditSegment: () => void;
   onOpenAiPanel: () => void;
   onOpenDanmakuDialog: () => void;
   onOpenRatingDialog: () => void;
@@ -94,6 +101,7 @@ type PlayerControlBarProps = {
   onProbeEmbeddedSubtitles: () => void;
   onRecordEmission: () => void;
   onRemoveHighlight: (highlightId: string) => void;
+  onRemoveEditSegment: (segmentId: string) => void;
   onReturnFocusToPlayer: () => void;
   onRotateVideo: () => void;
   onScheduleControlsHide: () => void;
@@ -115,10 +123,12 @@ export function PlayerControlBar({
   canPlayNext,
   canRecordEmission,
   canUseEmbeddedSubtitles,
+  canGenerateMontage,
   controlBarRef,
   currentTime,
   currentVideoHasCompatibleMedia,
   currentVideoHighlights,
+  currentVideoEditSegments,
   currentVideoRating,
   currentVideoSpecialStats,
   currentVideoSourceChoice,
@@ -135,6 +145,8 @@ export function PlayerControlBar({
   isCinemaMode,
   isDeletingCompatibleMedia,
   isEmbeddedSubtitleLoading,
+  isEditSegmentMarkDisabled,
+  isEditSegmentMarkPending,
   isHighEnergyMarkDisabled,
   isHighEnergyMarkPending,
   isMuted,
@@ -143,6 +155,7 @@ export function PlayerControlBar({
   isSeriesMode,
   normalizedVideoRotation,
   pendingHighlightStartTime,
+  montageDisabledReason,
   playbackMode,
   playbackModeOptions,
   playbackRateOptions,
@@ -167,8 +180,10 @@ export function PlayerControlBar({
   onDeleteCompatibleMedia,
   onEditHighlight,
   onHideTimelinePreview,
+  onGenerateMontage,
   onKeepControlsVisible,
   onMarkHighEnergySegment,
+  onMarkEditSegment,
   onOpenAiPanel,
   onOpenDanmakuDialog,
   onOpenRatingDialog,
@@ -177,6 +192,7 @@ export function PlayerControlBar({
   onProbeEmbeddedSubtitles,
   onRecordEmission,
   onRemoveHighlight,
+  onRemoveEditSegment,
   onReturnFocusToPlayer,
   onRotateVideo,
   onScheduleControlsHide,
@@ -214,11 +230,16 @@ export function PlayerControlBar({
         formatTime={formatTime}
         hasCurrentVideo={hasCurrentVideo}
         highlights={currentVideoHighlights}
+        editSegments={currentVideoEditSegments}
+        canGenerateMontage={canGenerateMontage}
+        montageDisabledReason={montageDisabledReason}
         isPrivacyMode={isPrivacyMode}
         progressPercent={progressPercent}
         timelinePreview={timelinePreview}
         timelineRef={timelineRef}
         onHideTimelinePreview={onHideTimelinePreview}
+        onGenerateMontage={onGenerateMontage}
+        onRemoveEditSegment={onRemoveEditSegment}
         onReturnFocusToPlayer={onReturnFocusToPlayer}
         onSeek={onSeek}
         onStopTimelineDragPreview={onStopTimelineDragPreview}
@@ -283,12 +304,15 @@ export function PlayerControlBar({
           isEmbeddedSubtitleLoading={isEmbeddedSubtitleLoading}
           isHighEnergyMarkDisabled={isHighEnergyMarkDisabled}
           isHighEnergyMarkPending={isHighEnergyMarkPending}
+          isEditSegmentMarkDisabled={isEditSegmentMarkDisabled}
+          isEditSegmentMarkPending={isEditSegmentMarkPending}
           isSeriesMode={isSeriesMode}
           selectedSubtitleId={selectedSubtitleId}
           subtitleControlOptions={subtitleControlOptions}
           videoTagCount={currentVideoTagsCount}
           onChangeSubtitle={onChangeSubtitle}
           onMarkHighEnergySegment={onMarkHighEnergySegment}
+          onMarkEditSegment={onMarkEditSegment}
           onOpenAiPanel={onOpenAiPanel}
           onOpenDanmakuDialog={onOpenDanmakuDialog}
           onOpenRatingDialog={onOpenRatingDialog}

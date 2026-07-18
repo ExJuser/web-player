@@ -51,6 +51,9 @@ test("sqlite store imports legacy player and photo album json once", async () =>
         videoHighlights: {
           video1: [{ id: "mark-1", startTime: 12, endTime: 18, tag: "名场面", updatedAt: 1200 }],
         },
+        videoEditSegments: {
+          video1: [{ id: "edit-1", startTime: 5, endTime: 20, updatedAt: 1250 }],
+        },
         tagMergeDecisions: {},
         embeddedSubtitles: [],
         danmakuSelections: {},
@@ -84,6 +87,7 @@ test("sqlite store imports legacy player and photo album json once", async () =>
     assert.deepEqual(playerStore.videoTags.video1, ["Tag A"]);
     assert.equal(playerStore.watchActivity["2026-06-29::video1"].watchedSeconds, 90);
     assert.deepEqual(playerStore.videoHighlights.video1, [{ id: "mark-1", startTime: 12, endTime: 18, tag: "名场面", updatedAt: 1200 }]);
+    assert.deepEqual(playerStore.videoEditSegments.video1, [{ id: "edit-1", startTime: 5, endTime: 20, updatedAt: 1250 }]);
     assert.equal(photoStore.progress.album1.imageIndex, 2);
     assert.equal(photoStore.coverImageByAlbumId.album1, "image-2");
     assert.deepEqual(photoStore.albumTags.album1, ["剧情", "AI-字幕"]);
@@ -133,6 +137,11 @@ test("sqlite incremental writes keep unrelated player data", async () => {
     context.store.setVideoRating("global", "video1", 9);
     context.store.replaceVideoTags("global", "video1", ["New"]);
     context.store.replaceVideoHighlights("global", "video1", [{ id: "h1", startTime: 8, endTime: 15, tag: " 高能 ", updatedAt: 2200 }]);
+    context.store.replaceVideoEditSegments("global", "video1", [
+      { id: "edit-2", startTime: 30, endTime: 40, updatedAt: 2400 },
+      { id: "edit-1", startTime: 5, endTime: 20, updatedAt: 2350 },
+      { id: "bad", startTime: 20, endTime: 10, updatedAt: 2450 },
+    ]);
     context.store.upsertWatchActivity("global", {
       date: "2026-06-29",
       videoId: "video1",
@@ -150,6 +159,10 @@ test("sqlite incremental writes keep unrelated player data", async () => {
     assert.deepEqual(store.videoRatings, { video1: 9 });
     assert.deepEqual(store.videoTags.video1, ["New"]);
     assert.deepEqual(store.videoHighlights.video1, [{ id: "h1", startTime: 8, endTime: 15, tag: "高能", updatedAt: 2200 }]);
+    assert.deepEqual(store.videoEditSegments.video1, [
+      { id: "edit-1", startTime: 5, endTime: 20, updatedAt: 2350 },
+      { id: "edit-2", startTime: 30, endTime: 40, updatedAt: 2400 },
+    ]);
     assert.deepEqual(store.watchActivity["2026-06-29::video1"], {
       date: "2026-06-29",
       videoId: "video1",
