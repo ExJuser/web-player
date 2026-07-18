@@ -233,8 +233,8 @@ button {
   display: inline-flex;
   align-items: center;
   transition:
-    opacity 180ms ease,
-    transform 180ms ease;
+    opacity 280ms ease,
+    transform 280ms ease;
 }
 
 .video-metadata-summary {
