@@ -5189,7 +5189,7 @@ button {
 
 .lada-options-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(260px, 0.85fr) minmax(0, 1.15fr);
   gap: 14px;
   min-width: 0;
 }
@@ -5207,6 +5207,21 @@ button {
 .lada-option-field .control-select-trigger {
   width: 100%;
   min-width: 0;
+}
+
+.lada-option-field:nth-child(2) .control-select-list {
+  right: 0;
+  left: auto;
+  width: min(520px, calc(100vw - 80px));
+  max-height: min(170px, calc(100vh - 140px));
+  transform: none;
+}
+
+.lada-option-field:nth-child(2) .control-select-list button {
+  line-height: 1.35;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .lada-option-field .control-group {
