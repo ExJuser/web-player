@@ -8,6 +8,8 @@ import {
   assertMontageMediaRoot,
   createHighlightMontage,
   createHighlightMontageArgs,
+  createLosslessHighlightMontageArgs,
+  createLosslessHighlightMontageScript,
   mapHighlightsToMontage,
   normalizeMontageSegments,
 } from "../server/highlightMontage.mjs";
@@ -84,6 +86,29 @@ test("creates precise H.264 AAC montage arguments for media with audio", () => {
   assert.equal(args.includes("aac"), true);
   assert.equal(args.includes("yuv420p"), true);
   assert.equal(args.at(-1), "output.tmp.mp4");
+});
+
+test("creates a concat script and stream-copy arguments for lossless montage", () => {
+  const script = createLosslessHighlightMontageScript("D:\\Media\\Director's Cut.mkv", [
+    { startTime: 5, endTime: 10 },
+    { startTime: 20, endTime: 25 },
+  ]);
+  const args = createLosslessHighlightMontageArgs("segments.ffconcat", "output.mkv", { hasAudio: true });
+
+  assert.equal(script, [
+    "ffconcat version 1.0",
+    "file 'D:/Media/Director'\\''s Cut.mkv'",
+    "inpoint 5",
+    "outpoint 10",
+    "file 'D:/Media/Director'\\''s Cut.mkv'",
+    "inpoint 20",
+    "outpoint 25",
+    "",
+  ].join("\n"));
+  assert.deepEqual(args.slice(0, 8), ["-v", "error", "-y", "-f", "concat", "-safe", "0", "-i"]);
+  assert.equal(args.includes("-filter_complex"), false);
+  assert.deepEqual(args.slice(args.indexOf("-c"), args.indexOf("-map_metadata")), ["-c", "copy"]);
+  assert.equal(args.at(-1), "output.mkv");
 });
 
 test("creates hardware-specific H.264 encoder arguments", () => {
@@ -191,6 +216,7 @@ test("writes an incremented edit file and persists mapped highlights", async () 
     });
 
     assert.equal(result.fileName, "霸王别姬.1993-edit-2.mp4");
+    assert.equal(result.mode, "precise");
     assert.equal(result.relativePath, "Classics/霸王别姬.1993-edit-2.mp4");
     assert.equal(result.segmentCount, 1);
     assert.equal(result.durationSeconds, 20);
@@ -202,6 +228,53 @@ test("writes an incremented edit file and persists mapped highlights", async () 
     ]);
     assert.equal(progressEvents.some((event) => event.percent === 50), true);
     assert.equal(progressEvents.at(-1).percent, 100);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("creates a lossless montage in the source container without probing encoders", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "web-player-lossless-montage-"));
+  const sourcePath = path.join(directory, "Movie.mkv");
+  await writeFile(sourcePath, "source");
+  let montageArgs = null;
+  let concatScript = "";
+
+  try {
+    const result = await createHighlightMontage({
+      runProcess: async (command, args) => {
+        if (command === "ffprobe") {
+          if (args.at(-1) !== sourcePath) {
+            return JSON.stringify({ format: { duration: "20.75" }, streams: [{ codec_type: "video" }, { codec_type: "audio" }] });
+          }
+          return JSON.stringify({
+            format: { duration: "100" },
+            streams: [{ codec_type: "video" }, { codec_type: "audio" }],
+          });
+        }
+        assert.equal(args.at(-1) === "-", false);
+        montageArgs = args;
+        concatScript = await readFile(args[args.indexOf("-i") + 1], "utf8");
+        await writeFile(args.at(-1), "lossless-output");
+        return "";
+      },
+      sourcePath,
+      rootId: "movies",
+      relativePath: "Movie.mkv",
+      segments: [{ startTime: 10, endTime: 30 }],
+      mode: "lossless",
+      now: () => 1000,
+      persistHighlights: () => { throw new Error("lossless montage must not persist inaccurate highlights"); },
+    });
+
+    assert.equal(result.fileName, "Movie-edit.mkv");
+    assert.equal(result.mode, "lossless");
+    assert.equal(result.relativePath, "Movie-edit.mkv");
+    assert.equal(result.durationSeconds, 20.75);
+    assert.equal(montageArgs.includes("copy"), true);
+    assert.match(concatScript, /inpoint 10\noutpoint 30/);
+    assert.equal(await readFile(path.join(directory, result.fileName), "utf8"), "lossless-output");
+    assert.deepEqual((await readdir(directory)).sort(), ["Movie-edit.mkv", "Movie.mkv"]);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

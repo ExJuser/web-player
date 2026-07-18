@@ -4,7 +4,7 @@ import type { MediaProcessingTaskState } from "./MediaProcessingTaskDialog";
 export type MediaProcessingTaskAction =
   | { type: "idle" }
   | { type: "active"; task: MediaProcessingTaskState }
-  | { type: "montage-completed"; result: Pick<HighlightMontageResult, "fileName" | "relativePath" | "durationSeconds"> }
+  | { type: "montage-completed"; result: Pick<HighlightMontageResult, "fileName" | "mode" | "relativePath" | "durationSeconds"> }
   | { type: "lada-completed"; result: Pick<LadaRestorationResult, "fileName" | "relativePath" | "size"> }
   | { type: "message"; message: string };
 
@@ -45,6 +45,7 @@ export function resolveMediaProcessingTaskAction(
       type: "montage-completed",
       result: {
         fileName: task.result.fileName,
+        mode: task.result.mode,
         relativePath: task.result.relativePath,
         durationSeconds: task.result.durationSeconds,
       },

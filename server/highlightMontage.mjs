@@ -1,4 +1,4 @@
-import { access, link, rm, stat } from "node:fs/promises";
+import { access, link, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { probeMediaFile } from "./mediaCompatibility.mjs";
@@ -139,6 +139,40 @@ export async function selectHighlightMontageVideoEncoder(runProcess, { signal } 
   return SOFTWARE_VIDEO_ENCODER;
 }
 
+export function createLosslessHighlightMontageScript(sourcePath, segments) {
+  const escapedPath = sourcePath.replaceAll("\\", "/").replaceAll("'", "'\\''");
+  return [
+    "ffconcat version 1.0",
+    ...segments.flatMap((segment) => [
+      `file '${escapedPath}'`,
+      `inpoint ${segment.startTime}`,
+      `outpoint ${segment.endTime}`,
+    ]),
+    "",
+  ].join("\n");
+}
+
+export function createLosslessHighlightMontageArgs(concatPath, outputPath, { hasAudio }) {
+  const supportsFastStart = [".mp4", ".m4v", ".mov"].includes(path.extname(outputPath).toLowerCase());
+  return [
+    "-v", "error",
+    "-y",
+    "-f", "concat",
+    "-safe", "0",
+    "-i", concatPath,
+    "-map", "0:v:0",
+    ...(hasAudio ? ["-map", "0:a:0?"] : []),
+    "-c", "copy",
+    "-map_metadata", "-1",
+    "-map_chapters", "-1",
+    "-avoid_negative_ts", "make_zero",
+    ...(supportsFastStart ? ["-movflags", "+faststart"] : []),
+    "-progress", "pipe:1",
+    "-nostats",
+    outputPath,
+  ];
+}
+
 export function createHighlightMontageArgs(sourcePath, outputPath, segments, { hasAudio, videoEncoder = SOFTWARE_VIDEO_ENCODER }) {
   const filters = [];
   const concatInputs = [];
@@ -197,14 +231,18 @@ function parseProgressChunk(chunk, state, durationSeconds, onProgress) {
   }
 }
 
-function outputFileName(sourcePath, sequence) {
-  const stem = path.parse(sourcePath).name;
-  return `${stem}-edit${sequence > 1 ? `-${sequence}` : ""}.mp4`;
+function montageOutputExtension(sourcePath, mode) {
+  return mode === "lossless" ? path.extname(sourcePath) || ".mkv" : ".mp4";
 }
 
-async function commitTemporaryOutput(temporaryPath, sourcePath) {
+function outputFileName(sourcePath, sequence, mode) {
+  const stem = path.parse(sourcePath).name;
+  return `${stem}-edit${sequence > 1 ? `-${sequence}` : ""}${montageOutputExtension(sourcePath, mode)}`;
+}
+
+async function commitTemporaryOutput(temporaryPath, sourcePath, mode) {
   for (let sequence = 1; ; sequence += 1) {
-    const fileName = outputFileName(sourcePath, sequence);
+    const fileName = outputFileName(sourcePath, sequence, mode);
     const outputPath = path.join(path.dirname(sourcePath), fileName);
     try {
       await access(outputPath);
@@ -238,6 +276,7 @@ export async function createHighlightMontage({
   onProgress,
   persistHighlights,
   now = Date.now,
+  mode = "precise",
 }) {
   const rawProbe = await probeMediaFile(runProcess, sourcePath);
   const durationSeconds = Number(rawProbe?.format?.duration);
@@ -246,25 +285,38 @@ export async function createHighlightMontage({
     throw new Error("原片没有可用的视频流。");
   }
   const normalizedSegments = normalizeMontageSegments(segments, durationSeconds);
-  const mappedHighlights = mapHighlightsToMontage(sourceHighlights, normalizedSegments, now());
+  const normalizedMode = mode === "lossless" ? "lossless" : "precise";
+  const mappedHighlights = normalizedMode === "precise"
+    ? mapHighlightsToMontage(sourceHighlights, normalizedSegments, now())
+    : [];
   const outputDuration = segmentDuration(normalizedSegments);
+  const outputExtension = montageOutputExtension(sourcePath, normalizedMode);
   const temporaryPath = path.join(
     path.dirname(sourcePath),
-    `.${path.parse(sourcePath).name}-edit-${process.pid}-${now()}.tmp.mp4`,
+    `.${path.parse(sourcePath).name}-edit-${process.pid}-${now()}.tmp${outputExtension}`,
   );
+  const concatPath = `${temporaryPath}.ffconcat`;
   let committedPath = null;
   onProgress?.({ percent: 0, message: "正在准备剪辑任务..." });
 
   try {
     const progressState = { buffer: "", lastPercent: 0 };
     await rm(temporaryPath, { force: true });
-    const videoEncoder = await selectHighlightMontageVideoEncoder(runProcess, { signal });
+    await rm(concatPath, { force: true });
+    const hasAudio = streams.some((stream) => stream?.codec_type === "audio");
+    let args;
+    if (normalizedMode === "lossless") {
+      await writeFile(concatPath, createLosslessHighlightMontageScript(sourcePath, normalizedSegments), "utf8");
+      args = createLosslessHighlightMontageArgs(concatPath, temporaryPath, { hasAudio });
+    } else {
+      args = createHighlightMontageArgs(sourcePath, temporaryPath, normalizedSegments, {
+        hasAudio,
+        videoEncoder: await selectHighlightMontageVideoEncoder(runProcess, { signal }),
+      });
+    }
     await runProcess(
       "ffmpeg",
-      createHighlightMontageArgs(sourcePath, temporaryPath, normalizedSegments, {
-        hasAudio: streams.some((stream) => stream?.codec_type === "audio"),
-        videoEncoder,
-      }),
+      args,
       {
         timeoutMs: 2 * 60 * 60 * 1000,
         timeoutMessage: "生成剪辑版超时。",
@@ -276,20 +328,28 @@ export async function createHighlightMontage({
     const temporaryStat = await stat(temporaryPath);
     if (!temporaryStat.isFile() || temporaryStat.size <= 0) throw new Error("生成剪辑版失败。");
 
-    const committed = await commitTemporaryOutput(temporaryPath, sourcePath);
+    const committed = await commitTemporaryOutput(temporaryPath, sourcePath, normalizedMode);
     committedPath = committed.outputPath;
     await rm(temporaryPath, { force: true });
     const outputStat = await stat(committed.outputPath);
     const outputRelativePath = createOutputRelativePath(relativePath, committed.fileName);
     const lastModified = Math.round(outputStat.mtimeMs);
     const videoId = `${rootId}|${outputRelativePath}|${outputStat.size}|${lastModified}`;
-    await persistHighlights?.(videoId, mappedHighlights);
+    let completedDuration = outputDuration;
+    if (normalizedMode === "lossless") {
+      const outputProbe = await probeMediaFile(runProcess, committed.outputPath);
+      const probedDuration = Number(outputProbe?.format?.duration);
+      if (Number.isFinite(probedDuration) && probedDuration > 0) completedDuration = probedDuration;
+    } else {
+      await persistHighlights?.(videoId, mappedHighlights);
+    }
     onProgress?.({ percent: 100, message: `已生成 ${committed.fileName}` });
     return {
       fileName: committed.fileName,
+      mode: normalizedMode,
       relativePath: outputRelativePath,
       segmentCount: normalizedSegments.length,
-      durationSeconds: asTimestamp(outputDuration),
+      durationSeconds: asTimestamp(completedDuration),
       videoId,
       size: outputStat.size,
       lastModified,
@@ -299,5 +359,6 @@ export async function createHighlightMontage({
     throw error;
   } finally {
     await rm(temporaryPath, { force: true });
+    await rm(concatPath, { force: true });
   }
 }

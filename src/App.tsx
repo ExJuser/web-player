@@ -5909,7 +5909,7 @@ export default function App() {
         result: highlightMontageResult,
         formatTime,
         onCloseConfirm: () => setHighlightMontageConfirm(null),
-        onCreate: () => void createHighlightMontage(),
+        onCreate: (mode) => void createHighlightMontage(mode),
         onCloseResult: () => setHighlightMontageResult(null),
       }}
       ladaRestoration={{

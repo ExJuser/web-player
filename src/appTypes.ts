@@ -114,6 +114,7 @@ export type CompatibleRemuxStreamEvent =
 
 export type HighlightMontageResult = {
   fileName: string;
+  mode: "lossless" | "precise";
   relativePath: string;
   segmentCount: number;
   durationSeconds: number;

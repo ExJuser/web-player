@@ -61,6 +61,27 @@ test("resolves active and completed snapshots into ui actions", () => {
     type: "lada-completed",
     result: { fileName: "Movie.restored.mp4", relativePath: "Movie.restored.mp4", size: 1024 },
   });
+
+  const completedMontage = {
+    ...active,
+    progress: 100,
+    state: "completed",
+    result: {
+      fileName: "Movie-edit.mkv",
+      mode: "lossless",
+      relativePath: "Movie-edit.mkv",
+      durationSeconds: 20.75,
+    },
+  };
+  assert.deepEqual(client.resolveMediaProcessingTaskAction(completedMontage, null), {
+    type: "montage-completed",
+    result: {
+      fileName: "Movie-edit.mkv",
+      mode: "lossless",
+      relativePath: "Movie-edit.mkv",
+      durationSeconds: 20.75,
+    },
+  });
 });
 
 test("resolves failed and cancelled snapshots into messages", () => {

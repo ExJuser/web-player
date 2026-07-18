@@ -958,6 +958,7 @@ export function playerDataApiPlugin({ projectRoot, env }) {
               sourcePath,
               rootId: root.id,
               relativePath: payload?.relativePath,
+              mode: payload?.mode === "lossless" ? "lossless" : "precise",
               segments: payload?.segments,
               sourceHighlights,
               signal,

@@ -3,6 +3,7 @@ import { useCallback, type Dispatch, type SetStateAction } from "react";
 import type { MediaProcessingTaskSnapshot } from "./appTypes";
 import type {
   HighlightMontageConfirmState,
+  HighlightMontageMode,
   HighlightMontageResultState,
 } from "./HighlightMontageDialogs";
 import type { MediaProcessingTaskState } from "./MediaProcessingTaskDialog";
@@ -19,7 +20,7 @@ type UseHighlightMontageControllerOptions = {
 };
 
 export function useHighlightMontageController({ confirm, task, setConfirm, setResult, setTask, setMessage }: UseHighlightMontageControllerOptions) {
-  const createMontage = useCallback(async () => {
+  const createMontage = useCallback(async (mode: HighlightMontageMode) => {
     if (!confirm || task) return;
     const request = confirm;
     setConfirm(null);
@@ -31,6 +32,7 @@ export function useHighlightMontageController({ confirm, task, setConfirm, setRe
           rootId: request.rootId,
           relativePath: request.relativePath,
           sourceVideoId: request.sourceVideoId,
+          mode,
           segments: request.segments,
           highlights: request.highlights,
         }),

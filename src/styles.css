@@ -5056,6 +5056,65 @@ button {
   width: min(560px, 100%);
 }
 
+.highlight-montage-mode-picker {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.highlight-montage-mode-picker legend {
+  margin-bottom: 8px;
+  color: #dce2ec;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.highlight-montage-mode-picker label {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+  min-width: 0;
+  padding: 11px 12px;
+  border: 1px solid #303743;
+  border-radius: 8px;
+  background: #20252d;
+  cursor: pointer;
+}
+
+.highlight-montage-mode-picker label.selected {
+  border-color: #00a1d6;
+  background: rgba(0, 161, 214, 0.1);
+}
+
+.highlight-montage-mode-picker input {
+  width: 16px;
+  height: 16px;
+  margin: 2px 0 0;
+  accent-color: #00a1d6;
+}
+
+.highlight-montage-mode-picker span {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.highlight-montage-mode-picker strong {
+  color: #f5f7fb;
+  font-size: 13px;
+}
+
+.highlight-montage-mode-picker small {
+  color: #9aa4b2;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .high-energy-tag-field {
   grid-column: 1 / -1;
   display: grid;
@@ -8031,6 +8090,30 @@ button {
 .app-shell.theme-light .compatible-media-progress-track,
 :root[data-theme="light"] .compatible-media-progress-track {
   background: #d7e0ea;
+}
+
+.app-shell.theme-light .highlight-montage-mode-picker legend,
+.app-shell.theme-light .highlight-montage-mode-picker strong,
+:root[data-theme="light"] .highlight-montage-mode-picker legend,
+:root[data-theme="light"] .highlight-montage-mode-picker strong {
+  color: #172033;
+}
+
+.app-shell.theme-light .highlight-montage-mode-picker small,
+:root[data-theme="light"] .highlight-montage-mode-picker small {
+  color: #667085;
+}
+
+.app-shell.theme-light .highlight-montage-mode-picker label,
+:root[data-theme="light"] .highlight-montage-mode-picker label {
+  border-color: #cfd8e3;
+  background: #ffffff;
+}
+
+.app-shell.theme-light .highlight-montage-mode-picker label.selected,
+:root[data-theme="light"] .highlight-montage-mode-picker label.selected {
+  border-color: #00a1d6;
+  background: #eefaff;
 }
 
 .app-shell.theme-light .lada-options-status,
