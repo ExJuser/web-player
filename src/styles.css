@@ -3834,8 +3834,9 @@ button {
   display: inline-flex;
   align-items: center;
   flex: 0 1 auto;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 6px;
+  margin-left: auto;
   min-width: 0;
 }
 
@@ -3843,6 +3844,98 @@ button {
   border-color: #7f54d7;
   background: #2b1d43;
   color: #d6c4ff;
+}
+
+.special-stats-card {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  width: 102px;
+  max-width: calc(100vw - 80px);
+  min-height: 30px;
+  max-height: 30px;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition:
+    width 180ms ease,
+    max-height 180ms ease;
+}
+
+.special-stats-card:focus-visible,
+.special-stats-card.is-expanded {
+  width: min(452px, calc(100vw - 80px));
+}
+
+.special-stats-card:focus-visible {
+  outline: 2px solid #69c8ff;
+  outline-offset: 2px;
+}
+
+.special-stats-summary,
+.special-stats-details {
+  display: inline-flex;
+  align-items: center;
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease;
+}
+
+.special-stats-summary {
+  position: absolute;
+  inset: 0;
+  justify-content: center;
+  gap: 5px;
+  border: 1px solid #344050;
+  border-radius: 6px;
+  background: #171d25;
+  color: #cbd5e1;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.special-stats-details {
+  justify-content: flex-end;
+  gap: 6px;
+  width: 100%;
+  min-width: max-content;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(10px);
+}
+
+.special-stats-card:focus-visible .special-stats-summary,
+.special-stats-card.is-expanded .special-stats-summary {
+  opacity: 0;
+  transform: translateX(10px);
+}
+
+.special-stats-card:focus-visible .special-stats-details,
+.special-stats-card.is-expanded .special-stats-details {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+@media (hover: hover) {
+  .special-stats-card:hover {
+    width: min(452px, calc(100vw - 80px));
+  }
+
+  .special-stats-card:hover .special-stats-summary {
+    opacity: 0;
+    transform: translateX(10px);
+  }
+
+  .special-stats-card:hover .special-stats-details {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 .special-stat-pill {
@@ -6539,6 +6632,13 @@ button {
   color: #243044;
 }
 
+.app-shell.theme-light .special-stats-summary,
+:root[data-theme="light"] .special-stats-summary {
+  border-color: #d7e0ea;
+  background: #f8fafc;
+  color: #243044;
+}
+
 .app-shell.theme-light .special-stat-pill span {
   color: #667085;
 }
@@ -7495,6 +7595,15 @@ button {
   color: #cbd5e1;
 }
 
+.app-shell.theme-light .player-frame.fullscreen .special-stats-summary,
+.app-shell.theme-light.cinema-mode .special-stats-summary,
+:root[data-theme="light"] .player-frame.fullscreen .special-stats-summary,
+:root[data-theme="light"] .app-shell.cinema-mode .special-stats-summary {
+  border-color: #344050;
+  background: #171d25;
+  color: #cbd5e1;
+}
+
 .app-shell.theme-light .player-frame.fullscreen .special-stat-pill span,
 .app-shell.theme-light.cinema-mode .special-stat-pill span {
   color: #8e97a5;
@@ -7888,7 +7997,7 @@ button {
     flex: 0 1 auto;
     flex-wrap: nowrap;
     justify-content: flex-start;
-    overflow: hidden;
+    overflow: visible;
   }
 
   .special-stat-pill {
@@ -8176,6 +8285,30 @@ button {
     align-items: center;
   }
 
+  .special-stats-control {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .special-stats-card:focus-visible,
+  .special-stats-card.is-expanded {
+    width: calc(100% - 36px);
+    max-height: 66px;
+  }
+
+  .special-stats-card:focus-visible .special-stats-details,
+  .special-stats-card.is-expanded .special-stats-details {
+    display: grid;
+    width: 100%;
+    min-width: 0;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .special-stats-card:focus-visible .special-stat-pill,
+  .special-stats-card.is-expanded .special-stat-pill {
+    max-width: none;
+  }
+
   .playlist-page-size-control {
     flex: 0 1 76px;
   }
@@ -8309,6 +8442,32 @@ button {
     gap: 6px;
   }
 
+}
+
+@media (max-width: 640px) and (hover: hover) {
+  .special-stats-card:hover {
+    width: calc(100% - 36px);
+    max-height: 66px;
+  }
+
+  .special-stats-card:hover .special-stats-details {
+    display: grid;
+    width: 100%;
+    min-width: 0;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .special-stats-card:hover .special-stat-pill {
+    max-width: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .special-stats-card,
+  .special-stats-summary,
+  .special-stats-details {
+    transition: none;
+  }
 }
 
 .app-shell.theme-light .danmaku-dialog,
