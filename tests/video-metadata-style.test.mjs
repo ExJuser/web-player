@@ -15,6 +15,6 @@ test("video metadata details use a calmer transition duration", () => {
     /\.video-metadata-summary,\s*\.video-metadata-details\s*\{(?<body>[^}]+)\}/,
   );
 
-  assert.match(contentRule?.groups?.body ?? "", /opacity\s+280ms ease,/);
-  assert.match(contentRule?.groups?.body ?? "", /transform\s+280ms ease;/);
+  assert.match(contentRule?.groups?.body ?? "", /opacity\s+450ms ease,/);
+  assert.match(contentRule?.groups?.body ?? "", /transform\s+450ms ease;/);
 });
