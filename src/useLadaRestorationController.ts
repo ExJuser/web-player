@@ -37,6 +37,8 @@ export function useLadaRestorationController({
         body: JSON.stringify({
           rootId: request.rootId,
           relativePath: request.relativePath,
+          sourceVideoId: request.sourceVideoId,
+          highlights: request.highlights,
           options: requestOptions,
         }),
       });

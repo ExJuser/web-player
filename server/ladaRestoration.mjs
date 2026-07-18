@@ -1,6 +1,8 @@
 import { access, link, mkdir, mkdtemp, rm, stat } from "node:fs/promises";
 import path from "node:path";
 
+import { createGlobalVideoId } from "./mediaRoots.mjs";
+
 export const ladaExecutablePath = "D:\\lada\\lada-cli.exe";
 export const ladaWorkingDirectory = "D:\\lada";
 
@@ -149,11 +151,14 @@ function createOutputRelativePath(sourceRelativePath, fileName) {
 export async function restoreVideoWithLada({
   runProcess,
   sourcePath,
+  rootId,
   relativePath,
+  sourceHighlights = [],
   options,
   capabilities,
   signal,
   onProgress,
+  persistHighlights,
 }) {
   await access(sourcePath);
   const normalizedOptions = normalizeLadaOptions(options, capabilities);
@@ -201,12 +206,15 @@ export async function restoreVideoWithLada({
     await rm(temporaryOutputPath, { force: true });
     const outputStat = await stat(committed.outputPath);
     const outputRelativePath = createOutputRelativePath(relativePath, committed.fileName);
+    const lastModified = Math.round(outputStat.mtimeMs);
+    const videoId = createGlobalVideoId(rootId, outputRelativePath, outputStat.size, lastModified);
+    await persistHighlights?.(videoId, sourceHighlights);
     onProgress?.({ percent: 100, message: `已生成 ${committed.fileName}` });
     return {
       fileName: committed.fileName,
       relativePath: outputRelativePath,
       size: outputStat.size,
-      lastModified: Math.round(outputStat.mtimeMs),
+      lastModified,
     };
   } catch (error) {
     if (committedPath) await rm(committedPath, { force: true });

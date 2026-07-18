@@ -165,6 +165,8 @@ test("restores to an incremented file and removes all temporary content", async 
   await writeFile(sourcePath, "source");
   await writeFile(path.join(directory, "Movie.restored.mp4"), "existing");
   const progressEvents = [];
+  const persisted = [];
+  const sourceHighlights = [{ id: "h1", startTime: 12, endTime: 15, tag: "高能", updatedAt: 1 }];
 
   try {
     const result = await restoreVideoWithLada({
@@ -179,7 +181,10 @@ test("restores to an incremented file and removes all temporary content", async 
         return "";
       },
       sourcePath,
+      rootId: "movies",
       relativePath: "Classics/Movie.mkv",
+      sourceHighlights,
+      persistHighlights: (videoId, highlights) => persisted.push({ videoId, highlights }),
       options: capabilities.defaults,
       capabilities,
       now: () => 1234,
@@ -189,6 +194,8 @@ test("restores to an incremented file and removes all temporary content", async 
     assert.equal(result.fileName, "Movie.restored-2.mp4");
     assert.equal(result.relativePath, "Classics/Movie.restored-2.mp4");
     assert.equal(result.size, Buffer.byteLength("restored-video"));
+    assert.match(persisted[0].videoId, /^movies\|Classics\/Movie\.restored-2\.mp4\|/);
+    assert.deepEqual(persisted[0].highlights, sourceHighlights);
     assert.equal(await readFile(path.join(directory, result.fileName), "utf8"), "restored-video");
     assert.deepEqual((await readdir(directory)).sort(), ["Movie.mkv", "Movie.restored-2.mp4", "Movie.restored.mp4"]);
     assert.equal(progressEvents.some((event) => event.percent === 50), true);

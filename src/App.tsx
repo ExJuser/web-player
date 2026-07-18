@@ -4335,7 +4335,9 @@ export default function App() {
     setLadaRestorationConfirm({
       rootId: currentMediaRootId,
       relativePath: currentVideo.relativePath,
+      sourceVideoId: currentVideo.id,
       videoName: currentVideo.name,
+      highlights: currentVideoHighlights,
       capabilities: null,
       options: null,
       isLoading: true,
@@ -4353,7 +4355,7 @@ export default function App() {
         ? { ...current, isLoading: false, error: message }
         : current);
     }
-  }, [canRestoreWithLada, currentMediaRootId, currentVideo]);
+  }, [canRestoreWithLada, currentMediaRootId, currentVideo, currentVideoHighlights]);
 
   const updateLadaRestorationOptions = useCallback((options: LadaRestoreOptions) => {
     setLadaRestorationConfirm((current) => current ? { ...current, options } : current);

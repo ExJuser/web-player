@@ -2,11 +2,14 @@ import { CheckCircle2, LoaderCircle, Sparkles } from "lucide-react";
 
 import { ControlSelect } from "./ControlSelect";
 import type { LadaCapabilities, LadaRestoreOptions } from "./ladaPreferences";
+import type { VideoHighlightSegment } from "./playerTypes";
 
 export type LadaRestorationConfirmState = {
   rootId: string;
   relativePath: string;
+  sourceVideoId: string;
   videoName: string;
+  highlights: VideoHighlightSegment[];
   capabilities: LadaCapabilities | null;
   options: LadaRestoreOptions | null;
   isLoading: boolean;

@@ -980,6 +980,10 @@ export function playerDataApiPlugin({ projectRoot, env }) {
         const sourcePath = resolveVideoPathFromConfig(config, root.id, payload?.relativePath);
         await ensureFileExists(sourcePath);
         const capabilities = await loadLadaCapabilities();
+        const sourceVideoId = typeof payload?.sourceVideoId === "string" ? payload.sourceVideoId : "";
+        const sourceHighlights = Array.isArray(payload?.highlights)
+          ? payload.highlights
+          : store.loadPlayerDataStore("global").videoHighlights[sourceVideoId] ?? [];
         try {
           sendJson(response, 202, mediaProcessingTaskApi.start({
             kind: "lada",
@@ -988,11 +992,14 @@ export function playerDataApiPlugin({ projectRoot, env }) {
             run: ({ signal, onProgress }) => restoreVideoWithLada({
               runProcess,
               sourcePath,
+              rootId: root.id,
               relativePath: payload?.relativePath,
+              sourceHighlights,
               options: payload?.options,
               capabilities,
               signal,
               onProgress,
+              persistHighlights: (videoId, highlights) => store.replaceVideoHighlights("global", videoId, highlights),
             }),
           }));
         } catch (error) {
