@@ -28,6 +28,29 @@ test("resolves manual over nfo over actor tags and keeps manual empty lists", ()
   assert.deepEqual(empty, { actorIds: [], source: "manual" });
 });
 
+test("adds actor names to an existing selection and deduplicates names and aliases", () => {
+  const profiles = {
+    "actor:existing": {
+      id: "actor:existing",
+      name: "Existing Actor",
+      aliases: [{ key: "existing actor", label: "Existing Actor" }, { key: "existing", label: "Existing" }],
+      updatedAt: 1,
+    },
+  };
+
+  const merged = actors.addActorNamesToSelection({
+    profiles,
+    actorIds: ["actor:existing"],
+    names: ["Existing", "New Actor", "New Actor"],
+    now: 2,
+  });
+  assert.deepEqual(merged.actorIds, ["actor:existing", "actor:new actor"]);
+  assert.equal(merged.profiles["actor:new actor"].name, "New Actor");
+
+  const fromEmpty = actors.addActorNamesToSelection({ profiles, actorIds: [], names: ["New Actor"], now: 3 });
+  assert.deepEqual(fromEmpty.actorIds, ["actor:new actor"]);
+});
+
 test("media scan cache preserves optional nfo actor hints and accepts old videos without them", () => {
   const base = {
     version: 1,

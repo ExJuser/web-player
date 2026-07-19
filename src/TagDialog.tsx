@@ -1,8 +1,8 @@
-import { CheckCircle2, ExternalLink, RefreshCw, Sparkles, Tags, X } from "lucide-react";
-import { useEffect, useState, type PointerEvent as ReactPointerEvent, type Ref } from "react";
+import { CheckCircle2, ExternalLink, RefreshCw, RotateCcw, Sparkles, Tags, UserPlus, X } from "lucide-react";
+import { useEffect, useMemo, useState, type PointerEvent as ReactPointerEvent, type Ref } from "react";
 
+import type { ActorProfileStore, ActorSource } from "./playerTypes";
 import type { TagMergeSuggestion } from "./tagUtils";
-import { normalizeTagKey } from "./tagUtils";
 
 type DialogOffset = {
   x: number;
@@ -24,9 +24,13 @@ type TagDialogProps = {
   dialogRef: Ref<HTMLElement>;
   isDragging: boolean;
   offset: DialogOffset;
+  currentVideoId: string;
   currentVideoName: string;
   currentVideoTags: string[];
-  actorTagKeys: Set<string>;
+  actorProfiles: ActorProfileStore;
+  currentActorIds: string[];
+  currentActorSource: ActorSource | null;
+  isCurrentActorListManual: boolean;
   isTagInputActor: boolean;
   tagInput: string;
   tagInputSuggestions: string[];
@@ -45,9 +49,8 @@ type TagDialogProps = {
   hasCurrentVideo: boolean;
   onClose: () => void;
   onRemoveTag: (tag: string) => void;
-  onEditTag: (oldTag: string, nextLabel: string, isActor: boolean) => void;
-  onToggleActorTag: (tag: string, isActor: boolean) => void;
-  getActorTagUsageCount: (tag: string) => number;
+  onSaveActors: (actorIds: string[], newActorName?: string) => void;
+  onRestoreAutomaticActors: () => void;
   onSubmitTagInput: () => void;
   onTagInputChange: (value: string) => void;
   onTagInputActorChange: (value: boolean) => void;
@@ -70,9 +73,13 @@ export function TagDialog({
   dialogRef,
   isDragging,
   offset,
+  currentVideoId,
   currentVideoName,
   currentVideoTags,
-  actorTagKeys,
+  actorProfiles,
+  currentActorIds,
+  currentActorSource,
+  isCurrentActorListManual,
   isTagInputActor,
   tagInput,
   tagInputSuggestions,
@@ -91,9 +98,8 @@ export function TagDialog({
   hasCurrentVideo,
   onClose,
   onRemoveTag,
-  onEditTag,
-  onToggleActorTag,
-  getActorTagUsageCount,
+  onSaveActors,
+  onRestoreAutomaticActors,
   onSubmitTagInput,
   onTagInputChange,
   onTagInputActorChange,
@@ -110,13 +116,32 @@ export function TagDialog({
   onPointerMove,
   onPointerUp,
 }: TagDialogProps) {
-  const [editingTag, setEditingTag] = useState<string | null>(null);
-  const [editingLabel, setEditingLabel] = useState("");
-  const [editingIsActor, setEditingIsActor] = useState(false);
-  const [pendingActorUnmark, setPendingActorUnmark] = useState<string | null>(null);
+  const [selectedActorIds, setSelectedActorIds] = useState<Set<string>>(() => new Set(currentActorIds));
+  const [actorQuery, setActorQuery] = useState("");
+  const currentActorIdsKey = currentActorIds.join("\u0000");
   useEffect(() => {
-    if (!isOpen) setEditingTag(null);
-  }, [isOpen]);
+    setSelectedActorIds(new Set(currentActorIdsKey ? currentActorIdsKey.split("\u0000") : []));
+    setActorQuery("");
+  }, [currentActorIdsKey, currentVideoId]);
+  const actors = useMemo(
+    () => Object.values(actorProfiles).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" })),
+    [actorProfiles],
+  );
+  const selectedActors = actors.filter((actor) => selectedActorIds.has(actor.id));
+  const normalizedActorQuery = actorQuery.normalize("NFKC").trim().toLocaleLowerCase();
+  const matchingActors = normalizedActorQuery
+    ? actors.filter((actor) => [actor.name, ...actor.aliases.map((alias) => alias.label)].some((name) => name.normalize("NFKC").toLocaleLowerCase().includes(normalizedActorQuery)))
+    : actors;
+  const filteredOtherActors = matchingActors.filter((actor) => !selectedActorIds.has(actor.id));
+  const otherActorCount = actors.length - selectedActors.length;
+  const matchingSelectedActorCount = matchingActors.length - filteredOtherActors.length;
+  const newActorNameToSave = normalizedActorQuery && !matchingActors.length ? actorQuery.trim() : undefined;
+  const toggleActor = (actorId: string) => setSelectedActorIds((current) => {
+    const next = new Set(current);
+    if (next.has(actorId)) next.delete(actorId); else next.add(actorId);
+    return next;
+  });
+  const actorSourceLabel = currentActorSource === "manual" ? "人工" : currentActorSource === "nfo" ? "NFO" : currentActorSource === "tag" ? "演员标签" : "未识别";
   if (!isOpen) return null;
 
   return (
@@ -151,41 +176,55 @@ export function TagDialog({
 
         <div className="tag-editor-current">
           {currentVideoTags.length ? (
-            currentVideoTags.map((tag) => {
-              const tagKey = normalizeTagKey(tag);
-              const isActor = actorTagKeys.has(tagKey);
-              return editingTag === tag ? (
-                <div className="tag-inline-editor" key={tag}>
-                  <input value={editingLabel} maxLength={120} onChange={(event) => setEditingLabel(event.target.value)} />
-                  <label><input type="checkbox" checked={editingIsActor} onChange={(event) => setEditingIsActor(event.target.checked)} />演员人名</label>
-                  <button className="primary-button" type="button" onClick={() => { onEditTag(tag, editingLabel, editingIsActor); setEditingTag(null); }}>保存</button>
-                  <button className="secondary-button" type="button" onClick={() => setEditingTag(null)}>取消</button>
-                </div>
-              ) : (
-                <div className="tag-editor-chip" key={tag}>
-                  <span>{tag}</span>
-                  {isActor ? <small>演员</small> : null}
-                  <button type="button" title="切换演员人名" aria-label={`${isActor ? "取消" : "标记"}${tag}为演员人名`} onClick={() => isActor ? setPendingActorUnmark(tag) : onToggleActorTag(tag, true)}>人</button>
-                  <button type="button" title="修改标签" aria-label={`修改标签${tag}`} onClick={() => { setEditingTag(tag); setEditingLabel(tag); setEditingIsActor(isActor); }}>改</button>
-                  <button type="button" title="移除标签" aria-label={`移除标签${tag}`} onClick={() => onRemoveTag(tag)}><X size={14} /></button>
-                </div>
-              );
-            })
+            currentVideoTags.map((tag) => (
+              <div className="tag-editor-chip current-tag-chip" key={tag}>
+                <span>{tag}</span>
+                <button className="tag-chip-remove" type="button" title="移除标签" aria-label={`移除标签${tag}`} onClick={() => onRemoveTag(tag)}><X size={13} /></button>
+              </div>
+            ))
           ) : (
             <div className="ai-empty-state">当前视频还没有标签。</div>
           )}
         </div>
 
-        {pendingActorUnmark ? (
-          <div className="tag-merge-prompt">
-            <strong>取消演员人名分类</strong>
-            <p>“{pendingActorUnmark}”在 {getActorTagUsageCount(pendingActorUnmark)} 部影片中使用。取消后，没有有效 NFO 或人工名单的影片会重新计算演员。</p>
-            <div className="dialog-actions compact">
-              <button className="primary-button" type="button" onClick={() => { onToggleActorTag(pendingActorUnmark, false); setPendingActorUnmark(null); }}>确认取消</button>
-              <button className="secondary-button" type="button" onClick={() => setPendingActorUnmark(null)}>保留分类</button>
-            </div>
+        <section className="tag-actor-editor" aria-labelledby="tag-actor-editor-title">
+          <div className="tag-actor-editor-heading">
+            <strong id="tag-actor-editor-title">影片演员（{selectedActors.length}）</strong>
+            <span>当前来源：{actorSourceLabel}</span>
           </div>
-        ) : null}
+          <div className="actor-selected-list custom-scrollbar">
+            {selectedActors.length ? selectedActors.map((actor) => (
+              <label key={actor.id}>
+                <input type="checkbox" checked onChange={() => toggleActor(actor.id)} />
+                <span>{actor.name}</span>
+              </label>
+            )) : <div className="actor-selected-empty">暂未选择演员</div>}
+          </div>
+          <label className="actor-new-field tag-actor-search">
+            <span>搜索或新增演员</span>
+            <input value={actorQuery} maxLength={120} placeholder="筛选现有演员，或输入新姓名" onChange={(event) => setActorQuery(event.target.value)} disabled={!hasCurrentVideo} />
+          </label>
+          <strong className="actor-edit-section-title">{normalizedActorQuery ? `筛选结果（${filteredOtherActors.length} / ${otherActorCount}）` : `其他演员（${otherActorCount}）`}</strong>
+          <div className="actor-checkbox-list tag-actor-checkbox-list custom-scrollbar">
+            {filteredOtherActors.map((actor) => (
+              <label key={actor.id}>
+                <input type="checkbox" checked={selectedActorIds.has(actor.id)} onChange={() => toggleActor(actor.id)} />
+                <span>{actor.name}</span>
+              </label>
+            ))}
+            {!filteredOtherActors.length ? <div className="ai-empty-state">{normalizedActorQuery ? matchingSelectedActorCount ? "匹配演员已在“已选演员”中。" : "没有匹配演员，保存时将新增该演员。" : actors.length ? "没有其他演员。" : "尚无演员，可在上方新增。"}</div> : null}
+          </div>
+          <div className="dialog-actions compact tag-actor-actions">
+            <button className="primary-button" type="button" disabled={!hasCurrentVideo} onClick={() => onSaveActors(Array.from(selectedActorIds), newActorNameToSave)}>
+              <UserPlus size={16} /> 保存人工名单
+            </button>
+            {isCurrentActorListManual ? (
+              <button className="secondary-button" type="button" onClick={onRestoreAutomaticActors}>
+                <RotateCcw size={16} /> 恢复自动识别
+              </button>
+            ) : null}
+          </div>
+        </section>
 
         <form
           className="tag-editor-form"

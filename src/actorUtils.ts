@@ -73,6 +73,25 @@ export function addActorProfile(profiles: ActorProfileStore, label: string, now 
   return { profiles: nextProfiles, actorId };
 }
 
+export function addActorNamesToSelection(input: {
+  profiles: ActorProfileStore;
+  actorIds: string[];
+  names: string[];
+  now?: number;
+}) {
+  const profiles: ActorProfileStore = Object.fromEntries(
+    Object.entries(input.profiles).map(([id, profile]) => [id, { ...profile, aliases: [...profile.aliases] }]),
+  );
+  const aliasIndex = createActorAliasIndex(profiles);
+  const actorIds = new Set(input.actorIds.filter((actorId) => Boolean(profiles[actorId])));
+  const timestamp = input.now ?? Date.now();
+  input.names.forEach((name) => {
+    const actorId = ensureActorProfile(profiles, aliasIndex, name, timestamp);
+    if (actorId) actorIds.add(actorId);
+  });
+  return { profiles, actorIds: Array.from(actorIds) };
+}
+
 export function reconcileActorProfiles(input: {
   profiles: ActorProfileStore;
   videos: VideoItem[];

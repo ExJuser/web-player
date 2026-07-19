@@ -122,6 +122,7 @@ import type {
   WatchActivityStore
 } from "./playerTypes";
 import {
+  addActorNamesToSelection,
   addActorProfile,
   buildActorInsights,
   reconcileActorProfiles,
@@ -1288,46 +1289,70 @@ export default function App() {
   const currentVideoHasCompatibleMedia = Boolean(currentVideo?.playability?.compatibleUrl);
   const currentVideoTags = currentVideo ? videoTags[currentVideo.id] ?? [] : [];
   const currentVideoRating = currentVideo ? videoRatings[currentVideo.id] : undefined;
-  const updateActorTagDefinitions = useCallback((tags: string[], isActor: boolean) => {
+  const currentVideoResolvedActors = useMemo(() => currentVideo ? resolveVideoActors({
+    video: currentVideo,
+    profiles: actorProfiles,
+    videoTags,
+    actorTagDefinitions,
+    videoActorOverrides,
+  }) : { actorIds: [], source: null }, [actorProfiles, actorTagDefinitions, currentVideo, videoActorOverrides, videoTags]);
+  const persistActorState = useCallback((
+    nextProfiles: ActorProfileStore,
+    nextDefinitions: ActorTagDefinitionStore,
+    nextOverrides: VideoActorOverrideStore,
+  ) => {
+    actorProfilesRef.current = nextProfiles;
+    actorTagDefinitionsRef.current = nextDefinitions;
+    videoActorOverridesRef.current = nextOverrides;
+    setActorProfiles(nextProfiles);
+    setActorTagDefinitions(nextDefinitions);
+    setVideoActorOverrides(nextOverrides);
+    void saveCurrentPlayerDataStore({
+      actorProfiles: nextProfiles,
+      actorTagDefinitions: nextDefinitions,
+      videoActorOverrides: nextOverrides,
+    }).catch(() => setMessage("演员数据保存失败。"));
+  }, [actorProfilesRef, actorTagDefinitionsRef, saveCurrentPlayerDataStore, videoActorOverridesRef]);
+  const addCurrentVideoActorTags = useCallback((tags: string[]) => {
+    if (!currentVideo) return;
     const nextDefinitions = { ...actorTagDefinitionsRef.current };
     tags.forEach((tag) => {
       const key = normalizeTagKey(tag);
       if (!key) return;
-      if (isActor) nextDefinitions[key] = { key, label: tag.trim(), updatedAt: Date.now() };
-      else delete nextDefinitions[key];
+      nextDefinitions[key] = { key, label: tag.trim(), updatedAt: Date.now() };
     });
-    actorTagDefinitionsRef.current = nextDefinitions;
-    setActorTagDefinitions(nextDefinitions);
-    void saveCurrentPlayerDataStore({ actorTagDefinitions: nextDefinitions }).catch(() => setTagMessage("演员标签分类保存失败。"));
-  }, [actorTagDefinitionsRef, saveCurrentPlayerDataStore]);
-
-  const editCurrentVideoTag = useCallback((oldTag: string, nextLabel: string, isActor: boolean) => {
+    const merged = addActorNamesToSelection({
+      profiles: actorProfilesRef.current,
+      actorIds: currentVideoResolvedActors.actorIds,
+      names: tags,
+    });
+    const nextOverrides = {
+      ...videoActorOverridesRef.current,
+      [currentVideo.id]: { actorIds: merged.actorIds, updatedAt: Date.now() },
+    };
+    persistActorState(merged.profiles, nextDefinitions, nextOverrides);
+  }, [actorProfilesRef, actorTagDefinitionsRef, currentVideo, currentVideoResolvedActors.actorIds, persistActorState, videoActorOverridesRef]);
+  const saveCurrentVideoActorOverride = useCallback((actorIds: string[], newActorName?: string) => {
     if (!currentVideo) return;
-    const label = nextLabel.trim();
-    const oldKey = normalizeTagKey(oldTag);
-    const nextKey = normalizeTagKey(label);
-    if (!label || !nextKey) {
-      setTagMessage("标签名称不能为空。");
-      return;
-    }
-    const nextTags = Array.from(new Map(
-      (videoTagsRef.current[currentVideo.id] ?? []).map((tag) => {
-        const nextTag = normalizeTagKey(tag) === oldKey ? label : tag;
-        return [normalizeTagKey(nextTag), nextTag];
-      }),
-    )).map(([, tag]) => tag);
-    const nextVideoTags = { ...videoTagsRef.current, [currentVideo.id]: nextTags };
-    const nextDefinitions = { ...actorTagDefinitionsRef.current };
-    if (isActor) nextDefinitions[nextKey] = { key: nextKey, label, updatedAt: Date.now() };
-    else delete nextDefinitions[nextKey];
-    videoTagsRef.current = nextVideoTags;
-    actorTagDefinitionsRef.current = nextDefinitions;
-    setVideoTags(nextVideoTags);
-    setActorTagDefinitions(nextDefinitions);
-    void saveCurrentPlayerDataStore({ videoTags: nextVideoTags, actorTagDefinitions: nextDefinitions })
-      .then(() => setTagMessage("标签已修改。"))
-      .catch(() => setTagMessage("标签修改保存失败。"));
-  }, [actorTagDefinitionsRef, currentVideo, saveCurrentPlayerDataStore, videoTagsRef]);
+    const merged = addActorNamesToSelection({
+      profiles: actorProfilesRef.current,
+      actorIds,
+      names: newActorName ? [newActorName] : [],
+    });
+    const nextOverrides = {
+      ...videoActorOverridesRef.current,
+      [currentVideo.id]: { actorIds: merged.actorIds, updatedAt: Date.now() },
+    };
+    persistActorState(merged.profiles, actorTagDefinitionsRef.current, nextOverrides);
+    setTagMessage("影片演员已保存。");
+  }, [actorProfilesRef, actorTagDefinitionsRef, currentVideo, persistActorState, videoActorOverridesRef]);
+  const restoreCurrentVideoActors = useCallback(() => {
+    if (!currentVideo) return;
+    const nextOverrides = { ...videoActorOverridesRef.current };
+    delete nextOverrides[currentVideo.id];
+    persistActorState(actorProfilesRef.current, actorTagDefinitionsRef.current, nextOverrides);
+    setTagMessage("已恢复自动识别演员。");
+  }, [actorProfilesRef, actorTagDefinitionsRef, currentVideo, persistActorState, videoActorOverridesRef]);
   const {
     activeTagSuggestionId,
     addTagsToCurrentVideo,
@@ -1347,7 +1372,7 @@ export default function App() {
     isTagInputActor,
     isTagSuggestionLoading,
     localConfig,
-    onMarkActorTags: (tags) => updateActorTagDefinitions(tags, true),
+    onMarkActorTags: addCurrentVideoActorTags,
     setActiveTagSuggestionIndex,
     setIsTagSuggestionLoading,
     setTagInput,
@@ -1619,24 +1644,6 @@ export default function App() {
         : null,
     [homeMediaMode, modeFilteredVideos, progressStore, videoStatsRevision, videoTags],
   );
-  const persistActorState = useCallback((
-    nextProfiles: ActorProfileStore,
-    nextDefinitions: ActorTagDefinitionStore,
-    nextOverrides: VideoActorOverrideStore,
-  ) => {
-    actorProfilesRef.current = nextProfiles;
-    actorTagDefinitionsRef.current = nextDefinitions;
-    videoActorOverridesRef.current = nextOverrides;
-    setActorProfiles(nextProfiles);
-    setActorTagDefinitions(nextDefinitions);
-    setVideoActorOverrides(nextOverrides);
-    void saveCurrentPlayerDataStore({
-      actorProfiles: nextProfiles,
-      actorTagDefinitions: nextDefinitions,
-      videoActorOverrides: nextOverrides,
-    }).catch(() => setMessage("演员数据保存失败。"));
-  }, [actorProfilesRef, actorTagDefinitionsRef, saveCurrentPlayerDataStore, videoActorOverridesRef]);
-
   useEffect(() => {
     const nextProfiles = reconcileActorProfiles({
       profiles: actorProfilesRef.current,
@@ -6358,9 +6365,13 @@ export default function App() {
       dialogRef={tagDialogRef}
       isDragging={isTagDialogDragging}
       offset={tagDialogOffset}
+      currentVideoId={currentVideo?.id ?? ""}
       currentVideoName={currentVideo?.name ?? ""}
       currentVideoTags={currentVideoTags}
-      actorTagKeys={new Set(Object.keys(actorTagDefinitions))}
+      actorProfiles={actorProfiles}
+      currentActorIds={currentVideoResolvedActors.actorIds}
+      currentActorSource={currentVideoResolvedActors.source}
+      isCurrentActorListManual={Boolean(currentVideo && videoActorOverrides[currentVideo.id])}
       isTagInputActor={isTagInputActor}
       tagInput={tagInput}
       tagInputSuggestions={tagInputSuggestions}
@@ -6379,9 +6390,8 @@ export default function App() {
       hasCurrentVideo={Boolean(currentVideo)}
       onClose={() => setIsTagDialogOpen(false)}
       onRemoveTag={removeTagFromCurrentVideo}
-      onEditTag={editCurrentVideoTag}
-      onToggleActorTag={(tag, isActor) => updateActorTagDefinitions([tag], isActor)}
-      getActorTagUsageCount={(tag) => Object.values(videoTags).filter((tags) => tags.some((item) => normalizeTagKey(item) === normalizeTagKey(tag))).length}
+      onSaveActors={saveCurrentVideoActorOverride}
+      onRestoreAutomaticActors={restoreCurrentVideoActors}
       onSubmitTagInput={() => {
         submitTagInput();
         setIsTagInputActor(false);
