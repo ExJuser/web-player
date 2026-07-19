@@ -12,6 +12,24 @@ import {
 import type { MediaProcessingTaskState } from "./MediaProcessingTaskDialog";
 
 type MediaProcessingTaskResponse = { task: MediaProcessingTaskSnapshot | null };
+const handledTaskStorageKey = "local-web-player-handled-media-processing-task";
+
+function readHandledTaskId() {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.localStorage.getItem(handledTaskStorageKey);
+  } catch {
+    return null;
+  }
+}
+
+function writeHandledTaskId(taskId: string) {
+  try {
+    window.localStorage.setItem(handledTaskStorageKey, taskId);
+  } catch {
+    // Storage can be unavailable in private or restricted browser contexts.
+  }
+}
 
 type UseMediaProcessingTaskSyncOptions = {
   task: MediaProcessingTaskState | null;
@@ -28,7 +46,7 @@ export function useMediaProcessingTaskSync({
   setLadaRestorationResult,
   setMessage,
 }: UseMediaProcessingTaskSyncOptions) {
-  const handledTaskIdRef = useRef<string | null>(null);
+  const handledTaskIdRef = useRef<string | null>(readHandledTaskId());
 
   useEffect(() => {
     let disposed = false;
@@ -48,6 +66,7 @@ export function useMediaProcessingTaskSync({
         setTask(null);
         if (!remoteTask || handledTaskIdRef.current === remoteTask.id) return;
         handledTaskIdRef.current = remoteTask.id;
+        writeHandledTaskId(remoteTask.id);
         const action = resolveMediaProcessingTaskAction(remoteTask, null);
         if (action.type === "lada-completed") {
           setLadaRestorationResult(action.result);
