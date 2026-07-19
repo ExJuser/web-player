@@ -124,9 +124,7 @@ import type {
 import {
   addActorProfile,
   buildActorInsights,
-  mergeActorProfiles,
   reconcileActorProfiles,
-  renameActorProfile,
   resolveVideoActors,
 } from "./actorUtils";
 import {
@@ -1641,23 +1639,6 @@ export default function App() {
     setActorEditVideoId(null);
   }, [actorEditVideo, actorProfilesRef, actorTagDefinitionsRef, persistActorState, videoActorOverridesRef]);
 
-  const renameActor = useCallback((actorId: string, name: string) => {
-    const result = renameActorProfile(actorProfilesRef.current, actorId, name);
-    if (result.conflictActorId) return result.conflictActorId;
-    persistActorState(result.profiles, actorTagDefinitionsRef.current, videoActorOverridesRef.current);
-    return null;
-  }, [actorProfilesRef, actorTagDefinitionsRef, persistActorState, videoActorOverridesRef]);
-
-  const mergeActor = useCallback((sourceActorId: string, targetActorId: string) => {
-    const result = mergeActorProfiles({
-      profiles: actorProfilesRef.current,
-      videoActorOverrides: videoActorOverridesRef.current,
-      sourceActorId,
-      targetActorId,
-    });
-    persistActorState(result.profiles, actorTagDefinitionsRef.current, result.videoActorOverrides);
-    setSelectedActorId(targetActorId);
-  }, [actorProfilesRef, actorTagDefinitionsRef, persistActorState, videoActorOverridesRef]);
   const watchActivityVideos = useMemo(
     () => (isRatingFilterEnabled ? modeFilteredVideos : []),
     [isRatingFilterEnabled, modeFilteredVideos],
@@ -5555,13 +5536,10 @@ export default function App() {
                 <ActorDashboardSection
                   actors={actorInsights.actors}
                   unresolvedVideos={actorInsights.unresolvedVideos}
-                  profiles={actorProfiles}
                   selectedActorId={selectedActorId}
                   onSelectActor={setSelectedActorId}
                   onOpenVideo={openVideoFromHome}
                   onEditVideoActors={(video) => setActorEditVideoId(video.id)}
-                  onRenameActor={renameActor}
-                  onMergeActor={mergeActor}
                   onThumbnailError={markVideoThumbnailFailed}
                 />
               ) : (

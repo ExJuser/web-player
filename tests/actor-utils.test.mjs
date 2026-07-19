@@ -28,24 +28,6 @@ test("resolves manual over nfo over actor tags and keeps manual empty lists", ()
   assert.deepEqual(empty, { actorIds: [], source: "manual" });
 });
 
-test("renames with aliases and merges manual overrides", () => {
-  const first = actors.addActorProfile({}, "First", 1);
-  const second = actors.addActorProfile(first.profiles, "Second", 1);
-  const renamed = actors.renameActorProfile(second.profiles, first.actorId, "Renamed", 2);
-  assert.equal(renamed.profiles[first.actorId].aliases.some((alias) => alias.key === "first"), true);
-  assert.equal(renamed.profiles[first.actorId].aliases.some((alias) => alias.key === "renamed"), true);
-
-  const merged = actors.mergeActorProfiles({
-    profiles: renamed.profiles,
-    videoActorOverrides: { video: { actorIds: [first.actorId, second.actorId], updatedAt: 1 } },
-    sourceActorId: first.actorId,
-    targetActorId: second.actorId,
-    now: 3,
-  });
-  assert.deepEqual(merged.videoActorOverrides.video.actorIds, [second.actorId]);
-  assert.equal(merged.profiles[first.actorId], undefined);
-});
-
 test("media scan cache preserves optional nfo actor hints and accepts old videos without them", () => {
   const base = {
     version: 1,

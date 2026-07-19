@@ -8136,7 +8136,6 @@ button {
 
 .actor-dashboard-header,
 .actor-toolbar,
-.actor-management-panel,
 .actor-unresolved-list > div {
   display: flex;
   align-items: center;
@@ -8145,6 +8144,16 @@ button {
 
 .actor-dashboard-header {
   justify-content: space-between;
+}
+
+.actor-detail .actor-dashboard-header {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+}
+
+.actor-detail .actor-dashboard-header > div {
+  grid-column: 2;
+  text-align: center;
 }
 
 .actor-dashboard-header h2,
@@ -8181,8 +8190,6 @@ button {
 
 .actor-toolbar input,
 .actor-toolbar select,
-.actor-management-panel input,
-.actor-management-panel select,
 .actor-new-field input,
 .tag-inline-editor input {
   min-width: 0;
@@ -8291,15 +8298,6 @@ button {
 .actor-source.manual { color: #fef3c7; background: rgba(217, 119, 6, 0.25); }
 .actor-source.tag { color: #cffafe; background: rgba(8, 145, 178, 0.24); }
 
-.actor-management-panel {
-  flex-wrap: wrap;
-  padding: 14px;
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  border-radius: 12px;
-  background: rgba(15, 23, 42, 0.52);
-}
-
-.actor-management-panel label,
 .actor-new-field {
   display: grid;
   gap: 5px;
@@ -8403,14 +8401,12 @@ button {
 .app-shell.theme-light .actor-card,
 .app-shell.theme-light .actor-video-card,
 .app-shell.theme-light .actor-toolbar label,
-.app-shell.theme-light .actor-management-panel,
 .app-shell.theme-light .actor-unresolved-list > div,
 .app-shell.theme-light .actor-edit-dialog,
 :root[data-theme="light"] .special-view-switch,
 :root[data-theme="light"] .actor-card,
 :root[data-theme="light"] .actor-video-card,
 :root[data-theme="light"] .actor-toolbar label,
-:root[data-theme="light"] .actor-management-panel,
 :root[data-theme="light"] .actor-unresolved-list > div,
 :root[data-theme="light"] .actor-edit-dialog {
   color: #172033;
@@ -8420,8 +8416,8 @@ button {
 
 @media (max-width: 720px) {
   .actor-dashboard-header,
-  .actor-toolbar,
-  .actor-management-panel { align-items: stretch; flex-direction: column; }
+  .actor-toolbar { align-items: stretch; flex-direction: column; }
+  .actor-detail .actor-dashboard-header { display: flex; }
   .actor-card-grid,
   .actor-video-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .actor-unresolved-list > div { align-items: stretch; flex-direction: column; }

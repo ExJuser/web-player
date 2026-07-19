@@ -1,34 +1,28 @@
-import { ArrowLeft, Film, Merge, Pencil, Search, UserRound, Users } from "lucide-react";
+import { ArrowLeft, Film, Pencil, Search, UserRound, Users } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import type { ActorInsight } from "./actorUtils";
-import type { ActorProfileStore, VideoItem } from "./playerTypes";
+import type { VideoItem } from "./playerTypes";
 
 const pageSize = 24;
 
 type ActorDashboardSectionProps = {
   actors: ActorInsight[];
   unresolvedVideos: VideoItem[];
-  profiles: ActorProfileStore;
   selectedActorId: string | null;
   onSelectActor: (actorId: string | null) => void;
   onOpenVideo: (video: VideoItem) => void;
   onEditVideoActors: (video: VideoItem) => void;
-  onRenameActor: (actorId: string, name: string) => string | null;
-  onMergeActor: (sourceActorId: string, targetActorId: string) => void;
   onThumbnailError: (videoId: string) => void;
 };
 
 export function ActorDashboardSection({
   actors,
   unresolvedVideos,
-  profiles,
   selectedActorId,
   onSelectActor,
   onOpenVideo,
   onEditVideoActors,
-  onRenameActor,
-  onMergeActor,
   onThumbnailError,
 }: ActorDashboardSectionProps) {
   const [query, setQuery] = useState("");
@@ -36,17 +30,7 @@ export function ActorDashboardSection({
   const [page, setPage] = useState(1);
   const [unresolvedPage, setUnresolvedPage] = useState(1);
   const [showUnresolved, setShowUnresolved] = useState(false);
-  const [isManaging, setIsManaging] = useState(false);
   const selected = actors.find((entry) => entry.actor.id === selectedActorId) ?? null;
-  const [actorName, setActorName] = useState(selected?.actor.name ?? "");
-  const [mergeTargetId, setMergeTargetId] = useState("");
-  const [managementMessage, setManagementMessage] = useState("");
-  useEffect(() => {
-    setActorName(selected?.actor.name ?? "");
-    setMergeTargetId("");
-    setManagementMessage("");
-    setIsManaging(false);
-  }, [selected?.actor.id, selected?.actor.name]);
 
   const filteredActors = useMemo(() => {
     const normalizedQuery = query.normalize("NFKC").trim().toLocaleLowerCase();
@@ -71,20 +55,7 @@ export function ActorDashboardSection({
         <div className="actor-dashboard-header">
           <button className="secondary-button" type="button" onClick={() => onSelectActor(null)}><ArrowLeft size={16} /> 返回演员列表</button>
           <div><h2>{selected.actor.name}</h2><p>{selected.videos.length} 部影片</p></div>
-          <button className="secondary-button" type="button" onClick={() => setIsManaging((value) => !value)}><Pencil size={15} /> 管理演员</button>
         </div>
-        {isManaging ? (
-          <div className="actor-management-panel">
-            <label><span>演员显示名</span><input value={actorName} maxLength={120} onChange={(event) => setActorName(event.target.value)} /></label>
-            <button className="primary-button" type="button" disabled={!actorName.trim()} onClick={() => {
-              const conflict = onRenameActor(selected.actor.id, actorName.trim());
-              setManagementMessage(conflict ? "该姓名已属于其他演员，请使用合并。" : "演员姓名已更新，旧姓名继续作为别名。 ");
-            }}>保存改名</button>
-            <label><span>合并到</span><select value={mergeTargetId} onChange={(event) => setMergeTargetId(event.target.value)}><option value="">选择目标演员</option>{Object.values(profiles).filter((actor) => actor.id !== selected.actor.id).sort((a, b) => a.name.localeCompare(b.name)).map((actor) => <option key={actor.id} value={actor.id}>{actor.name}</option>)}</select></label>
-            <button className="secondary-button" type="button" disabled={!mergeTargetId} onClick={() => onMergeActor(selected.actor.id, mergeTargetId)}><Merge size={15} /> 确认合并</button>
-            {managementMessage ? <div className="ai-empty-state">{managementMessage}</div> : null}
-          </div>
-        ) : null}
         <div className="actor-video-grid">
           {selected.videos.map(({ video, source }) => (
             <article className="actor-video-card" key={video.id}>
