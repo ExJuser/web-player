@@ -1029,7 +1029,7 @@ button {
   display: grid;
   grid-template-columns: minmax(240px, min(38%, 462px)) minmax(0, 1fr);
   gap: 28px;
-  min-height: 600px;
+  min-height: 540px;
   padding: 24px;
 }
 
@@ -1110,7 +1110,7 @@ button {
 .home-resume-card > .home-card-thumbnail {
   align-self: stretch;
   height: 100%;
-  max-height: 600px;
+  max-height: 540px;
   aspect-ratio: auto;
 }
 
@@ -1125,7 +1125,7 @@ button {
 .home-resume-card > .home-card-thumbnail.has-image img {
   width: auto;
   max-width: min(52vw, 920px);
-  max-height: 600px;
+  max-height: 540px;
 }
 
 .home-resume-copy {
