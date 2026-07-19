@@ -1205,6 +1205,11 @@ export default function App() {
     () => getHomeModeMediaRoots(localConfig?.mediaRoots ?? [], homeMediaMode),
     [homeMediaMode, localConfig],
   );
+  const mediaRootLabelsById = useMemo(
+    () => Object.fromEntries((localConfig?.mediaRoots ?? []).map((root) => [root.id, root.label])),
+    [localConfig],
+  );
+  const videoById = useMemo(() => new Map(videos.map((video) => [video.id, video])), [videos]);
   const homeModeMediaRootIds = useMemo(
     () => createMediaRootIdSet(homeModeMediaRoots),
     [homeModeMediaRoots],
@@ -1271,8 +1276,8 @@ export default function App() {
     [isSeriesMode, playlistVideos, selectedSeriesKey, seriesOptions, seriesTitleByVideoId],
   );
   const currentVideo = useMemo(
-    () => videos.find((item) => item.id === currentVideoId) ?? null,
-    [currentVideoId, videos],
+    () => (currentVideoId ? videoById.get(currentVideoId) ?? null : null),
+    [currentVideoId, videoById],
   );
   const currentVideoSourceChoice = currentVideo ? playbackSourceChoices[currentVideo.id] ?? "compatible" : "compatible";
   const currentVideoPlaybackUrl = currentVideo ? getPlayableVideoUrl(currentVideo, currentVideoSourceChoice) : "";
@@ -1378,9 +1383,8 @@ export default function App() {
   });
   const currentVideoMediaRootLabel = useMemo(() => {
     if (!currentVideo) return "";
-    const mediaRoot = localConfig?.mediaRoots.find((root) => root.id === currentVideo.mediaRootId);
-    return mediaRoot?.label ?? fallbackMediaRootLabelForVideo(currentVideo);
-  }, [currentVideo, localConfig]);
+    return (currentVideo.mediaRootId ? mediaRootLabelsById[currentVideo.mediaRootId] : "") || fallbackMediaRootLabelForVideo(currentVideo);
+  }, [currentVideo, mediaRootLabelsById]);
   const seriesOptionsKey = useMemo(() => createSeriesOptionsKey(seriesOptions), [seriesOptions]);
   const currentSeriesKey = useMemo(
     () => getCurrentSeriesKey(currentVideo, seriesTitleByVideoId),
@@ -1541,31 +1545,30 @@ export default function App() {
       const progressPercent = progressDuration
         ? clamp(((progress?.currentTime ?? 0) / progressDuration) * 100, 0, 100)
         : 0;
-      const mediaRoot = video.mediaRootId ? localConfig?.mediaRoots.find((root) => root.id === video.mediaRootId) : null;
       return {
         video,
         progress,
         progressPercent,
         seriesTitle: seriesTitleByVideoId.get(video.id) ?? inferSeriesTitle(video),
-        mediaRootLabel: mediaRoot?.label ?? fallbackMediaRootLabelForVideo(video),
+        mediaRootLabel: (video.mediaRootId ? mediaRootLabelsById[video.mediaRootId] : "") || fallbackMediaRootLabelForVideo(video),
         tags: videoTags[video.id] ?? [],
         rating: videoRatings[video.id],
         ratingComment: videoComments[video.id],
       };
     },
-    [localConfig, progressStore, seriesTitleByVideoId, videoComments, videoRatings, videoTags],
+    [mediaRootLabelsById, progressStore, seriesTitleByVideoId, videoComments, videoRatings, videoTags],
   );
   const homeLibrarySearchContext = useMemo(
     () => ({
       mode: homeMediaMode,
-      mediaRootLabelsById: Object.fromEntries((localConfig?.mediaRoots ?? []).map((root) => [root.id, root.label])),
+      mediaRootLabelsById,
       progressByVideoId: progressStore,
       favoriteVideoIds,
       isResumableProgress,
       videoTags,
       videoRatings,
     }),
-    [favoriteVideoIds, homeMediaMode, localConfig, progressStore, videoRatings, videoTags],
+    [favoriteVideoIds, homeMediaMode, mediaRootLabelsById, progressStore, videoRatings, videoTags],
   );
   const playerLibrarySearchContext = useMemo(
     () => ({
@@ -1654,7 +1657,7 @@ export default function App() {
     videoStats: videoStatsRef.current,
     watchActivity: watchActivityRef.current,
   }), [actorProfiles, actorTagDefinitions, modeFilteredVideos, videoActorOverrides, videoStatsRevision, videoTags, watchActivityRevision]);
-  const actorEditVideo = actorEditVideoId ? videos.find((video) => video.id === actorEditVideoId) ?? null : null;
+  const actorEditVideo = actorEditVideoId ? videoById.get(actorEditVideoId) ?? null : null;
   const actorEditResolved = actorEditVideo ? resolveVideoActors({
     video: actorEditVideo,
     profiles: actorProfiles,
