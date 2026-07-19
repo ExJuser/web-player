@@ -5056,6 +5056,18 @@ button {
   width: min(560px, 100%);
 }
 
+.episode-duplicate-meta.severity-edit {
+  border-color: rgba(243, 184, 71, 0.36);
+  color: #ffd68a;
+  background: rgba(243, 184, 71, 0.12);
+}
+
+.episode-duplicate-meta.severity-restored {
+  border-color: rgba(73, 190, 132, 0.36);
+  color: #91e5b9;
+  background: rgba(73, 190, 132, 0.12);
+}
+
 .highlight-montage-mode-picker {
   grid-column: 1 / -1;
   display: grid;
@@ -8090,6 +8102,20 @@ button {
 .app-shell.theme-light .compatible-media-progress-track,
 :root[data-theme="light"] .compatible-media-progress-track {
   background: #d7e0ea;
+}
+
+.app-shell.theme-light .episode-duplicate-meta.severity-edit,
+:root[data-theme="light"] .episode-duplicate-meta.severity-edit {
+  border-color: rgba(173, 117, 15, 0.26);
+  color: #8a5b00;
+  background: rgba(243, 184, 71, 0.12);
+}
+
+.app-shell.theme-light .episode-duplicate-meta.severity-restored,
+:root[data-theme="light"] .episode-duplicate-meta.severity-restored {
+  border-color: rgba(27, 135, 80, 0.24);
+  color: #167044;
+  background: rgba(73, 190, 132, 0.11);
 }
 
 .app-shell.theme-light .highlight-montage-mode-picker legend,

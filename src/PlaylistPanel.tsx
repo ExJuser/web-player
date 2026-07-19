@@ -5,6 +5,7 @@ import { PlaylistPagination } from "./PlaylistPagination";
 import { PlaylistTools } from "./PlaylistTools";
 import { PlaylistVideoList } from "./PlaylistVideoList";
 import type { HomeMediaMode, SeriesOption, DuplicatePlaylistVideoMeta } from "./playerUiState";
+import type { VideoVersionPlaylistMeta } from "./videoVersionUtils";
 import type {
   PlaylistFilter,
   PlaylistSortMode,
@@ -22,6 +23,7 @@ type PlaylistPanelProps = {
   currentVideoId: string | null;
   defaultLibrarySearchStatus: string;
   duplicatePlaylistMetaByVideoId: Map<string, DuplicatePlaylistVideoMeta>;
+  versionPlaylistMetaByVideoId: Map<string, VideoVersionPlaylistMeta>;
   favoriteVideoIds: Set<string>;
   hasModeFilteredVideos: boolean;
   hasMorePlayerLibrarySearchResults: boolean;
@@ -31,6 +33,7 @@ type PlaylistPanelProps = {
   isBangumiLoading: boolean;
   isCurrentVideoVisible: boolean;
   isDuplicatePlaylistActive: boolean;
+  isVersionPlaylistActive: boolean;
   isPlayerLibrarySearchEmpty: boolean;
   isPlayerLibrarySearchLoading: boolean;
   isPlaylistSeriesMode: boolean;
@@ -84,6 +87,7 @@ type PlaylistPanelProps = {
   onChangePlaylistFilter: (filter: PlaylistFilter) => void;
   onChangePlaylistSortMode: (sortMode: PlaylistSortMode) => void;
   onClearDuplicatePlaylist: () => void;
+  onClearVersionPlaylist: () => void;
   onClearRatingPlaylist: () => void;
   onCommitPlaylistPageInput: () => void;
   onDeleteVideo: (video: VideoItem) => void;
@@ -116,6 +120,7 @@ export function PlaylistPanel({
   currentVideoId,
   defaultLibrarySearchStatus,
   duplicatePlaylistMetaByVideoId,
+  versionPlaylistMetaByVideoId,
   favoriteVideoIds,
   hasModeFilteredVideos,
   hasMorePlayerLibrarySearchResults,
@@ -125,6 +130,7 @@ export function PlaylistPanel({
   isBangumiLoading,
   isCurrentVideoVisible,
   isDuplicatePlaylistActive,
+  isVersionPlaylistActive,
   isPlayerLibrarySearchEmpty,
   isPlayerLibrarySearchLoading,
   isPlaylistSeriesMode,
@@ -178,6 +184,7 @@ export function PlaylistPanel({
   onChangePlaylistFilter,
   onChangePlaylistSortMode,
   onClearDuplicatePlaylist,
+  onClearVersionPlaylist,
   onClearRatingPlaylist,
   onCommitPlaylistPageInput,
   onDeleteVideo,
@@ -207,7 +214,7 @@ export function PlaylistPanel({
       <div className="playlist-header">
         <div className="playlist-title-row">
           <span className={`player-mode-indicator mode-${homeMediaMode}`} title={`当前播放模式：${playerMediaModeLabel}`}>
-            {isDuplicatePlaylistActive ? "重复" : isRatingPlaylistActive ? "评分" : playerMediaModeLabel}
+            {isDuplicatePlaylistActive ? "重复" : isVersionPlaylistActive ? "版本" : isRatingPlaylistActive ? "评分" : playerMediaModeLabel}
           </span>
           <span className="playlist-title-text">{playlistTitle}</span>
         </div>
@@ -219,6 +226,7 @@ export function PlaylistPanel({
           isBangumiLoading={isBangumiLoading}
           isCurrentVideoVisible={isCurrentVideoVisible}
           isDuplicatePlaylistActive={isDuplicatePlaylistActive}
+          isVersionPlaylistActive={isVersionPlaylistActive}
           isPlaylistSeriesMode={isPlaylistSeriesMode}
           isPlaylistSortReversed={isPlaylistSortReversed}
           isRatingPlaylistActive={isRatingPlaylistActive}
@@ -232,6 +240,7 @@ export function PlaylistPanel({
           onChangePlaylistFilter={onChangePlaylistFilter}
           onChangePlaylistSortMode={onChangePlaylistSortMode}
           onClearDuplicatePlaylist={onClearDuplicatePlaylist}
+          onClearVersionPlaylist={onClearVersionPlaylist}
           onClearRatingPlaylist={onClearRatingPlaylist}
           onOpenBangumiSubject={onOpenBangumiSubject}
           onScrollPlaylistToCurrent={onScrollPlaylistToCurrent}
@@ -272,9 +281,11 @@ export function PlaylistPanel({
       <PlaylistVideoList
         currentVideoId={currentVideoId}
         duplicatePlaylistMetaByVideoId={duplicatePlaylistMetaByVideoId}
+        versionPlaylistMetaByVideoId={versionPlaylistMetaByVideoId}
         favoriteVideoIds={favoriteVideoIds}
         homeMediaModeLabel={homeMediaModeLabel}
         isDuplicatePlaylistActive={isDuplicatePlaylistActive}
+        isVersionPlaylistActive={isVersionPlaylistActive}
         isRatingPlaylistActive={isRatingPlaylistActive}
         isPlaylistSeriesMode={isPlaylistSeriesMode}
         isVideoDeletePending={isVideoDeletePending}

@@ -7,6 +7,7 @@ import { resolvePlayerEntrySeriesMode, type RatingPlaylistMode } from "./playerU
 type SelectVideoOptions = {
   syncSeriesMode?: boolean;
   keepDuplicatePlaylist?: boolean;
+  keepVersionPlaylist?: boolean;
   keepRatingPlaylist?: boolean;
 };
 
@@ -28,6 +29,7 @@ type UseVideoSelectionControllerOptions = {
   setCurrentVideoId: Dispatch<SetStateAction<string | null>>;
   setDuration: Dispatch<SetStateAction<number>>;
   setIsDuplicatePlaylistActive: Dispatch<SetStateAction<boolean>>;
+  setIsVersionPlaylistActive: Dispatch<SetStateAction<boolean>>;
   setIsMainVideoLoading: Dispatch<SetStateAction<boolean>>;
   setIsPlaying: Dispatch<SetStateAction<boolean>>;
   setIsSeriesMenuOpen: Dispatch<SetStateAction<boolean>>;
@@ -57,6 +59,7 @@ export function useVideoSelectionController({
   setCurrentVideoId,
   setDuration,
   setIsDuplicatePlaylistActive,
+  setIsVersionPlaylistActive,
   setIsMainVideoLoading,
   setIsPlaying,
   setIsSeriesMenuOpen,
@@ -117,6 +120,10 @@ export function useVideoSelectionController({
         setPlaylistPage(1);
         setIsDuplicatePlaylistActive(false);
       }
+      if (!options?.keepVersionPlaylist) {
+        setPlaylistPage(1);
+        setIsVersionPlaylistActive(false);
+      }
       if (!options?.keepRatingPlaylist) {
         setRatingPlaylistMode(null);
       }
@@ -148,6 +155,7 @@ export function useVideoSelectionController({
       setCurrentVideoId,
       setDuration,
       setIsDuplicatePlaylistActive,
+      setIsVersionPlaylistActive,
       setIsMainVideoLoading,
       setIsPlaying,
       setPlaylistPage,

@@ -313,6 +313,10 @@ import {
 } from "./playerUiState";
 import { normalizeTagKey } from "./tagUtils";
 import {
+  createVideoVersionGroups,
+  createVideoVersionPlaylistMetaByVideoId,
+} from "./videoVersionUtils";
+import {
   clearPhotoAlbumFolderHandle,
   clearRecentFolderHandle,
   createDefaultPlayerDataStore,
@@ -530,6 +534,7 @@ export default function App() {
   const [duplicateDetectionResultScopeKey, setDuplicateDetectionResultScopeKey] = useState("");
   const [isDuplicateDetectionRunning, setIsDuplicateDetectionRunning] = useState(false);
   const [isDuplicatePlaylistActive, setIsDuplicatePlaylistActive] = useState(false);
+  const [isVersionPlaylistActive, setIsVersionPlaylistActive] = useState(false);
   const [ratingFilterOperator, setRatingFilterOperator] = useState<RatingFilterOperator>("gt");
   const [ratingFilterThreshold, setRatingFilterThreshold] = useState(8);
   const [ratingPlaylistMode, setRatingPlaylistMode] = useState<RatingPlaylistMode | null>(null);
@@ -1281,19 +1286,28 @@ export default function App() {
     () => createDuplicatePlaylistMetaByVideoId(activeDuplicateVideoGroups),
     [activeDuplicateVideoGroups],
   );
+  const videoVersionGroups = useMemo(() => createVideoVersionGroups(modeFilteredVideos), [modeFilteredVideos]);
+  const versionPlaylistVideos = useMemo(
+    () => videoVersionGroups.flatMap((group) => group.videos),
+    [videoVersionGroups],
+  );
+  const versionPlaylistMetaByVideoId = useMemo(
+    () => createVideoVersionPlaylistMetaByVideoId(videoVersionGroups),
+    [videoVersionGroups],
+  );
   const visibleVideos = useMemo(
     () =>
       resolveVisiblePlaylistVideos({
-        isDuplicatePlaylistActive, duplicatePlaylistVideos, ratingPlaylistMode, ratingPlaylistVideos, playlistFilter, favoritePlaylistVideos, seriesFilteredVideos,
+        isDuplicatePlaylistActive, duplicatePlaylistVideos, isVersionPlaylistActive, versionPlaylistVideos, ratingPlaylistMode, ratingPlaylistVideos, playlistFilter, favoritePlaylistVideos, seriesFilteredVideos,
       }),
-    [duplicatePlaylistVideos, favoritePlaylistVideos, isDuplicatePlaylistActive, playlistFilter, ratingPlaylistMode, ratingPlaylistVideos, seriesFilteredVideos],
+    [duplicatePlaylistVideos, favoritePlaylistVideos, isDuplicatePlaylistActive, isVersionPlaylistActive, playlistFilter, ratingPlaylistMode, ratingPlaylistVideos, seriesFilteredVideos, versionPlaylistVideos],
   );
   const isRatingPlaylistActive = Boolean(ratingPlaylistMode);
   const activeRatingPlaylistLabel = getActiveRatingPlaylistLabel(ratingPlaylistMode, ratingFilterLabel);
-  const isPlaylistSeriesMode = isSeriesMode && !isDuplicatePlaylistActive && !isRatingPlaylistActive;
+  const isPlaylistSeriesMode = isSeriesMode && !isDuplicatePlaylistActive && !isVersionPlaylistActive && !isRatingPlaylistActive;
   const isAnimePlaylistSearchScope = homeMediaMode === "anime" && isPlaylistSeriesMode;
   const homeLibrarySearchVideos = modeFilteredVideos;
-  const playerLibrarySearchVideos = isDuplicatePlaylistActive || isRatingPlaylistActive || isAnimePlaylistSearchScope ? visibleVideos : modeFilteredVideos;
+  const playerLibrarySearchVideos = isDuplicatePlaylistActive || isVersionPlaylistActive || isRatingPlaylistActive || isAnimePlaylistSearchScope ? visibleVideos : modeFilteredVideos;
   const librarySearchScopeKey = useMemo(
     () => createLibrarySearchScopeKey(homeLibrarySearchVideos, playerLibrarySearchVideos),
     [homeLibrarySearchVideos, playerLibrarySearchVideos],
@@ -1304,10 +1318,10 @@ export default function App() {
     () =>
       createVideoIndexById(
         resolvePlaylistIndexVideos({
-          isDuplicatePlaylistActive, isRatingPlaylistActive, duplicatePlaylistVideos, ratingPlaylistVideos, playlistVideos,
+          isDuplicatePlaylistActive, isVersionPlaylistActive, isRatingPlaylistActive, duplicatePlaylistVideos, versionPlaylistVideos, ratingPlaylistVideos, playlistVideos,
         }),
       ),
-    [duplicatePlaylistVideos, isDuplicatePlaylistActive, isRatingPlaylistActive, playlistVideos, ratingPlaylistVideos],
+    [duplicatePlaylistVideos, isDuplicatePlaylistActive, isRatingPlaylistActive, isVersionPlaylistActive, playlistVideos, ratingPlaylistVideos, versionPlaylistVideos],
   );
   const visibleVideoIndexById = useMemo(() => createVideoIndexById(visibleVideos), [visibleVideos]);
   const playlistPageCount = Math.max(1, Math.ceil(visibleVideos.length / playlistPageSize));
@@ -1368,6 +1382,11 @@ export default function App() {
       setIsDuplicatePlaylistActive(false);
     }
   }, [duplicatePlaylistVideos.length, isDuplicatePlaylistActive]);
+  useEffect(() => {
+    if (isVersionPlaylistActive && !versionPlaylistVideos.length) {
+      setIsVersionPlaylistActive(false);
+    }
+  }, [isVersionPlaylistActive, versionPlaylistVideos.length]);
   useEffect(() => {
     if (ratingPlaylistMode && !ratingPlaylistVideos.length) {
       setRatingPlaylistMode(null);
@@ -2788,6 +2807,7 @@ export default function App() {
     setCurrentVideoId,
     setDuration,
     setIsDuplicatePlaylistActive,
+    setIsVersionPlaylistActive,
     setIsMainVideoLoading,
     setIsPlaying,
     setIsSeriesMenuOpen,
@@ -3123,6 +3143,18 @@ export default function App() {
     setIsSeriesMenuOpen(false);
     selectVideo(firstVideo.id, { keepDuplicatePlaylist: true, syncSeriesMode: false });
   }, [duplicatePlaylistVideos, selectVideo]);
+
+  const openVersionPlaylist = useCallback(() => {
+    const firstVideo = versionPlaylistVideos[0];
+    if (!firstVideo) return;
+    setPlaylistPage(1);
+    setIsDuplicatePlaylistActive(false);
+    setIsVersionPlaylistActive(true);
+    setRatingPlaylistMode(null);
+    setPlaylistFilter("all");
+    setIsSeriesMenuOpen(false);
+    selectVideo(firstVideo.id, { keepVersionPlaylist: true, syncSeriesMode: false });
+  }, [selectVideo, versionPlaylistVideos]);
 
   const openRatingPlaylist = useCallback((
     mode: RatingPlaylistMode = "numeric",
@@ -5233,7 +5265,7 @@ export default function App() {
   const pendingHighEnergyStartTime = isCurrentHighEnergyMarkPending ? pendingHighEnergyStart?.time ?? null : null;
   const isCurrentEditSegmentMarkPending = pendingEditSegmentStart?.videoId === currentVideo?.id;
   const pendingEditSegmentStartTime = isCurrentEditSegmentMarkPending ? pendingEditSegmentStart?.time ?? null : null;
-  const { ariaLabel: playlistPanelAriaLabel, title: playlistPanelTitle } = createPlaylistPanelLabels({ isDuplicatePlaylistActive, isRatingPlaylistActive, isPlaylistSeriesMode, playlistVisibleCountLabel, duplicateGroupCount: activeDuplicateVideoGroups.length, activeRatingPlaylistLabel, modeFilteredVideoCount: modeFilteredVideos.length, playlistFilter, homeMediaMode, homeMediaModeLabel, totalVideoCount: videos.length });
+  const { ariaLabel: playlistPanelAriaLabel, title: playlistPanelTitle } = createPlaylistPanelLabels({ isDuplicatePlaylistActive, isVersionPlaylistActive, isRatingPlaylistActive, isPlaylistSeriesMode, playlistVisibleCountLabel, duplicateGroupCount: activeDuplicateVideoGroups.length, versionGroupCount: videoVersionGroups.length, activeRatingPlaylistLabel, modeFilteredVideoCount: modeFilteredVideos.length, playlistFilter, homeMediaMode, homeMediaModeLabel, totalVideoCount: videos.length });
 
   return (
     <>
@@ -5435,6 +5467,13 @@ export default function App() {
                 progress: duplicateDetectionProgress,
                 renderGroup: renderDuplicateVideoGroup,
                 totalVideoCount: modeFilteredVideos.length,
+              }}
+              videoVersions={{
+                editCount: videoVersionGroups.reduce((count, group) => count + group.edits.length, 0),
+                groupCount: videoVersionGroups.length,
+                restoredCount: videoVersionGroups.reduce((count, group) => count + group.restored.length, 0),
+                videoCount: versionPlaylistVideos.length,
+                onOpenPlaylist: openVersionPlaylist,
               }}
               favorites={{
                 cards: favoriteHomeCards,
@@ -5689,6 +5728,7 @@ export default function App() {
           currentVideoId={currentVideoId}
           defaultLibrarySearchStatus={defaultLibrarySearchStatus}
           duplicatePlaylistMetaByVideoId={duplicatePlaylistMetaByVideoId}
+          versionPlaylistMetaByVideoId={versionPlaylistMetaByVideoId}
           favoriteVideoIds={favoriteVideoIds}
           hasModeFilteredVideos={Boolean(modeFilteredVideos.length)}
           hasMorePlayerLibrarySearchResults={hasMorePlayerLibrarySearchResults}
@@ -5698,6 +5738,7 @@ export default function App() {
           isBangumiLoading={activeBangumiMatch?.status === "loading"}
           isCurrentVideoVisible={isCurrentVideoVisible}
           isDuplicatePlaylistActive={isDuplicatePlaylistActive}
+          isVersionPlaylistActive={isVersionPlaylistActive}
           isPlayerLibrarySearchEmpty={isPlayerLibrarySearchSurface && librarySearchMode === "empty"}
           isPlayerLibrarySearchLoading={isPlayerLibrarySearchLoading}
           isPlaylistSeriesMode={isPlaylistSeriesMode}
@@ -5757,6 +5798,10 @@ export default function App() {
             setPlaylistPage(1);
             setIsDuplicatePlaylistActive(false);
           }}
+          onClearVersionPlaylist={() => {
+            setPlaylistPage(1);
+            setIsVersionPlaylistActive(false);
+          }}
           onClearRatingPlaylist={() => {
             setPlaylistPage(1);
             setRatingPlaylistMode(null);
@@ -5789,6 +5834,10 @@ export default function App() {
             if (isActive) return;
             if (isDuplicatePlaylistActive) {
               openDuplicateVideo(selectedVideo, { keepDuplicatePlaylist: true });
+              return;
+            }
+            if (isVersionPlaylistActive) {
+              selectVideo(selectedVideo.id, { keepVersionPlaylist: true, syncSeriesMode: false });
               return;
             }
             if (isRatingPlaylistActive) {

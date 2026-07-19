@@ -8,6 +8,7 @@ import { HomeMediaLibraryCard } from "./HomeMediaLibraryCard";
 import { HomeModeCard } from "./HomeModeCard";
 import { HomeRecapCard } from "./HomeRecapCard";
 import { RatingFilterCard } from "./RatingFilterCard";
+import { VideoVersionSummaryCard } from "./VideoVersionSummaryCard";
 
 type HomeSideColumnProps = {
   duplicateSummary: ComponentProps<typeof DuplicateVideoSummaryCard>;
@@ -18,6 +19,7 @@ type HomeSideColumnProps = {
   mode: ComponentProps<typeof HomeModeCard>;
   ratingFilter: ComponentProps<typeof RatingFilterCard> | null;
   recap: ComponentProps<typeof HomeRecapCard> | null;
+  videoVersions: ComponentProps<typeof VideoVersionSummaryCard>;
 };
 
 export function HomeSideColumn({
@@ -29,6 +31,7 @@ export function HomeSideColumn({
   mode,
   ratingFilter,
   recap,
+  videoVersions,
 }: HomeSideColumnProps) {
   return (
     <aside className="home-side-column">
@@ -45,6 +48,8 @@ export function HomeSideColumn({
       <HomeLibrarySearchSection {...librarySearch} />
 
       <DuplicateVideoSummaryCard {...duplicateSummary} />
+
+      <VideoVersionSummaryCard {...videoVersions} />
 
       <FavoriteHomeSection {...favorites} />
     </aside>

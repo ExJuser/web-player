@@ -15,6 +15,7 @@ type PlaylistToolsProps = {
   isBangumiLoading: boolean;
   isCurrentVideoVisible: boolean;
   isDuplicatePlaylistActive: boolean;
+  isVersionPlaylistActive: boolean;
   isPlaylistSeriesMode: boolean;
   isPlaylistSortReversed: boolean;
   isRatingPlaylistActive: boolean;
@@ -28,6 +29,7 @@ type PlaylistToolsProps = {
   onChangePlaylistFilter: (filter: PlaylistFilter) => void;
   onChangePlaylistSortMode: (sortMode: PlaylistSortMode) => void;
   onClearDuplicatePlaylist: () => void;
+  onClearVersionPlaylist: () => void;
   onClearRatingPlaylist: () => void;
   onOpenBangumiSubject: () => void;
   onScrollPlaylistToCurrent: () => void;
@@ -45,6 +47,7 @@ export function PlaylistTools({
   isBangumiLoading,
   isCurrentVideoVisible,
   isDuplicatePlaylistActive,
+  isVersionPlaylistActive,
   isPlaylistSeriesMode,
   isPlaylistSortReversed,
   isRatingPlaylistActive,
@@ -58,6 +61,7 @@ export function PlaylistTools({
   onChangePlaylistFilter,
   onChangePlaylistSortMode,
   onClearDuplicatePlaylist,
+  onClearVersionPlaylist,
   onClearRatingPlaylist,
   onOpenBangumiSubject,
   onScrollPlaylistToCurrent,
@@ -66,7 +70,7 @@ export function PlaylistTools({
   onTogglePlaylistSortDirection,
   onToggleSeriesMenu,
 }: PlaylistToolsProps) {
-  const isPlaylistListLocked = isDuplicatePlaylistActive || isRatingPlaylistActive;
+  const isPlaylistListLocked = isDuplicatePlaylistActive || isVersionPlaylistActive || isRatingPlaylistActive;
 
   return (
     <div className={`playlist-tools ${isPlaylistSeriesMode ? "series-mode" : ""}`}>
@@ -128,6 +132,10 @@ export function PlaylistTools({
       </button>
       {isDuplicatePlaylistActive ? (
         <button className="playlist-clear-button" type="button" onClick={onClearDuplicatePlaylist} title="退出重复列表">
+          退出
+        </button>
+      ) : isVersionPlaylistActive ? (
+        <button className="playlist-clear-button" type="button" onClick={onClearVersionPlaylist} title="退出版本列表">
           退出
         </button>
       ) : isRatingPlaylistActive ? (

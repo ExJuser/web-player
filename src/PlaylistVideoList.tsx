@@ -10,13 +10,16 @@ import type {
   VideoTagStore,
 } from "./playerTypes";
 import type { DuplicatePlaylistVideoMeta } from "./playerUiState";
+import type { VideoVersionPlaylistMeta } from "./videoVersionUtils";
 
 type PlaylistVideoListProps = {
   currentVideoId: string | null;
   duplicatePlaylistMetaByVideoId: Map<string, DuplicatePlaylistVideoMeta>;
+  versionPlaylistMetaByVideoId: Map<string, VideoVersionPlaylistMeta>;
   favoriteVideoIds: Set<string>;
   homeMediaModeLabel: string;
   isDuplicatePlaylistActive: boolean;
+  isVersionPlaylistActive: boolean;
   isRatingPlaylistActive: boolean;
   isPlaylistSeriesMode: boolean;
   isVideoDeletePending: boolean;
@@ -45,9 +48,11 @@ type PlaylistVideoListProps = {
 export function PlaylistVideoList({
   currentVideoId,
   duplicatePlaylistMetaByVideoId,
+  versionPlaylistMetaByVideoId,
   favoriteVideoIds,
   homeMediaModeLabel,
   isDuplicatePlaylistActive,
+  isVersionPlaylistActive,
   isRatingPlaylistActive,
   isPlaylistSeriesMode,
   isVideoDeletePending,
@@ -82,6 +87,7 @@ export function PlaylistVideoList({
         const isFavorite = favoriteVideoIds.has(video.id);
         const seriesTitle = isPlaylistSeriesMode ? seriesTitleByVideoId.get(video.id) : "";
         const duplicateMeta = isDuplicatePlaylistActive ? duplicatePlaylistMetaByVideoId.get(video.id) : null;
+        const versionMeta = isVersionPlaylistActive ? versionPlaylistMetaByVideoId.get(video.id) : null;
         const tags = videoTags[video.id] ?? [];
         const rating = videoRatings[video.id];
         const ratingComment = videoComments[video.id];
@@ -90,6 +96,7 @@ export function PlaylistVideoList({
           <PlaylistItemCard
             key={video.id}
             duplicateMeta={duplicateMeta}
+            versionMeta={versionMeta}
             hasProgress={Boolean(progress)}
             isActive={isActive}
             isCompleted={isCompleted}

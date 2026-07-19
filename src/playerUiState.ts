@@ -436,6 +436,8 @@ export function getFavoritePlaylistVideos<Video extends IdentifiedVideoForUi>(vi
 export function resolveVisiblePlaylistVideos<Video>(input: {
   isDuplicatePlaylistActive: boolean;
   duplicatePlaylistVideos: Video[];
+  isVersionPlaylistActive: boolean;
+  versionPlaylistVideos: Video[];
   ratingPlaylistMode: RatingPlaylistMode | null;
   ratingPlaylistVideos: Video[];
   playlistFilter: "all" | "favorites";
@@ -443,6 +445,7 @@ export function resolveVisiblePlaylistVideos<Video>(input: {
   seriesFilteredVideos: Video[];
 }) {
   if (input.isDuplicatePlaylistActive) return input.duplicatePlaylistVideos;
+  if (input.isVersionPlaylistActive) return input.versionPlaylistVideos;
   if (input.ratingPlaylistMode) return input.ratingPlaylistVideos;
   if (input.playlistFilter === "favorites") return input.favoritePlaylistVideos;
   return input.seriesFilteredVideos;
@@ -458,10 +461,13 @@ export function resolvePlaylistIndexVideos<Video>(input: {
   isDuplicatePlaylistActive: boolean;
   isRatingPlaylistActive: boolean;
   duplicatePlaylistVideos: Video[];
+  isVersionPlaylistActive: boolean;
+  versionPlaylistVideos: Video[];
   ratingPlaylistVideos: Video[];
   playlistVideos: Video[];
 }) {
   if (input.isDuplicatePlaylistActive) return input.duplicatePlaylistVideos;
+  if (input.isVersionPlaylistActive) return input.versionPlaylistVideos;
   if (input.isRatingPlaylistActive) return input.ratingPlaylistVideos;
   return input.playlistVideos;
 }
@@ -560,10 +566,12 @@ export function createPlaylistPageSizeSelectOptions(values = playlistPageSizeOpt
 
 export function createPlaylistPanelLabels(input: {
   isDuplicatePlaylistActive: boolean;
+  isVersionPlaylistActive: boolean;
   isRatingPlaylistActive: boolean;
   isPlaylistSeriesMode: boolean;
   playlistVisibleCountLabel: string;
   duplicateGroupCount: number;
+  versionGroupCount: number;
   activeRatingPlaylistLabel: string;
   modeFilteredVideoCount: number;
   playlistFilter: "all" | "favorites";
@@ -573,6 +581,8 @@ export function createPlaylistPanelLabels(input: {
 }) {
   const ariaLabel = input.isDuplicatePlaylistActive
     ? "重复视频列表"
+    : input.isVersionPlaylistActive
+      ? "剪辑与修复版本列表"
     : input.isRatingPlaylistActive
       ? "评分视频列表"
       : input.isPlaylistSeriesMode
@@ -581,6 +591,8 @@ export function createPlaylistPanelLabels(input: {
 
   const title = input.isDuplicatePlaylistActive
     ? `重复列表 · ${input.playlistVisibleCountLabel} 个视频 · ${input.duplicateGroupCount} 组`
+    : input.isVersionPlaylistActive
+      ? `版本列表 · ${input.playlistVisibleCountLabel} 个视频 · ${input.versionGroupCount} 组`
     : input.isRatingPlaylistActive
       ? `评分列表 · ${input.playlistVisibleCountLabel} 个视频 · ${input.activeRatingPlaylistLabel}`
       : input.modeFilteredVideoCount
