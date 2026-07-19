@@ -19,7 +19,7 @@ type HomeSideColumnProps = {
   mode: ComponentProps<typeof HomeModeCard>;
   ratingFilter: ComponentProps<typeof RatingFilterCard> | null;
   recap: ComponentProps<typeof HomeRecapCard> | null;
-  videoVersions: ComponentProps<typeof VideoVersionSummaryCard>;
+  videoVersions: ComponentProps<typeof VideoVersionSummaryCard> | null;
 };
 
 export function HomeSideColumn({
@@ -49,7 +49,7 @@ export function HomeSideColumn({
 
       <DuplicateVideoSummaryCard {...duplicateSummary} />
 
-      <VideoVersionSummaryCard {...videoVersions} />
+      {videoVersions ? <VideoVersionSummaryCard {...videoVersions} /> : null}
 
       <FavoriteHomeSection {...favorites} />
     </aside>

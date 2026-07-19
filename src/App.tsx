@@ -1286,7 +1286,10 @@ export default function App() {
     () => createDuplicatePlaylistMetaByVideoId(activeDuplicateVideoGroups),
     [activeDuplicateVideoGroups],
   );
-  const videoVersionGroups = useMemo(() => createVideoVersionGroups(modeFilteredVideos), [modeFilteredVideos]);
+  const videoVersionGroups = useMemo(
+    () => homeMediaMode === "special" ? createVideoVersionGroups(modeFilteredVideos) : [],
+    [homeMediaMode, modeFilteredVideos],
+  );
   const versionPlaylistVideos = useMemo(
     () => videoVersionGroups.flatMap((group) => group.videos),
     [videoVersionGroups],
@@ -5468,13 +5471,13 @@ export default function App() {
                 renderGroup: renderDuplicateVideoGroup,
                 totalVideoCount: modeFilteredVideos.length,
               }}
-              videoVersions={{
+              videoVersions={homeMediaMode === "special" ? {
                 editCount: videoVersionGroups.reduce((count, group) => count + group.edits.length, 0),
                 groupCount: videoVersionGroups.length,
                 restoredCount: videoVersionGroups.reduce((count, group) => count + group.restored.length, 0),
                 videoCount: versionPlaylistVideos.length,
                 onOpenPlaylist: openVersionPlaylist,
-              }}
+              } : null}
               favorites={{
                 cards: favoriteHomeCards,
                 renderCard: renderHomeListCard,
