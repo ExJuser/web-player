@@ -8423,6 +8423,11 @@ button {
   text-align: left;
 }
 
+.actor-video-card {
+  display: flex;
+  flex-direction: column;
+}
+
 .actor-card-details,
 .actor-video-card strong {
   display: grid;
@@ -8503,6 +8508,7 @@ button {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  margin-top: auto;
   gap: 8px;
   padding: 0 12px 12px;
 }
