@@ -8437,16 +8437,7 @@ button {
   aspect-ratio: 800 / 538;
   place-items: center;
   color: #c4b5fd;
-  background: linear-gradient(135deg, rgba(124, 58, 237, 0.35), rgba(219, 39, 119, 0.22));
-}
-
-.actor-cover.has-image::before {
-  position: absolute;
-  inset: -12px;
-  background: var(--actor-cover-image) center / cover no-repeat;
-  content: "";
-  filter: blur(12px);
-  opacity: 0.56;
+  background: rgba(15, 23, 42, 0.62);
 }
 
 .actor-cover img {
@@ -8868,6 +8859,11 @@ button {
   color: #172033;
   background: rgba(255, 255, 255, 0.94);
   border-color: rgba(100, 116, 139, 0.22);
+}
+
+.app-shell.theme-light .actor-cover,
+:root[data-theme="light"] .actor-cover {
+  background: rgba(255, 255, 255, 0.94);
 }
 
 .app-shell.theme-light .actor-toolbar label:focus-within,
