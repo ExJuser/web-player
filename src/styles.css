@@ -5073,8 +5073,15 @@ button {
 }
 
 .tag-dialog-backdrop {
+  align-items: safe center;
+  overflow-y: auto;
+  scrollbar-width: none;
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
+}
+
+.tag-dialog-backdrop::-webkit-scrollbar {
+  display: none;
 }
 
 .folder-dialog,
@@ -6252,8 +6259,7 @@ button {
   display: grid;
   gap: 14px;
   width: min(720px, calc(100vw - 32px));
-  max-height: min(720px, calc(100vh - 32px));
-  overflow: auto;
+  overflow: visible;
   padding: 22px;
   border: 1px solid #2d3440;
   border-radius: 8px;
