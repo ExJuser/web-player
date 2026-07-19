@@ -1431,15 +1431,6 @@ export async function migrateLegacyCachedThumbnailsToLocalData() {
   return entries.length;
 }
 
-export async function readRecentFolderHandle() {
-  if (!("indexedDB" in window)) return null;
-  return (await runObjectStoreRequest<FileSystemDirectoryHandle | undefined>(
-    RECENT_FOLDER_STORE_NAME,
-    "readonly",
-    (store) => store.get(RECENT_FOLDER_KEY),
-  )) ?? null;
-}
-
 export async function writeRecentFolderHandle(directory: FileSystemDirectoryHandle) {
   if (!("indexedDB" in window)) return;
   await runObjectStoreRequest<IDBValidKey>(RECENT_FOLDER_STORE_NAME, "readwrite", (store) =>
