@@ -1755,7 +1755,7 @@ export default function App() {
         favoriteHomeVideos: favoriteHomeCards.map((card) => card.video),
         watchActivityCarouselVideoIds,
         modeFilteredVideoById,
-        playlistThumbnailVideos: [...actorThumbnailVideos, ...playlistThumbnailVideos],
+        playlistThumbnailVideos: isHomeViewVisible ? actorThumbnailVideos : playlistThumbnailVideos,
       }),
     [
       favoriteHomeCards,
