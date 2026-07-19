@@ -1114,6 +1114,16 @@ function createThumbnailId(libraryId: string, videoId: string) {
   return `${libraryId}.${thumbnailCacheVersion}.${(hash >>> 0).toString(36)}`;
 }
 
+function createActorCoverId(libraryId: string, actorId: string) {
+  let hash = 2166136261;
+  const value = `actor-cover|1|${libraryId}|${actorId}`;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `actor-cover.1.${(hash >>> 0).toString(36)}`;
+}
+
 function createLegacyVideoIdCandidate(videoId: string) {
   const parts = videoId.split("|");
   if (parts.length < 4) return null;
@@ -1145,6 +1155,30 @@ export async function writeCachedThumbnail(libraryId: string | null, videoId: st
     headers: { "Content-Type": thumbnail.type || "application/octet-stream" },
     body: thumbnail,
   });
+  if (!response.ok) throw new Error(await readApiError(response));
+}
+
+export async function readActorCover(libraryId: string | null, actorId: string) {
+  if (!libraryId) return null;
+  const response = await fetch(createApiUrl(`actor-covers/${encodeURIComponent(createActorCoverId(libraryId, actorId))}`));
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error(await readApiError(response));
+  return response.blob();
+}
+
+export async function writeActorCover(libraryId: string | null, actorId: string, cover: Blob) {
+  if (!libraryId) throw new Error("媒体库尚未就绪。");
+  const response = await fetch(createApiUrl(`actor-covers/${encodeURIComponent(createActorCoverId(libraryId, actorId))}`), {
+    method: "PUT",
+    headers: { "Content-Type": cover.type || "image/jpeg" },
+    body: cover,
+  });
+  if (!response.ok) throw new Error(await readApiError(response));
+}
+
+export async function deleteActorCover(libraryId: string | null, actorId: string) {
+  if (!libraryId) throw new Error("媒体库尚未就绪。");
+  const response = await fetch(createApiUrl(`actor-covers/${encodeURIComponent(createActorCoverId(libraryId, actorId))}`), { method: "DELETE" });
   if (!response.ok) throw new Error(await readApiError(response));
 }
 

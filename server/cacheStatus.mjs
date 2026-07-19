@@ -3,6 +3,7 @@ import path from "node:path";
 
 const cacheKindsByStatusId = {
   thumbnails: ["thumbnail"],
+  "actor-covers": ["actor-cover"],
   "danmaku-sources": ["danmaku-source"],
   "ai-summaries": ["ai-summary"],
   "ai-qa": ["ai-qa"],

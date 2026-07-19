@@ -69,6 +69,7 @@ import { createSystemResourceStatus } from "./systemResources.mjs";
 let dataRoot;
 let librariesRoot;
 let thumbnailsRoot;
+let actorCoversRoot;
 let photoAlbumsRoot;
 let embeddedSubtitlesRoot;
 let compatibleMediaRoot;
@@ -90,6 +91,7 @@ function initializeApiServices(projectRoot) {
   dataRoot = path.resolve(projectRoot, ".local-web-player-data");
   librariesRoot = path.join(dataRoot, "libraries");
   thumbnailsRoot = path.join(dataRoot, "thumbnails");
+  actorCoversRoot = path.join(dataRoot, "actor-covers");
   photoAlbumsRoot = path.join(dataRoot, "photo-albums");
   embeddedSubtitlesRoot = path.join(dataRoot, "subtitles");
   compatibleMediaRoot = path.join(dataRoot, "compatible-media");
@@ -145,6 +147,7 @@ function createCacheStatusDefinitions() {
     { id: "global", label: "全局播放数据", path: globalDataPath },
     { id: "libraries", label: "播放数据", path: librariesRoot },
     { id: "thumbnails", label: "视频缩略图", path: thumbnailsRoot },
+    { id: "actor-covers", label: "演员封面", path: actorCoversRoot },
     { id: "photo-albums", label: "看图数据", path: photoAlbumsRoot },
     { id: "subtitles", label: "内封字幕", path: embeddedSubtitlesRoot },
     { id: "compatible-media", label: "兼容播放缓存", path: compatibleMediaRoot },
@@ -799,6 +802,7 @@ export function playerDataApiPlugin({ projectRoot, env }) {
     const url = new URL(request.url, "http://127.0.0.1");
     const libraryMatch = url.pathname.match(/^\/api\/player-data\/libraries\/([^/]+)$/);
     const thumbnailMatch = url.pathname.match(/^\/api\/player-data\/thumbnails\/([^/]+)$/);
+    const actorCoverMatch = url.pathname.match(/^\/api\/player-data\/actor-covers\/([^/]+)$/);
     const mediaMatch = url.pathname.match(/^\/api\/media\/([^/]+)\/(.+)$/);
     const compatibleMediaMatch = url.pathname.match(/^\/api\/media-compatible\/([a-f0-9]{64})\.mp4$/);
     const progressMatch = url.pathname.match(/^\/api\/player-data\/progress\/(.+)$/);
@@ -1441,6 +1445,55 @@ export function playerDataApiPlugin({ projectRoot, env }) {
           await mkdir(thumbnailsRoot, { recursive: true });
           await writeFile(filePath, rawBody);
           store.recordCacheEntry("thumbnail", thumbnailId, filePath, request.headers["content-type"] ?? null, rawBody.length);
+          sendJson(response, 200, { ok: true });
+          return;
+        }
+      }
+
+      if (actorCoverMatch) {
+        const coverId = sanitizeStorageId(decodeURIComponent(actorCoverMatch[1]));
+        if (!coverId) {
+          sendJson(response, 400, { error: "Invalid actor cover id." });
+          return;
+        }
+
+        const filePath = path.join(actorCoversRoot, `${coverId}.blob`);
+        if (request.method === "GET") {
+          try {
+            const cacheEntry = store.getCacheEntry("actor-cover", coverId);
+            const etag = `"${coverId}-${cacheEntry?.updated_at ?? 0}"`;
+            await stat(filePath);
+            if (request.headers["if-none-match"] === etag) {
+              response.statusCode = 304;
+              response.setHeader("Cache-Control", "no-cache");
+              response.setHeader("ETag", etag);
+              response.end();
+              return;
+            }
+            sendBlob(response, 200, await readFile(filePath), {
+              contentType: cacheEntry?.content_type || "image/jpeg",
+              cacheControl: "no-cache",
+              etag,
+            });
+          } catch {
+            response.statusCode = 404;
+            response.end();
+          }
+          return;
+        }
+
+        if (request.method === "PUT") {
+          const rawBody = await readBody(request);
+          await mkdir(actorCoversRoot, { recursive: true });
+          await writeFile(filePath, rawBody);
+          store.recordCacheEntry("actor-cover", coverId, filePath, request.headers["content-type"] ?? null, rawBody.length);
+          sendJson(response, 200, { ok: true });
+          return;
+        }
+
+        if (request.method === "DELETE") {
+          await rm(filePath, { force: true });
+          store.deleteCacheEntry("actor-cover", coverId);
           sendJson(response, 200, { ok: true });
           return;
         }

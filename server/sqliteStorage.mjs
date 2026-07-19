@@ -1387,6 +1387,12 @@ export class LocalDataSqliteStore {
       .get(kind, cacheId) ?? null;
   }
 
+  deleteCacheEntry(kind, cacheId) {
+    return this.transaction(() => {
+      this.db.prepare("DELETE FROM cache_entries WHERE kind = ? AND cache_id = ?").run(kind, cacheId);
+    });
+  }
+
   getMediaProbeCache(rootId, relativePath, fileIdentity) {
     const row = this.db
       .prepare("SELECT size, last_modified, result_json FROM media_probe_cache WHERE root_id = ? AND relative_path = ?")

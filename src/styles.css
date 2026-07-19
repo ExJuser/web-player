@@ -8420,6 +8420,13 @@ button {
   padding: 0 12px 12px;
 }
 
+.actor-video-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
 .actor-correction-button {
   min-width: auto;
   height: 30px;

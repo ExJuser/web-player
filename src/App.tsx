@@ -329,6 +329,7 @@ import {
   clearPhotoAlbumFolderHandle,
   clearRecentFolderHandle,
   createDefaultPlayerDataStore,
+  deleteActorCover,
   deleteLegacyPlayerDataStore,
   hasDirectoryWritePermission,
   isPlayerGlobalMetadata,
@@ -339,6 +340,7 @@ import {
   loadGlobalPlayerStartupData,
   loadPlayerDataStore,
   migrateLegacyCachedThumbnailsToLocalData,
+  writeActorCover,
   readPhotoAlbumFolderHandle,
   saveDanmakuSelection,
   saveCachedMediaRootScan,
@@ -349,6 +351,7 @@ import {
 import {
   getPlayerFrameAspectRatio,
   getVideoElementMetadata,
+  loadVideoThumbnail,
   selectTrustedDuration,
 } from "./videoThumbnail";
 import {
@@ -614,6 +617,8 @@ export default function App() {
   const [videoActorOverrides, setVideoActorOverrides] = useState<VideoActorOverrideStore>({});
   const [specialHomeSection, setSpecialHomeSection] = useState<"overview" | "actors">("overview");
   const [selectedActorId, setSelectedActorId] = useState<string | null>(null);
+  const [actorCoverVersions, setActorCoverVersions] = useState<Record<string, number>>({});
+  const [actorCoverPendingAction, setActorCoverPendingAction] = useState<string | null>(null);
   const [actorEditVideoId, setActorEditVideoId] = useState<string | null>(null);
   const [videoHighlights, setVideoHighlights] = useState<VideoHighlightStore>({});
   const [videoEditSegments, setVideoEditSegments] = useState<VideoEditSegmentStore>({});
@@ -1732,7 +1737,7 @@ export default function App() {
     const selectedActor = actorInsights.actors.find((entry) => entry.actor.id === selectedActorId);
     return selectedActor
       ? selectedActor.videos.slice(0, 50).map((entry) => entry.video)
-      : actorInsights.actors.slice(0, 24).map((entry) => entry.representativeVideo);
+      : [];
   }, [actorInsights.actors, homeMediaMode, selectedActorId, specialHomeSection]);
   const thumbnailQueueVideoIds = useMemo(
     () =>
@@ -2692,6 +2697,41 @@ export default function App() {
     },
     [],
   );
+
+  const saveActorCoverFromVideo = useCallback(async (actorId: string, video: VideoItem) => {
+    setActorCoverPendingAction(`set:${video.id}`);
+    try {
+      let thumbnailUrl = video.thumbnailUrl;
+      if (!thumbnailUrl) {
+        const loaded = await loadVideoThumbnail(libraryIdRef.current, video);
+        thumbnailUrl = loaded.thumbnailUrl;
+        if (loaded.metadata) updateVideoMetadata(video.id, loaded.metadata);
+        setVideoThumbnailState(video.id, "ready", thumbnailUrl);
+      }
+      const thumbnailResponse = await fetch(thumbnailUrl);
+      if (!thumbnailResponse.ok) throw new Error("无法读取影片缩略图。");
+      await writeActorCover(libraryIdRef.current, actorId, await thumbnailResponse.blob());
+      setActorCoverVersions((versions) => ({ ...versions, [actorId]: (versions[actorId] ?? 0) + 1 }));
+      setMessage("演员独立封面已保存。");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "演员封面保存失败。");
+    } finally {
+      setActorCoverPendingAction(null);
+    }
+  }, [libraryIdRef, setVideoThumbnailState, updateVideoMetadata]);
+
+  const removeStoredActorCover = useCallback(async (actorId: string) => {
+    setActorCoverPendingAction(`remove:${actorId}`);
+    try {
+      await deleteActorCover(libraryIdRef.current, actorId);
+      setActorCoverVersions((versions) => ({ ...versions, [actorId]: (versions[actorId] ?? 0) + 1 }));
+      setMessage("演员独立封面已移除。");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "演员封面移除失败。");
+    } finally {
+      setActorCoverPendingAction(null);
+    }
+  }, [libraryIdRef]);
 
   const updateVideoPlayability = useCallback((videoId: string, playability: NonNullable<VideoItem["playability"]>) => {
     setVideos((previous) => {
@@ -5604,10 +5644,15 @@ export default function App() {
                   actors={actorInsights.actors}
                   unresolvedVideos={actorInsights.unresolvedVideos}
                   selectedActorId={selectedActorId}
+                  libraryId={libraryId}
+                  actorCoverVersions={actorCoverVersions}
+                  actorCoverPendingAction={actorCoverPendingAction}
                   onSelectActor={setSelectedActorId}
                   onOpenVideo={openVideoFromHome}
                   onEditVideoActors={(video) => setActorEditVideoId(video.id)}
                   onThumbnailError={markVideoThumbnailFailed}
+                  onSetActorCover={(actorId, video) => void saveActorCoverFromVideo(actorId, video)}
+                  onRemoveActorCover={(actorId) => void removeStoredActorCover(actorId)}
                 />
               ) : (
                 <HomeSpecialInsightsSection
