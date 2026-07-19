@@ -110,6 +110,9 @@ export function hasStoredData(store: PlayerDataStore) {
       Object.keys(store.videoRatings).length ||
       Object.keys(store.videoComments).length ||
       Object.keys(store.videoTags).length ||
+      Object.keys(store.actorProfiles).length ||
+      Object.keys(store.actorTagDefinitions).length ||
+      Object.keys(store.videoActorOverrides).length ||
       Object.keys(store.videoStats).length ||
       Object.keys(store.watchActivity).length ||
       Object.keys(store.tagMergeDecisions).length ||
@@ -231,6 +234,15 @@ export function migrateMovedVideoData(store: PlayerDataStore, targetVideos: Vide
     }
   });
 
+  const nextVideoActorOverrides = { ...store.videoActorOverrides };
+  Object.entries(store.videoActorOverrides).forEach(([videoId, override]) => {
+    const nextVideoId = resolveMovedVideoId(videoId, mapping);
+    if (nextVideoId && !nextVideoActorOverrides[nextVideoId]) {
+      nextVideoActorOverrides[nextVideoId] = override;
+      didMigrate = true;
+    }
+  });
+
   const nextVideoRatings = { ...store.videoRatings };
   Object.entries(store.videoRatings).forEach(([videoId, rating]) => {
     const nextVideoId = resolveMovedVideoId(videoId, mapping);
@@ -282,6 +294,7 @@ export function migrateMovedVideoData(store: PlayerDataStore, targetVideos: Vide
         videoRatings: nextVideoRatings,
         videoComments: nextVideoComments,
         videoTags: nextVideoTags,
+        videoActorOverrides: nextVideoActorOverrides,
         watchActivity: nextWatchActivity,
         embeddedSubtitles: nextEmbeddedSubtitles,
         danmakuSelections: nextDanmakuSelections,

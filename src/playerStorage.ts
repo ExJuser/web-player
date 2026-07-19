@@ -1,4 +1,6 @@
 import type {
+  ActorProfileStore,
+  ActorTagDefinitionStore,
   CachedMediaRootScan,
   FileSystemDirectoryHandle,
   DanmakuPreferences,
@@ -18,6 +20,7 @@ import type {
   ShortcutMap,
   SubtitleItem,
   VideoItem,
+  VideoActorOverrideStore,
   VideoEditSegment,
   VideoEditSegmentStore,
   VideoHighlightSegment,
@@ -29,6 +32,8 @@ import type {
   WatchActivityItem,
   WatchActivityStore
 } from "./playerTypes";
+import { normalizeActorKey } from "./actorNfoCore.mjs";
+import { normalizeTagKey as normalizeVideoTagKey } from "./tagUtils";
 
 export function isPlayerGlobalMetadata(
   metadata: PlayerDataStore["metadata"] | null | undefined,
@@ -100,6 +105,57 @@ export function parseVideoTags(source: unknown): VideoTagStore {
     if (tags.length) store[videoId] = tags;
   }
   return store;
+}
+
+export function parseActorProfiles(source: unknown): ActorProfileStore {
+  if (!source || typeof source !== "object" || Array.isArray(source)) return {};
+  const profiles: ActorProfileStore = {};
+  for (const [id, value] of Object.entries(source)) {
+    if (!id || !value || typeof value !== "object" || Array.isArray(value)) continue;
+    const profile = value as Partial<ActorProfileStore[string]>;
+    const name = typeof profile.name === "string" ? profile.name.trim() : "";
+    if (!name) continue;
+    const aliases = Array.isArray(profile.aliases)
+      ? profile.aliases.flatMap((alias) => {
+          if (!alias || typeof alias !== "object") return [];
+          const label = typeof alias.label === "string" ? alias.label.trim() : "";
+          const key = normalizeActorKey(alias.key || label);
+          return key && label ? [{ key, label }] : [];
+        })
+      : [];
+    const nameKey = normalizeActorKey(name);
+    if (nameKey && !aliases.some((alias) => alias.key === nameKey)) aliases.push({ key: nameKey, label: name });
+    profiles[id] = { id, name, aliases, updatedAt: Number(profile.updatedAt) || 0 };
+  }
+  return profiles;
+}
+
+export function parseActorTagDefinitions(source: unknown): ActorTagDefinitionStore {
+  if (!source || typeof source !== "object" || Array.isArray(source)) return {};
+  const definitions: ActorTagDefinitionStore = {};
+  for (const value of Object.values(source)) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+    const definition = value as Partial<ActorTagDefinitionStore[string]>;
+    const label = typeof definition.label === "string" ? definition.label.trim() : "";
+    const key = normalizeVideoTagKey(definition.key || label);
+    if (key && label) definitions[key] = { key, label, updatedAt: Number(definition.updatedAt) || 0 };
+  }
+  return definitions;
+}
+
+export function parseVideoActorOverrides(source: unknown): VideoActorOverrideStore {
+  if (!source || typeof source !== "object" || Array.isArray(source)) return {};
+  const overrides: VideoActorOverrideStore = {};
+  for (const [videoId, value] of Object.entries(source)) {
+    if (!videoId || !value || typeof value !== "object" || Array.isArray(value)) continue;
+    const override = value as Partial<VideoActorOverrideStore[string]>;
+    if (!Array.isArray(override.actorIds)) continue;
+    overrides[videoId] = {
+      actorIds: Array.from(new Set(override.actorIds.filter((id): id is string => typeof id === "string" && Boolean(id)))),
+      updatedAt: Number(override.updatedAt) || 0,
+    };
+  }
+  return overrides;
 }
 
 export function parseVideoRatings(source: unknown): VideoRatingStore {
@@ -563,6 +619,9 @@ export function parsePlayerDataStore(raw: string): PlayerDataStore {
     preferences?: unknown;
     settings?: unknown;
     videoTags?: unknown;
+    actorProfiles?: unknown;
+    actorTagDefinitions?: unknown;
+    videoActorOverrides?: unknown;
     videoRatings?: unknown;
     videoComments?: unknown;
     videoStats?: unknown;
@@ -590,6 +649,9 @@ export function parsePlayerDataStore(raw: string): PlayerDataStore {
     videoRatings: parseVideoRatings(parsed?.videoRatings),
     videoComments: parseVideoComments(parsed?.videoComments),
     videoTags: parseVideoTags(parsed?.videoTags),
+    actorProfiles: parseActorProfiles(parsed?.actorProfiles),
+    actorTagDefinitions: parseActorTagDefinitions(parsed?.actorTagDefinitions),
+    videoActorOverrides: parseVideoActorOverrides(parsed?.videoActorOverrides),
     videoStats: parseVideoStats(parsed?.videoStats),
     watchActivity: parseWatchActivity(parsed?.watchActivity),
     videoHighlights: parseVideoHighlights(parsed?.videoHighlights),
@@ -611,12 +673,15 @@ export function parsePlayerDataStore(raw: string): PlayerDataStore {
 
 export function createDefaultPlayerDataStore(metadata?: PlayerDataStore["metadata"]): PlayerDataStore {
   return {
-    version: 5,
+    version: 6,
     progress: {},
     favorites: [],
     videoRatings: {},
     videoComments: {},
     videoTags: {},
+    actorProfiles: {},
+    actorTagDefinitions: {},
+    videoActorOverrides: {},
     videoStats: {},
     watchActivity: {},
     videoHighlights: {},
@@ -664,12 +729,28 @@ function parseCachedServerVideo(source: unknown): VideoItem | null {
     lastModified: parseFiniteNumber(video.lastModified),
     mediaRootId: video.mediaRootId,
     playbackSource: "server",
+    ...(parseVideoActorHints(video.actorHints) ? { actorHints: parseVideoActorHints(video.actorHints)! } : {}),
     ...(parseFiniteNumber(video.duration) > 0 ? { duration: parseFiniteNumber(video.duration) } : {}),
     ...(parseFiniteNumber(video.width) > 0 ? { width: parseFiniteNumber(video.width) } : {}),
     ...(parseFiniteNumber(video.height) > 0 ? { height: parseFiniteNumber(video.height) } : {}),
     ...(video.playability && typeof video.playability === "object" && !Array.isArray(video.playability)
       ? { playability: video.playability as VideoItem["playability"] }
       : {}),
+  };
+}
+
+function parseVideoActorHints(source: unknown): VideoItem["actorHints"] | null {
+  if (!source || typeof source !== "object" || Array.isArray(source)) return null;
+  const hints = source as Partial<NonNullable<VideoItem["actorHints"]>>;
+  if (
+    typeof hints.fileName !== "string" ||
+    !Array.isArray(hints.names) ||
+    (hints.status !== "parsed" && hints.status !== "noActors" && hints.status !== "invalid" && hints.status !== "tooLarge")
+  ) return null;
+  return {
+    fileName: hints.fileName,
+    names: hints.names.filter((name): name is string => typeof name === "string" && Boolean(name.trim())).slice(0, 100),
+    status: hints.status,
   };
 }
 
@@ -784,6 +865,7 @@ function serializeCachedMediaRootScan(scan: CachedMediaRootScan): CachedMediaRoo
       width: video.width,
       height: video.height,
       playability: video.playability,
+      actorHints: video.actorHints,
     })),
     subtitles: scan.subtitles.map((subtitle) => ({
       id: subtitle.id,
@@ -879,12 +961,15 @@ export async function deleteLegacyPlayerDataStore(directory: FileSystemDirectory
 
 function createPersistedPlayerDataPayload(store: PlayerDataStore) {
   return {
-    version: 5,
+    version: 6,
     items: store.progress,
     favorites: store.favorites,
     videoRatings: parseVideoRatings(store.videoRatings),
     videoComments: parseVideoComments(store.videoComments),
     videoTags: parseVideoTags(store.videoTags),
+    actorProfiles: parseActorProfiles(store.actorProfiles),
+    actorTagDefinitions: parseActorTagDefinitions(store.actorTagDefinitions),
+    videoActorOverrides: parseVideoActorOverrides(store.videoActorOverrides),
     videoStats: parseVideoStats(store.videoStats),
     watchActivity: parseWatchActivity(store.watchActivity),
     videoHighlights: parseVideoHighlights(store.videoHighlights),

@@ -4,6 +4,8 @@ import type { AppTheme } from "./appBrowserUtils";
 import { defaultDanmakuPreferences, defaultPlayerPreferences, defaultPlayerSettings } from "./playerConstants";
 import { saveGlobalPlayerDataStore } from "./playerStorage";
 import type {
+  ActorProfileStore,
+  ActorTagDefinitionStore,
   DanmakuPreferences,
   DanmakuSelectionStore,
   FileSystemDirectoryHandle,
@@ -19,6 +21,7 @@ import type {
   VideoEditSegmentStore,
   VideoHighlightStore,
   VideoItem,
+  VideoActorOverrideStore,
   VideoRatingStore,
   VideoStatsStore,
   VideoTagStore,
@@ -42,6 +45,9 @@ export function usePlayerDataRuntime(initialVolume: number) {
   const videoRatingsRef = useRef<VideoRatingStore>({});
   const videoCommentsRef = useRef<VideoCommentStore>({});
   const videoTagsRef = useRef<VideoTagStore>({});
+  const actorProfilesRef = useRef<ActorProfileStore>({});
+  const actorTagDefinitionsRef = useRef<ActorTagDefinitionStore>({});
+  const videoActorOverridesRef = useRef<VideoActorOverrideStore>({});
   const videoStatsRef = useRef<VideoStatsStore>({});
   const watchActivityRef = useRef<WatchActivityStore>({});
   const videoHighlightsRef = useRef<VideoHighlightStore>({});
@@ -55,12 +61,15 @@ export function usePlayerDataRuntime(initialVolume: number) {
 
   const buildPlayerDataStore = useCallback(
     (overrides?: Partial<PlayerDataStore>): PlayerDataStore => ({
-      version: 5,
+      version: 6,
       progress: progressStoreRef.current,
       favorites: Array.from(favoriteVideoIdsRef.current),
       videoRatings: videoRatingsRef.current,
       videoComments: videoCommentsRef.current,
       videoTags: videoTagsRef.current,
+      actorProfiles: actorProfilesRef.current,
+      actorTagDefinitions: actorTagDefinitionsRef.current,
+      videoActorOverrides: videoActorOverridesRef.current,
       videoStats: videoStatsRef.current,
       watchActivity: watchActivityRef.current,
       videoHighlights: videoHighlightsRef.current,
@@ -91,6 +100,8 @@ export function usePlayerDataRuntime(initialVolume: number) {
   );
 
   return {
+    actorProfilesRef,
+    actorTagDefinitionsRef,
     buildPlayerDataStore,
     danmakuPreferencesRef,
     danmakuSelectionsRef,
@@ -113,11 +124,14 @@ export function usePlayerDataRuntime(initialVolume: number) {
     videosRef,
     videoStatsRef,
     videoTagsRef,
+    videoActorOverridesRef,
     watchActivityRef,
   };
 }
 
 type UseApplyPlayerDataStoreOptions = {
+  actorProfilesRef: MutableRefObject<ActorProfileStore>;
+  actorTagDefinitionsRef: MutableRefObject<ActorTagDefinitionStore>;
   activateDuplicateDetectionForMode: (
     mode: HomeMediaMode,
     videos: VideoItem[],
@@ -133,6 +147,8 @@ type UseApplyPlayerDataStoreOptions = {
   playerSettingsRef: MutableRefObject<PlayerPersistentSettings>;
   progressStoreRef: MutableRefObject<ProgressStore>;
   setDanmakuPreferences: Dispatch<SetStateAction<DanmakuPreferences>>;
+  setActorProfiles: Dispatch<SetStateAction<ActorProfileStore>>;
+  setActorTagDefinitions: Dispatch<SetStateAction<ActorTagDefinitionStore>>;
   setDanmakuSelections: Dispatch<SetStateAction<DanmakuSelectionStore>>;
   setFavoriteVideoIds: Dispatch<SetStateAction<Set<string>>>;
   setHomeMediaMode: Dispatch<SetStateAction<HomeMediaMode>>;
@@ -154,6 +170,7 @@ type UseApplyPlayerDataStoreOptions = {
   setVideoHighlights: Dispatch<SetStateAction<VideoHighlightStore>>;
   setVideoRatings: Dispatch<SetStateAction<VideoRatingStore>>;
   setVideoTags: Dispatch<SetStateAction<VideoTagStore>>;
+  setVideoActorOverrides: Dispatch<SetStateAction<VideoActorOverrideStore>>;
   setVolume: Dispatch<SetStateAction<number>>;
   setWatchActivityRevision: Dispatch<SetStateAction<number>>;
   tagMergeDecisionsRef: MutableRefObject<TagMergeDecisionStore>;
@@ -164,10 +181,13 @@ type UseApplyPlayerDataStoreOptions = {
   videosRef: MutableRefObject<VideoItem[]>;
   videoStatsRef: MutableRefObject<VideoStatsStore>;
   videoTagsRef: MutableRefObject<VideoTagStore>;
+  videoActorOverridesRef: MutableRefObject<VideoActorOverrideStore>;
   watchActivityRef: MutableRefObject<WatchActivityStore>;
 };
 
 export function useApplyPlayerDataStore({
+  actorProfilesRef,
+  actorTagDefinitionsRef,
   activateDuplicateDetectionForMode,
   danmakuPreferencesRef,
   danmakuSelectionsRef,
@@ -179,6 +199,8 @@ export function useApplyPlayerDataStore({
   playerSettingsRef,
   progressStoreRef,
   setDanmakuPreferences,
+  setActorProfiles,
+  setActorTagDefinitions,
   setDanmakuSelections,
   setFavoriteVideoIds,
   setHomeMediaMode,
@@ -200,6 +222,7 @@ export function useApplyPlayerDataStore({
   setVideoHighlights,
   setVideoRatings,
   setVideoTags,
+  setVideoActorOverrides,
   setVolume,
   setWatchActivityRevision,
   tagMergeDecisionsRef,
@@ -210,6 +233,7 @@ export function useApplyPlayerDataStore({
   videosRef,
   videoStatsRef,
   videoTagsRef,
+  videoActorOverridesRef,
   watchActivityRef,
 }: UseApplyPlayerDataStoreOptions) {
   return useCallback((nextDataStore: PlayerDataStore) => {
@@ -221,6 +245,9 @@ export function useApplyPlayerDataStore({
     videoRatingsRef.current = nextDataStore.videoRatings;
     videoCommentsRef.current = nextDataStore.videoComments;
     videoTagsRef.current = nextDataStore.videoTags;
+    actorProfilesRef.current = nextDataStore.actorProfiles;
+    actorTagDefinitionsRef.current = nextDataStore.actorTagDefinitions;
+    videoActorOverridesRef.current = nextDataStore.videoActorOverrides;
     videoStatsRef.current = nextDataStore.videoStats;
     watchActivityRef.current = nextDataStore.watchActivity;
     videoHighlightsRef.current = nextDataStore.videoHighlights;
@@ -250,6 +277,9 @@ export function useApplyPlayerDataStore({
     setVideoRatings(nextDataStore.videoRatings);
     setVideoComments(nextDataStore.videoComments);
     setVideoTags(nextDataStore.videoTags);
+    setActorProfiles(nextDataStore.actorProfiles);
+    setActorTagDefinitions(nextDataStore.actorTagDefinitions);
+    setVideoActorOverrides(nextDataStore.videoActorOverrides);
     setVideoHighlights(nextDataStore.videoHighlights);
     setVideoEditSegments(nextDataStore.videoEditSegments);
     setWatchActivityRevision((revision) => revision + 1);
@@ -258,6 +288,8 @@ export function useApplyPlayerDataStore({
     setDanmakuPreferences(nextDataStore.danmakuPreferences);
     activateDuplicateDetectionForMode(nextDataStore.preferences.homeMediaMode, videosRef.current, nextDataStore.duplicateDetections);
   }, [
+    actorProfilesRef,
+    actorTagDefinitionsRef,
     activateDuplicateDetectionForMode,
     danmakuPreferencesRef,
     danmakuSelectionsRef,
@@ -269,6 +301,8 @@ export function useApplyPlayerDataStore({
     playerSettingsRef,
     progressStoreRef,
     setDanmakuPreferences,
+    setActorProfiles,
+    setActorTagDefinitions,
     setDanmakuSelections,
     setFavoriteVideoIds,
     setHomeMediaMode,
@@ -290,6 +324,7 @@ export function useApplyPlayerDataStore({
     setVideoHighlights,
     setVideoRatings,
     setVideoTags,
+    setVideoActorOverrides,
     setVolume,
     setWatchActivityRevision,
     tagMergeDecisionsRef,
@@ -300,6 +335,7 @@ export function useApplyPlayerDataStore({
     videosRef,
     videoStatsRef,
     videoTagsRef,
+    videoActorOverridesRef,
     watchActivityRef,
   ]);
 }

@@ -23,6 +23,28 @@ async function createTempStore() {
   return { root, dataRoot, librariesRoot, photoAlbumsRoot, store };
 }
 
+test("sqlite store preserves actor aliases, actor tags, and an empty manual actor override", async () => {
+  const context = await createTempStore();
+  try {
+    await context.store.initialize();
+    context.store.savePlayerDataStore("global", {
+      actorProfiles: {
+        actor1: { id: "actor1", name: "新名字", aliases: [{ key: "旧名字", label: "旧名字" }, { key: "新名字", label: "新名字" }], updatedAt: 10 },
+      },
+      actorTagDefinitions: { "新名字": { key: "新名字", label: "新名字", updatedAt: 11 } },
+      videoActorOverrides: { video1: { actorIds: [], updatedAt: 12 } },
+    });
+    const stored = context.store.loadPlayerDataStore("global");
+    assert.equal(stored.actorProfiles.actor1.name, "新名字");
+    assert.equal(stored.actorProfiles.actor1.aliases.length, 2);
+    assert.equal(stored.actorTagDefinitions["新名字"].label, "新名字");
+    assert.deepEqual(stored.videoActorOverrides.video1.actorIds, []);
+    context.store.close();
+  } finally {
+    await rm(context.root, { recursive: true, force: true });
+  }
+});
+
 test("sqlite store imports legacy player and photo album json once", async () => {
   const context = await createTempStore();
   try {

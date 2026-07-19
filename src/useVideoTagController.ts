@@ -22,8 +22,10 @@ type UseVideoTagControllerOptions = {
   currentVideo: VideoItem | null;
   currentVideoTags: string[];
   isTagDialogOpen: boolean;
+  isTagInputActor: boolean;
   isTagSuggestionLoading: boolean;
   localConfig: LocalConfig | null;
+  onMarkActorTags: (tags: string[]) => void;
   setActiveTagSuggestionIndex: Dispatch<SetStateAction<number>>;
   setIsTagSuggestionLoading: Dispatch<SetStateAction<boolean>>;
   setTagInput: Dispatch<SetStateAction<string>>;
@@ -43,8 +45,10 @@ export function useVideoTagController({
   currentVideo,
   currentVideoTags,
   isTagDialogOpen,
+  isTagInputActor,
   isTagSuggestionLoading,
   localConfig,
+  onMarkActorTags,
   setActiveTagSuggestionIndex,
   setIsTagSuggestionLoading,
   setTagInput,
@@ -112,7 +116,7 @@ export function useVideoTagController({
     return tags;
   }, [videoTagsRef]);
 
-  const addTagsToCurrentVideo = useCallback(async (tags: string[], options?: { skipPrompt?: boolean }) => {
+  const addTagsToCurrentVideo = useCallback(async (tags: string[], options?: { skipPrompt?: boolean; markAsActor?: boolean }) => {
     if (!currentVideo) return;
     const existingVideoTags = videoTagsRef.current[currentVideo.id] ?? [];
     const allTags = getAllLibraryTags();
@@ -129,7 +133,7 @@ export function useVideoTagController({
         .map((tag) => findTagMergeSuggestion(tag, allTags, tagMergeDecisionsRef.current))
         .find((item): item is TagMergeSuggestion => Boolean(item));
       if (suggestion) {
-        setTagMergePrompt({ pendingTags: resolvedTags, suggestion });
+        setTagMergePrompt({ pendingTags: resolvedTags, suggestion, markAsActor: options?.markAsActor });
         setTagMessage("");
         return;
       }
@@ -150,6 +154,7 @@ export function useVideoTagController({
                 reason: "相似标签",
                 score: 0.86,
               },
+              markAsActor: options?.markAsActor,
             });
             setTagMessage(aiSuggestion.reason || "");
             return;
@@ -168,12 +173,14 @@ export function useVideoTagController({
       [currentVideo.id]: nextTags,
     };
     replaceVideoTags(nextVideoTags, `已保存 ${nextTags.length} 个标签。`);
+    if (options?.markAsActor) onMarkActorTags(resolvedTags);
     setTagInput("");
     setTagMergePrompt(null);
   }, [
     currentVideo,
     getAllLibraryTags,
     localConfig,
+    onMarkActorTags,
     replaceVideoTags,
     setIsTagSuggestionLoading,
     setTagInput,
@@ -185,14 +192,14 @@ export function useVideoTagController({
 
   const submitTagInput = useCallback(() => {
     if (isTagSuggestionLoading) return;
-    void addTagsToCurrentVideo(parseTagInput(tagInput));
-  }, [addTagsToCurrentVideo, isTagSuggestionLoading, tagInput]);
+    void addTagsToCurrentVideo(parseTagInput(tagInput), { markAsActor: isTagInputActor });
+  }, [addTagsToCurrentVideo, isTagInputActor, isTagSuggestionLoading, tagInput]);
 
   const submitTagInputSuggestion = useCallback((tag: string) => {
     if (isTagSuggestionLoading) return;
     const resolvedInput = tagInput.replace(/[^\s,，、;；|]*$/u, tag);
-    void addTagsToCurrentVideo(parseTagInput(resolvedInput));
-  }, [addTagsToCurrentVideo, isTagSuggestionLoading, tagInput]);
+    void addTagsToCurrentVideo(parseTagInput(resolvedInput), { markAsActor: isTagInputActor });
+  }, [addTagsToCurrentVideo, isTagInputActor, isTagSuggestionLoading, tagInput]);
 
   useEffect(() => {
     setActiveTagSuggestionIndex(0);
@@ -229,7 +236,7 @@ export function useVideoTagController({
     const mergedTags = pendingTags.map((tag) =>
       normalizeTagKey(tag) === normalizeTagKey(suggestion.newTag) ? suggestion.existingTag : tag,
     );
-    void addTagsToCurrentVideo(mergedTags, { skipPrompt: true });
+    void addTagsToCurrentVideo(mergedTags, { skipPrompt: true, markAsActor: tagMergePrompt.markAsActor });
     saveTagMergeDecisions(nextDecisions).catch(() => setTagMessage("无法保存标签合并选择。"));
   }, [addTagsToCurrentVideo, currentVideo, setTagMergeDecisions, setTagMessage, tagMergeDecisionsRef, tagMergePrompt]);
 
@@ -246,7 +253,7 @@ export function useVideoTagController({
         updatedAt: Date.now(),
       },
     });
-    void addTagsToCurrentVideo(pendingTags, { skipPrompt: true });
+    void addTagsToCurrentVideo(pendingTags, { skipPrompt: true, markAsActor: tagMergePrompt.markAsActor });
   }, [addTagsToCurrentVideo, replaceTagMergeDecisions, tagMergeDecisionsRef, tagMergePrompt]);
 
   return {

@@ -1,7 +1,8 @@
 import { CheckCircle2, ExternalLink, RefreshCw, Sparkles, Tags, X } from "lucide-react";
-import type { PointerEvent as ReactPointerEvent, Ref } from "react";
+import { useEffect, useState, type PointerEvent as ReactPointerEvent, type Ref } from "react";
 
 import type { TagMergeSuggestion } from "./tagUtils";
+import { normalizeTagKey } from "./tagUtils";
 
 type DialogOffset = {
   x: number;
@@ -25,6 +26,8 @@ type TagDialogProps = {
   offset: DialogOffset;
   currentVideoName: string;
   currentVideoTags: string[];
+  actorTagKeys: Set<string>;
+  isTagInputActor: boolean;
   tagInput: string;
   tagInputSuggestions: string[];
   resolvedActiveTagSuggestionIndex: number;
@@ -42,8 +45,12 @@ type TagDialogProps = {
   hasCurrentVideo: boolean;
   onClose: () => void;
   onRemoveTag: (tag: string) => void;
+  onEditTag: (oldTag: string, nextLabel: string, isActor: boolean) => void;
+  onToggleActorTag: (tag: string, isActor: boolean) => void;
+  getActorTagUsageCount: (tag: string) => number;
   onSubmitTagInput: () => void;
   onTagInputChange: (value: string) => void;
+  onTagInputActorChange: (value: boolean) => void;
   onActiveTagSuggestionIndexChange: (updater: (index: number) => number) => void;
   onSelectTagSuggestion: (tag: string) => void;
   onGenerateAutoTags: () => void;
@@ -65,6 +72,8 @@ export function TagDialog({
   offset,
   currentVideoName,
   currentVideoTags,
+  actorTagKeys,
+  isTagInputActor,
   tagInput,
   tagInputSuggestions,
   resolvedActiveTagSuggestionIndex,
@@ -82,8 +91,12 @@ export function TagDialog({
   hasCurrentVideo,
   onClose,
   onRemoveTag,
+  onEditTag,
+  onToggleActorTag,
+  getActorTagUsageCount,
   onSubmitTagInput,
   onTagInputChange,
+  onTagInputActorChange,
   onActiveTagSuggestionIndexChange,
   onSelectTagSuggestion,
   onGenerateAutoTags,
@@ -97,6 +110,13 @@ export function TagDialog({
   onPointerMove,
   onPointerUp,
 }: TagDialogProps) {
+  const [editingTag, setEditingTag] = useState<string | null>(null);
+  const [editingLabel, setEditingLabel] = useState("");
+  const [editingIsActor, setEditingIsActor] = useState(false);
+  const [pendingActorUnmark, setPendingActorUnmark] = useState<string | null>(null);
+  useEffect(() => {
+    if (!isOpen) setEditingTag(null);
+  }, [isOpen]);
   if (!isOpen) return null;
 
   return (
@@ -131,16 +151,41 @@ export function TagDialog({
 
         <div className="tag-editor-current">
           {currentVideoTags.length ? (
-            currentVideoTags.map((tag) => (
-              <button className="tag-editor-chip" key={tag} type="button" onClick={() => onRemoveTag(tag)}>
-                <span>{tag}</span>
-                <X size={14} />
-              </button>
-            ))
+            currentVideoTags.map((tag) => {
+              const tagKey = normalizeTagKey(tag);
+              const isActor = actorTagKeys.has(tagKey);
+              return editingTag === tag ? (
+                <div className="tag-inline-editor" key={tag}>
+                  <input value={editingLabel} maxLength={120} onChange={(event) => setEditingLabel(event.target.value)} />
+                  <label><input type="checkbox" checked={editingIsActor} onChange={(event) => setEditingIsActor(event.target.checked)} />演员人名</label>
+                  <button className="primary-button" type="button" onClick={() => { onEditTag(tag, editingLabel, editingIsActor); setEditingTag(null); }}>保存</button>
+                  <button className="secondary-button" type="button" onClick={() => setEditingTag(null)}>取消</button>
+                </div>
+              ) : (
+                <div className="tag-editor-chip" key={tag}>
+                  <span>{tag}</span>
+                  {isActor ? <small>演员</small> : null}
+                  <button type="button" title="切换演员人名" aria-label={`${isActor ? "取消" : "标记"}${tag}为演员人名`} onClick={() => isActor ? setPendingActorUnmark(tag) : onToggleActorTag(tag, true)}>人</button>
+                  <button type="button" title="修改标签" aria-label={`修改标签${tag}`} onClick={() => { setEditingTag(tag); setEditingLabel(tag); setEditingIsActor(isActor); }}>改</button>
+                  <button type="button" title="移除标签" aria-label={`移除标签${tag}`} onClick={() => onRemoveTag(tag)}><X size={14} /></button>
+                </div>
+              );
+            })
           ) : (
             <div className="ai-empty-state">当前视频还没有标签。</div>
           )}
         </div>
+
+        {pendingActorUnmark ? (
+          <div className="tag-merge-prompt">
+            <strong>取消演员人名分类</strong>
+            <p>“{pendingActorUnmark}”在 {getActorTagUsageCount(pendingActorUnmark)} 部影片中使用。取消后，没有有效 NFO 或人工名单的影片会重新计算演员。</p>
+            <div className="dialog-actions compact">
+              <button className="primary-button" type="button" onClick={() => { onToggleActorTag(pendingActorUnmark, false); setPendingActorUnmark(null); }}>确认取消</button>
+              <button className="secondary-button" type="button" onClick={() => setPendingActorUnmark(null)}>保留分类</button>
+            </div>
+          </div>
+        ) : null}
 
         <form
           className="tag-editor-form"
@@ -209,6 +254,10 @@ export function TagDialog({
             {isTagSuggestionLoading ? "查询中" : "添加"}
           </button>
         </form>
+        <label className="tag-actor-toggle">
+          <input type="checkbox" checked={isTagInputActor} onChange={(event) => onTagInputActorChange(event.target.checked)} />
+          <span>本次添加的标签是演员人名</span>
+        </label>
         <button
           className={`secondary-button auto-tag-button${isAutoTagLoading ? " loading" : ""}`}
           type="button"

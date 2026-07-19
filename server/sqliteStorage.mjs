@@ -3,8 +3,8 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { readJsonFile } from "./jsonFiles.mjs";
 
-const schemaVersion = 1;
-const playerStoreVersion = 5;
+const schemaVersion = 2;
+const playerStoreVersion = 6;
 const photoAlbumStoreVersion = 1;
 
 function now() {
@@ -30,6 +30,10 @@ function normalizeTagKey(value) {
     .toLocaleLowerCase()
     .replace(/[\s\p{P}\p{S}]+/gu, "")
     .trim();
+}
+
+function normalizeActorKey(value) {
+  return String(value ?? "").normalize("NFKC").replace(/\s+/gu, " ").trim().toLowerCase();
 }
 
 function asObject(value) {
@@ -145,6 +149,45 @@ export class LocalDataSqliteStore {
         tag_label TEXT NOT NULL,
         created_at INTEGER NOT NULL,
         PRIMARY KEY (library_id, video_id, tag_key)
+      );
+
+      CREATE TABLE IF NOT EXISTS actors (
+        library_id TEXT NOT NULL,
+        actor_id TEXT NOT NULL,
+        actor_name TEXT NOT NULL,
+        updated_at INTEGER NOT NULL,
+        PRIMARY KEY (library_id, actor_id)
+      );
+
+      CREATE TABLE IF NOT EXISTS actor_aliases (
+        library_id TEXT NOT NULL,
+        actor_id TEXT NOT NULL,
+        alias_key TEXT NOT NULL,
+        alias_label TEXT NOT NULL,
+        PRIMARY KEY (library_id, alias_key)
+      );
+
+      CREATE TABLE IF NOT EXISTS actor_tag_definitions (
+        library_id TEXT NOT NULL,
+        tag_key TEXT NOT NULL,
+        tag_label TEXT NOT NULL,
+        updated_at INTEGER NOT NULL,
+        PRIMARY KEY (library_id, tag_key)
+      );
+
+      CREATE TABLE IF NOT EXISTS video_actor_overrides (
+        library_id TEXT NOT NULL,
+        video_id TEXT NOT NULL,
+        updated_at INTEGER NOT NULL,
+        PRIMARY KEY (library_id, video_id)
+      );
+
+      CREATE TABLE IF NOT EXISTS video_actor_override_members (
+        library_id TEXT NOT NULL,
+        video_id TEXT NOT NULL,
+        actor_id TEXT NOT NULL,
+        position INTEGER NOT NULL,
+        PRIMARY KEY (library_id, video_id, actor_id)
       );
 
       CREATE TABLE IF NOT EXISTS video_ratings (
@@ -439,6 +482,11 @@ export class LocalDataSqliteStore {
     this.saveMetadataSync(libraryId, store.metadata);
 
     for (const table of [
+      "video_actor_override_members",
+      "video_actor_overrides",
+      "actor_aliases",
+      "actor_tag_definitions",
+      "actors",
       "video_progress",
       "video_favorites",
       "video_tags",
@@ -481,6 +529,36 @@ export class LocalDataSqliteStore {
         const key = normalizeTagKey(label);
         if (label && key) tagInsert.run(libraryId, videoId, key, label, timestamp);
       }
+    }
+
+    const actorInsert = this.db.prepare("INSERT INTO actors (library_id, actor_id, actor_name, updated_at) VALUES (?, ?, ?, ?)");
+    const aliasInsert = this.db.prepare("INSERT INTO actor_aliases (library_id, actor_id, alias_key, alias_label) VALUES (?, ?, ?, ?)");
+    for (const [actorId, profile] of Object.entries(asObject(store.actorProfiles))) {
+      const actorName = String(profile?.name ?? "").trim();
+      if (!actorId || !actorName) continue;
+      actorInsert.run(libraryId, actorId, actorName, Number(profile.updatedAt) || timestamp);
+      for (const alias of Array.isArray(profile.aliases) ? profile.aliases : []) {
+        const aliasLabel = String(alias?.label ?? "").trim();
+        const aliasKey = normalizeActorKey(alias?.key ?? aliasLabel);
+        if (aliasKey && aliasLabel) aliasInsert.run(libraryId, actorId, aliasKey, aliasLabel);
+      }
+    }
+
+    const actorTagInsert = this.db.prepare("INSERT INTO actor_tag_definitions (library_id, tag_key, tag_label, updated_at) VALUES (?, ?, ?, ?)");
+    for (const definition of Object.values(asObject(store.actorTagDefinitions))) {
+      const label = String(definition?.label ?? "").trim();
+      const key = normalizeTagKey(definition?.key ?? label);
+      if (key && label) actorTagInsert.run(libraryId, key, label, Number(definition.updatedAt) || timestamp);
+    }
+
+    const actorOverrideInsert = this.db.prepare("INSERT INTO video_actor_overrides (library_id, video_id, updated_at) VALUES (?, ?, ?)");
+    const actorOverrideMemberInsert = this.db.prepare("INSERT INTO video_actor_override_members (library_id, video_id, actor_id, position) VALUES (?, ?, ?, ?)");
+    for (const [videoId, override] of Object.entries(asObject(store.videoActorOverrides))) {
+      if (!videoId || !Array.isArray(override?.actorIds)) continue;
+      actorOverrideInsert.run(libraryId, videoId, Number(override.updatedAt) || timestamp);
+      Array.from(new Set(override.actorIds.filter((actorId) => typeof actorId === "string" && actorId))).forEach((actorId, position) => {
+        actorOverrideMemberInsert.run(libraryId, videoId, actorId, position);
+      });
     }
 
     const ratingInsert = this.db.prepare("INSERT INTO video_ratings (library_id, video_id, rating, updated_at) VALUES (?, ?, ?, ?)");
@@ -650,6 +728,8 @@ export class LocalDataSqliteStore {
   loadPlayerDataStore(libraryId) {
     const metadataRow = this.db.prepare("SELECT metadata_json FROM library_metadata WHERE library_id = ?").get(libraryId);
     const hasData = Boolean(metadataRow)
+      || Boolean(this.db.prepare("SELECT 1 FROM actors WHERE library_id = ? LIMIT 1").get(libraryId))
+      || Boolean(this.db.prepare("SELECT 1 FROM video_actor_overrides WHERE library_id = ? LIMIT 1").get(libraryId))
       || Boolean(this.db.prepare("SELECT 1 FROM video_progress WHERE library_id = ? LIMIT 1").get(libraryId))
       || Boolean(this.db.prepare("SELECT 1 FROM video_ratings WHERE library_id = ? LIMIT 1").get(libraryId))
       || Boolean(this.db.prepare("SELECT 1 FROM watch_activity WHERE library_id = ? LIMIT 1").get(libraryId))
@@ -675,6 +755,28 @@ export class LocalDataSqliteStore {
     for (const row of allRows(this.db.prepare("SELECT video_id, tag_label FROM video_tags WHERE library_id = ? ORDER BY created_at, tag_label"), libraryId)) {
       videoTags[row.video_id] ??= [];
       videoTags[row.video_id].push(row.tag_label);
+    }
+
+    const actorProfiles = {};
+    for (const row of allRows(this.db.prepare("SELECT actor_id, actor_name, updated_at FROM actors WHERE library_id = ?"), libraryId)) {
+      actorProfiles[row.actor_id] = { id: row.actor_id, name: row.actor_name, aliases: [], updatedAt: row.updated_at };
+    }
+    for (const row of allRows(this.db.prepare("SELECT actor_id, alias_key, alias_label FROM actor_aliases WHERE library_id = ? ORDER BY alias_label"), libraryId)) {
+      if (!actorProfiles[row.actor_id]) continue;
+      actorProfiles[row.actor_id].aliases.push({ key: row.alias_key, label: row.alias_label });
+    }
+
+    const actorTagDefinitions = {};
+    for (const row of allRows(this.db.prepare("SELECT tag_key, tag_label, updated_at FROM actor_tag_definitions WHERE library_id = ?"), libraryId)) {
+      actorTagDefinitions[row.tag_key] = { key: row.tag_key, label: row.tag_label, updatedAt: row.updated_at };
+    }
+
+    const videoActorOverrides = {};
+    for (const row of allRows(this.db.prepare("SELECT video_id, updated_at FROM video_actor_overrides WHERE library_id = ?"), libraryId)) {
+      videoActorOverrides[row.video_id] = { actorIds: [], updatedAt: row.updated_at };
+    }
+    for (const row of allRows(this.db.prepare("SELECT video_id, actor_id FROM video_actor_override_members WHERE library_id = ? ORDER BY video_id, position"), libraryId)) {
+      if (videoActorOverrides[row.video_id]) videoActorOverrides[row.video_id].actorIds.push(row.actor_id);
     }
 
     const videoRatings = {};
@@ -771,6 +873,9 @@ export class LocalDataSqliteStore {
       videoRatings,
       videoComments,
       videoTags,
+      actorProfiles,
+      actorTagDefinitions,
+      videoActorOverrides,
       videoStats,
       watchActivity,
       videoHighlights,

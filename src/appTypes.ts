@@ -45,6 +45,7 @@ export type AutoTagSuggestionResponse = {
 export type TagMergePrompt = {
   pendingTags: string[];
   suggestion: TagMergeSuggestion;
+  markAsActor?: boolean;
 };
 
 export type ExistingMediaRootPrompt = {

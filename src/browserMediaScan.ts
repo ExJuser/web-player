@@ -1,5 +1,6 @@
 import type {
   FileSystemDirectoryHandle,
+  FileSystemFileHandle,
   MediaCollection,
   MediaScanBatch,
   SubtitleItem,
@@ -17,6 +18,7 @@ import {
   shouldFlushMediaScan,
   sortMediaCollection,
 } from "./playerMediaUtils";
+import { findMatchingNfoName, maxActorNfoBytes, parseActorNfoBytes } from "./actorNfoCore.mjs";
 
 export async function ensureDirectoryReadPermission(directory: FileSystemDirectoryHandle) {
   const descriptor = { mode: "read" as const };
@@ -74,7 +76,13 @@ export async function* collectVideos(
   }
 
   async function* walk(handle: FileSystemDirectoryHandle, segments: string[]): AsyncGenerator<MediaScanBatch> {
-    for await (const entry of handle.values()) {
+    const entries: Array<FileSystemDirectoryHandle | FileSystemFileHandle> = [];
+    for await (const entry of handle.values()) entries.push(entry);
+    const fileEntries = entries.filter((entry): entry is FileSystemFileHandle => entry.kind === "file");
+    const fileEntryNames = fileEntries.map((entry) => entry.name);
+    const fileEntriesByName = new Map(fileEntries.map((entry) => [entry.name, entry]));
+
+    for (const entry of entries) {
       if (entry.kind === "directory") {
         yield* walk(entry, [...segments, entry.name]);
       } else if (isVideoFile(entry.name)) {
@@ -84,7 +92,7 @@ export async function* collectVideos(
           filteredSmallVideos += 1;
         } else {
           const relativePath = [...segments, entry.name].join("/");
-          pendingVideos.push({
+          const video: VideoItem = {
             id: rootId ? createGlobalVideoId(rootId, relativePath, file) : createLegacyVideoId(relativePath, file),
             name: entry.name,
             relativePath,
@@ -94,7 +102,20 @@ export async function* collectVideos(
             lastModified: file.lastModified,
             parentDirectory: handle,
             playbackSource: "browser",
-          });
+          };
+          const nfoName = findMatchingNfoName(entry.name, fileEntryNames);
+          const nfoEntry = nfoName ? fileEntriesByName.get(nfoName) : undefined;
+          if (nfoEntry) {
+            try {
+              const nfoFile = await nfoEntry.getFile();
+              video.actorHints = nfoFile.size > maxActorNfoBytes
+                ? { fileName: nfoName ?? nfoEntry.name, names: [], status: "tooLarge" }
+                : parseActorNfoBytes(await nfoFile.arrayBuffer(), nfoName ?? nfoEntry.name);
+            } catch {
+              video.actorHints = { fileName: nfoName ?? nfoEntry.name, names: [], status: "invalid" };
+            }
+          }
+          pendingVideos.push(video);
         }
       } else if (isSubtitleFile(entry.name)) {
         scannedFiles += 1;

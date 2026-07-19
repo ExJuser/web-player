@@ -43,7 +43,41 @@ export type VideoItem = {
   mediaRootId?: string;
   playbackSource?: "browser" | "server";
   playability?: VideoPlayability;
+  actorHints?: VideoActorHints;
 };
+
+export type ActorSource = "manual" | "nfo" | "tag";
+export type VideoActorNfoStatus = "parsed" | "noActors" | "invalid" | "tooLarge";
+export type VideoActorHints = {
+  fileName: string;
+  names: string[];
+  status: VideoActorNfoStatus;
+};
+
+export type ActorAlias = {
+  key: string;
+  label: string;
+};
+
+export type ActorProfile = {
+  id: string;
+  name: string;
+  aliases: ActorAlias[];
+  updatedAt: number;
+};
+
+export type ActorProfileStore = Record<string, ActorProfile>;
+export type ActorTagDefinition = {
+  key: string;
+  label: string;
+  updatedAt: number;
+};
+export type ActorTagDefinitionStore = Record<string, ActorTagDefinition>;
+export type VideoActorOverride = {
+  actorIds: string[];
+  updatedAt: number;
+};
+export type VideoActorOverrideStore = Record<string, VideoActorOverride>;
 
 export type VideoMetadata = Pick<VideoItem, "duration" | "width" | "height">;
 
@@ -266,6 +300,9 @@ export type PlayerDataStore = {
   videoRatings: VideoRatingStore;
   videoComments: VideoCommentStore;
   videoTags: VideoTagStore;
+  actorProfiles: ActorProfileStore;
+  actorTagDefinitions: ActorTagDefinitionStore;
+  videoActorOverrides: VideoActorOverrideStore;
   videoStats: VideoStatsStore;
   watchActivity: WatchActivityStore;
   videoHighlights: VideoHighlightStore;

@@ -81,6 +81,8 @@ import {
 } from "./watchActivityInsights";
 import type {
   ActiveView,
+  ActorProfileStore,
+  ActorTagDefinitionStore,
   DanmakuComment,
   DanmakuPreferences,
   DanmakuSelectionStore,
@@ -111,6 +113,7 @@ import type {
   VideoHighlightStore,
   VideoEditSegmentStore,
   VideoItem,
+  VideoActorOverrideStore,
   VideoMetadata,
   VideoCommentStore,
   VideoRatingStore,
@@ -118,6 +121,14 @@ import type {
   VideoTagStore,
   WatchActivityStore
 } from "./playerTypes";
+import {
+  addActorProfile,
+  buildActorInsights,
+  mergeActorProfiles,
+  reconcileActorProfiles,
+  renameActorProfile,
+  resolveVideoActors,
+} from "./actorUtils";
 import {
   clearCachedPhotoAlbumScan,
   createPhotoAlbumStats,
@@ -381,6 +392,8 @@ import { RatingDialog } from "./RatingDialog";
 import { ShortcutDialog } from "./ShortcutDialog";
 import { TagDialog } from "./TagDialog";
 import { WatchActivitySection } from "./WatchActivitySection";
+import { ActorDashboardSection } from "./ActorDashboardSection";
+import { ActorEditDialog } from "./ActorEditDialog";
 
 const playlistResizeMinWidth = 280;
 const playlistResizeDefaultWidth = 360;
@@ -415,6 +428,8 @@ export default function App() {
   const rightMouseHoldTimerRef = useRef<number | null>(null);
   const rightMousePointerIdRef = useRef<number | null>(null);
   const {
+    actorProfilesRef,
+    actorTagDefinitionsRef,
     buildPlayerDataStore,
     danmakuPreferencesRef,
     danmakuSelectionsRef,
@@ -437,6 +452,7 @@ export default function App() {
     videosRef,
     videoStatsRef,
     videoTagsRef,
+    videoActorOverridesRef,
     watchActivityRef,
   } = usePlayerDataRuntime(initialVolumeRef.current);
   const localConfigRef = useRef<LocalConfig | null>(null);
@@ -591,6 +607,12 @@ export default function App() {
   const [videoRatings, setVideoRatings] = useState<VideoRatingStore>({});
   const [videoComments, setVideoComments] = useState<VideoCommentStore>({});
   const [videoTags, setVideoTags] = useState<VideoTagStore>({});
+  const [actorProfiles, setActorProfiles] = useState<ActorProfileStore>({});
+  const [actorTagDefinitions, setActorTagDefinitions] = useState<ActorTagDefinitionStore>({});
+  const [videoActorOverrides, setVideoActorOverrides] = useState<VideoActorOverrideStore>({});
+  const [specialHomeSection, setSpecialHomeSection] = useState<"overview" | "actors">("overview");
+  const [selectedActorId, setSelectedActorId] = useState<string | null>(null);
+  const [actorEditVideoId, setActorEditVideoId] = useState<string | null>(null);
   const [videoHighlights, setVideoHighlights] = useState<VideoHighlightStore>({});
   const [videoEditSegments, setVideoEditSegments] = useState<VideoEditSegmentStore>({});
   const [, setTagMergeDecisions] = useState<TagMergeDecisionStore>({});
@@ -626,6 +648,7 @@ export default function App() {
     setVideoComments,
   });
   const [tagInput, setTagInput] = useState("");
+  const [isTagInputActor, setIsTagInputActor] = useState(false);
   const [activeTagSuggestionIndex, setActiveTagSuggestionIndex] = useState(0);
   const [tagMessage, setTagMessage] = useState("");
   const [isTagSuggestionLoading, setIsTagSuggestionLoading] = useState(false);
@@ -875,6 +898,8 @@ export default function App() {
   }, []);
 
   const applyPlayerDataStore = useApplyPlayerDataStore({
+    actorProfilesRef,
+    actorTagDefinitionsRef,
     activateDuplicateDetectionForMode,
     danmakuPreferencesRef,
     danmakuSelectionsRef,
@@ -886,6 +911,8 @@ export default function App() {
     playerSettingsRef,
     progressStoreRef,
     setDanmakuPreferences,
+    setActorProfiles,
+    setActorTagDefinitions,
     setDanmakuSelections,
     setFavoriteVideoIds,
     setHomeMediaMode,
@@ -907,6 +934,7 @@ export default function App() {
     setVideoHighlights,
     setVideoRatings,
     setVideoTags,
+    setVideoActorOverrides,
     setVolume,
     setWatchActivityRevision,
     tagMergeDecisionsRef,
@@ -917,6 +945,7 @@ export default function App() {
     videosRef,
     videoStatsRef,
     videoTagsRef,
+    videoActorOverridesRef,
     watchActivityRef,
   });
 
@@ -1211,6 +1240,46 @@ export default function App() {
   const currentVideoHasCompatibleMedia = Boolean(currentVideo?.playability?.compatibleUrl);
   const currentVideoTags = currentVideo ? videoTags[currentVideo.id] ?? [] : [];
   const currentVideoRating = currentVideo ? videoRatings[currentVideo.id] : undefined;
+  const updateActorTagDefinitions = useCallback((tags: string[], isActor: boolean) => {
+    const nextDefinitions = { ...actorTagDefinitionsRef.current };
+    tags.forEach((tag) => {
+      const key = normalizeTagKey(tag);
+      if (!key) return;
+      if (isActor) nextDefinitions[key] = { key, label: tag.trim(), updatedAt: Date.now() };
+      else delete nextDefinitions[key];
+    });
+    actorTagDefinitionsRef.current = nextDefinitions;
+    setActorTagDefinitions(nextDefinitions);
+    void saveCurrentPlayerDataStore({ actorTagDefinitions: nextDefinitions }).catch(() => setTagMessage("演员标签分类保存失败。"));
+  }, [actorTagDefinitionsRef, saveCurrentPlayerDataStore]);
+
+  const editCurrentVideoTag = useCallback((oldTag: string, nextLabel: string, isActor: boolean) => {
+    if (!currentVideo) return;
+    const label = nextLabel.trim();
+    const oldKey = normalizeTagKey(oldTag);
+    const nextKey = normalizeTagKey(label);
+    if (!label || !nextKey) {
+      setTagMessage("标签名称不能为空。");
+      return;
+    }
+    const nextTags = Array.from(new Map(
+      (videoTagsRef.current[currentVideo.id] ?? []).map((tag) => {
+        const nextTag = normalizeTagKey(tag) === oldKey ? label : tag;
+        return [normalizeTagKey(nextTag), nextTag];
+      }),
+    )).map(([, tag]) => tag);
+    const nextVideoTags = { ...videoTagsRef.current, [currentVideo.id]: nextTags };
+    const nextDefinitions = { ...actorTagDefinitionsRef.current };
+    if (isActor) nextDefinitions[nextKey] = { key: nextKey, label, updatedAt: Date.now() };
+    else delete nextDefinitions[nextKey];
+    videoTagsRef.current = nextVideoTags;
+    actorTagDefinitionsRef.current = nextDefinitions;
+    setVideoTags(nextVideoTags);
+    setActorTagDefinitions(nextDefinitions);
+    void saveCurrentPlayerDataStore({ videoTags: nextVideoTags, actorTagDefinitions: nextDefinitions })
+      .then(() => setTagMessage("标签已修改。"))
+      .catch(() => setTagMessage("标签修改保存失败。"));
+  }, [actorTagDefinitionsRef, currentVideo, saveCurrentPlayerDataStore, videoTagsRef]);
   const {
     activeTagSuggestionId,
     addTagsToCurrentVideo,
@@ -1227,8 +1296,10 @@ export default function App() {
     currentVideo,
     currentVideoTags,
     isTagDialogOpen,
+    isTagInputActor,
     isTagSuggestionLoading,
     localConfig,
+    onMarkActorTags: (tags) => updateActorTagDefinitions(tags, true),
     setActiveTagSuggestionIndex,
     setIsTagSuggestionLoading,
     setTagInput,
@@ -1500,6 +1571,93 @@ export default function App() {
         : null,
     [homeMediaMode, modeFilteredVideos, progressStore, videoStatsRevision, videoTags],
   );
+  const persistActorState = useCallback((
+    nextProfiles: ActorProfileStore,
+    nextDefinitions: ActorTagDefinitionStore,
+    nextOverrides: VideoActorOverrideStore,
+  ) => {
+    actorProfilesRef.current = nextProfiles;
+    actorTagDefinitionsRef.current = nextDefinitions;
+    videoActorOverridesRef.current = nextOverrides;
+    setActorProfiles(nextProfiles);
+    setActorTagDefinitions(nextDefinitions);
+    setVideoActorOverrides(nextOverrides);
+    void saveCurrentPlayerDataStore({
+      actorProfiles: nextProfiles,
+      actorTagDefinitions: nextDefinitions,
+      videoActorOverrides: nextOverrides,
+    }).catch(() => setMessage("演员数据保存失败。"));
+  }, [actorProfilesRef, actorTagDefinitionsRef, saveCurrentPlayerDataStore, videoActorOverridesRef]);
+
+  useEffect(() => {
+    const nextProfiles = reconcileActorProfiles({
+      profiles: actorProfilesRef.current,
+      videos,
+      videoTags: videoTagsRef.current,
+      actorTagDefinitions: actorTagDefinitionsRef.current,
+    });
+    if (JSON.stringify(nextProfiles) === JSON.stringify(actorProfilesRef.current)) return;
+    persistActorState(nextProfiles, actorTagDefinitionsRef.current, videoActorOverridesRef.current);
+  }, [actorProfilesRef, actorTagDefinitionsRef, persistActorState, videoActorOverridesRef, videoTags, videoTagsRef, videos]);
+
+  const actorInsights = useMemo(() => buildActorInsights({
+    videos: modeFilteredVideos,
+    profiles: actorProfiles,
+    videoTags,
+    actorTagDefinitions,
+    videoActorOverrides,
+  }), [actorProfiles, actorTagDefinitions, modeFilteredVideos, videoActorOverrides, videoTags]);
+  const actorEditVideo = actorEditVideoId ? videos.find((video) => video.id === actorEditVideoId) ?? null : null;
+  const actorEditResolved = actorEditVideo ? resolveVideoActors({
+    video: actorEditVideo,
+    profiles: actorProfiles,
+    videoTags,
+    actorTagDefinitions,
+    videoActorOverrides,
+  }) : { actorIds: [], source: null };
+
+  const saveVideoActorOverride = useCallback((actorIds: string[], newActorName?: string) => {
+    if (!actorEditVideo) return;
+    let nextProfiles = actorProfilesRef.current;
+    const nextActorIds = [...actorIds];
+    if (newActorName) {
+      const created = addActorProfile(nextProfiles, newActorName);
+      nextProfiles = created.profiles;
+      if (created.actorId) nextActorIds.push(created.actorId);
+    }
+    const nextOverrides = {
+      ...videoActorOverridesRef.current,
+      [actorEditVideo.id]: { actorIds: Array.from(new Set(nextActorIds)), updatedAt: Date.now() },
+    };
+    persistActorState(nextProfiles, actorTagDefinitionsRef.current, nextOverrides);
+    setActorEditVideoId(null);
+  }, [actorEditVideo, actorProfilesRef, actorTagDefinitionsRef, persistActorState, videoActorOverridesRef]);
+
+  const restoreVideoActorAutomatic = useCallback(() => {
+    if (!actorEditVideo) return;
+    const nextOverrides = { ...videoActorOverridesRef.current };
+    delete nextOverrides[actorEditVideo.id];
+    persistActorState(actorProfilesRef.current, actorTagDefinitionsRef.current, nextOverrides);
+    setActorEditVideoId(null);
+  }, [actorEditVideo, actorProfilesRef, actorTagDefinitionsRef, persistActorState, videoActorOverridesRef]);
+
+  const renameActor = useCallback((actorId: string, name: string) => {
+    const result = renameActorProfile(actorProfilesRef.current, actorId, name);
+    if (result.conflictActorId) return result.conflictActorId;
+    persistActorState(result.profiles, actorTagDefinitionsRef.current, videoActorOverridesRef.current);
+    return null;
+  }, [actorProfilesRef, actorTagDefinitionsRef, persistActorState, videoActorOverridesRef]);
+
+  const mergeActor = useCallback((sourceActorId: string, targetActorId: string) => {
+    const result = mergeActorProfiles({
+      profiles: actorProfilesRef.current,
+      videoActorOverrides: videoActorOverridesRef.current,
+      sourceActorId,
+      targetActorId,
+    });
+    persistActorState(result.profiles, actorTagDefinitionsRef.current, result.videoActorOverrides);
+    setSelectedActorId(targetActorId);
+  }, [actorProfilesRef, actorTagDefinitionsRef, persistActorState, videoActorOverridesRef]);
   const watchActivityVideos = useMemo(
     () => (isRatingFilterEnabled ? modeFilteredVideos : []),
     [isRatingFilterEnabled, modeFilteredVideos],
@@ -1544,6 +1702,13 @@ export default function App() {
       }),
     [createHomeVideoCard, modeFilteredVideos, selectedWatchActivityDay, watchActivityRevision],
   );
+  const actorThumbnailVideos = useMemo(() => {
+    if (homeMediaMode !== "special" || specialHomeSection !== "actors") return [];
+    const selectedActor = actorInsights.actors.find((entry) => entry.actor.id === selectedActorId);
+    return selectedActor
+      ? selectedActor.videos.slice(0, 50).map((entry) => entry.video)
+      : actorInsights.actors.slice(0, 24).map((entry) => entry.representativeVideo);
+  }, [actorInsights.actors, homeMediaMode, selectedActorId, specialHomeSection]);
   const thumbnailQueueVideoIds = useMemo(
     () =>
       createThumbnailQueueVideoIds({
@@ -1554,10 +1719,11 @@ export default function App() {
         favoriteHomeVideos: favoriteHomeCards.map((card) => card.video),
         watchActivityCarouselVideoIds,
         modeFilteredVideoById,
-        playlistThumbnailVideos,
+        playlistThumbnailVideos: [...actorThumbnailVideos, ...playlistThumbnailVideos],
       }),
     [
       favoriteHomeCards,
+      actorThumbnailVideos,
       isHomeViewVisible,
       modeFilteredVideoById,
       nextEpisodeCard,
@@ -2628,6 +2794,9 @@ export default function App() {
     videoRatingsRef.current = {};
     videoCommentsRef.current = {};
     videoTagsRef.current = {};
+    actorProfilesRef.current = {};
+    actorTagDefinitionsRef.current = {};
+    videoActorOverridesRef.current = {};
     videoStatsRef.current = {};
     watchActivityRef.current = {};
     tagMergeDecisionsRef.current = {};
@@ -2639,6 +2808,9 @@ export default function App() {
     setVideoRatings({});
     setVideoComments({});
     setVideoTags({});
+    setActorProfiles({});
+    setActorTagDefinitions({});
+    setVideoActorOverrides({});
     setWatchActivityRevision((revision) => revision + 1);
     setTagMergeDecisions({});
     setHomeProgressRecap("");
@@ -2832,6 +3004,7 @@ export default function App() {
       const nextVideos = videosRef.current.filter((item) => item.id !== video.id);
       const nextProgress = { ...progressStoreRef.current };
       const nextVideoTags = { ...videoTagsRef.current };
+      const nextVideoActorOverrides = { ...videoActorOverridesRef.current };
       const nextVideoRatings = { ...videoRatingsRef.current };
       const nextVideoComments = { ...videoCommentsRef.current };
       const nextVideoStats = { ...videoStatsRef.current };
@@ -2846,6 +3019,7 @@ export default function App() {
 
       delete nextProgress[video.id];
       delete nextVideoTags[video.id];
+      delete nextVideoActorOverrides[video.id];
       delete nextVideoRatings[video.id];
       delete nextVideoComments[video.id];
       delete nextVideoStats[createVideoStatsKey(video)];
@@ -2860,6 +3034,7 @@ export default function App() {
       videosRef.current = nextVideos;
       progressStoreRef.current = nextProgress;
       videoTagsRef.current = nextVideoTags;
+      videoActorOverridesRef.current = nextVideoActorOverrides;
       videoRatingsRef.current = nextVideoRatings;
       videoCommentsRef.current = nextVideoComments;
       videoStatsRef.current = nextVideoStats;
@@ -2873,6 +3048,7 @@ export default function App() {
       setVideos(nextVideos);
       setProgressStore(nextProgress);
       setVideoTags(nextVideoTags);
+      setVideoActorOverrides(nextVideoActorOverrides);
       setVideoRatings(nextVideoRatings);
       setVideoComments(nextVideoComments);
       setVideoHighlights(nextVideoHighlights);
@@ -2960,6 +3136,7 @@ export default function App() {
           progress: nextProgress,
           favorites: Array.from(nextFavorites),
           videoTags: nextVideoTags,
+          videoActorOverrides: nextVideoActorOverrides,
           videoRatings: nextVideoRatings,
           videoComments: nextVideoComments,
           videoStats: nextVideoStats,
@@ -3988,6 +4165,9 @@ export default function App() {
       setAiMessage("");
       progressStoreRef.current = {};
       videoTagsRef.current = {};
+      actorProfilesRef.current = {};
+      actorTagDefinitionsRef.current = {};
+      videoActorOverridesRef.current = {};
       tagMergeDecisionsRef.current = {};
       playerPreferencesRef.current = {
         playlistSortMode,
@@ -4004,6 +4184,9 @@ export default function App() {
       setProgressStore({});
       setFavoriteVideoIds(new Set());
       setVideoTags({});
+      setActorProfiles({});
+      setActorTagDefinitions({});
+      setVideoActorOverrides({});
       setTagMergeDecisions({});
       setIsSeriesMode(playerPreferencesRef.current.isSeriesMode);
       setSelectedSeriesKey(playerPreferencesRef.current.selectedSeriesKey);
@@ -5335,7 +5518,14 @@ export default function App() {
 
               <HomeRecentSection cards={recentHomeCards} renderCard={renderHomeListCard} />
 
-              {isRatingFilterEnabled ? (
+              {homeMediaMode === "special" ? (
+                <section className="special-view-switch" aria-label="特殊模式视图">
+                  <button className={specialHomeSection === "overview" ? "active" : ""} type="button" onClick={() => setSpecialHomeSection("overview")}>概览</button>
+                  <button className={specialHomeSection === "actors" ? "active" : ""} type="button" onClick={() => setSpecialHomeSection("actors")}>演员</button>
+                </section>
+              ) : null}
+
+              {isRatingFilterEnabled && specialHomeSection === "overview" ? (
                 <WatchActivitySection
                   carouselCardsByDate={watchActivityCarouselCardsByDate}
                   carouselTick={watchActivityCarouselTick}
@@ -5361,19 +5551,34 @@ export default function App() {
                 />
               ) : null}
 
-              <HomeSpecialInsightsSection
-                activeTab={specialInsightTab}
-                formatDuration={formatCumulativeDuration}
-                formatRelativeTime={formatRelativeTime}
-                formatVideoMetric={formatSpecialInsightMetric}
-                insights={specialModeInsights}
-                onOpenVideo={openVideoFromHome}
-                onSelectTag={runSpecialInsightTagSearch}
-                onTabChange={setSpecialInsightTab}
-                rankingVideos={specialInsightRankingVideos}
-                videoComments={videoComments}
-                videoRatings={videoRatings}
-              />
+              {homeMediaMode === "special" && specialHomeSection === "actors" ? (
+                <ActorDashboardSection
+                  actors={actorInsights.actors}
+                  unresolvedVideos={actorInsights.unresolvedVideos}
+                  profiles={actorProfiles}
+                  selectedActorId={selectedActorId}
+                  onSelectActor={setSelectedActorId}
+                  onOpenVideo={openVideoFromHome}
+                  onEditVideoActors={(video) => setActorEditVideoId(video.id)}
+                  onRenameActor={renameActor}
+                  onMergeActor={mergeActor}
+                  onThumbnailError={markVideoThumbnailFailed}
+                />
+              ) : (
+                <HomeSpecialInsightsSection
+                  activeTab={specialInsightTab}
+                  formatDuration={formatCumulativeDuration}
+                  formatRelativeTime={formatRelativeTime}
+                  formatVideoMetric={formatSpecialInsightMetric}
+                  insights={specialModeInsights}
+                  onOpenVideo={openVideoFromHome}
+                  onSelectTag={runSpecialInsightTagSearch}
+                  onTabChange={setSpecialInsightTab}
+                  rankingVideos={specialInsightRankingVideos}
+                  videoComments={videoComments}
+                  videoRatings={videoRatings}
+                />
+              )}
             </div>
 
             <HomeSideColumn
@@ -6050,6 +6255,8 @@ export default function App() {
       offset={tagDialogOffset}
       currentVideoName={currentVideo?.name ?? ""}
       currentVideoTags={currentVideoTags}
+      actorTagKeys={new Set(Object.keys(actorTagDefinitions))}
+      isTagInputActor={isTagInputActor}
       tagInput={tagInput}
       tagInputSuggestions={tagInputSuggestions}
       resolvedActiveTagSuggestionIndex={resolvedActiveTagSuggestionIndex}
@@ -6067,8 +6274,15 @@ export default function App() {
       hasCurrentVideo={Boolean(currentVideo)}
       onClose={() => setIsTagDialogOpen(false)}
       onRemoveTag={removeTagFromCurrentVideo}
-      onSubmitTagInput={submitTagInput}
+      onEditTag={editCurrentVideoTag}
+      onToggleActorTag={(tag, isActor) => updateActorTagDefinitions([tag], isActor)}
+      getActorTagUsageCount={(tag) => Object.values(videoTags).filter((tags) => tags.some((item) => normalizeTagKey(item) === normalizeTagKey(tag))).length}
+      onSubmitTagInput={() => {
+        submitTagInput();
+        setIsTagInputActor(false);
+      }}
       onTagInputChange={setTagInput}
+      onTagInputActorChange={setIsTagInputActor}
       onActiveTagSuggestionIndexChange={setActiveTagSuggestionIndex}
       onSelectTagSuggestion={submitTagInputSuggestion}
       onGenerateAutoTags={() => void generateAutoTagsForCurrentVideo()}
@@ -6081,6 +6295,16 @@ export default function App() {
       onPointerDown={startTagDialogDrag}
       onPointerMove={moveTagDialogDrag}
       onPointerUp={stopTagDialogDrag}
+    />
+    <ActorEditDialog
+      video={actorEditVideo}
+      source={actorEditResolved.source}
+      profiles={actorProfiles}
+      initialActorIds={actorEditResolved.actorIds}
+      isManual={Boolean(actorEditVideo && videoActorOverrides[actorEditVideo.id])}
+      onClose={() => setActorEditVideoId(null)}
+      onSave={saveVideoActorOverride}
+      onRestoreAutomatic={restoreVideoActorAutomatic}
     />
     <DanmakuDialog
       isOpen={isDanmakuDialogOpen}

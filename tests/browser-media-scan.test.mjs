@@ -97,3 +97,21 @@ test("collects videos from browser directories in batches", async () => {
     URL.createObjectURL = originalCreateObjectUrl;
   }
 });
+
+test("collects actors only from a same-basename browser nfo", async () => {
+  const originalCreateObjectUrl = URL.createObjectURL;
+  URL.createObjectURL = (file) => `blob:${file.name}`;
+  try {
+    const nfoText = "<movie><actor><name>Actor A</name><type>Actor</type></actor><actor><name>Actor B</name></actor></movie>";
+    const directory = createDirectoryEntry("Root", [
+      createFileEntry("Movie.mp4", { size: 100 * 1024 * 1024, lastModified: 10 }),
+      createFileEntry("movie.NFO", { size: nfoText.length, arrayBuffer: async () => new TextEncoder().encode(nfoText).buffer }),
+      createFileEntry("other.nfo", { size: 10, arrayBuffer: async () => new ArrayBuffer(0) }),
+    ]);
+    const batches = [];
+    for await (const batch of browserMediaScan.collectVideos(directory, "root-a")) batches.push(batch);
+    assert.deepEqual(batches[0].videos[0].actorHints, { fileName: "movie.NFO", names: ["Actor A", "Actor B"], status: "parsed" });
+  } finally {
+    URL.createObjectURL = originalCreateObjectUrl;
+  }
+});
