@@ -8506,6 +8506,12 @@ button {
   flex: 0 0 auto;
 }
 
+.actor-video-rating-tags .actor-video-empty-chip {
+  border-color: rgba(148, 163, 184, 0.2);
+  color: var(--muted-text);
+  background: rgba(148, 163, 184, 0.08);
+}
+
 .actor-video-playback-stats {
   display: flex;
   flex-wrap: wrap;

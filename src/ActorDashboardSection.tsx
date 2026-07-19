@@ -203,14 +203,18 @@ export function ActorDashboardSection({
         <div className="actor-video-grid">
           {visibleActorVideos.map(({ video, source, lastWatchedAt }) => {
             const stats = videoStats[createVideoStatsKey(video)];
+            const tags = videoTags[video.id] ?? [];
+            const rating = videoRatings[video.id];
+            const comment = videoComments[video.id];
+            const hasRating = typeof rating === "number" || Boolean(comment?.trim());
             return <article className="actor-video-card" key={video.id}>
               <button type="button" onClick={() => onOpenVideo(video)}>
                 <span className={`actor-cover ${video.thumbnailUrl ? "has-image" : ""} ${video.thumbnailUrl && !hasNamedVideoArtwork(video) ? "generated-thumbnail" : ""}`}>{video.thumbnailUrl ? <img src={video.thumbnailUrl} alt="" onError={() => onThumbnailError(video.id)} /> : <Film size={28} />}</span>
                 <strong>{video.name}</strong>
                 <span className="actor-video-metadata">
                   <span className="actor-video-rating-tags">
-                    <RatingChip rating={videoRatings[video.id]} comment={videoComments[video.id]} />
-                    <TagChips tags={videoTags[video.id] ?? []} limit={8} compact />
+                    {hasRating ? <RatingChip rating={rating} comment={comment} /> : <span className="rating-chip actor-video-empty-chip">暂无评分</span>}
+                    {tags.length ? <TagChips tags={tags} limit={8} compact /> : <span className="tag-chip-row compact"><span className="tag-chip actor-video-empty-chip">暂无标签</span></span>}
                   </span>
                   <span className="actor-video-playback-stats">
                     <small title={`播放次数：${stats?.playCount ?? 0}`}><Play size={13} /> {stats?.playCount ?? 0} 次播放</small>
