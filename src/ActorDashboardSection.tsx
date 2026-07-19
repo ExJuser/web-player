@@ -32,19 +32,25 @@ type ActorDashboardSectionProps = {
 
 function StoredActorCover({ actorId, actorName, fallbackVideo, libraryId, onAvailabilityChange, onThumbnailError, version }: { actorId: string; actorName: string; fallbackVideo: VideoItem; libraryId: string | null; onAvailabilityChange: (actorId: string, isAvailable: boolean) => void; onThumbnailError: (videoId: string) => void; version: number }) {
   const [coverUrl, setCoverUrl] = useState<string | null>(null);
+  const [hasResolvedCover, setHasResolvedCover] = useState(false);
 
   useEffect(() => {
     let isCancelled = false;
     let nextUrl: string | null = null;
     setCoverUrl(null);
+    setHasResolvedCover(false);
     void readActorCover(libraryId, actorId).then((cover) => {
       if (isCancelled) return;
       onAvailabilityChange(actorId, Boolean(cover));
+      setHasResolvedCover(true);
       if (!cover) return;
       nextUrl = URL.createObjectURL(cover);
       setCoverUrl(nextUrl);
     }).catch(() => {
-      if (!isCancelled) onAvailabilityChange(actorId, false);
+      if (!isCancelled) {
+        onAvailabilityChange(actorId, false);
+        setHasResolvedCover(true);
+      }
     });
     return () => {
       isCancelled = true;
@@ -60,7 +66,7 @@ function StoredActorCover({ actorId, actorName, fallbackVideo, libraryId, onAvai
     } else {
       onThumbnailError(fallbackVideo.id);
     }
-  }} /> : <UserRound size={32} aria-label={`${actorName}暂无封面`} />}</span>;
+  }} /> : <UserRound size={32} aria-label={`${actorName}暂无封面`} />}{hasResolvedCover && visibleCoverUrl ? <small className={`actor-cover-source${coverUrl ? " stored" : " automatic"}`}>{coverUrl ? "独立封面" : "自动封面"}</small> : null}</span>;
 }
 
 export function ActorDashboardSection({
