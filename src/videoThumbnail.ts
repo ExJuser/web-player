@@ -267,6 +267,13 @@ async function createVideoThumbnailBlob(video: VideoItem) {
 }
 
 export async function loadVideoThumbnail(libraryId: string | null, video: VideoItem) {
+  if (video.posterFile) {
+    return { thumbnailUrl: URL.createObjectURL(video.posterFile), metadata: undefined };
+  }
+  if (video.posterUrl) {
+    return { thumbnailUrl: video.posterUrl, metadata: undefined };
+  }
+
   const cachedThumbnail = await withTimeout(
     readCachedThumbnail(libraryId, video.id),
     thumbnailCacheTimeout,

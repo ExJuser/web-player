@@ -49,6 +49,17 @@ export function isPhotoFile(name: string) {
   return hasExtension(name, PHOTO_EXTENSIONS);
 }
 
+export function findVideoPosterName(videoName: string, fileNames: string[]) {
+  const dotIndex = videoName.lastIndexOf(".");
+  const baseName = dotIndex >= 0 ? videoName.slice(0, dotIndex) : videoName;
+  const namesByLowerCase = new Map(fileNames.map((fileName) => [fileName.toLowerCase(), fileName]));
+  for (const extension of PHOTO_EXTENSIONS) {
+    const match = namesByLowerCase.get(`${baseName}-poster${extension}`.toLowerCase());
+    if (match) return match;
+  }
+  return undefined;
+}
+
 export function basePathOf(path: string) {
   const dotIndex = path.lastIndexOf(".");
   return dotIndex >= 0 ? path.slice(0, dotIndex).toLowerCase() : path.toLowerCase();

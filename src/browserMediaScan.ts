@@ -9,6 +9,7 @@ import type {
 import {
   createGlobalVideoId,
   createLegacyVideoId,
+  findVideoPosterName,
   isSubtitleFile,
   isVideoFile,
   shouldFilterLocalVideoFile,
@@ -104,6 +105,15 @@ export async function* collectVideos(
             parentDirectory: handle,
             playbackSource: "browser",
           };
+          const posterName = findVideoPosterName(entry.name, fileEntryNames);
+          const posterEntry = posterName ? fileEntriesByName.get(posterName) : undefined;
+          if (posterEntry) {
+            try {
+              video.posterFile = await posterEntry.getFile();
+            } catch {
+              // Fall back to the generated thumbnail when the poster cannot be read.
+            }
+          }
           const nfoName = findMatchingNfoName(entry.name);
           const nfoEntry = nfoName ? fileEntriesByName.get(nfoName) : undefined;
           if (nfoEntry) {
@@ -146,6 +156,18 @@ export async function* collectVideos(
 
 export function collectVideosFromFiles(files: FileList | File[]): MediaCollection {
   const collection = createEmptyMediaCollection();
+  const filesByRelativePath = new Map<string, File>();
+  const fileNamesByDirectoryPath = new Map<string, string[]>();
+  for (const file of Array.from(files)) {
+    const browserRelativePath = (file as File & { webkitRelativePath?: string }).webkitRelativePath;
+    const relativePath = (browserRelativePath || file.name).replace(/\\/g, "/");
+    const separatorIndex = relativePath.lastIndexOf("/");
+    const directoryPath = separatorIndex >= 0 ? relativePath.slice(0, separatorIndex + 1) : "";
+    filesByRelativePath.set(relativePath.toLowerCase(), file);
+    const directoryFileNames = fileNamesByDirectoryPath.get(directoryPath.toLowerCase()) ?? [];
+    directoryFileNames.push(relativePath.slice(separatorIndex + 1));
+    fileNamesByDirectoryPath.set(directoryPath.toLowerCase(), directoryFileNames);
+  }
 
   for (const file of Array.from(files)) {
     const browserRelativePath = (file as File & { webkitRelativePath?: string }).webkitRelativePath;
@@ -158,6 +180,9 @@ export function collectVideosFromFiles(files: FileList | File[]): MediaCollectio
         collection.filteredSmallVideos += 1;
         continue;
       }
+      const directoryPath = relativePath.includes("/") ? relativePath.slice(0, relativePath.lastIndexOf("/") + 1) : "";
+      const posterName = findVideoPosterName(name, fileNamesByDirectoryPath.get(directoryPath.toLowerCase()) ?? []);
+      const posterFile = posterName ? filesByRelativePath.get(`${directoryPath}${posterName}`.toLowerCase()) : undefined;
       collection.videos.push({
         id: createLegacyVideoId(relativePath, file),
         name,
@@ -167,6 +192,7 @@ export function collectVideosFromFiles(files: FileList | File[]): MediaCollectio
         size: file.size,
         lastModified: file.lastModified,
         playbackSource: "browser",
+        posterFile,
       });
     } else if (isSubtitleFile(name)) {
       collection.scannedFiles += 1;

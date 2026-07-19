@@ -27,6 +27,14 @@ test("normalizes object URLs and base paths", () => {
   assert.equal(libraryUtils.basePathOf("Show/E01"), "show/e01");
 });
 
+test("matches a same-basename poster image case-insensitively", () => {
+  assert.equal(
+    libraryUtils.findVideoPosterName("Movie.Name.mkv", ["other.jpg", "movie.name-POSTER.WEBP"]),
+    "movie.name-POSTER.WEBP",
+  );
+  assert.equal(libraryUtils.findVideoPosterName("Movie.Name.mkv", ["Movie.Name.jpg", "other-poster.jpg"]), undefined);
+});
+
 test("creates stable media ids", () => {
   const file = { size: 1024, lastModified: 1700000000000 };
 

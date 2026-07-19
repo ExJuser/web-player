@@ -61,7 +61,7 @@ import {
 import { createWatchActivityKey, isValidWatchActivityDate } from "./watchActivityInsights";
 
 const LEGACY_THUMBNAIL_STORE_NAME = "thumbnails";
-export const mediaRootScanCacheVersion = 1;
+export const mediaRootScanCacheVersion = 2;
 
 export function createProgress(currentTime: number, duration: number, completed = false): PlaybackProgress | null {
   if (!Number.isFinite(currentTime) || !Number.isFinite(duration)) return null;
@@ -731,6 +731,7 @@ function parseCachedServerVideo(source: unknown): VideoItem | null {
     lastModified: parseFiniteNumber(video.lastModified),
     mediaRootId: video.mediaRootId,
     playbackSource: "server",
+    ...(typeof video.posterUrl === "string" && video.posterUrl.trim() ? { posterUrl: video.posterUrl } : {}),
     ...(parseVideoActorHints(video.actorHints) ? { actorHints: parseVideoActorHints(video.actorHints)! } : {}),
     ...(parseFiniteNumber(video.duration) > 0 ? { duration: parseFiniteNumber(video.duration) } : {}),
     ...(parseFiniteNumber(video.width) > 0 ? { width: parseFiniteNumber(video.width) } : {}),
@@ -863,6 +864,7 @@ function serializeCachedMediaRootScan(scan: CachedMediaRootScan): CachedMediaRoo
       lastModified: video.lastModified,
       mediaRootId: video.mediaRootId,
       playbackSource: "server",
+      posterUrl: video.posterUrl,
       duration: video.duration,
       width: video.width,
       height: video.height,

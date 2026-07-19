@@ -38,6 +38,7 @@ test("collects dropped browser videos and subtitles", () => {
       createFile({ name: "episode.mp4", webkitRelativePath: "Show/episode.mp4" }),
       createFile({ name: "episode.srt", size: 200, webkitRelativePath: "Show/episode.srt" }),
       createFile({ name: "tiny.mp4", size: 1024, webkitRelativePath: "Show/tiny.mp4" }),
+      createFile({ name: "episode-poster.jpg", size: 1024, webkitRelativePath: "Show/episode-poster.jpg" }),
       createFile({ name: "cover.jpg", size: 1024, webkitRelativePath: "Show/cover.jpg" }),
     ]);
 
@@ -46,6 +47,7 @@ test("collects dropped browser videos and subtitles", () => {
     assert.deepEqual(media.videos.map((video) => video.relativePath), ["Show/episode.mp4"]);
     assert.deepEqual(media.subtitles.map((subtitle) => subtitle.relativePath), ["Show/episode.srt"]);
     assert.equal(media.videos[0].url, "blob:episode.mp4");
+    assert.equal(media.videos[0].posterFile?.name, "episode-poster.jpg");
   } finally {
     URL.createObjectURL = originalCreateObjectUrl;
   }
@@ -74,6 +76,7 @@ test("collects videos from browser directories in batches", async () => {
     const directory = createDirectoryEntry("Root", [
       createDirectoryEntry("Season 1", [
         createFileEntry("Episode 01.mp4", { size: 100 * 1024 * 1024, lastModified: 10 }),
+        createFileEntry("episode 01-POSTER.webp", { size: 1024, lastModified: 9 }),
         createFileEntry("Episode 01.srt", { size: 200, lastModified: 11 }),
         createFileEntry("tiny.mp4", { size: 1024, lastModified: 12 }),
       ]),
@@ -92,6 +95,7 @@ test("collects videos from browser directories in batches", async () => {
     assert.deepEqual(batches[0].subtitles.map((subtitle) => subtitle.relativePath), ["Season 1/Episode 01.srt"]);
     assert.equal(batches[0].videos[0].id, "root-a|Season 1/Episode 01.mp4|104857600|10");
     assert.equal(batches[0].videos[0].url, "blob:Episode 01.mp4");
+    assert.equal(batches[0].videos[0].posterFile?.name, "episode 01-POSTER.webp");
     assert.equal(batches[0].subtitles[0].mediaRootId, "root-a");
   } finally {
     URL.createObjectURL = originalCreateObjectUrl;

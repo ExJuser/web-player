@@ -32,6 +32,17 @@ function shouldFilterVideoFile(fileName, size) {
   return size < smallVideoFileThresholdBytes || isIgnoredVideoFile(fileName);
 }
 
+function findVideoPosterName(videoName, fileNames) {
+  const videoExtension = path.extname(videoName);
+  const baseName = path.basename(videoName, videoExtension);
+  const namesByLowerCase = new Map(fileNames.map((fileName) => [fileName.toLowerCase(), fileName]));
+  for (const extension of photoExtensions) {
+    const match = namesByLowerCase.get(`${baseName}-poster${extension}`.toLowerCase());
+    if (match) return match;
+  }
+  return undefined;
+}
+
 async function statSupportedFiles(entries, directory, isSupported) {
   const supportedEntries = entries.filter((entry) => entry.isFile() && isSupported(entry.name));
   const results = new Array(supportedEntries.length);
@@ -299,6 +310,10 @@ export async function scanMediaRoot(root, options = {}) {
           mediaRootId: root.id,
           playbackSource: "server",
         };
+        const posterName = findVideoPosterName(entry.name, fileEntryNames);
+        if (posterName) {
+          video.posterUrl = encodeMediaUrl(root.id, [...segments, posterName].join("/"));
+        }
         const nfoName = findMatchingNfoName(entry.name);
         if (nfoName) {
           try {

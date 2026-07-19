@@ -39,6 +39,8 @@ export type VideoItem = {
   height?: number;
   thumbnailUrl?: string;
   thumbnailStatus?: "idle" | "loading" | "ready" | "failed";
+  posterFile?: File;
+  posterUrl?: string;
   parentDirectory?: FileSystemDirectoryHandle;
   mediaRootId?: string;
   playbackSource?: "browser" | "server";

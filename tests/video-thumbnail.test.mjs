@@ -50,3 +50,17 @@ test("returns video display size only when both dimensions are present", () => {
   assert.equal(thumbnail.getVideoDisplaySize(1920, 0), null);
   assert.equal(thumbnail.getVideoDisplaySize(undefined, 1080), null);
 });
+
+test("uses a same-directory poster before cached or generated thumbnails", async () => {
+  const originalCreateObjectUrl = URL.createObjectURL;
+  URL.createObjectURL = (file) => `blob:${file.name}`;
+  try {
+    const result = await thumbnail.loadVideoThumbnail("library", {
+      id: "movie",
+      posterFile: { name: "movie-poster.jpg" },
+    });
+    assert.equal(result.thumbnailUrl, "blob:movie-poster.jpg");
+  } finally {
+    URL.createObjectURL = originalCreateObjectUrl;
+  }
+});
