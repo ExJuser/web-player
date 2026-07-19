@@ -64,6 +64,7 @@ import { parseJsonBody, readBody, sanitizeStorageId } from "./requestUtils.mjs";
 import { LocalDataSqliteStore } from "./sqliteStorage.mjs";
 import { BoundedLruCache } from "./boundedLruCache.mjs";
 import { createPlayerDeferredData, createPlayerStartupData } from "./playerDataViews.mjs";
+import { createSystemResourceStatus } from "./systemResources.mjs";
 
 let dataRoot;
 let librariesRoot;
@@ -907,6 +908,11 @@ export function playerDataApiPlugin({ projectRoot, env }) {
 
       if (url.pathname === "/api/cache-status" && request.method === "GET") {
         sendJson(response, 200, await createCacheStatus());
+        return;
+      }
+
+      if (url.pathname === "/api/system-resources" && request.method === "GET") {
+        sendJson(response, 200, await createSystemResourceStatus());
         return;
       }
 
