@@ -8209,6 +8209,19 @@ button {
   padding: 0 10px;
 }
 
+.actor-cover-header-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
+}
+
+.actor-cover-header-actions .secondary-button {
+  width: auto;
+  min-width: auto;
+  height: 34px;
+  padding: 0 10px;
+}
+
 .actor-dashboard-header h2,
 .actor-dashboard-header p {
   margin: 0;

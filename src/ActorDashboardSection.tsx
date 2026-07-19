@@ -1,4 +1,4 @@
-import { ArrowLeft, Film, ImageMinus, ImagePlus, Pencil, Search, UserRound, Users } from "lucide-react";
+import { ArrowLeft, Film, ImageMinus, ImagePlus, Pencil, Search, Upload, UserRound, Users } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { ActorInsight } from "./actorUtils";
@@ -22,6 +22,7 @@ type ActorDashboardSectionProps = {
   actorCoverVersions: Record<string, number>;
   actorCoverPendingAction: string | null;
   onSetActorCover: (actorId: string, video: VideoItem) => void;
+  onUploadActorCover: (actorId: string, file: File) => void;
   onRemoveActorCover: (actorId: string) => void;
 };
 
@@ -59,6 +60,7 @@ export function ActorDashboardSection({
   actorCoverVersions,
   actorCoverPendingAction,
   onSetActorCover,
+  onUploadActorCover,
   onRemoveActorCover,
 }: ActorDashboardSectionProps) {
   const [query, setQuery] = useState("");
@@ -71,6 +73,7 @@ export function ActorDashboardSection({
   const [pendingCoverRemovalActorId, setPendingCoverRemovalActorId] = useState<string | null>(null);
   const actorLoadMoreRef = useRef<HTMLDivElement>(null);
   const actorVideoLoadMoreRef = useRef<HTMLDivElement>(null);
+  const actorCoverFileInputRef = useRef<HTMLInputElement>(null);
   const selected = actors.find((entry) => entry.actor.id === selectedActorId) ?? null;
 
   const filteredActors = useMemo(() => {
@@ -119,14 +122,22 @@ export function ActorDashboardSection({
         <div className="actor-dashboard-header">
           <button className="secondary-button" type="button" onClick={() => onSelectActor(null)}><ArrowLeft size={16} /> 返回演员列表</button>
           <div><h2>{selected.actor.name}</h2><p>{selected.videos.length} 部影片</p></div>
-          <button className="secondary-button" type="button" disabled={Boolean(actorCoverPendingAction)} onClick={() => {
-            if (pendingCoverRemovalActorId === selected.actor.id) {
-              onRemoveActorCover(selected.actor.id);
-              setPendingCoverRemovalActorId(null);
-            } else {
-              setPendingCoverRemovalActorId(selected.actor.id);
-            }
-          }}><ImageMinus size={15} /> {pendingCoverRemovalActorId === selected.actor.id ? "确认移除封面" : "移除独立封面"}</button>
+          <span className="actor-cover-header-actions">
+            <input ref={actorCoverFileInputRef} type="file" accept="image/*" hidden onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = "";
+              if (file) onUploadActorCover(selected.actor.id, file);
+            }} />
+            <button className="secondary-button" type="button" disabled={Boolean(actorCoverPendingAction)} onClick={() => { setPendingCoverRemovalActorId(null); actorCoverFileInputRef.current?.click(); }}><Upload size={15} /> {actorCoverPendingAction === `upload:${selected.actor.id}` ? "上传中..." : "上传封面"}</button>
+            <button className="secondary-button" type="button" disabled={Boolean(actorCoverPendingAction)} onClick={() => {
+              if (pendingCoverRemovalActorId === selected.actor.id) {
+                onRemoveActorCover(selected.actor.id);
+                setPendingCoverRemovalActorId(null);
+              } else {
+                setPendingCoverRemovalActorId(selected.actor.id);
+              }
+            }}><ImageMinus size={15} /> {pendingCoverRemovalActorId === selected.actor.id ? "确认移除封面" : "移除独立封面"}</button>
+          </span>
         </div>
         <div className="actor-video-grid">
           {visibleActorVideos.map(({ video, source }) => (
@@ -135,7 +146,7 @@ export function ActorDashboardSection({
                 <span className={`actor-cover ${video.thumbnailUrl ? "has-image" : ""}`}>{video.thumbnailUrl ? <img src={video.thumbnailUrl} alt="" onError={() => onThumbnailError(video.id)} /> : <Film size={28} />}</span>
                 <strong>{video.name}</strong>
               </button>
-              <div><span className={`actor-source ${source}`}>{source === "manual" ? "人工" : source === "nfo" ? "NFO" : "演员标签"}</span><span className="actor-video-actions"><button className="secondary-button actor-correction-button" type="button" disabled={Boolean(actorCoverPendingAction)} onClick={() => onSetActorCover(selected.actor.id, video)}><ImagePlus size={13} /> {actorCoverPendingAction === `set:${video.id}` ? "保存中..." : "设为封面"}</button><button className="secondary-button actor-correction-button" type="button" onClick={() => onEditVideoActors(video)}><Pencil size={13} /> 纠正演员</button></span></div>
+              <div><span className={`actor-source ${source}`}>{source === "manual" ? "人工" : source === "nfo" ? "NFO" : "演员标签"}</span><span className="actor-video-actions"><button className="secondary-button actor-correction-button" type="button" disabled={Boolean(actorCoverPendingAction)} onClick={() => { setPendingCoverRemovalActorId(null); onSetActorCover(selected.actor.id, video); }}><ImagePlus size={13} /> {actorCoverPendingAction === `set:${video.id}` ? "保存中..." : "设为封面"}</button><button className="secondary-button actor-correction-button" type="button" onClick={() => onEditVideoActors(video)}><Pencil size={13} /> 纠正演员</button></span></div>
             </article>
           ))}
         </div>

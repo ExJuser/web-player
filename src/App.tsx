@@ -363,6 +363,7 @@ import {
 } from "./appBrowserUtils";
 import { revokeObjectUrl, revokeObjectUrls } from "./appResourceCleanup";
 import { createPrimaryHomeLabels, formatSpecialInsightVideoMetric } from "./appViewModel";
+import { createUploadedActorCoverBlob } from "./actorCoverImage";
 import { AiSubtitleDialog, type AiSubtitleTab } from "./AiSubtitleDialog";
 import { DanmakuDialog } from "./DanmakuDialog";
 import {
@@ -2728,6 +2729,19 @@ export default function App() {
       setMessage("演员独立封面已移除。");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "演员封面移除失败。");
+    } finally {
+      setActorCoverPendingAction(null);
+    }
+  }, [libraryIdRef]);
+
+  const saveUploadedActorCover = useCallback(async (actorId: string, file: File) => {
+    setActorCoverPendingAction(`upload:${actorId}`);
+    try {
+      await writeActorCover(libraryIdRef.current, actorId, await createUploadedActorCoverBlob(file));
+      setActorCoverVersions((versions) => ({ ...versions, [actorId]: (versions[actorId] ?? 0) + 1 }));
+      setMessage("上传的演员独立封面已保存。");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "演员封面上传失败。");
     } finally {
       setActorCoverPendingAction(null);
     }
@@ -5652,6 +5666,7 @@ export default function App() {
                   onEditVideoActors={(video) => setActorEditVideoId(video.id)}
                   onThumbnailError={markVideoThumbnailFailed}
                   onSetActorCover={(actorId, video) => void saveActorCoverFromVideo(actorId, video)}
+                  onUploadActorCover={(actorId, file) => void saveUploadedActorCover(actorId, file)}
                   onRemoveActorCover={(actorId) => void removeStoredActorCover(actorId)}
                 />
               ) : (
