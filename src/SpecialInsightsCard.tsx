@@ -1,7 +1,8 @@
 import type { CSSProperties, ReactNode } from "react";
 
+import { HomeCardThumbnail } from "./HomeVideoCards";
 import { RatingChip, TagChips } from "./MetadataChips";
-import type { VideoCommentStore, VideoItem, VideoRatingStore } from "./playerTypes";
+import type { HomeVideoCard, VideoCommentStore, VideoItem, VideoRatingStore } from "./playerTypes";
 import type { SpecialInsightTab, SpecialModeInsights, SpecialModeTagInsight, SpecialModeVideoInsight } from "./specialInsights";
 
 type SpecialInsightTabOption = {
@@ -15,6 +16,7 @@ type SpecialTagMetric = "videoCount" | "played" | "emission";
 type SpecialInsightsCardProps = {
   insights: SpecialModeInsights;
   activeTab: SpecialInsightTab;
+  createCard: (video: VideoItem) => HomeVideoCard;
   tabOptions: SpecialInsightTabOption[];
   tagGroupIcons: Record<SpecialTagMetric, ReactNode>;
   rankingVideos: SpecialModeVideoInsight[];
@@ -26,22 +28,27 @@ type SpecialInsightsCardProps = {
   onTabChange: (tab: SpecialInsightTab) => void;
   onOpenVideo: (video: VideoItem) => void;
   onSelectTag: (tag: string) => void;
+  onThumbnailError: (videoId: string) => void;
 };
 
 function SpecialInsightVideoRow({
   insight,
   index,
+  card,
   rating,
   comment,
   formatMetric,
   onOpenVideo,
+  onThumbnailError,
 }: {
   insight: SpecialModeVideoInsight;
   index: number;
+  card: HomeVideoCard;
   rating?: number;
   comment?: string;
   formatMetric: (insight: SpecialModeVideoInsight) => string;
   onOpenVideo: (video: VideoItem) => void;
+  onThumbnailError: (videoId: string) => void;
 }) {
   return (
     <button
@@ -51,6 +58,7 @@ function SpecialInsightVideoRow({
       title={insight.video.relativePath || insight.video.name}
     >
       <span className="special-insight-rank">{index + 1}</span>
+      <HomeCardThumbnail card={card} fallbackIndex={index} onThumbnailError={onThumbnailError} />
       <span className="special-insight-row-copy">
         <strong>{insight.video.name}</strong>
         <small>{formatMetric(insight)}</small>
@@ -163,6 +171,7 @@ function SpecialTagChartGroup({
 export function SpecialInsightsCard({
   insights,
   activeTab,
+  createCard,
   tabOptions,
   tagGroupIcons,
   rankingVideos,
@@ -174,6 +183,7 @@ export function SpecialInsightsCard({
   onTabChange,
   onOpenVideo,
   onSelectTag,
+  onThumbnailError,
 }: SpecialInsightsCardProps) {
   return (
     <section className="home-section special-insights-card">
@@ -222,12 +232,14 @@ export function SpecialInsightsCard({
         <div className="special-insight-list">
           {rankingVideos.map((insight, index) => (
             <SpecialInsightVideoRow
+              card={createCard(insight.video)}
               comment={videoComments[insight.video.id]}
               formatMetric={formatVideoMetric}
               index={index}
               insight={insight}
               key={`${activeTab}-${insight.video.id}`}
               onOpenVideo={onOpenVideo}
+              onThumbnailError={onThumbnailError}
               rating={videoRatings[insight.video.id]}
             />
           ))}

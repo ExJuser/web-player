@@ -5694,6 +5694,7 @@ export default function App() {
               ) : (
                 <HomeSpecialInsightsSection
                   activeTab={specialInsightTab}
+                  createCard={createHomeVideoCard}
                   formatDuration={formatCumulativeDuration}
                   formatRelativeTime={formatRelativeTime}
                   formatVideoMetric={formatSpecialInsightMetric}
@@ -5701,6 +5702,7 @@ export default function App() {
                   onOpenVideo={openVideoFromHome}
                   onSelectTag={runSpecialInsightTagSearch}
                   onTabChange={setSpecialInsightTab}
+                  onThumbnailError={markVideoThumbnailFailed}
                   rankingVideos={specialInsightRankingVideos}
                   videoComments={videoComments}
                   videoRatings={videoRatings}

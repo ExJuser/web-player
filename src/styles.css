@@ -2574,9 +2574,9 @@ button {
 
 .special-insight-video-row {
   display: grid;
-  grid-template-columns: 26px minmax(0, 1fr);
+  grid-template-columns: 26px clamp(128px, 8vw, 156px) minmax(0, 1fr);
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   min-width: 0;
   padding: 8px;
   border: 1px solid #2b323d;
@@ -2585,6 +2585,10 @@ button {
   color: inherit;
   cursor: pointer;
   text-align: left;
+}
+
+.special-insight-video-row .home-card-thumbnail {
+  border-radius: 5px;
 }
 
 .special-insight-video-row:hover,
@@ -9449,6 +9453,10 @@ button {
   .home-primary-column .special-insight-list,
   .home-primary-column .special-tag-groups {
     grid-template-columns: 1fr;
+  }
+
+  .special-insight-video-row {
+    grid-template-columns: 24px 104px minmax(0, 1fr);
   }
 
   .video-element,

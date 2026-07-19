@@ -2,7 +2,7 @@ import { Activity, BarChart3, Clock3, Rocket, Tags } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { SpecialInsightsCard } from "./SpecialInsightsCard";
-import type { VideoCommentStore, VideoItem, VideoRatingStore } from "./playerTypes";
+import type { HomeVideoCard, VideoCommentStore, VideoItem, VideoRatingStore } from "./playerTypes";
 import type { SpecialInsightTab, SpecialModeInsights, SpecialModeVideoInsight } from "./specialInsights";
 
 const specialInsightTabOptions: Array<{ value: SpecialInsightTab; label: string; icon: ReactNode }> = [
@@ -14,6 +14,7 @@ const specialInsightTabOptions: Array<{ value: SpecialInsightTab; label: string;
 
 type HomeSpecialInsightsSectionProps = {
   activeTab: SpecialInsightTab;
+  createCard: (video: VideoItem) => HomeVideoCard;
   insights: SpecialModeInsights | null;
   rankingVideos: SpecialModeVideoInsight[];
   videoComments: VideoCommentStore;
@@ -24,10 +25,12 @@ type HomeSpecialInsightsSectionProps = {
   onOpenVideo: (video: VideoItem) => void;
   onSelectTag: (tag: string) => void;
   onTabChange: (tab: SpecialInsightTab) => void;
+  onThumbnailError: (videoId: string) => void;
 };
 
 export function HomeSpecialInsightsSection({
   activeTab,
+  createCard,
   insights,
   rankingVideos,
   videoComments,
@@ -38,12 +41,14 @@ export function HomeSpecialInsightsSection({
   onOpenVideo,
   onSelectTag,
   onTabChange,
+  onThumbnailError,
 }: HomeSpecialInsightsSectionProps) {
   if (!insights?.summary.totalVideos) return null;
 
   return (
     <SpecialInsightsCard
       activeTab={activeTab}
+      createCard={createCard}
       formatDuration={formatDuration}
       formatRelativeTime={formatRelativeTime}
       formatVideoMetric={formatVideoMetric}
@@ -51,6 +56,7 @@ export function HomeSpecialInsightsSection({
       onOpenVideo={onOpenVideo}
       onSelectTag={onSelectTag}
       onTabChange={onTabChange}
+      onThumbnailError={onThumbnailError}
       rankingVideos={rankingVideos}
       tagGroupIcons={{
         videoCount: <Tags size={14} />,
