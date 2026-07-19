@@ -4153,6 +4153,7 @@ export default function App() {
 
         const existingVideosOutsideRoot = videosRef.current.filter((video) => video.mediaRootId !== nextMediaRootId);
         const replacedVideos = videosRef.current.filter((video) => video.mediaRootId === nextMediaRootId);
+        const replacedVideoIds = new Set(replacedVideos.map((video) => video.id));
         revokeReplacedMediaRootVideoUrls(replacedVideos, media.videos);
         const mergedVideos = getSortedVideos(
           [...existingVideosOutsideRoot, ...mergeVideoRuntimeState(media.videos, replacedVideos)],
@@ -4160,14 +4161,17 @@ export default function App() {
           playerPreferencesRef.current.isPlaylistSortReversed,
         );
 
-        const existingSubtitlesOutsideRoot = subtitlesRef.current.filter((subtitle) => {
-          if (subtitle.mediaRootId) return subtitle.mediaRootId !== nextMediaRootId;
-          const matchedVideo = subtitle.videoId ? videosRef.current.find((video) => video.id === subtitle.videoId) : null;
-          return matchedVideo?.mediaRootId !== nextMediaRootId;
+        const existingSubtitlesOutsideRoot: SubtitleItem[] = [];
+        subtitlesRef.current.forEach((subtitle) => {
+          const belongsToReplacedRoot = subtitle.mediaRootId
+            ? subtitle.mediaRootId === nextMediaRootId
+            : Boolean(subtitle.videoId && replacedVideoIds.has(subtitle.videoId));
+          if (!belongsToReplacedRoot) {
+            existingSubtitlesOutsideRoot.push(subtitle);
+          } else if (subtitle.url && isObjectUrl(subtitle.url)) {
+            revokeObjectUrl(subtitle.url);
+          }
         });
-        subtitlesRef.current
-          .filter((subtitle) => !existingSubtitlesOutsideRoot.includes(subtitle) && subtitle.url && isObjectUrl(subtitle.url))
-          .forEach((subtitle) => revokeObjectUrl(subtitle.url));
         let mergedSubtitles = [...existingSubtitlesOutsideRoot, ...media.subtitles];
 
         const rootStatuses = mediaRootStatuses.filter((status) => status.id !== nextMediaRootId);

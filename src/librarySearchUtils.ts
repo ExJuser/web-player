@@ -518,10 +518,11 @@ export function searchLibraryEntries<Video extends LibrarySearchVideo, Progress>
   const hasRatingFilter = typeof searchContext.minimumRating === "number";
   const queryState = createLibrarySearchQueryState(parsedQuery.textQuery);
   if (!queryState.normalizedQuery && !hasTagFilters && !hasExcludedTagFilters && !hasRatingFilter) return [];
-  const folderVideosByKey = groupVideosByLibraryFolderKey(videos);
-  const scoredVideos = videos
-    .map((video) => ({ video, ...scoreVideo(video, queryState, searchContext) }))
-    .filter((item) => item.score > 0);
+  const scoredVideos: Array<{ video: Video; score: number; reason: string }> = [];
+  videos.forEach((video) => {
+    const scored = scoreVideo(video, queryState, searchContext);
+    if (scored.score > 0) scoredVideos.push({ video, ...scored });
+  });
 
   if (searchContext.mode === "special" || searchContext.resultKind === "video") {
     const videoResults = scoredVideos
@@ -530,6 +531,7 @@ export function searchLibraryEntries<Video extends LibrarySearchVideo, Progress>
     return applyLibrarySearchResultLimit(videoResults, limit);
   }
 
+  const folderVideosByKey = groupVideosByLibraryFolderKey(videos);
   const folderResults = new Map<string, LibrarySearchEntry<Video, Progress>>();
   scoredVideos.forEach(({ video, score, reason }) => {
     const key = libraryFolderKeyForVideo(video);
@@ -558,7 +560,8 @@ export function createAiLibrarySearchResults<Video extends LibrarySearchVideo, P
   context: LibrarySearchContext<Progress>,
 ) {
   const videoById = new Map(videos.map((video) => [video.id, video]));
-  const folderVideosByKey = groupVideosByLibraryFolderKey(videos);
+  const shouldCreateVideoResults = context.mode === "special" || context.resultKind === "video";
+  const folderVideosByKey = shouldCreateVideoResults ? null : groupVideosByLibraryFolderKey(videos);
   const resultsByKey = new Map<string, LibrarySearchEntry<Video, Progress>>();
   const results: Array<LibrarySearchEntry<Video, Progress>> = [];
 
@@ -566,7 +569,7 @@ export function createAiLibrarySearchResults<Video extends LibrarySearchVideo, P
     const video = videoById.get(id);
     if (!video) return;
     const score = 100 - index;
-    if (context.mode === "special" || context.resultKind === "video") {
+    if (shouldCreateVideoResults) {
       if (resultsByKey.has(video.id)) return;
       const result = createLibraryVideoResult(video, score, "AI 推荐", context);
       resultsByKey.set(video.id, result);
@@ -576,7 +579,7 @@ export function createAiLibrarySearchResults<Video extends LibrarySearchVideo, P
 
     const key = libraryFolderKeyForVideo(video);
     if (resultsByKey.has(key)) return;
-    const result = createLibraryFolderResult(folderVideosByKey.get(key) ?? [video], video, score, "AI 推荐", context);
+    const result = createLibraryFolderResult(folderVideosByKey?.get(key) ?? [video], video, score, "AI 推荐", context);
     resultsByKey.set(key, result);
     results.push(result);
   });

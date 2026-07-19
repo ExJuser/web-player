@@ -94,6 +94,11 @@ export function buildSpecialModeInsights(
   const videoLimit = options?.videoLimit ?? defaultInsightLimit;
   const tagLimit = options?.tagLimit ?? defaultInsightLimit;
   const tagStatsByKey = new Map<string, SpecialModeTagInsight>();
+  let taggedVideos = 0;
+  let totalPlayedSeconds = 0;
+  let playCount = 0;
+  let emissionCount = 0;
+  let lastEmissionAt: number | null = null;
   const videoInsights = videos.map((video) => {
     const stats = videoStats[createVideoStatsKey(video)] ?? emptyStats;
     const tags = videoTags[video.id] ?? [];
@@ -135,22 +140,14 @@ export function buildSpecialModeInsights(
       });
     });
 
+    if (seenTagKeys.size) taggedVideos += 1;
+    totalPlayedSeconds += stats.totalPlayedSeconds;
+    playCount += stats.playCount;
+    emissionCount += stats.emissionCount;
+    if (stats.lastEmissionAt && stats.lastEmissionAt > (lastEmissionAt ?? 0)) lastEmissionAt = stats.lastEmissionAt;
+
     return insight;
   });
-
-  const taggedVideos = videoInsights.filter((insight) =>
-    insight.tags.some((tag) => normalizeTagKey(tag)),
-  ).length;
-  const totalPlayedSeconds = videoInsights.reduce((sum, insight) => sum + insight.stats.totalPlayedSeconds, 0);
-  const playCount = videoInsights.reduce((sum, insight) => sum + insight.stats.playCount, 0);
-  const emissionCount = videoInsights.reduce((sum, insight) => sum + insight.stats.emissionCount, 0);
-  const lastEmissionAt = videoInsights.reduce(
-    (latest: number | null, insight) =>
-      insight.stats.lastEmissionAt && insight.stats.lastEmissionAt > (latest ?? 0)
-        ? insight.stats.lastEmissionAt
-        : latest,
-    null,
-  );
   const tagInsights = Array.from(tagStatsByKey.values());
 
   return {

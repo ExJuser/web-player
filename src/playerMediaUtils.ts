@@ -471,7 +471,7 @@ function createDuplicateNameSimilarityPair(
 }
 
 function createDuplicatePairKey(aId: string, bId: string) {
-  return [aId, bId].sort().join("\u0000");
+  return aId <= bId ? `${aId}\u0000${bId}` : `${bId}\u0000${aId}`;
 }
 
 function createDuplicateVideoPair(a: VideoItem, b: VideoItem, pair: { score: number; reasons: string[] }): DuplicateVideoPair {
@@ -502,21 +502,15 @@ function mergeDuplicatePairScore(pairScores: Map<string, DuplicateVideoPair>, a:
   }
 }
 
-function createDuplicatePairCandidate(a: VideoItem, b: VideoItem) {
-  return {
-    key: createDuplicatePairKey(a.id, b.id),
-    a,
-    b,
-  };
-}
+type DuplicatePairCandidate = { key: string; a: VideoItem; b: VideoItem };
 
-function addDuplicateCandidate(candidates: Map<string, ReturnType<typeof createDuplicatePairCandidate>>, a: VideoItem, b: VideoItem) {
+function addDuplicateCandidate(candidates: Map<string, DuplicatePairCandidate>, a: VideoItem, b: VideoItem) {
   if (a.id === b.id) return;
-  const candidate = createDuplicatePairCandidate(a, b);
-  if (!candidates.has(candidate.key)) candidates.set(candidate.key, candidate);
+  const key = createDuplicatePairKey(a.id, b.id);
+  if (!candidates.has(key)) candidates.set(key, { key, a, b });
 }
 
-function addDuplicateBucketCandidates(candidates: Map<string, ReturnType<typeof createDuplicatePairCandidate>>, bucket: VideoItem[]) {
+function addDuplicateBucketCandidates(candidates: Map<string, DuplicatePairCandidate>, bucket: VideoItem[]) {
   const sorted = [...bucket].sort((a, b) => compareNaturalRelativePath(a.relativePath, b.relativePath));
   for (let aIndex = 0; aIndex < sorted.length; aIndex += 1) {
     const maxIndex = Math.min(sorted.length, aIndex + 1 + duplicateCandidateNeighborLimit);
@@ -527,7 +521,7 @@ function addDuplicateBucketCandidates(candidates: Map<string, ReturnType<typeof 
 }
 
 function addDuplicateWindowCandidates(
-  candidates: Map<string, ReturnType<typeof createDuplicatePairCandidate>>,
+  candidates: Map<string, DuplicatePairCandidate>,
   videos: VideoItem[],
   getValue: (video: VideoItem) => number | undefined,
   maxDelta: number,
@@ -550,15 +544,18 @@ function addDuplicateWindowCandidates(
 }
 
 function createDuplicatePairCandidates(videos: VideoItem[]) {
-  const candidates = new Map<string, ReturnType<typeof createDuplicatePairCandidate>>();
+  const candidates = new Map<string, DuplicatePairCandidate>();
   const normalizedNameBuckets = new Map<string, VideoItem[]>();
 
   videos.forEach((video) => {
     const normalizedName = normalizeDuplicateName(video.name || video.relativePath);
     if (!normalizedName) return;
-    const bucket = normalizedNameBuckets.get(normalizedName) ?? [];
-    bucket.push(video);
-    normalizedNameBuckets.set(normalizedName, bucket);
+    const bucket = normalizedNameBuckets.get(normalizedName);
+    if (bucket) {
+      bucket.push(video);
+    } else {
+      normalizedNameBuckets.set(normalizedName, [video]);
+    }
   });
 
   normalizedNameBuckets.forEach((bucket) => {
@@ -624,8 +621,12 @@ function createDuplicateGroupFromPairs(
 
 function buildDuplicateVideoGroups(videos: VideoItem[], pairScores: Map<string, DuplicateVideoPair>): DuplicateVideoGroup[] {
   const videoById = new Map(videos.map((video) => [video.id, video]));
-  const duplicatePairs = Array.from(pairScores.values()).filter((pair) => pair.severity === "duplicate");
-  const suspiciousPairs = Array.from(pairScores.values()).filter((pair) => pair.severity === "suspicious");
+  const duplicatePairs: DuplicateVideoPair[] = [];
+  const suspiciousPairs: DuplicateVideoPair[] = [];
+  pairScores.forEach((pair) => {
+    if (pair.severity === "duplicate") duplicatePairs.push(pair);
+    else suspiciousPairs.push(pair);
+  });
   const disjointSet = createDuplicateDisjointSet(videos.map((video) => video.id));
 
   duplicatePairs.forEach((pair) => disjointSet.union(pair.aId, pair.bId));
@@ -674,9 +675,11 @@ export function detectDuplicateVideos(videos: VideoItem[], context: DuplicateDet
 export function rebuildDuplicateVideoGroups(videos: VideoItem[], groups: DuplicateVideoGroup[]): DuplicateVideoGroup[] {
   const availableIds = new Set(videos.map((video) => video.id));
   const pairScores = new Map<string, DuplicateVideoPair>();
-  groups.flatMap((group) => group.pairs).forEach((pair) => {
-    if (!availableIds.has(pair.aId) || !availableIds.has(pair.bId)) return;
-    pairScores.set(pair.key, pair);
+  groups.forEach((group) => {
+    group.pairs.forEach((pair) => {
+      if (!availableIds.has(pair.aId) || !availableIds.has(pair.bId)) return;
+      pairScores.set(pair.key, pair);
+    });
   });
   return buildDuplicateVideoGroups(videos, pairScores);
 }
@@ -773,7 +776,7 @@ export async function detectDuplicateVideosWithProgress(
   if (options.getContentFingerprint) {
     const maxFingerprintVideos = Math.max(0, options.maxFingerprintVideos ?? defaultMaxFingerprintVideos);
     const fingerprintCandidatesById = new Map<string, VideoItem>();
-    [...fingerprintCandidatePairs]
+    fingerprintCandidatePairs
       .sort((a, b) => b.pair.score - a.pair.score || compareNaturalRelativePath(a.a.relativePath, b.a.relativePath))
       .forEach((candidate) => {
         if (fingerprintCandidatesById.size >= maxFingerprintVideos) return;

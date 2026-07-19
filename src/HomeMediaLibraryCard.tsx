@@ -29,7 +29,12 @@ export function HomeMediaLibraryCard({
   onRefresh,
   onToggle,
 }: HomeMediaLibraryCardProps) {
-  const readyRootCount = mediaRootStatuses.filter((status) => status.status === "ready").length;
+  let readyRootCount = 0;
+  const statusByRootId = new Map<string, PlayerMediaRootStatus>();
+  mediaRootStatuses.forEach((status) => {
+    statusByRootId.set(status.id, status);
+    if (status.status === "ready") readyRootCount += 1;
+  });
 
   return (
     <section className="home-section media-library-card">
@@ -60,7 +65,7 @@ export function HomeMediaLibraryCard({
             <div className={`media-library-list${mediaRoots.length > 2 ? " media-library-list-scrollable" : ""}`}>
               {mediaRoots.map((root) => {
                 const action = getMediaRootLocalPathAction(root);
-                const status = mediaRootStatuses.find((item) => item.id === root.id);
+                const status = statusByRootId.get(root.id);
                 return (
                   <div className="media-library-row" key={root.id}>
                     <strong>{root.label}</strong>

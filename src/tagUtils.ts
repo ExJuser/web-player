@@ -38,19 +38,20 @@ export function normalizeTagKey(tag: string) {
     .trim();
 }
 
+const synonymGroupByTagKey = new Map(
+  synonymGroups.flatMap((group, index) => group.map((tag) => [normalizeTagKey(tag), index] as const)),
+);
+
 export function parseTagInput(input: string) {
   const seenKeys = new Set<string>();
   const tags: string[] = [];
-  input
-    .split(tagSeparators)
-    .map((tag) => tag.trim())
-    .filter(Boolean)
-    .forEach((tag) => {
-      const key = normalizeTagKey(tag);
-      if (!key || seenKeys.has(key)) return;
-      seenKeys.add(key);
-      tags.push(tag);
-    });
+  input.split(tagSeparators).forEach((rawTag) => {
+    const tag = rawTag.trim();
+    const key = normalizeTagKey(tag);
+    if (!key || seenKeys.has(key)) return;
+    seenKeys.add(key);
+    tags.push(tag);
+  });
   return tags;
 }
 
@@ -59,12 +60,13 @@ export function getActiveTagInputSegment(input: string) {
 }
 
 export function createTagPairKey(a: string, b: string) {
-  return [normalizeTagKey(a), normalizeTagKey(b)].sort().join("::");
+  const aKey = normalizeTagKey(a);
+  const bKey = normalizeTagKey(b);
+  return aKey <= bKey ? `${aKey}::${bKey}` : `${bKey}::${aKey}`;
 }
 
 function getSynonymGroupKey(tag: string) {
-  const key = normalizeTagKey(tag);
-  return synonymGroups.findIndex((group) => group.some((item) => normalizeTagKey(item) === key));
+  return synonymGroupByTagKey.get(normalizeTagKey(tag)) ?? -1;
 }
 
 function getSimilarity(a: string, b: string) {
@@ -74,24 +76,23 @@ function getSimilarity(a: string, b: string) {
     return Math.min(a.length, b.length) / Math.max(a.length, b.length);
   }
 
-  const rows = a.length + 1;
   const columns = b.length + 1;
-  const distances = Array.from({ length: rows }, (_, row) =>
-    Array.from({ length: columns }, (__, column) => (row === 0 ? column : column === 0 ? row : 0)),
-  );
-
-  for (let row = 1; row < rows; row += 1) {
+  let previous = Array.from({ length: columns }, (_, column) => column);
+  let current = new Array<number>(columns);
+  for (let row = 1; row <= a.length; row += 1) {
+    current[0] = row;
     for (let column = 1; column < columns; column += 1) {
       const cost = a[row - 1] === b[column - 1] ? 0 : 1;
-      distances[row][column] = Math.min(
-        distances[row - 1][column] + 1,
-        distances[row][column - 1] + 1,
-        distances[row - 1][column - 1] + cost,
+      current[column] = Math.min(
+        previous[column] + 1,
+        current[column - 1] + 1,
+        previous[column - 1] + cost,
       );
     }
+    [previous, current] = [current, previous];
   }
 
-  const distance = distances[a.length][b.length];
+  const distance = previous[b.length];
   return 1 - distance / Math.max(a.length, b.length);
 }
 
@@ -210,34 +211,24 @@ export function buildGlobalTagUsageStats(videoTags: Record<string, string[]>): T
   });
 }
 
+function getSingleTagSearchScore(queryKey: string, querySynonymGroup: number, tag: string, tagKey = normalizeTagKey(tag)) {
+  if (!tagKey) return 0;
+  if (tagKey === queryKey) return 32;
+  const tagSynonymGroup = getSynonymGroupKey(tag);
+  if (querySynonymGroup >= 0 && querySynonymGroup === tagSynonymGroup) return 28;
+  if (tagKey.includes(queryKey) || queryKey.includes(tagKey)) return 20;
+  return getSimilarity(queryKey, tagKey) >= 0.72 ? 16 : 0;
+}
+
 export function getTagSearchScore(query: string, tags: string[]) {
   const queryKey = normalizeTagKey(query);
   if (!queryKey) return 0;
 
   let bestScore = 0;
+  const querySynonymGroup = getSynonymGroupKey(query);
   for (const tag of tags) {
-    const tagKey = normalizeTagKey(tag);
-    if (!tagKey) continue;
-    if (tagKey === queryKey) {
-      bestScore = Math.max(bestScore, 32);
-      continue;
-    }
-
-    const querySynonymGroup = getSynonymGroupKey(query);
-    const tagSynonymGroup = getSynonymGroupKey(tag);
-    if (querySynonymGroup >= 0 && querySynonymGroup === tagSynonymGroup) {
-      bestScore = Math.max(bestScore, 28);
-      continue;
-    }
-
-    if (tagKey.includes(queryKey) || queryKey.includes(tagKey)) {
-      bestScore = Math.max(bestScore, 20);
-      continue;
-    }
-
-    if (getSimilarity(queryKey, tagKey) >= 0.72) {
-      bestScore = Math.max(bestScore, 16);
-    }
+    bestScore = Math.max(bestScore, getSingleTagSearchScore(queryKey, querySynonymGroup, tag));
+    if (bestScore === 32) return bestScore;
   }
   return bestScore;
 }
@@ -252,22 +243,24 @@ export function createTagInputSuggestions(input: {
   if (!queryKey) return [];
 
   const currentTagKeys = new Set(input.currentTags.map(normalizeTagKey).filter(Boolean));
+  const querySynonymGroup = getSynonymGroupKey(input.query);
   const seen = new Set<string>();
-  return Object.values(input.allVideoTags)
-    .flatMap((tags) => tags ?? [])
-    .filter((tag) => {
+  const candidates: string[] = [];
+  Object.values(input.allVideoTags).forEach((tags) => {
+    tags?.forEach((tag) => {
       const key = normalizeTagKey(tag);
-      if (!key || seen.has(key) || currentTagKeys.has(key)) return false;
-      if (!key.includes(queryKey) && getTagSearchScore(input.query, [tag]) <= 0) return false;
+      if (!key || seen.has(key) || currentTagKeys.has(key)) return;
+      if (!key.includes(queryKey) && getSingleTagSearchScore(queryKey, querySynonymGroup, tag, key) <= 0) return;
       seen.add(key);
-      return true;
-    })
-    .sort((a, b) => {
-      const aKey = normalizeTagKey(a);
-      const bKey = normalizeTagKey(b);
-      const aPrefix = aKey.startsWith(queryKey) ? 0 : 1;
-      const bPrefix = bKey.startsWith(queryKey) ? 0 : 1;
-      return aPrefix - bPrefix || a.localeCompare(b, "zh-Hans-CN", { numeric: true });
-    })
+      candidates.push(tag);
+    });
+  });
+  return candidates.sort((a, b) => {
+    const aKey = normalizeTagKey(a);
+    const bKey = normalizeTagKey(b);
+    const aPrefix = aKey.startsWith(queryKey) ? 0 : 1;
+    const bPrefix = bKey.startsWith(queryKey) ? 0 : 1;
+    return aPrefix - bPrefix || a.localeCompare(b, "zh-Hans-CN", { numeric: true });
+  })
     .slice(0, input.limit ?? 8);
 }

@@ -388,13 +388,14 @@ export function createNextEpisodeCard<Video extends HomeCardVideoForUi, Progress
   const sourceVideo = input.primaryResumeCard?.video ?? input.recentHomeCards[0]?.video ?? input.currentVideo;
   if (!sourceVideo) return null;
   const sourceSeriesKey = scopedSeriesKeyForVideo(sourceVideo, input.seriesTitleByVideoId.get(sourceVideo.id) ?? inferSeriesTitle(sourceVideo));
-  const seriesVideos = input.playlistVideos.filter(
-    (video) => scopedSeriesKeyForVideo(video, input.seriesTitleByVideoId.get(video.id) ?? inferSeriesTitle(video)) === sourceSeriesKey,
-  );
-  if (seriesVideos.length < 2) return null;
-  const sourceIndex = seriesVideos.findIndex((video) => video.id === sourceVideo.id);
-  if (sourceIndex < 0 || sourceIndex >= seriesVideos.length - 1) return null;
-  return input.createCard(seriesVideos[sourceIndex + 1]);
+  let foundSource = false;
+  for (const video of input.playlistVideos) {
+    const seriesKey = scopedSeriesKeyForVideo(video, input.seriesTitleByVideoId.get(video.id) ?? inferSeriesTitle(video));
+    if (seriesKey !== sourceSeriesKey) continue;
+    if (foundSource) return input.createCard(video);
+    if (video.id === sourceVideo.id) foundSource = true;
+  }
+  return null;
 }
 
 export function createPrimaryHomeCard<Card>(primaryResumeCard: Card | null | undefined, firstPlaylistCard: Card | null | undefined) {
@@ -536,7 +537,11 @@ export function countRatingFilterMatches<Video extends RatedVideoForUi>(
   operator: RatingFilterOperator,
   threshold: number,
 ) {
-  return videos.filter((video) => doesVideoMatchRatingFilter(ratings[video.id], operator, threshold)).length;
+  let matches = 0;
+  videos.forEach((video) => {
+    if (doesVideoMatchRatingFilter(ratings[video.id], operator, threshold)) matches += 1;
+  });
+  return matches;
 }
 
 export function createPlaylistPageLabels(input: {

@@ -9,6 +9,7 @@ const subtitleExtensions = new Set([".srt", ".vtt"]);
 const photoExtensions = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif", ".bmp"]);
 const mediaExtensions = new Set([...videoExtensions, ...subtitleExtensions, ...photoExtensions]);
 const smallVideoFileThresholdBytes = 50 * 1024 * 1024;
+const fileStatConcurrency = 16;
 const ignoredVideoBasenames = new Set(["theme_video", "trailer"]);
 const fixedPhotoAlbumsRoot = {
   id: "photo-albums-local",
@@ -29,6 +30,28 @@ function isIgnoredVideoFile(fileName) {
 
 function shouldFilterVideoFile(fileName, size) {
   return size < smallVideoFileThresholdBytes || isIgnoredVideoFile(fileName);
+}
+
+async function statSupportedFiles(entries, directory, isSupported) {
+  const supportedEntries = entries.filter((entry) => entry.isFile() && isSupported(entry.name));
+  const results = new Array(supportedEntries.length);
+  let nextIndex = 0;
+
+  const worker = async () => {
+    while (nextIndex < supportedEntries.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      try {
+        results[index] = { value: await stat(path.join(directory, supportedEntries[index].name)) };
+      } catch (error) {
+        results[index] = { error };
+      }
+    }
+  };
+
+  const workerCount = Math.min(fileStatConcurrency, supportedEntries.length);
+  await Promise.all(Array.from({ length: workerCount }, () => worker()));
+  return new Map(supportedEntries.map((entry, index) => [entry.name, results[index]]));
 }
 
 function normalizeAbsolutePath(value) {
@@ -232,8 +255,15 @@ export async function scanMediaRoot(root, options = {}) {
 
   async function walk(directory, segments) {
     const entries = await readdir(directory, { withFileTypes: true });
-    const fileEntryNames = entries.filter((entry) => entry.isFile()).map((entry) => entry.name);
+    const fileEntryNames = [];
+    for (const entry of entries) {
+      if (entry.isFile()) fileEntryNames.push(entry.name);
+    }
     const findMatchingNfoName = createMatchingNfoNameLookup(fileEntryNames);
+    const fileStatsByName = await statSupportedFiles(entries, directory, (fileName) => {
+      const extension = path.extname(fileName).toLowerCase();
+      return videoExtensions.has(extension) || subtitleExtensions.has(extension);
+    });
     for (const entry of entries) {
       const nextSegments = [...segments, entry.name];
       const entryPath = path.join(directory, entry.name);
@@ -247,7 +277,10 @@ export async function scanMediaRoot(root, options = {}) {
       if (!videoExtensions.has(extension) && !subtitleExtensions.has(extension)) continue;
       scannedFiles += 1;
 
-      const fileStat = await stat(entryPath);
+      const fileStatResult = fileStatsByName.get(entry.name);
+      if (fileStatResult?.error) throw fileStatResult.error;
+      const fileStat = fileStatResult?.value;
+      if (!fileStat) continue;
       const lastModified = Math.round(fileStat.mtimeMs);
       const relativePath = nextSegments.join("/");
       if (videoExtensions.has(extension)) {
@@ -328,10 +361,16 @@ export async function scanMediaRoot(root, options = {}) {
 export async function scanConfiguredMediaRoots(config, options = {}) {
   const roots = normalizeMediaRoots(config);
   const rootsResult = await Promise.all(roots.map((root) => scanMediaRoot(root, options)));
-  const videos = rootsResult.flatMap((result) => result.videos);
-  const subtitles = rootsResult.flatMap((result) => result.subtitles);
-  const scannedFiles = rootsResult.reduce((sum, result) => sum + result.status.scannedFiles, 0);
-  const filteredSmallVideos = rootsResult.reduce((sum, result) => sum + result.filteredSmallVideos, 0);
+  const videos = [];
+  const subtitles = [];
+  let scannedFiles = 0;
+  let filteredSmallVideos = 0;
+  for (const result of rootsResult) {
+    videos.push(...result.videos);
+    subtitles.push(...result.subtitles);
+    scannedFiles += result.status.scannedFiles;
+    filteredSmallVideos += result.filteredSmallVideos;
+  }
   return {
     roots: rootsResult,
     videos,
@@ -368,6 +407,9 @@ async function scanPhotoAlbumsRoot(root) {
   async function walk(directory, segments) {
     const entries = await readdir(directory, { withFileTypes: true });
     const images = [];
+    let totalSize = 0;
+    let updatedAt = 0;
+    const fileStatsByName = await statSupportedFiles(entries, directory, (fileName) => photoExtensions.has(path.extname(fileName).toLowerCase()));
 
     for (const entry of entries) {
       const nextSegments = [...segments, entry.name];
@@ -382,8 +424,13 @@ async function scanPhotoAlbumsRoot(root) {
       if (!photoExtensions.has(extension)) continue;
       scannedFiles += 1;
 
-      const fileStat = await stat(entryPath);
+      const fileStatResult = fileStatsByName.get(entry.name);
+      if (fileStatResult?.error) throw fileStatResult.error;
+      const fileStat = fileStatResult?.value;
+      if (!fileStat) continue;
       const lastModified = Math.round(fileStat.mtimeMs);
+      totalSize += fileStat.size;
+      updatedAt = Math.max(updatedAt, lastModified);
       const relativePath = nextSegments.join("/");
       images.push({
         id: createGlobalMediaId(root.id, relativePath, fileStat.size, lastModified),
@@ -400,8 +447,6 @@ async function scanPhotoAlbumsRoot(root) {
     images.sort(compareRelativePath);
     const folderPath = segments.join("/");
     const title = segments.at(-1) || root.label;
-    const totalSize = images.reduce((sum, image) => sum + image.size, 0);
-    const updatedAt = images.reduce((latest, image) => Math.max(latest, image.lastModified), 0);
     albums.push({
       id: createStableFolderId(root.id, folderPath),
       title,
@@ -442,8 +487,12 @@ async function scanPhotoAlbumsRoot(root) {
 export async function scanConfiguredPhotoAlbums(config) {
   const roots = [fixedPhotoAlbumsRoot];
   const rootsResult = await Promise.all(roots.map((root) => scanPhotoAlbumsRoot(root)));
-  const albums = rootsResult.flatMap((result) => result.albums);
-  const scannedFiles = rootsResult.reduce((sum, result) => sum + result.status.scannedFiles, 0);
+  const albums = [];
+  let scannedFiles = 0;
+  for (const result of rootsResult) {
+    albums.push(...result.albums);
+    scannedFiles += result.status.scannedFiles;
+  }
   return {
     roots: rootsResult,
     albums,
