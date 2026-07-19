@@ -215,7 +215,7 @@ export function buildActorInsights(input: {
       representativeVideo: sortedEntries[0].video,
       commonTags: Array.from(tagCounts.values())
         .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, undefined, { numeric: true, sensitivity: "base" }))
-        .slice(0, 3)
+        .slice(0, 5)
         .map((tag) => tag.label),
       stats: {
         emissionCount,

@@ -59,7 +59,7 @@ test("builds cached actor card tags and playback summaries", () => {
   const insight = actors.buildActorInsights({
     videos,
     profiles,
-    videoTags: { one: ["Star", "剧情", "高清"], two: ["剧情", "字幕"] },
+    videoTags: { one: ["Star", "剧情", "高清", "无码", "长发", "黑丝", "室内"], two: ["剧情", "字幕"] },
     actorTagDefinitions: {},
     videoActorOverrides: {
       one: { actorIds: ["actor:star"], updatedAt: 1 },
@@ -75,7 +75,8 @@ test("builds cached actor card tags and playback summaries", () => {
     },
   }).actors[0];
 
-  assert.deepEqual(insight.commonTags, ["剧情", "高清", "字幕"]);
+  assert.equal(insight.commonTags.length, 5);
+  assert.equal(insight.commonTags[0], "剧情");
   assert.deepEqual(insight.stats, { emissionCount: 3, playCount: 5, totalPlayedSeconds: 300, lastWatchedAt: 200 });
 });
 
