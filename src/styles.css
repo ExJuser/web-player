@@ -8276,6 +8276,15 @@ button {
   background: transparent;
 }
 
+.actor-toolbar label:focus-within {
+  border-color: rgba(0, 161, 214, 0.68);
+  box-shadow: 0 0 0 2px rgba(0, 161, 214, 0.12);
+}
+
+.actor-toolbar label input:focus {
+  outline: none;
+}
+
 .actor-sort-controls {
   display: flex;
   align-items: center;
@@ -8803,6 +8812,12 @@ button {
   color: #172033;
   background: rgba(255, 255, 255, 0.94);
   border-color: rgba(100, 116, 139, 0.22);
+}
+
+.app-shell.theme-light .actor-toolbar label:focus-within,
+:root[data-theme="light"] .actor-toolbar label:focus-within {
+  border-color: rgba(0, 119, 168, 0.62);
+  box-shadow: 0 0 0 2px rgba(0, 119, 168, 0.1);
 }
 
 @media (max-width: 720px) {
