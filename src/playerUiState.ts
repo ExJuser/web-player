@@ -732,7 +732,7 @@ export function createSelectedWatchActivityCards<Video extends WatchActivityVide
 }) {
   if (!input.day) return [];
   const day = input.day;
-  const maxCards = input.maxCards ?? 5;
+  const maxCards = input.maxCards ?? 6;
   const selectedIds = new Set(day.videoIds);
   return input.videos
     .filter((video) => selectedIds.has(video.id))
