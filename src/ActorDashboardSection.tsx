@@ -1,5 +1,5 @@
 import { ArrowLeft, Clock3, Film, History, ImageMinus, ImagePlus, Pencil, Play, Rocket, Search, Upload, UserRound, Users } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import type { ActorInsight } from "./actorUtils";
 import { ControlSelect } from "./ControlSelect";
@@ -111,6 +111,7 @@ export function ActorDashboardSection({
   const [showUnresolved, setShowUnresolved] = useState(false);
   const [actorCoverAvailability, setActorCoverAvailability] = useState<Record<string, boolean>>({});
   const [pendingCoverRemovalActorId, setPendingCoverRemovalActorId] = useState<string | null>(null);
+  const actorDashboardRef = useRef<HTMLElement>(null);
   const actorVideoLoadMoreRef = useRef<HTMLDivElement>(null);
   const actorCoverFileInputRef = useRef<HTMLInputElement>(null);
   const wasRemovingActorCoverRef = useRef(false);
@@ -140,6 +141,9 @@ export function ActorDashboardSection({
   useEffect(() => setActorPage(1), [query, sort, sortDirection]);
   useEffect(() => setVisibleActorVideoCount(actorVideoPageSize), [selected?.actor.id]);
   useEffect(() => setPendingCoverRemovalActorId(null), [selected?.actor.id]);
+  useLayoutEffect(() => {
+    if (selectedActorId) actorDashboardRef.current?.scrollIntoView({ block: "start", inline: "nearest" });
+  }, [selectedActorId]);
   useEffect(() => {
     if (!selected) return undefined;
     let isCancelled = false;
@@ -182,7 +186,7 @@ export function ActorDashboardSection({
 
   if (selected) {
     return (
-      <section className="actor-dashboard actor-detail" aria-label={`${selected.actor.name}演员详情`}>
+      <section ref={actorDashboardRef} className="actor-dashboard actor-detail" aria-label={`${selected.actor.name}演员详情`}>
         <div className="actor-dashboard-header">
           <button className="secondary-button" type="button" onClick={() => onSelectActor(null)}><ArrowLeft size={16} /> 返回演员列表</button>
           <span className="actor-cover-header-actions">
