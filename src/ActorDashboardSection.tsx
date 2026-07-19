@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { ActorInsight } from "./actorUtils";
 import { ControlSelect } from "./ControlSelect";
+import { DeleteConfirmDialog } from "./DeleteConfirmDialog";
 import { readActorCover } from "./playerStorage";
 import type { VideoItem } from "./playerTypes";
 
@@ -87,6 +88,7 @@ export function ActorDashboardSection({
   const [pendingCoverRemovalActorId, setPendingCoverRemovalActorId] = useState<string | null>(null);
   const actorVideoLoadMoreRef = useRef<HTMLDivElement>(null);
   const actorCoverFileInputRef = useRef<HTMLInputElement>(null);
+  const wasRemovingActorCoverRef = useRef(false);
   const selected = actors.find((entry) => entry.actor.id === selectedActorId) ?? null;
   const handleActorCoverAvailabilityChange = useCallback((actorId: string, isAvailable: boolean) => {
     setActorCoverAvailability((availability) => availability[actorId] === isAvailable ? availability : { ...availability, [actorId]: isAvailable });
@@ -109,6 +111,11 @@ export function ActorDashboardSection({
   useEffect(() => setActorPage(1), [query, sort, sortDirection]);
   useEffect(() => setVisibleActorVideoCount(actorVideoPageSize), [selected?.actor.id]);
   useEffect(() => setPendingCoverRemovalActorId(null), [selected?.actor.id]);
+  useEffect(() => {
+    const isRemoving = actorCoverPendingAction?.startsWith("remove:") ?? false;
+    if (wasRemovingActorCoverRef.current && !isRemoving) setPendingCoverRemovalActorId(null);
+    wasRemovingActorCoverRef.current = isRemoving;
+  }, [actorCoverPendingAction]);
   useEffect(() => setActorCoverAvailability({}), [libraryId]);
   useEffect(() => setActorPage((value) => Math.min(value, actorPageCount)), [actorPageCount]);
   useEffect(() => setUnresolvedPage((value) => Math.min(value, unresolvedPageCount)), [unresolvedPageCount]);
@@ -144,14 +151,7 @@ export function ActorDashboardSection({
               if (file) onUploadActorCover(selected.actor.id, file);
             }} />
             <button className="secondary-button" type="button" disabled={Boolean(actorCoverPendingAction)} onClick={() => { setPendingCoverRemovalActorId(null); actorCoverFileInputRef.current?.click(); }}><Upload size={15} /> {actorCoverPendingAction === `upload:${selected.actor.id}` ? "上传中..." : "上传封面"}</button>
-            <button className="secondary-button" type="button" disabled={Boolean(actorCoverPendingAction)} onClick={() => {
-              if (pendingCoverRemovalActorId === selected.actor.id) {
-                onRemoveActorCover(selected.actor.id);
-                setPendingCoverRemovalActorId(null);
-              } else {
-                setPendingCoverRemovalActorId(selected.actor.id);
-              }
-            }}><ImageMinus size={15} /> {pendingCoverRemovalActorId === selected.actor.id ? "确认移除封面" : "移除独立封面"}</button>
+            <button className="secondary-button" type="button" disabled={Boolean(actorCoverPendingAction)} onClick={() => setPendingCoverRemovalActorId(selected.actor.id)}><ImageMinus size={15} /> 移除独立封面</button>
           </span>
           <div><h2>{selected.actor.name}</h2><p>{selected.videos.length} 部影片</p></div>
         </div>
@@ -167,6 +167,19 @@ export function ActorDashboardSection({
           ))}
         </div>
         {visibleActorVideoCount < selected.videos.length ? <div ref={actorVideoLoadMoreRef} className="actor-infinite-loader">继续向下滚动加载更多影片</div> : null}
+        <DeleteConfirmDialog
+          isOpen={pendingCoverRemovalActorId === selected.actor.id}
+          titleId="actor-cover-remove-title"
+          title="移除独立封面？"
+          description="移除后将恢复使用影片缩略图作为演员封面。"
+          primaryText="移除封面"
+          pendingText="移除中..."
+          isPending={actorCoverPendingAction === `remove:${selected.actor.id}`}
+          previewTitle={selected.actor.name}
+          previewMeta="之后仍可重新上传或从影片缩略图设置独立封面。"
+          onClose={() => setPendingCoverRemovalActorId(null)}
+          onConfirm={() => onRemoveActorCover(selected.actor.id)}
+        />
       </section>
     );
   }
