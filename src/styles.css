@@ -8305,6 +8305,12 @@ button {
   gap: 14px;
 }
 
+.actor-infinite-loader {
+  padding: 14px;
+  color: var(--muted-text);
+  text-align: center;
+}
+
 .actor-card,
 .actor-video-card {
   min-width: 0;
