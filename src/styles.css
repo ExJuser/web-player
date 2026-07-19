@@ -1090,15 +1090,16 @@ button {
 }
 
 .home-card-thumbnail.has-image {
-  width: fit-content;
+  width: 100%;
   max-width: 100%;
-  aspect-ratio: auto;
+  aspect-ratio: 16 / 9;
 }
 
 .home-card-thumbnail.has-image img {
-  width: auto;
+  width: 100%;
   max-width: 100%;
-  height: auto;
+  height: 100%;
+  max-height: 100%;
   object-fit: contain;
 }
 
@@ -1110,8 +1111,8 @@ button {
 }
 
 .home-resume-card > .home-card-thumbnail.has-image {
-  align-self: center;
-  height: auto;
+  align-self: stretch;
+  height: 100%;
 }
 
 .home-resume-card > .home-card-thumbnail.has-image img {
