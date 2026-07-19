@@ -8434,10 +8434,19 @@ button {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  aspect-ratio: var(--actor-cover-aspect-ratio, 16 / 9);
+  aspect-ratio: 16 / 9;
   place-items: center;
   color: #c4b5fd;
   background: linear-gradient(135deg, rgba(124, 58, 237, 0.35), rgba(219, 39, 119, 0.22));
+}
+
+.actor-cover.has-image::before {
+  position: absolute;
+  inset: -12px;
+  background: var(--actor-cover-image) center / cover no-repeat;
+  content: "";
+  filter: blur(12px);
+  opacity: 0.56;
 }
 
 .actor-cover img {
@@ -8450,6 +8459,7 @@ button {
   max-height: 100%;
   object-fit: contain;
   object-position: center;
+  z-index: 1;
 }
 
 .actor-video-card > button {
@@ -8475,6 +8485,7 @@ button {
   position: absolute;
   top: 8px;
   right: 8px;
+  z-index: 2;
   padding: 3px 7px;
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 999px;

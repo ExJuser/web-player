@@ -11,11 +11,10 @@ const actorPageSize = 12;
 const actorVideoPageSize = 12;
 const unresolvedPageSize = 24;
 
-function syncActorCoverAspectRatio(event: SyntheticEvent<HTMLImageElement>) {
+function syncActorCoverBackdrop(event: SyntheticEvent<HTMLImageElement>) {
   const image = event.currentTarget;
-  if (image.naturalWidth > 0 && image.naturalHeight > 0) {
-    image.parentElement?.style.setProperty("--actor-cover-aspect-ratio", `${image.naturalWidth} / ${image.naturalHeight}`);
-  }
+  const imageUrl = image.currentSrc || image.src;
+  image.parentElement?.style.setProperty("--actor-cover-image", `url("${imageUrl.replace(/["\\]/g, "\\$&")}")`);
 }
 
 type ActorDashboardSectionProps = {
@@ -66,7 +65,7 @@ function StoredActorCover({ actorId, actorName, fallbackVideo, libraryId, onAvai
   }, [actorId, libraryId, onAvailabilityChange, version]);
 
   const visibleCoverUrl = coverUrl ?? fallbackVideo.thumbnailUrl;
-  return <span className={`actor-cover ${visibleCoverUrl ? "has-image" : ""}`}>{visibleCoverUrl ? <img src={visibleCoverUrl} alt="" onLoad={syncActorCoverAspectRatio} onError={() => {
+  return <span className={`actor-cover ${visibleCoverUrl ? "has-image" : ""}`}>{visibleCoverUrl ? <img src={visibleCoverUrl} alt="" onLoad={syncActorCoverBackdrop} onError={() => {
     if (coverUrl) {
       setCoverUrl(null);
       onAvailabilityChange(actorId, false);
@@ -192,7 +191,7 @@ export function ActorDashboardSection({
           {visibleActorVideos.map(({ video, source }) => (
             <article className="actor-video-card" key={video.id}>
               <button type="button" onClick={() => onOpenVideo(video)}>
-                <span className={`actor-cover ${video.thumbnailUrl ? "has-image" : ""}`}>{video.thumbnailUrl ? <img src={video.thumbnailUrl} alt="" onLoad={syncActorCoverAspectRatio} onError={() => onThumbnailError(video.id)} /> : <Film size={28} />}</span>
+                <span className={`actor-cover ${video.thumbnailUrl ? "has-image" : ""}`}>{video.thumbnailUrl ? <img src={video.thumbnailUrl} alt="" onLoad={syncActorCoverBackdrop} onError={() => onThumbnailError(video.id)} /> : <Film size={28} />}</span>
                 <strong>{video.name}</strong>
               </button>
               <div><span className={`actor-source ${source}`}>{source === "manual" ? "人工" : source === "nfo" ? "NFO" : "演员标签"}</span><span className="actor-video-actions"><button className="secondary-button actor-correction-button" type="button" disabled={Boolean(actorCoverPendingAction)} onClick={() => { setPendingCoverRemovalActorId(null); onSetActorCover(selected.actor.id, video); }}><ImagePlus size={13} /> {actorCoverPendingAction === `set:${video.id}` ? "保存中..." : "设为封面"}</button><button className="secondary-button actor-correction-button" type="button" onClick={() => onEditVideoActors(video)}><Pencil size={13} /> 纠正演员</button></span></div>
