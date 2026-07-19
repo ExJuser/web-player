@@ -118,6 +118,24 @@ test("aggregates normalized tag stats by video count, played duration, and emiss
   );
 });
 
+test("backfills existing playback stats when a video receives a tag later", () => {
+  const video = createVideo({ id: "root-a|late-tag.mp4|100|1", name: "late-tag.mp4", relativePath: "late-tag.mp4" });
+  const videoStats = statsFor(video, { totalPlayedSeconds: 7200, playCount: 12, emissionCount: 8 });
+
+  const beforeTagging = specialInsights.buildSpecialModeInsights([video], videoStats, {}, {});
+  assert.deepEqual(beforeTagging.tagsByPlayedDuration, []);
+  assert.deepEqual(beforeTagging.tagsByEmissionCount, []);
+
+  const afterTagging = specialInsights.buildSpecialModeInsights(
+    [video],
+    videoStats,
+    { [video.id]: ["后补标签"] },
+    {},
+  );
+  assert.equal(afterTagging.tagsByPlayedDuration[0].totalPlayedSeconds, 7200);
+  assert.equal(afterTagging.tagsByEmissionCount[0].emissionCount, 8);
+});
+
 test("keeps ten default special insight entries", () => {
   const videos = Array.from({ length: 12 }, (_, index) =>
     createVideo({
