@@ -1,9 +1,17 @@
 import { CheckCircle2, Heart, RotateCcw, Star, Trash2 } from "lucide-react";
+import type { SyntheticEvent } from "react";
 
 import { RatingChip, TagChips } from "./MetadataChips";
 import type { VideoItem } from "./playerTypes";
 import type { DuplicatePlaylistVideoMeta } from "./playerUiState";
 import type { VideoVersionPlaylistMeta } from "./videoVersionUtils";
+
+function syncEpisodeThumbnailAspectRatio(event: SyntheticEvent<HTMLImageElement>) {
+  const image = event.currentTarget;
+  if (image.naturalWidth > 0 && image.naturalHeight > 0) {
+    image.parentElement?.style.setProperty("--episode-thumbnail-aspect-ratio", `${image.naturalWidth} / ${image.naturalHeight}`);
+  }
+}
 
 type PlaylistItemCardProps = {
   duplicateMeta?: DuplicatePlaylistVideoMeta | null;
@@ -67,6 +75,7 @@ export function PlaylistItemCard({
               src={video.thumbnailUrl}
               alt=""
               draggable={false}
+              onLoad={syncEpisodeThumbnailAspectRatio}
               onError={() => onThumbnailError(video.id)}
             />
           ) : (
