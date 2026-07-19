@@ -540,6 +540,7 @@ export default function App() {
   const [homeProgressRecapVideoId, setHomeProgressRecapVideoId] = useState("");
   const [isHomeProgressRecapLoading, setIsHomeProgressRecapLoading] = useState(false);
   const [specialInsightTab, setSpecialInsightTab] = useState<SpecialInsightTab>("played");
+  const [isSpecialInsightsExpanded, setIsSpecialInsightsExpanded] = useState(false);
   const [duplicateVideoGroups, setDuplicateVideoGroups] = useState<DuplicateVideoGroup[]>([]);
   const [duplicateDetectionProgress, setDuplicateDetectionProgress] = useState<DuplicateDetectionProgress | null>(null);
   const [duplicateDetectionMessage, setDuplicateDetectionMessage] = useState("尚未检测重复视频。");
@@ -666,6 +667,7 @@ export default function App() {
   const [watchActivityRevision, setWatchActivityRevision] = useState(0);
   const [watchActivityRange, setWatchActivityRange] = useState<WatchActivityRange>(30);
   const [watchActivityMetric, setWatchActivityMetric] = useState<WatchActivityMetric>("watched");
+  const [isWatchActivityExpanded, setIsWatchActivityExpanded] = useState(false);
   const [selectedWatchActivityDate, setSelectedWatchActivityDate] = useState<string | null>(null);
   const [watchActivityCarouselTick, setWatchActivityCarouselTick] = useState(0);
   const [launchEffectKey, setLaunchEffectKey] = useState(0);
@@ -1614,16 +1616,24 @@ export default function App() {
     [createHomeVideoCard, currentVideo, homeMediaMode, playlistVideos, primaryResumeCard, recentHomeCards, seriesTitleByVideoId],
   );
   const isHomeViewVisible = activeView === "home" && !isPrivacyMode && !isCinemaMode && !isFullscreen;
+  const shouldLoadWatchActivity = isHomeViewVisible
+    && isRatingFilterEnabled
+    && specialHomeSection === "overview"
+    && isWatchActivityExpanded;
+  const shouldLoadSpecialInsights = isHomeViewVisible
+    && homeMediaMode === "special"
+    && specialHomeSection === "overview"
+    && isSpecialInsightsExpanded;
   const isPhotoAlbumViewVisible =
     (activeView === "photos" || activeView === "photoViewer") && !isPrivacyMode && !isCinemaMode && !isFullscreen;
   const isNonPlayerViewVisible = isHomeViewVisible || isPhotoAlbumViewVisible;
   useEffect(() => {
-    if (!isHomeViewVisible) return undefined;
+    if (!isHomeViewVisible || !shouldLoadWatchActivity) return undefined;
     const timer = window.setInterval(() => {
       setWatchActivityCarouselTick((tick) => tick + 1);
     }, 3200);
     return () => window.clearInterval(timer);
-  }, [isHomeViewVisible]);
+  }, [isHomeViewVisible, shouldLoadWatchActivity]);
   const firstPlayableHomeCard = playlistVideos[0] ? createHomeVideoCard(playlistVideos[0]) : null;
   const primaryHomeCard = createPrimaryHomeCard(primaryResumeCard, firstPlayableHomeCard);
   const libraryStats = useMemo(
@@ -1631,11 +1641,31 @@ export default function App() {
     [favoriteVideoIds, modeFilteredVideos, progressStore],
   );
   const specialModeInsights = useMemo(
-    () =>
-      homeMediaMode === "special"
-        ? buildSpecialModeInsights(modeFilteredVideos, videoStatsRef.current, videoTags, progressStore)
-        : null,
-    [homeMediaMode, modeFilteredVideos, progressStore, videoStatsRevision, videoTags],
+    () => {
+      if (homeMediaMode !== "special") return null;
+      if (shouldLoadSpecialInsights) {
+        return buildSpecialModeInsights(modeFilteredVideos, videoStatsRef.current, videoTags, progressStore);
+      }
+      return {
+        summary: {
+          totalVideos: modeFilteredVideos.length,
+          taggedVideos: 0,
+          tagCoverage: 0,
+          totalPlayedSeconds: 0,
+          playCount: 0,
+          emissionCount: 0,
+          lastEmissionAt: null,
+        },
+        videosByPlayedDuration: [],
+        videosByPlayCount: [],
+        videosByEmissionCount: [],
+        videosByRecentActivity: [],
+        tagsByVideoCount: [],
+        tagsByPlayedDuration: [],
+        tagsByEmissionCount: [],
+      };
+    },
+    [homeMediaMode, modeFilteredVideos, progressStore, shouldLoadSpecialInsights, videoStatsRevision, videoTags],
   );
   useEffect(() => {
     const nextProfiles = reconcileActorProfiles({
@@ -1692,16 +1722,30 @@ export default function App() {
   }, [actorEditVideo, actorProfilesRef, actorTagDefinitionsRef, persistActorState, videoActorOverridesRef]);
 
   const watchActivityVideos = useMemo(
-    () => (isRatingFilterEnabled ? modeFilteredVideos : []),
-    [isRatingFilterEnabled, modeFilteredVideos],
+    () => (shouldLoadWatchActivity ? modeFilteredVideos : []),
+    [modeFilteredVideos, shouldLoadWatchActivity],
   );
   const watchActivityInsights = useMemo(
-    () =>
-      buildWatchActivityInsights(watchActivityRef.current, watchActivityVideos, videoTags, {
+    () => {
+      if (!shouldLoadWatchActivity) {
+        return {
+          rangeDays: watchActivityRange,
+          days: [],
+          activeDays: 0,
+          maxMetricValue: 0,
+          totalWatchedSeconds: 0,
+          totalPlayCount: 0,
+          totalCompletedCount: 0,
+          totalEmissionCount: 0,
+          topTags: [],
+        };
+      }
+      return buildWatchActivityInsights(watchActivityRef.current, watchActivityVideos, videoTags, {
         rangeDays: watchActivityRange,
         metric: watchActivityMetric,
-      }),
-    [videoTags, watchActivityMetric, watchActivityRange, watchActivityRevision, watchActivityVideos],
+      });
+    },
+    [shouldLoadWatchActivity, videoTags, watchActivityMetric, watchActivityRange, watchActivityRevision, watchActivityVideos],
   );
   const watchActivityMonthGroups = useMemo(
     () => groupWatchActivityDaysByMonth(watchActivityInsights.days),
@@ -5648,6 +5692,7 @@ export default function App() {
                   carouselTick={watchActivityCarouselTick}
                   cards={selectedWatchActivityCards}
                   insights={watchActivityInsights}
+                  isExpanded={isWatchActivityExpanded}
                   metric={watchActivityMetric}
                   metricOptions={watchActivityMetricOptions}
                   monthGroups={watchActivityMonthGroups}
@@ -5665,6 +5710,7 @@ export default function App() {
                   onSelectDate={setSelectedWatchActivityDate}
                   onSelectTag={runSpecialInsightTagSearch}
                   onThumbnailError={markVideoThumbnailFailed}
+                  onToggle={() => setIsWatchActivityExpanded((current) => !current)}
                 />
               ) : null}
 
@@ -5699,10 +5745,12 @@ export default function App() {
                   formatRelativeTime={formatRelativeTime}
                   formatVideoMetric={formatSpecialInsightMetric}
                   insights={specialModeInsights}
+                  isExpanded={isSpecialInsightsExpanded}
                   onOpenVideo={openVideoFromHome}
                   onSelectTag={runSpecialInsightTagSearch}
                   onTabChange={setSpecialInsightTab}
                   onThumbnailError={markVideoThumbnailFailed}
+                  onToggle={() => setIsSpecialInsightsExpanded((current) => !current)}
                   rankingVideos={specialInsightRankingVideos}
                   videoComments={videoComments}
                   videoRatings={videoRatings}

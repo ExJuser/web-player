@@ -1,5 +1,4 @@
 import { CalendarDays, ChevronDown } from "lucide-react";
-import { useState } from "react";
 
 import { HomeCardThumbnail } from "./HomeVideoCards";
 import type { HomeVideoCard, VideoItem, WatchActivityStore } from "./playerTypes";
@@ -20,6 +19,7 @@ type WatchActivitySectionProps = {
   carouselTick: number;
   cards: HomeVideoCard[];
   insights: WatchActivityInsights;
+  isExpanded: boolean;
   metric: WatchActivityMetric;
   metricOptions: Array<{ value: WatchActivityMetric; label: string }>;
   monthGroups: WatchActivityMonthGroup[];
@@ -37,6 +37,7 @@ type WatchActivitySectionProps = {
   onSelectDate: (date: string) => void;
   onSelectTag: (tag: string) => void;
   onThumbnailError: (videoId: string) => void;
+  onToggle: () => void;
 };
 
 export function WatchActivitySection({
@@ -44,6 +45,7 @@ export function WatchActivitySection({
   carouselTick,
   cards,
   insights,
+  isExpanded,
   metric,
   metricOptions,
   monthGroups,
@@ -61,8 +63,8 @@ export function WatchActivitySection({
   onSelectDate,
   onSelectTag,
   onThumbnailError,
+  onToggle,
 }: WatchActivitySectionProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
   const selectedMetricLabel = selectedDay
     ? formatMetric(getWatchActivityMetricValue(selectedDay, metric), metric)
     : "暂无记录";
@@ -74,10 +76,10 @@ export function WatchActivitySection({
         type="button"
         aria-expanded={isExpanded}
         aria-controls="watch-activity-content"
-        onClick={() => setIsExpanded((current) => !current)}
+        onClick={onToggle}
       >
         <h2>观看日历</h2>
-        <span>{insights.activeDays} 个活跃日</span>
+        <span>{isExpanded ? `${insights.activeDays} 个活跃日` : "点击展开"}</span>
         <ChevronDown className="home-section-toggle-chevron" size={16} aria-hidden="true" />
       </button>
       {isExpanded ? (

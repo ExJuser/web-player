@@ -16,6 +16,7 @@ type HomeSpecialInsightsSectionProps = {
   activeTab: SpecialInsightTab;
   createCard: (video: VideoItem) => HomeVideoCard;
   insights: SpecialModeInsights | null;
+  isExpanded: boolean;
   rankingVideos: SpecialModeVideoInsight[];
   videoComments: VideoCommentStore;
   videoRatings: VideoRatingStore;
@@ -26,12 +27,14 @@ type HomeSpecialInsightsSectionProps = {
   onSelectTag: (tag: string) => void;
   onTabChange: (tab: SpecialInsightTab) => void;
   onThumbnailError: (videoId: string) => void;
+  onToggle: () => void;
 };
 
 export function HomeSpecialInsightsSection({
   activeTab,
   createCard,
   insights,
+  isExpanded,
   rankingVideos,
   videoComments,
   videoRatings,
@@ -42,6 +45,7 @@ export function HomeSpecialInsightsSection({
   onSelectTag,
   onTabChange,
   onThumbnailError,
+  onToggle,
 }: HomeSpecialInsightsSectionProps) {
   if (!insights?.summary.totalVideos) return null;
 
@@ -53,10 +57,12 @@ export function HomeSpecialInsightsSection({
       formatRelativeTime={formatRelativeTime}
       formatVideoMetric={formatVideoMetric}
       insights={insights}
+      isExpanded={isExpanded}
       onOpenVideo={onOpenVideo}
       onSelectTag={onSelectTag}
       onTabChange={onTabChange}
       onThumbnailError={onThumbnailError}
+      onToggle={onToggle}
       rankingVideos={rankingVideos}
       tagGroupIcons={{
         videoCount: <Tags size={14} />,

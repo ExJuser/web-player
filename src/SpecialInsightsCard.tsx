@@ -1,5 +1,5 @@
 import { ChevronDown } from "lucide-react";
-import { useState, type CSSProperties, type ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
 import { HomeCardThumbnail } from "./HomeVideoCards";
 import { RatingChip, TagChips } from "./MetadataChips";
@@ -16,6 +16,7 @@ type SpecialTagMetric = "videoCount" | "played" | "emission";
 
 type SpecialInsightsCardProps = {
   insights: SpecialModeInsights;
+  isExpanded: boolean;
   activeTab: SpecialInsightTab;
   createCard: (video: VideoItem) => HomeVideoCard;
   tabOptions: SpecialInsightTabOption[];
@@ -30,6 +31,7 @@ type SpecialInsightsCardProps = {
   onOpenVideo: (video: VideoItem) => void;
   onSelectTag: (tag: string) => void;
   onThumbnailError: (videoId: string) => void;
+  onToggle: () => void;
 };
 
 function SpecialInsightVideoRow({
@@ -171,6 +173,7 @@ function SpecialTagChartGroup({
 
 export function SpecialInsightsCard({
   insights,
+  isExpanded,
   activeTab,
   createCard,
   tabOptions,
@@ -185,9 +188,8 @@ export function SpecialInsightsCard({
   onOpenVideo,
   onSelectTag,
   onThumbnailError,
+  onToggle,
 }: SpecialInsightsCardProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
-
   return (
     <section className="home-section special-insights-card">
       <button
@@ -195,10 +197,10 @@ export function SpecialInsightsCard({
         type="button"
         aria-expanded={isExpanded}
         aria-controls="special-insights-content"
-        onClick={() => setIsExpanded((current) => !current)}
+        onClick={onToggle}
       >
         <h2>特殊模式洞察</h2>
-        <span>{insights.summary.taggedVideos} 个已打标签</span>
+        <span>{isExpanded ? `${insights.summary.taggedVideos} 个已打标签` : "点击展开"}</span>
         <ChevronDown className="home-section-toggle-chevron" size={16} aria-hidden="true" />
       </button>
       {isExpanded ? (
