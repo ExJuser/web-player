@@ -8504,16 +8504,21 @@ button {
 }
 
 .actor-video-playback-stats {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 12px;
+  display: grid;
+  width: 100%;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
   color: var(--muted-text);
 }
 
 .actor-video-playback-stats small {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  min-width: 0;
+  overflow: hidden;
   gap: 4px;
+  white-space: nowrap;
 }
 
 .actor-video-card > div {
@@ -8596,12 +8601,17 @@ button {
 }
 
 .actor-card-stats {
-  justify-content: flex-start;
-  flex-wrap: wrap;
+  display: grid;
+  width: 100%;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
   padding-top: 2px;
 }
 
 .actor-card-stats small {
+  justify-content: center;
+  min-width: 0;
+  overflow: hidden;
   font-size: 13px;
   white-space: nowrap;
 }
