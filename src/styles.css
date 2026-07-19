@@ -8157,6 +8157,17 @@ button {
   color: var(--muted-text);
 }
 
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.pagination-controls span {
+  color: var(--muted-text);
+}
+
 .actor-toolbar label {
   display: flex;
   align-items: center;
