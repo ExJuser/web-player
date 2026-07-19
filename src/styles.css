@@ -1176,6 +1176,22 @@ button {
   line-height: 1.5;
 }
 
+.home-resume-metadata {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.home-resume-metadata .tag-chip-row {
+  width: fit-content;
+}
+
+.home-resume-metadata .rating-chip {
+  margin-top: 0;
+}
+
 .home-progress {
   width: 100%;
   height: 8px;

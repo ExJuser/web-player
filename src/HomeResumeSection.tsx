@@ -1,6 +1,7 @@
 import { FolderOpen, Play, RotateCcw } from "lucide-react";
 
 import { HomeCardThumbnail } from "./HomeVideoCards";
+import { RatingChip, TagChips } from "./MetadataChips";
 import type { HomeVideoCard, VideoItem } from "./playerTypes";
 
 type HomeResumeSectionProps = {
@@ -30,6 +31,10 @@ export function HomeResumeSection({
   onOpenVideo,
   onThumbnailError,
 }: HomeResumeSectionProps) {
+  const hasMetadata = Boolean(
+    card && (card.tags?.length || typeof card.rating === "number" || card.ratingComment?.trim()),
+  );
+
   return (
     <section className={`home-resume-card ${card ? "" : "empty"} ${card?.video.thumbnailUrl ? "has-thumbnail" : ""}`}>
       {card ? (
@@ -45,6 +50,12 @@ export function HomeResumeSection({
               <span style={{ width: `${card.progressPercent}%` }} />
             </div>
             <small>{formatHomeMeta(card)}</small>
+            {hasMetadata ? (
+              <div className="home-resume-metadata">
+                <TagChips tags={card.tags ?? []} limit={10} />
+                <RatingChip rating={card.rating} comment={card.ratingComment} />
+              </div>
+            ) : null}
             <div className="home-resume-actions">
               <button className="primary-button" type="button" onClick={() => onOpenVideo(card.video)}>
                 <Play size={18} />
