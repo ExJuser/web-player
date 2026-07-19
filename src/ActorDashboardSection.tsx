@@ -11,6 +11,10 @@ const actorPageSize = 12;
 const actorVideoPageSize = 12;
 const unresolvedPageSize = 24;
 
+function hasNamedVideoArtwork(video: VideoItem) {
+  return Boolean(video.posterFile || video.posterUrl || video.fanartFile || video.fanartUrl || video.thumbFile || video.thumbUrl);
+}
+
 type ActorDashboardSectionProps = {
   actors: ActorInsight[];
   unresolvedVideos: VideoItem[];
@@ -59,7 +63,8 @@ function StoredActorCover({ actorId, actorName, fallbackVideo, libraryId, onAvai
   }, [actorId, libraryId, onAvailabilityChange, version]);
 
   const visibleCoverUrl = coverUrl ?? fallbackVideo.thumbnailUrl;
-  return <span className={`actor-cover ${visibleCoverUrl ? "has-image" : ""}`}>{visibleCoverUrl ? <img src={visibleCoverUrl} alt="" onError={() => {
+  const isGeneratedThumbnail = Boolean(visibleCoverUrl && !coverUrl && !hasNamedVideoArtwork(fallbackVideo));
+  return <span className={`actor-cover ${visibleCoverUrl ? "has-image" : ""} ${isGeneratedThumbnail ? "generated-thumbnail" : ""}`}>{visibleCoverUrl ? <img src={visibleCoverUrl} alt="" onError={() => {
     if (coverUrl) {
       setCoverUrl(null);
       onAvailabilityChange(actorId, false);
@@ -185,7 +190,7 @@ export function ActorDashboardSection({
           {visibleActorVideos.map(({ video, source }) => (
             <article className="actor-video-card" key={video.id}>
               <button type="button" onClick={() => onOpenVideo(video)}>
-                <span className={`actor-cover ${video.thumbnailUrl ? "has-image" : ""}`}>{video.thumbnailUrl ? <img src={video.thumbnailUrl} alt="" onError={() => onThumbnailError(video.id)} /> : <Film size={28} />}</span>
+                <span className={`actor-cover ${video.thumbnailUrl ? "has-image" : ""} ${video.thumbnailUrl && !hasNamedVideoArtwork(video) ? "generated-thumbnail" : ""}`}>{video.thumbnailUrl ? <img src={video.thumbnailUrl} alt="" onError={() => onThumbnailError(video.id)} /> : <Film size={28} />}</span>
                 <strong>{video.name}</strong>
               </button>
               <div><span className={`actor-source ${source}`}>{source === "manual" ? "人工" : source === "nfo" ? "NFO" : "演员标签"}</span><span className="actor-video-actions"><button className="secondary-button actor-correction-button" type="button" disabled={Boolean(actorCoverPendingAction)} onClick={() => { setPendingCoverRemovalActorId(null); onSetActorCover(selected.actor.id, video); }}><ImagePlus size={13} /> {actorCoverPendingAction === `set:${video.id}` ? "保存中..." : "设为封面"}</button><button className="secondary-button actor-correction-button" type="button" onClick={() => onEditVideoActors(video)}><Pencil size={13} /> 纠正演员</button></span></div>

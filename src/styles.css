@@ -8457,6 +8457,10 @@ button {
   z-index: 1;
 }
 
+.actor-cover.generated-thumbnail img {
+  object-fit: cover;
+}
+
 .actor-video-card > button {
   display: grid;
   width: 100%;
