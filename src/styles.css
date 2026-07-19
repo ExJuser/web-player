@@ -2373,11 +2373,11 @@ button {
 
 .watch-activity-video {
   display: grid;
-  grid-template-columns: 54px minmax(0, 1fr);
+  grid-template-columns: clamp(128px, 8vw, 156px) minmax(0, 1fr);
   align-items: center;
-  gap: 9px;
+  gap: 12px;
   min-width: 0;
-  padding: 8px;
+  padding: 10px;
   border: 1px solid #2b323d;
   border-radius: 6px;
   background: #20252d;
@@ -9382,6 +9382,12 @@ button {
 
   .watch-activity-video-list {
     grid-template-columns: 1fr;
+  }
+
+  .watch-activity-video {
+    grid-template-columns: 104px minmax(0, 1fr);
+    gap: 10px;
+    padding: 8px;
   }
 
   .home-primary-column .special-insight-summary,
