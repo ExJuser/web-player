@@ -79,13 +79,12 @@ export function ActorDashboardSection({
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<"name" | "count" | "recent">("count");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
-  const [visibleActorCount, setVisibleActorCount] = useState(actorPageSize);
+  const [actorPage, setActorPage] = useState(1);
   const [visibleActorVideoCount, setVisibleActorVideoCount] = useState(actorVideoPageSize);
   const [unresolvedPage, setUnresolvedPage] = useState(1);
   const [showUnresolved, setShowUnresolved] = useState(false);
   const [actorCoverAvailability, setActorCoverAvailability] = useState<Record<string, boolean>>({});
   const [pendingCoverRemovalActorId, setPendingCoverRemovalActorId] = useState<string | null>(null);
-  const actorLoadMoreRef = useRef<HTMLDivElement>(null);
   const actorVideoLoadMoreRef = useRef<HTMLDivElement>(null);
   const actorCoverFileInputRef = useRef<HTMLInputElement>(null);
   const selected = actors.find((entry) => entry.actor.id === selectedActorId) ?? null;
@@ -105,21 +104,14 @@ export function ActorDashboardSection({
         return (a.videos.length - b.videos.length) * direction || nameComparison;
       });
   }, [actors, query, sort, sortDirection]);
+  const actorPageCount = Math.max(1, Math.ceil(filteredActors.length / actorPageSize));
   const unresolvedPageCount = Math.max(1, Math.ceil(unresolvedVideos.length / unresolvedPageSize));
-  useEffect(() => setVisibleActorCount(actorPageSize), [query, sort, sortDirection]);
+  useEffect(() => setActorPage(1), [query, sort, sortDirection]);
   useEffect(() => setVisibleActorVideoCount(actorVideoPageSize), [selected?.actor.id]);
   useEffect(() => setPendingCoverRemovalActorId(null), [selected?.actor.id]);
   useEffect(() => setActorCoverAvailability({}), [libraryId]);
+  useEffect(() => setActorPage((value) => Math.min(value, actorPageCount)), [actorPageCount]);
   useEffect(() => setUnresolvedPage((value) => Math.min(value, unresolvedPageCount)), [unresolvedPageCount]);
-  useEffect(() => {
-    const target = actorLoadMoreRef.current;
-    if (!target || visibleActorCount >= filteredActors.length) return;
-    const observer = new IntersectionObserver(([entry]) => {
-      if (entry.isIntersecting) setVisibleActorCount((value) => Math.min(value + actorPageSize, filteredActors.length));
-    }, { rootMargin: "240px 0px" });
-    observer.observe(target);
-    return () => observer.disconnect();
-  }, [filteredActors.length, visibleActorCount]);
   useEffect(() => {
     const target = actorVideoLoadMoreRef.current;
     const videoCount = selected?.videos.length ?? 0;
@@ -130,7 +122,7 @@ export function ActorDashboardSection({
     observer.observe(target);
     return () => observer.disconnect();
   }, [selected?.videos.length, visibleActorVideoCount]);
-  const visibleActors = useMemo(() => filteredActors.slice(0, visibleActorCount), [filteredActors, visibleActorCount]);
+  const visibleActors = useMemo(() => filteredActors.slice((actorPage - 1) * actorPageSize, actorPage * actorPageSize), [actorPage, filteredActors]);
   const visibleActorVideos = selected?.videos.slice(0, visibleActorVideoCount) ?? [];
   const missingActorThumbnailVideoIds = useMemo(() => visibleActors.every((entry) => actorCoverAvailability[entry.actor.id] !== undefined)
     ? visibleActors.filter((entry) => !actorCoverAvailability[entry.actor.id]).map((entry) => entry.representativeVideo.id)
@@ -194,7 +186,7 @@ export function ActorDashboardSection({
       <div className="actor-dashboard-header"><div><h2>演员视图</h2><p>{actors.length} 名演员 · {unresolvedVideos.length} 部未识别影片</p></div><button className="secondary-button" type="button" onClick={() => { setUnresolvedPage(1); setShowUnresolved(true); }}><Film size={15} /> 未识别影片</button></div>
       <div className="actor-toolbar"><label><Search size={16} /><input value={query} placeholder="搜索演员姓名或别名" onChange={(event) => setQuery(event.target.value)} /></label><div className="actor-sort-controls"><ControlSelect label="" ariaLabel="演员排序字段" value={sort} options={[{ value: "count", label: "影片数" }, { value: "name", label: "姓名" }, { value: "recent", label: "最近影片" }]} onChange={setSort} className="actor-sort-control" /><ControlSelect label="" ariaLabel="演员排序方向" value={sortDirection} options={[{ value: "desc", label: "降序" }, { value: "asc", label: "升序" }]} onChange={setSortDirection} className="actor-sort-direction-control" /></div></div>
       {visibleActors.length ? <div className="actor-card-grid">{visibleActors.map((entry) => <button className="actor-card" type="button" key={entry.actor.id} onClick={() => onSelectActor(entry.actor.id)}><StoredActorCover actorId={entry.actor.id} actorName={entry.actor.name} fallbackVideo={entry.representativeVideo} libraryId={libraryId} onAvailabilityChange={handleActorCoverAvailabilityChange} onThumbnailError={onThumbnailError} version={actorCoverVersions[entry.actor.id] ?? 0} /><span><strong>{entry.actor.name}</strong><small><Users size={13} /> {entry.videos.length} 部影片</small></span></button>)}</div> : <div className="ai-empty-state">没有符合条件的演员。</div>}
-      {visibleActorCount < filteredActors.length ? <div ref={actorLoadMoreRef} className="actor-infinite-loader">继续向下滚动加载更多演员</div> : null}
+      {actorPageCount > 1 ? <div className="pagination-controls"><button className="secondary-button" type="button" disabled={actorPage <= 1} onClick={() => setActorPage((value) => value - 1)}>上一页</button><span>{actorPage} / {actorPageCount}</span><button className="secondary-button" type="button" disabled={actorPage >= actorPageCount} onClick={() => setActorPage((value) => value + 1)}>下一页</button></div> : null}
     </section>
   );
 }
