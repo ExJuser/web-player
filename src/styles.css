@@ -1188,8 +1188,17 @@ button {
   width: fit-content;
 }
 
+.home-resume-metadata .tag-chip,
 .home-resume-metadata .rating-chip {
+  min-height: 28px;
   margin-top: 0;
+  padding: 0 10px;
+  font-size: 14px;
+  line-height: 26px;
+}
+
+.home-resume-metadata .tag-chip {
+  max-width: 160px;
 }
 
 .home-progress {
