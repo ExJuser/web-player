@@ -8434,7 +8434,7 @@ button {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  aspect-ratio: 16 / 9;
+  aspect-ratio: 800 / 538;
   place-items: center;
   color: #c4b5fd;
   background: linear-gradient(135deg, rgba(124, 58, 237, 0.35), rgba(219, 39, 119, 0.22));
