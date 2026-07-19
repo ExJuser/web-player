@@ -1,4 +1,5 @@
 import { normalizeActorKey } from "./actorNfoCore.mjs";
+import { createVideoStatsKey } from "./playerUiState";
 import { normalizeTagKey } from "./tagUtils";
 import type {
   ActorProfile,
@@ -7,7 +8,9 @@ import type {
   ActorTagDefinitionStore,
   VideoActorOverrideStore,
   VideoItem,
+  VideoStatsStore,
   VideoTagStore,
+  WatchActivityStore,
 } from "./playerTypes";
 
 export type ResolvedVideoActors = {
@@ -25,6 +28,13 @@ export type ActorInsight = {
   videos: ActorVideoEntry[];
   latestModified: number;
   representativeVideo: VideoItem;
+  commonTags: string[];
+  stats: {
+    emissionCount: number;
+    playCount: number;
+    totalPlayedSeconds: number;
+    lastWatchedAt: number | null;
+  };
 };
 
 function createActorId(key: string) {
@@ -148,9 +158,18 @@ export function buildActorInsights(input: {
   videoTags: VideoTagStore;
   actorTagDefinitions: ActorTagDefinitionStore;
   videoActorOverrides: VideoActorOverrideStore;
+  videoStats?: VideoStatsStore;
+  watchActivity?: WatchActivityStore;
 }) {
   const entriesByActor = new Map<string, ActorVideoEntry[]>();
   const unresolvedVideos: VideoItem[] = [];
+  const lastWatchedAtByVideoId = new Map<string, number>();
+  Object.values(input.watchActivity ?? {}).forEach((activity) => {
+    if (activity.watchedSeconds <= 0 && activity.playCount <= 0) return;
+    const previous = lastWatchedAtByVideoId.get(activity.videoId) ?? 0;
+    if (activity.updatedAt > previous) lastWatchedAtByVideoId.set(activity.videoId, activity.updatedAt);
+  });
+  const actorAliasIndex = createActorAliasIndex(input.profiles);
   input.videos.forEach((video) => {
     const resolved = resolveVideoActors({ ...input, video });
     if (!resolved.actorIds.length || !resolved.source) {
@@ -169,11 +188,41 @@ export function buildActorInsights(input: {
     const actor = input.profiles[actorId];
     if (!actor || !entries.length) return;
     const sortedEntries = [...entries].sort((a, b) => b.video.lastModified - a.video.lastModified);
+    const tagCounts = new Map<string, { label: string; count: number }>();
+    let emissionCount = 0;
+    let playCount = 0;
+    let totalPlayedSeconds = 0;
+    let lastWatchedAt = 0;
+    sortedEntries.forEach(({ video }) => {
+      const seenTagKeys = new Set<string>();
+      (input.videoTags[video.id] ?? []).forEach((tag) => {
+        const key = normalizeTagKey(tag);
+        if (!key || seenTagKeys.has(key) || input.actorTagDefinitions[key] || actorAliasIndex.has(normalizeActorKey(tag))) return;
+        seenTagKeys.add(key);
+        const current = tagCounts.get(key);
+        tagCounts.set(key, { label: current?.label ?? tag, count: (current?.count ?? 0) + 1 });
+      });
+      const stats = input.videoStats?.[createVideoStatsKey(video)];
+      emissionCount += stats?.emissionCount ?? 0;
+      playCount += stats?.playCount ?? 0;
+      totalPlayedSeconds += stats?.totalPlayedSeconds ?? 0;
+      lastWatchedAt = Math.max(lastWatchedAt, lastWatchedAtByVideoId.get(video.id) ?? 0);
+    });
     actors.push({
       actor,
       videos: sortedEntries,
       latestModified: sortedEntries[0].video.lastModified,
       representativeVideo: sortedEntries[0].video,
+      commonTags: Array.from(tagCounts.values())
+        .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, undefined, { numeric: true, sensitivity: "base" }))
+        .slice(0, 3)
+        .map((tag) => tag.label),
+      stats: {
+        emissionCount,
+        playCount,
+        totalPlayedSeconds,
+        lastWatchedAt: lastWatchedAt || null,
+      },
     });
   });
   return { actors, unresolvedVideos: unresolvedVideos.sort((a, b) => b.lastModified - a.lastModified) };

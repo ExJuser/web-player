@@ -8389,7 +8389,7 @@ button {
   text-align: left;
 }
 
-.actor-card > span:last-child,
+.actor-card-details,
 .actor-video-card strong {
   display: grid;
   gap: 4px;
@@ -8436,6 +8436,65 @@ button {
   justify-content: space-between;
   gap: 8px;
   padding: 0 12px 12px;
+}
+
+.actor-card-heading,
+.actor-card-stats {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.actor-card-heading strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.actor-card-heading small {
+  flex: none;
+}
+
+.actor-card-tags {
+  display: flex;
+  min-width: 0;
+  gap: 5px;
+  overflow: hidden;
+}
+
+.actor-card-tags > span {
+  overflow: hidden;
+  padding: 3px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  color: #cffafe;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: rgba(8, 145, 178, 0.2);
+}
+
+.app-shell.theme-light .actor-card-tags > span,
+:root[data-theme="light"] .actor-card-tags > span {
+  color: #075d72;
+  background: rgba(8, 145, 178, 0.14);
+}
+
+.actor-card-tags em {
+  color: var(--muted-text);
+  font-size: 11px;
+  font-style: normal;
+}
+
+.actor-card-stats {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  padding-top: 2px;
+}
+
+.actor-card-stats small {
+  white-space: nowrap;
 }
 
 .actor-video-actions {

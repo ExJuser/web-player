@@ -1662,7 +1662,9 @@ export default function App() {
     videoTags,
     actorTagDefinitions,
     videoActorOverrides,
-  }), [actorProfiles, actorTagDefinitions, modeFilteredVideos, videoActorOverrides, videoTags]);
+    videoStats: videoStatsRef.current,
+    watchActivity: watchActivityRef.current,
+  }), [actorProfiles, actorTagDefinitions, modeFilteredVideos, videoActorOverrides, videoStatsRevision, videoTags, watchActivityRevision]);
   const actorEditVideo = actorEditVideoId ? videos.find((video) => video.id === actorEditVideoId) ?? null : null;
   const actorEditResolved = actorEditVideo ? resolveVideoActors({
     video: actorEditVideo,
@@ -5678,6 +5680,8 @@ export default function App() {
                   libraryId={libraryId}
                   actorCoverVersions={actorCoverVersions}
                   actorCoverPendingAction={actorCoverPendingAction}
+                  formatDuration={formatCumulativeDuration}
+                  formatRelativeTime={formatRelativeTime}
                   onSelectActor={setSelectedActorId}
                   onOpenVideo={openVideoFromHome}
                   onEditVideoActors={(video) => setActorEditVideoId(video.id)}
