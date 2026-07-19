@@ -8416,7 +8416,9 @@ button {
 
 .actor-checkbox-list {
   display: grid;
+  height: 240px;
   max-height: 240px;
+  align-content: start;
   gap: 6px;
   padding-right: 4px;
   overflow-y: auto;
