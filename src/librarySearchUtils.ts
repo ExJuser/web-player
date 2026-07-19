@@ -293,8 +293,7 @@ function getSearchableFields<Video extends LibrarySearchVideo, Progress>(video: 
   ].map(normalizeLibrarySearchText);
 }
 
-function matchesRequiredSpecialTerms(searchable: string[], query: string, tags: string[]) {
-  const requiredTokens = tokenizeLibrarySearchQuery(query, 1);
+function matchesRequiredSpecialTerms(searchable: string[], requiredTokens: string[], tags: string[]) {
   if (!requiredTokens.length) return false;
   return requiredTokens.every((token) => {
     const tagScore = getTagSearchScore(token, tags);
@@ -303,16 +302,39 @@ function matchesRequiredSpecialTerms(searchable: string[], query: string, tags: 
   });
 }
 
-function scoreVideo<Video extends LibrarySearchVideo, Progress>(
-  video: Video,
-  query: string,
-  context: LibrarySearchContext<Progress>,
-) {
+type LibrarySearchQueryState = {
+  query: string;
+  normalizedQuery: string;
+  tokens: string[];
+  tokenSet: Set<string>;
+  queryVariants: string[];
+  alternateQueryVariants: string[];
+  tokenVariants: string[];
+  requiredSpecialTokens: string[];
+};
+
+function createLibrarySearchQueryState(query: string): LibrarySearchQueryState {
   const normalizedQuery = normalizeLibrarySearchText(query);
   const tokens = tokenizeLibrarySearchQuery(query);
   const queryVariants = createLibrarySearchTextVariants(query);
-  const alternateQueryVariants = queryVariants.filter((variant) => variant !== normalizedQuery);
-  const tokenVariants = createLibrarySearchTokenVariants(query);
+  return {
+    query,
+    normalizedQuery,
+    tokens,
+    tokenSet: new Set(tokens),
+    queryVariants,
+    alternateQueryVariants: queryVariants.filter((variant) => variant !== normalizedQuery),
+    tokenVariants: createLibrarySearchTokenVariants(query),
+    requiredSpecialTokens: tokenizeLibrarySearchQuery(query, 1),
+  };
+}
+
+function scoreVideo<Video extends LibrarySearchVideo, Progress>(
+  video: Video,
+  queryState: LibrarySearchQueryState,
+  context: LibrarySearchContext<Progress>,
+) {
+  const { query, normalizedQuery, tokens, tokenSet, queryVariants, alternateQueryVariants, tokenVariants, requiredSpecialTokens } = queryState;
   const searchable = getSearchableFields(video, context);
   const tags = context.videoTags?.[video.id] ?? [];
   const rating = context.videoRatings?.[video.id];
@@ -340,7 +362,7 @@ function scoreVideo<Video extends LibrarySearchVideo, Progress>(
           ? ["评分筛选"]
           : [];
 
-  if (context.mode === "special" && normalizedQuery && !matchesRequiredSpecialTerms(searchable, query, tags)) {
+  if (context.mode === "special" && normalizedQuery && !matchesRequiredSpecialTerms(searchable, requiredSpecialTokens, tags)) {
     return { score: 0, reason: "关键词匹配" };
   }
 
@@ -393,14 +415,14 @@ function scoreVideo<Video extends LibrarySearchVideo, Progress>(
     score += Math.floor(getTagSearchScore(token, tags) / 4);
   });
   if (context.mode === "special") {
-    tokenizeLibrarySearchQuery(query, 1)
-      .filter((token) => !tokens.includes(token))
+    requiredSpecialTokens
+      .filter((token) => !tokenSet.has(token))
       .forEach((token) => {
         score += Math.floor(getTagSearchScore(token, tags) / 2);
       });
   }
   tokenVariants
-    .filter((token) => !tokens.includes(token))
+    .filter((token) => !tokenSet.has(token))
     .forEach((token) => {
       if (searchable[0].includes(token)) score += 8;
       if (searchable[1].includes(token)) score += 6;
@@ -494,10 +516,11 @@ export function searchLibraryEntries<Video extends LibrarySearchVideo, Progress>
   const hasTagFilters = Boolean(searchContext.tagFilters?.length);
   const hasExcludedTagFilters = Boolean(searchContext.excludedTagFilters?.length);
   const hasRatingFilter = typeof searchContext.minimumRating === "number";
-  if (!normalizeLibrarySearchText(parsedQuery.textQuery) && !hasTagFilters && !hasExcludedTagFilters && !hasRatingFilter) return [];
+  const queryState = createLibrarySearchQueryState(parsedQuery.textQuery);
+  if (!queryState.normalizedQuery && !hasTagFilters && !hasExcludedTagFilters && !hasRatingFilter) return [];
   const folderVideosByKey = groupVideosByLibraryFolderKey(videos);
   const scoredVideos = videos
-    .map((video) => ({ video, ...scoreVideo(video, parsedQuery.textQuery, searchContext) }))
+    .map((video) => ({ video, ...scoreVideo(video, queryState, searchContext) }))
     .filter((item) => item.score > 0);
 
   if (searchContext.mode === "special" || searchContext.resultKind === "video") {
