@@ -2020,6 +2020,43 @@ button {
   font-size: 16px;
 }
 
+.home-section-toggle {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.home-section-toggle h2 {
+  font-size: 16px;
+}
+
+.home-section-toggle > span {
+  color: #8e97a5;
+  font-size: 13px;
+}
+
+.home-section-toggle-chevron {
+  color: #79dfff;
+  transition: transform 0.16s ease;
+}
+
+.home-section-toggle[aria-expanded="true"] .home-section-toggle-chevron {
+  transform: rotate(180deg);
+}
+
+.home-section-collapsible-content {
+  display: grid;
+  gap: 12px;
+}
+
 .home-next-card {
   display: grid;
   grid-template-columns: 132px minmax(0, 1fr) auto;
@@ -6822,6 +6859,7 @@ button {
 .app-shell.theme-light .home-next-card small,
 .app-shell.theme-light .home-list-copy small,
 .app-shell.theme-light .home-section-header span,
+.app-shell.theme-light .home-section-toggle > span,
 .app-shell.theme-light .episode-main small,
 .app-shell.theme-light .cache-status-summary span,
 .app-shell.theme-light .cache-status-overview span,
@@ -6852,6 +6890,7 @@ button {
 .app-shell.theme-light .home-empty-state h2,
 .app-shell.theme-light .home-resume-copy h2,
 .app-shell.theme-light .home-section-header h2,
+.app-shell.theme-light .home-section-toggle h2,
 .app-shell.theme-light .photo-toolbar h2,
 .app-shell.theme-light .photo-empty-state h2,
 .app-shell.theme-light .photo-album-title-row > button:first-child,

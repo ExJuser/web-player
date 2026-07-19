@@ -1,4 +1,5 @@
-import type { CSSProperties, ReactNode } from "react";
+import { ChevronDown } from "lucide-react";
+import { useState, type CSSProperties, type ReactNode } from "react";
 
 import { HomeCardThumbnail } from "./HomeVideoCards";
 import { RatingChip, TagChips } from "./MetadataChips";
@@ -185,12 +186,23 @@ export function SpecialInsightsCard({
   onSelectTag,
   onThumbnailError,
 }: SpecialInsightsCardProps) {
+  const [isExpanded, setIsExpanded] = useState(false);
+
   return (
     <section className="home-section special-insights-card">
-      <div className="home-section-header">
+      <button
+        className="home-section-toggle"
+        type="button"
+        aria-expanded={isExpanded}
+        aria-controls="special-insights-content"
+        onClick={() => setIsExpanded((current) => !current)}
+      >
         <h2>特殊模式洞察</h2>
         <span>{insights.summary.taggedVideos} 个已打标签</span>
-      </div>
+        <ChevronDown className="home-section-toggle-chevron" size={16} aria-hidden="true" />
+      </button>
+      {isExpanded ? (
+        <div id="special-insights-content" className="home-section-collapsible-content">
       <div className="special-insight-summary">
         <div>
           <strong>{formatDuration(insights.summary.totalPlayedSeconds)}</strong>
@@ -276,6 +288,8 @@ export function SpecialInsightsCard({
           onSelectTag={onSelectTag}
         />
       </div>
+        </div>
+      ) : null}
     </section>
   );
 }
