@@ -8496,8 +8496,9 @@ button {
 
 .actor-video-rating-tags {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   min-width: 0;
+  flex-direction: column;
   gap: 7px;
   overflow: hidden;
 }
