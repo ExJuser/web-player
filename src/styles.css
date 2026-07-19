@@ -2062,6 +2062,12 @@ button {
   text-align: left;
 }
 
+.home-recent-section .home-list-card {
+  grid-template-columns: clamp(144px, 10vw, 176px) minmax(0, 1fr);
+  gap: 14px;
+  padding: 10px;
+}
+
 .home-list-card:hover {
   background: #17242d;
 }
@@ -9495,6 +9501,12 @@ button {
 
   .home-list-grid {
     grid-template-columns: 1fr;
+  }
+
+  .home-recent-section .home-list-card {
+    grid-template-columns: 112px minmax(0, 1fr);
+    gap: 10px;
+    padding: 8px;
   }
 
   .home-next-card {

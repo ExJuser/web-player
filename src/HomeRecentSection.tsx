@@ -11,7 +11,7 @@ export function HomeRecentSection({ cards, renderCard }: HomeRecentSectionProps)
   if (!cards.length) return null;
 
   return (
-    <section className="home-section">
+    <section className="home-section home-recent-section">
       <div className="home-section-header">
         <h2>最近观看</h2>
         <span>{cards.length} 个记录</span>
