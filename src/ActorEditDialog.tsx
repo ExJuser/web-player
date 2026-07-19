@@ -26,10 +26,11 @@ export function ActorEditDialog({
 }: ActorEditDialogProps) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set(initialActorIds));
   const [newActorName, setNewActorName] = useState("");
+  const initialActorIdsKey = initialActorIds.join("\u0000");
   useEffect(() => {
-    setSelectedIds(new Set(initialActorIds));
+    setSelectedIds(new Set(initialActorIdsKey ? initialActorIdsKey.split("\u0000") : []));
     setNewActorName("");
-  }, [initialActorIds, video?.id]);
+  }, [initialActorIdsKey, video?.id]);
   const actors = useMemo(
     () => Object.values(profiles).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" })),
     [profiles],
@@ -42,6 +43,7 @@ export function ActorEditDialog({
     : actors;
   const filteredOtherActors = matchingActors.filter((actor) => !selectedIds.has(actor.id));
   const matchingSelectedActorCount = matchingActors.length - filteredOtherActors.length;
+  const newActorNameToSave = normalizedActorQuery && !matchingActors.length ? newActorName.trim() : undefined;
   const toggleActor = (actorId: string) => setSelectedIds((current) => {
     const next = new Set(current);
     if (next.has(actorId)) next.delete(actorId); else next.add(actorId);
@@ -77,10 +79,7 @@ export function ActorEditDialog({
               <input
                 type="checkbox"
                 checked={selectedIds.has(actor.id)}
-                onChange={() => {
-                  toggleActor(actor.id);
-                  setNewActorName("");
-                }}
+                onChange={() => toggleActor(actor.id)}
               />
               <span>{actor.name}</span>
             </label>
@@ -93,7 +92,7 @@ export function ActorEditDialog({
           <small>存在匹配项时可直接在上方勾选。</small>
         </label>
         <div className="dialog-actions">
-          <button className="primary-button" type="button" onClick={() => onSave(Array.from(selectedIds), newActorName.trim() || undefined)}>
+          <button className="primary-button" type="button" onClick={() => onSave(Array.from(selectedIds), newActorNameToSave)}>
             <UserPlus size={16} /> 保存人工名单
           </button>
           {isManual ? (
