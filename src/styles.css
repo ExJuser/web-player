@@ -8390,6 +8390,24 @@ button {
 .actor-source.manual { color: #fef3c7; background: rgba(217, 119, 6, 0.25); }
 .actor-source.tag { color: #cffafe; background: rgba(8, 145, 178, 0.24); }
 
+.app-shell.theme-light .actor-source,
+:root[data-theme="light"] .actor-source {
+  color: #5b21b6;
+  background: rgba(124, 58, 237, 0.12);
+}
+
+.app-shell.theme-light .actor-source.manual,
+:root[data-theme="light"] .actor-source.manual {
+  color: #92400e;
+  background: rgba(217, 119, 6, 0.12);
+}
+
+.app-shell.theme-light .actor-source.tag,
+:root[data-theme="light"] .actor-source.tag {
+  color: #0e7490;
+  background: rgba(8, 145, 178, 0.12);
+}
+
 .actor-new-field {
   display: grid;
   gap: 5px;
@@ -8398,6 +8416,18 @@ button {
 .actor-new-field small {
   color: var(--muted-text);
   font-size: 12px;
+}
+
+.app-shell.theme-light .actor-new-field input,
+:root[data-theme="light"] .actor-new-field input {
+  border-color: #cfd8e3;
+  color: #172033;
+  background: #ffffff;
+}
+
+.app-shell.theme-light .actor-new-field input::placeholder,
+:root[data-theme="light"] .actor-new-field input::placeholder {
+  color: #98a2b3;
 }
 
 .actor-unresolved-list {
@@ -8522,6 +8552,12 @@ button {
   padding: 9px 10px;
   border-radius: 8px;
   background: rgba(30, 41, 59, 0.68);
+}
+
+.app-shell.theme-light .actor-checkbox-list label,
+:root[data-theme="light"] .actor-checkbox-list label {
+  color: #243044;
+  background: #eef2f6;
 }
 
 .tag-editor-current .tag-editor-chip {
