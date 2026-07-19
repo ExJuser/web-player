@@ -8315,12 +8315,28 @@ button {
   background: rgba(15, 23, 42, 0.52);
 }
 
-.actor-unresolved-list span {
+.actor-unresolved-video-button {
   display: flex;
+  flex: 1;
   min-width: 0;
   align-items: center;
   gap: 8px;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  text-align: left;
+  background: transparent;
+  cursor: pointer;
   overflow-wrap: anywhere;
+}
+
+.actor-unresolved-video-button:hover {
+  color: #c4b5fd;
+}
+
+.app-shell.theme-light .actor-unresolved-video-button:hover,
+:root[data-theme="light"] .actor-unresolved-video-button:hover {
+  color: #7c3aed;
 }
 
 .actor-edit-dialog {
