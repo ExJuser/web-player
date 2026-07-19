@@ -34,6 +34,13 @@ export function ActorEditDialog({
     () => Object.values(profiles).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" })),
     [profiles],
   );
+  const selectedActors = actors.filter((actor) => selectedIds.has(actor.id));
+  const otherActors = actors.filter((actor) => !selectedIds.has(actor.id));
+  const toggleActor = (actorId: string) => setSelectedIds((current) => {
+    const next = new Set(current);
+    if (next.has(actorId)) next.delete(actorId); else next.add(actorId);
+    return next;
+  });
   if (!video) return null;
 
   return (
@@ -44,22 +51,32 @@ export function ActorEditDialog({
           <h2 id="actor-edit-title">纠正影片演员</h2>
           <p>{video.name} · 当前来源：{source === "manual" ? "人工" : source === "nfo" ? "NFO" : source === "tag" ? "演员标签" : "未识别"}</p>
         </div>
+        <div className="actor-selected-section">
+          <strong className="actor-edit-section-title">已选演员（{selectedActors.length}）</strong>
+          {selectedActors.length ? (
+            <div className="actor-selected-list custom-scrollbar">
+              {selectedActors.map((actor) => (
+                <label key={actor.id}>
+                  <input type="checkbox" checked onChange={() => toggleActor(actor.id)} />
+                  <span>{actor.name}</span>
+                </label>
+              ))}
+            </div>
+          ) : <div className="actor-selected-empty">暂未选择演员</div>}
+        </div>
+        <strong className="actor-edit-section-title">其他演员（{otherActors.length}）</strong>
         <div className="actor-checkbox-list custom-scrollbar">
-          {actors.map((actor) => (
+          {otherActors.map((actor) => (
             <label key={actor.id}>
               <input
                 type="checkbox"
                 checked={selectedIds.has(actor.id)}
-                onChange={() => setSelectedIds((current) => {
-                  const next = new Set(current);
-                  if (next.has(actor.id)) next.delete(actor.id); else next.add(actor.id);
-                  return next;
-                })}
+                onChange={() => toggleActor(actor.id)}
               />
               <span>{actor.name}</span>
             </label>
           ))}
-          {!actors.length ? <div className="ai-empty-state">尚无演员，可在下方新增。</div> : null}
+          {!otherActors.length ? <div className="ai-empty-state">{actors.length ? "没有其他演员。" : "尚无演员，可在下方新增。"}</div> : null}
         </div>
         <label className="actor-new-field">
           <span>新增演员</span>

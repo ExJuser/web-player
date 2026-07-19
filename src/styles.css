@@ -8353,9 +8353,55 @@ button {
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.48);
 }
 
+.actor-selected-section {
+  display: grid;
+  gap: 8px;
+}
+
+.actor-edit-section-title {
+  color: var(--muted-text);
+  font-size: 13px;
+}
+
+.actor-selected-list {
+  display: flex;
+  max-height: 104px;
+  gap: 6px;
+  padding-right: 4px;
+  overflow-y: auto;
+  flex-wrap: wrap;
+}
+
+.actor-selected-list label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 10px;
+  border: 1px solid rgba(167, 139, 250, 0.38);
+  border-radius: 999px;
+  color: #ede9fe;
+  background: rgba(124, 58, 237, 0.22);
+  cursor: pointer;
+}
+
+.actor-selected-empty {
+  padding: 9px 10px;
+  border: 1px dashed rgba(148, 163, 184, 0.24);
+  border-radius: 8px;
+  color: var(--muted-text);
+  font-size: 13px;
+}
+
+.app-shell.theme-light .actor-selected-list label,
+:root[data-theme="light"] .actor-selected-list label {
+  border-color: rgba(124, 58, 237, 0.3);
+  color: #5b21b6;
+  background: rgba(124, 58, 237, 0.1);
+}
+
 .actor-checkbox-list {
   display: grid;
-  max-height: 310px;
+  max-height: 240px;
   gap: 6px;
   padding-right: 4px;
   overflow-y: auto;
