@@ -8504,21 +8504,16 @@ button {
 }
 
 .actor-video-playback-stats {
-  display: grid;
-  width: 100%;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 20px;
   color: var(--muted-text);
 }
 
 .actor-video-playback-stats small {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  min-width: 0;
-  overflow: hidden;
   gap: 4px;
-  white-space: nowrap;
 }
 
 .actor-video-card > div {
@@ -8601,17 +8596,13 @@ button {
 }
 
 .actor-card-stats {
-  display: grid;
-  width: 100%;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 8px 20px;
   padding-top: 2px;
 }
 
 .actor-card-stats small {
-  justify-content: center;
-  min-width: 0;
-  overflow: hidden;
   font-size: 13px;
   white-space: nowrap;
 }
