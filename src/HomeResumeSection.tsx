@@ -31,7 +31,7 @@ export function HomeResumeSection({
   onThumbnailError,
 }: HomeResumeSectionProps) {
   return (
-    <section className={`home-resume-card ${card ? "" : "empty"}`}>
+    <section className={`home-resume-card ${card ? "" : "empty"} ${card?.video.thumbnailUrl ? "has-thumbnail" : ""}`}>
       {card ? (
         <>
           <HomeCardThumbnail card={card} onThumbnailError={onThumbnailError} />

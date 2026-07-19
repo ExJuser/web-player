@@ -1029,8 +1029,12 @@ button {
   display: grid;
   grid-template-columns: minmax(240px, min(38%, 462px)) minmax(0, 1fr);
   gap: 18px;
-  min-height: 260px;
+  min-height: 320px;
   padding: 16px;
+}
+
+.home-resume-card.has-thumbnail {
+  grid-template-columns: auto minmax(0, 1fr);
 }
 
 .home-resume-card.empty {
@@ -1106,17 +1110,22 @@ button {
 .home-resume-card > .home-card-thumbnail {
   align-self: stretch;
   height: 100%;
-  max-height: 260px;
+  max-height: 320px;
   aspect-ratio: auto;
 }
 
 .home-resume-card > .home-card-thumbnail.has-image {
   align-self: stretch;
+  justify-self: start;
+  width: fit-content;
   height: 100%;
+  aspect-ratio: auto;
 }
 
 .home-resume-card > .home-card-thumbnail.has-image img {
-  max-height: 260px;
+  width: auto;
+  max-width: min(42vw, 520px);
+  max-height: 320px;
 }
 
 .home-resume-copy {
@@ -9142,8 +9151,13 @@ button {
     overflow: visible;
   }
 
-  .home-resume-card {
+  .home-resume-card,
+  .home-resume-card.has-thumbnail {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .home-resume-card > .home-card-thumbnail.has-image img {
+    max-width: 100%;
   }
 
   .watch-activity-calendar {
