@@ -8199,7 +8199,6 @@ button {
 }
 
 .actor-toolbar input,
-.actor-toolbar select,
 .actor-new-field input,
 .tag-inline-editor input {
   min-width: 0;
@@ -8214,6 +8213,89 @@ button {
   flex: 1;
   border: 0;
   background: transparent;
+}
+
+.actor-sort-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.actor-sort-controls .control-group-label {
+  display: none;
+}
+
+.actor-sort-controls .control-group + .control-group {
+  margin-left: 0;
+}
+
+.actor-sort-control .control-select {
+  width: 132px;
+}
+
+.actor-sort-direction-control .control-select {
+  width: 96px;
+}
+
+.actor-sort-controls .control-select-trigger {
+  height: 42px;
+  padding: 0 14px 0 12px;
+  border-radius: 10px;
+}
+
+.actor-sort-controls .control-select-list {
+  top: calc(100% + 6px);
+  right: 0;
+  bottom: auto;
+  left: auto;
+  transform: none;
+  border-radius: 10px;
+}
+
+.app-shell.theme-light .actor-sort-controls .control-select-trigger,
+:root[data-theme="light"] .actor-sort-controls .control-select-trigger {
+  border-color: #cfd8e3;
+  color: #172033;
+  background: #ffffff;
+}
+
+.app-shell.theme-light .actor-sort-controls .control-select-trigger:hover,
+.app-shell.theme-light .actor-sort-controls .control-select-trigger:focus-visible,
+.app-shell.theme-light .actor-sort-controls .control-select-trigger[aria-expanded="true"],
+:root[data-theme="light"] .actor-sort-controls .control-select-trigger:hover,
+:root[data-theme="light"] .actor-sort-controls .control-select-trigger:focus-visible,
+:root[data-theme="light"] .actor-sort-controls .control-select-trigger[aria-expanded="true"] {
+  border-color: #00a1d6;
+  color: #005f86;
+  background: #e1f5fd;
+  box-shadow: 0 0 0 2px rgba(0, 161, 214, 0.16);
+}
+
+.app-shell.theme-light .actor-sort-controls .control-select-chevron,
+:root[data-theme="light"] .actor-sort-controls .control-select-chevron {
+  color: #0077a8;
+}
+
+.app-shell.theme-light .actor-sort-controls .control-select-list,
+:root[data-theme="light"] .actor-sort-controls .control-select-list {
+  border-color: #d7e0ea;
+  background: #ffffff;
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.14);
+}
+
+.app-shell.theme-light .actor-sort-controls .control-select-list button,
+:root[data-theme="light"] .actor-sort-controls .control-select-list button {
+  color: #243044;
+}
+
+.app-shell.theme-light .actor-sort-controls .control-select-list button:hover,
+.app-shell.theme-light .actor-sort-controls .control-select-list button:focus-visible,
+.app-shell.theme-light .actor-sort-controls .control-select-list button.active,
+:root[data-theme="light"] .actor-sort-controls .control-select-list button:hover,
+:root[data-theme="light"] .actor-sort-controls .control-select-list button:focus-visible,
+:root[data-theme="light"] .actor-sort-controls .control-select-list button.active {
+  color: #0077a8;
+  background: #e1f5fd;
 }
 
 .actor-card-grid,
@@ -8496,6 +8578,10 @@ button {
 @media (max-width: 720px) {
   .actor-dashboard-header,
   .actor-toolbar { align-items: stretch; flex-direction: column; }
+  .actor-sort-controls,
+  .actor-sort-controls .control-group,
+  .actor-sort-controls .control-select { width: 100%; }
+  .actor-sort-controls .control-group { flex: 1; }
   .actor-card-grid,
   .actor-video-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .actor-unresolved-list > div { align-items: stretch; flex-direction: column; }

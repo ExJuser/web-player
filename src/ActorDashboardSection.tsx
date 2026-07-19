@@ -2,6 +2,7 @@ import { ArrowLeft, Film, Pencil, Search, UserRound, Users } from "lucide-react"
 import { useEffect, useMemo, useState } from "react";
 
 import type { ActorInsight } from "./actorUtils";
+import { ControlSelect } from "./ControlSelect";
 import type { VideoItem } from "./playerTypes";
 
 const actorPageSize = 12;
@@ -29,6 +30,7 @@ export function ActorDashboardSection({
 }: ActorDashboardSectionProps) {
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<"name" | "count" | "recent">("count");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [page, setPage] = useState(1);
   const [actorVideoPage, setActorVideoPage] = useState(1);
   const [unresolvedPage, setUnresolvedPage] = useState(1);
@@ -39,16 +41,18 @@ export function ActorDashboardSection({
     const normalizedQuery = query.normalize("NFKC").trim().toLocaleLowerCase();
     return actors
       .filter((entry) => !normalizedQuery || entry.actor.name.toLocaleLowerCase().includes(normalizedQuery) || entry.actor.aliases.some((alias) => alias.label.toLocaleLowerCase().includes(normalizedQuery)))
-      .sort((a, b) => sort === "name"
-        ? a.actor.name.localeCompare(b.actor.name, undefined, { numeric: true, sensitivity: "base" })
-        : sort === "recent"
-          ? b.latestModified - a.latestModified
-          : b.videos.length - a.videos.length || a.actor.name.localeCompare(b.actor.name));
-  }, [actors, query, sort]);
+      .sort((a, b) => {
+        const nameComparison = a.actor.name.localeCompare(b.actor.name, undefined, { numeric: true, sensitivity: "base" });
+        const direction = sortDirection === "asc" ? 1 : -1;
+        if (sort === "name") return nameComparison * direction;
+        if (sort === "recent") return (a.latestModified - b.latestModified) * direction || nameComparison;
+        return (a.videos.length - b.videos.length) * direction || nameComparison;
+      });
+  }, [actors, query, sort, sortDirection]);
   const pageCount = Math.max(1, Math.ceil(filteredActors.length / actorPageSize));
   const actorVideoPageCount = Math.max(1, Math.ceil((selected?.videos.length ?? 0) / actorVideoPageSize));
   const unresolvedPageCount = Math.max(1, Math.ceil(unresolvedVideos.length / unresolvedPageSize));
-  useEffect(() => setPage(1), [query, sort]);
+  useEffect(() => setPage(1), [query, sort, sortDirection]);
   useEffect(() => setActorVideoPage(1), [selected?.actor.id]);
   useEffect(() => setActorVideoPage((value) => Math.min(value, actorVideoPageCount)), [actorVideoPageCount]);
   useEffect(() => setUnresolvedPage((value) => Math.min(value, unresolvedPageCount)), [unresolvedPageCount]);
@@ -92,7 +96,7 @@ export function ActorDashboardSection({
   return (
     <section className="actor-dashboard" aria-label="演员视图">
       <div className="actor-dashboard-header"><div><h2>演员视图</h2><p>{actors.length} 名演员 · {unresolvedVideos.length} 部未识别影片</p></div><button className="secondary-button" type="button" onClick={() => { setUnresolvedPage(1); setShowUnresolved(true); }}><Film size={15} /> 未识别影片</button></div>
-      <div className="actor-toolbar"><label><Search size={16} /><input value={query} placeholder="搜索演员姓名或别名" onChange={(event) => setQuery(event.target.value)} /></label><select value={sort} onChange={(event) => setSort(event.target.value as typeof sort)}><option value="count">影片数</option><option value="name">姓名</option><option value="recent">最近影片</option></select></div>
+      <div className="actor-toolbar"><label><Search size={16} /><input value={query} placeholder="搜索演员姓名或别名" onChange={(event) => setQuery(event.target.value)} /></label><div className="actor-sort-controls"><ControlSelect label="" ariaLabel="演员排序字段" value={sort} options={[{ value: "count", label: "影片数" }, { value: "name", label: "姓名" }, { value: "recent", label: "最近影片" }]} onChange={setSort} className="actor-sort-control" /><ControlSelect label="" ariaLabel="演员排序方向" value={sortDirection} options={[{ value: "desc", label: "降序" }, { value: "asc", label: "升序" }]} onChange={setSortDirection} className="actor-sort-direction-control" /></div></div>
       {pagedActors.length ? <div className="actor-card-grid">{pagedActors.map((entry) => <button className="actor-card" type="button" key={entry.actor.id} onClick={() => { setActorVideoPage(1); onSelectActor(entry.actor.id); }}><span className={`actor-cover ${entry.representativeVideo.thumbnailUrl ? "has-image" : ""}`}>{entry.representativeVideo.thumbnailUrl ? <img src={entry.representativeVideo.thumbnailUrl} alt="" onError={() => onThumbnailError(entry.representativeVideo.id)} /> : <UserRound size={32} />}</span><span><strong>{entry.actor.name}</strong><small><Users size={13} /> {entry.videos.length} 部影片</small></span></button>)}</div> : <div className="ai-empty-state">没有符合条件的演员。</div>}
       {pageCount > 1 ? <div className="pagination-controls"><button className="secondary-button" type="button" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>上一页</button><span>{page} / {pageCount}</span><button className="secondary-button" type="button" disabled={page >= pageCount} onClick={() => setPage((value) => value + 1)}>下一页</button></div> : null}
     </section>
