@@ -364,7 +364,7 @@ test("player settings remember bounded volume", () => {
 test("default player data store contains tag containers", () => {
   const store = storage.createDefaultPlayerDataStore();
 
-  assert.equal(store.version, 5);
+  assert.equal(store.version, 6);
   assert.deepEqual(store.videoTags, {});
   assert.deepEqual(store.videoRatings, {});
   assert.deepEqual(store.videoStats, {});
