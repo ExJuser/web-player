@@ -8476,6 +8476,8 @@ button {
 .actor-video-card > button {
   display: grid;
   width: 100%;
+  flex: 1;
+  grid-template-rows: auto auto minmax(0, 1fr);
   gap: 9px;
   padding: 0 0 10px;
   border: 0;
@@ -8485,8 +8487,9 @@ button {
 }
 
 .actor-video-metadata {
-  display: grid;
+  display: flex;
   min-width: 0;
+  flex-direction: column;
   gap: 7px;
   padding: 0 12px;
 }
@@ -8506,6 +8509,7 @@ button {
 .actor-video-playback-stats {
   display: flex;
   flex-wrap: wrap;
+  margin-top: auto;
   gap: 6px 20px;
   color: var(--muted-text);
 }
