@@ -89,12 +89,22 @@ export function parseActorNfoBytes(input, fileName = "") {
   return { fileName, names, status: names.length ? "parsed" : "noActors" };
 }
 
-export function findMatchingNfoName(videoName, entryNames) {
-  const dotIndex = videoName.lastIndexOf(".");
-  const stem = (dotIndex > 0 ? videoName.slice(0, dotIndex) : videoName).normalize("NFKC").toLowerCase();
-  return entryNames.find((name) => {
+function normalizeFileStem(fileName) {
+  const dotIndex = fileName.lastIndexOf(".");
+  return (dotIndex > 0 ? fileName.slice(0, dotIndex) : fileName).normalize("NFKC").toLowerCase();
+}
+
+export function createMatchingNfoNameLookup(entryNames) {
+  const nfoNameByStem = new Map();
+  entryNames.forEach((name) => {
     const extensionIndex = name.lastIndexOf(".");
-    if (extensionIndex <= 0 || name.slice(extensionIndex).toLowerCase() !== ".nfo") return false;
-    return name.slice(0, extensionIndex).normalize("NFKC").toLowerCase() === stem;
-  }) ?? null;
+    if (extensionIndex <= 0 || name.slice(extensionIndex).toLowerCase() !== ".nfo") return;
+    const stem = normalizeFileStem(name);
+    if (!nfoNameByStem.has(stem)) nfoNameByStem.set(stem, name);
+  });
+  return (videoName) => nfoNameByStem.get(normalizeFileStem(videoName)) ?? null;
+}
+
+export function findMatchingNfoName(videoName, entryNames) {
+  return createMatchingNfoNameLookup(entryNames)(videoName);
 }

@@ -18,7 +18,7 @@ import {
   shouldFlushMediaScan,
   sortMediaCollection,
 } from "./playerMediaUtils";
-import { findMatchingNfoName, maxActorNfoBytes, parseActorNfoBytes } from "./actorNfoCore.mjs";
+import { createMatchingNfoNameLookup, maxActorNfoBytes, parseActorNfoBytes } from "./actorNfoCore.mjs";
 
 export async function ensureDirectoryReadPermission(directory: FileSystemDirectoryHandle) {
   const descriptor = { mode: "read" as const };
@@ -81,6 +81,7 @@ export async function* collectVideos(
     const fileEntries = entries.filter((entry): entry is FileSystemFileHandle => entry.kind === "file");
     const fileEntryNames = fileEntries.map((entry) => entry.name);
     const fileEntriesByName = new Map(fileEntries.map((entry) => [entry.name, entry]));
+    const findMatchingNfoName = createMatchingNfoNameLookup(fileEntryNames);
 
     for (const entry of entries) {
       if (entry.kind === "directory") {
@@ -103,7 +104,7 @@ export async function* collectVideos(
             parentDirectory: handle,
             playbackSource: "browser",
           };
-          const nfoName = findMatchingNfoName(entry.name, fileEntryNames);
+          const nfoName = findMatchingNfoName(entry.name);
           const nfoEntry = nfoName ? fileEntriesByName.get(nfoName) : undefined;
           if (nfoEntry) {
             try {

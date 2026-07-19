@@ -1,6 +1,6 @@
 import { access, readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
-import { findMatchingNfoName, maxActorNfoBytes, parseActorNfoBytes } from "../src/actorNfoCore.mjs";
+import { createMatchingNfoNameLookup, maxActorNfoBytes, parseActorNfoBytes } from "../src/actorNfoCore.mjs";
 import { hashValue } from "./hashUtils.mjs";
 import { readJsonFile, writeJsonFile } from "./jsonFiles.mjs";
 
@@ -233,6 +233,7 @@ export async function scanMediaRoot(root, options = {}) {
   async function walk(directory, segments) {
     const entries = await readdir(directory, { withFileTypes: true });
     const fileEntryNames = entries.filter((entry) => entry.isFile()).map((entry) => entry.name);
+    const findMatchingNfoName = createMatchingNfoNameLookup(fileEntryNames);
     for (const entry of entries) {
       const nextSegments = [...segments, entry.name];
       const entryPath = path.join(directory, entry.name);
@@ -265,7 +266,7 @@ export async function scanMediaRoot(root, options = {}) {
           mediaRootId: root.id,
           playbackSource: "server",
         };
-        const nfoName = findMatchingNfoName(entry.name, fileEntryNames);
+        const nfoName = findMatchingNfoName(entry.name);
         if (nfoName) {
           try {
             const nfoPath = path.join(directory, nfoName);
