@@ -6,6 +6,7 @@ import {
   thumbnailWidth,
 } from "./playerConstants";
 import { readCachedThumbnail, writeCachedThumbnail } from "./playerStorage";
+import { revokeObjectUrl } from "./appResourceCleanup";
 import type { VideoItem, VideoMetadata } from "./playerTypes";
 import { getPlayableVideoUrl } from "./playerUiState";
 
@@ -52,6 +53,62 @@ export function withTimeout<T>(promise: Promise<T>, timeout: number, message: st
       },
     );
   });
+}
+
+type ArtworkSize = { width: number; height: number };
+type ArtworkSizeReader = (url: string) => Promise<ArtworkSize>;
+
+function readArtworkSize(url: string) {
+  return new Promise<ArtworkSize>((resolve, reject) => {
+    const image = new Image();
+    const cleanup = () => {
+      window.clearTimeout(timer);
+      image.onload = null;
+      image.onerror = null;
+    };
+    const timer = window.setTimeout(() => {
+      cleanup();
+      reject(new Error("Timed out reading artwork dimensions."));
+    }, thumbnailCacheTimeout);
+    image.onload = () => {
+      const size = { width: image.naturalWidth, height: image.naturalHeight };
+      cleanup();
+      size.width > 0 && size.height > 0 ? resolve(size) : reject(new Error("Invalid artwork dimensions."));
+    };
+    image.onerror = () => {
+      cleanup();
+      reject(new Error("Unable to load artwork."));
+    };
+    image.src = url;
+  });
+}
+
+export async function selectVideoArtworkThumbnail(video: VideoItem, readSize: ArtworkSizeReader = readArtworkSize) {
+  const candidates = [
+    { file: video.posterFile, url: video.posterUrl },
+    { file: video.fanartFile, url: video.fanartUrl },
+    { file: video.thumbFile, url: video.thumbUrl },
+  ].filter((candidate) => candidate.file || candidate.url);
+  let fallbackUrl: string | null = null;
+
+  for (const candidate of candidates) {
+    const url = candidate.file ? URL.createObjectURL(candidate.file) : candidate.url!;
+    let size: ArtworkSize;
+    try {
+      size = await readSize(url);
+    } catch {
+      revokeObjectUrl(url);
+      continue;
+    }
+    if (size.width >= size.height) {
+      revokeObjectUrl(fallbackUrl);
+      return url;
+    }
+    if (!fallbackUrl) fallbackUrl = url;
+    else revokeObjectUrl(url);
+  }
+
+  return fallbackUrl;
 }
 
 function waitForDrawableVideoFrame(element: HTMLVideoElement) {
@@ -267,12 +324,8 @@ async function createVideoThumbnailBlob(video: VideoItem) {
 }
 
 export async function loadVideoThumbnail(libraryId: string | null, video: VideoItem) {
-  if (video.posterFile) {
-    return { thumbnailUrl: URL.createObjectURL(video.posterFile), metadata: undefined };
-  }
-  if (video.posterUrl) {
-    return { thumbnailUrl: video.posterUrl, metadata: undefined };
-  }
+  const artworkUrl = await selectVideoArtworkThumbnail(video);
+  if (artworkUrl) return { thumbnailUrl: artworkUrl, metadata: undefined };
 
   const cachedThumbnail = await withTimeout(
     readCachedThumbnail(libraryId, video.id),

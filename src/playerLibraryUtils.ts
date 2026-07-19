@@ -49,15 +49,19 @@ export function isPhotoFile(name: string) {
   return hasExtension(name, PHOTO_EXTENSIONS);
 }
 
-export function findVideoPosterName(videoName: string, fileNames: string[]) {
+export function findVideoArtworkName(videoName: string, fileNames: string[], suffix: "poster" | "fanart" | "thumb") {
   const dotIndex = videoName.lastIndexOf(".");
   const baseName = dotIndex >= 0 ? videoName.slice(0, dotIndex) : videoName;
   const namesByLowerCase = new Map(fileNames.map((fileName) => [fileName.toLowerCase(), fileName]));
   for (const extension of PHOTO_EXTENSIONS) {
-    const match = namesByLowerCase.get(`${baseName}-poster${extension}`.toLowerCase());
+    const match = namesByLowerCase.get(`${baseName}-${suffix}${extension}`.toLowerCase());
     if (match) return match;
   }
   return undefined;
+}
+
+export function findVideoPosterName(videoName: string, fileNames: string[]) {
+  return findVideoArtworkName(videoName, fileNames, "poster");
 }
 
 export function basePathOf(path: string) {

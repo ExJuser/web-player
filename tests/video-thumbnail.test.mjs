@@ -51,16 +51,31 @@ test("returns video display size only when both dimensions are present", () => {
   assert.equal(thumbnail.getVideoDisplaySize(undefined, 1080), null);
 });
 
-test("uses a same-directory poster before cached or generated thumbnails", async () => {
-  const originalCreateObjectUrl = URL.createObjectURL;
-  URL.createObjectURL = (file) => `blob:${file.name}`;
-  try {
-    const result = await thumbnail.loadVideoThumbnail("library", {
-      id: "movie",
-      posterFile: { name: "movie-poster.jpg" },
-    });
-    assert.equal(result.thumbnailUrl, "blob:movie-poster.jpg");
-  } finally {
-    URL.createObjectURL = originalCreateObjectUrl;
-  }
+test("prefers landscape fanart when the poster is portrait", async () => {
+  const sizes = new Map([
+    ["poster", { width: 800, height: 1200 }],
+    ["fanart", { width: 1920, height: 1080 }],
+    ["thumb", { width: 1600, height: 900 }],
+  ]);
+  const result = await thumbnail.selectVideoArtworkThumbnail(
+    { posterUrl: "poster", fanartUrl: "fanart", thumbUrl: "thumb" },
+    async (url) => sizes.get(url),
+  );
+  assert.equal(result, "fanart");
+});
+
+test("keeps the poster when all same-name artwork is portrait", async () => {
+  const result = await thumbnail.selectVideoArtworkThumbnail(
+    { posterUrl: "poster", fanartUrl: "fanart", thumbUrl: "thumb" },
+    async () => ({ width: 800, height: 1200 }),
+  );
+  assert.equal(result, "poster");
+});
+
+test("uses a landscape thumb when poster and fanart are portrait", async () => {
+  const result = await thumbnail.selectVideoArtworkThumbnail(
+    { posterUrl: "poster", fanartUrl: "fanart", thumbUrl: "thumb" },
+    async (url) => url === "thumb" ? { width: 1600, height: 900 } : { width: 800, height: 1200 },
+  );
+  assert.equal(result, "thumb");
 });

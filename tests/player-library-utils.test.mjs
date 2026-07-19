@@ -33,6 +33,11 @@ test("matches a same-basename poster image case-insensitively", () => {
     "movie.name-POSTER.WEBP",
   );
   assert.equal(libraryUtils.findVideoPosterName("Movie.Name.mkv", ["Movie.Name.jpg", "other-poster.jpg"]), undefined);
+  assert.equal(
+    libraryUtils.findVideoArtworkName("Movie.Name.mkv", ["movie.name-FANART.png"], "fanart"),
+    "movie.name-FANART.png",
+  );
+  assert.equal(libraryUtils.findVideoArtworkName("Movie.Name.mkv", ["movie.name-thumb.jpg"], "thumb"), "movie.name-thumb.jpg");
 });
 
 test("creates stable media ids", () => {

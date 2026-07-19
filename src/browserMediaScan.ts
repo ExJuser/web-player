@@ -9,6 +9,7 @@ import type {
 import {
   createGlobalVideoId,
   createLegacyVideoId,
+  findVideoArtworkName,
   findVideoPosterName,
   isSubtitleFile,
   isVideoFile,
@@ -114,6 +115,22 @@ export async function* collectVideos(
               // Fall back to the generated thumbnail when the poster cannot be read.
             }
           }
+          const fanartName = findVideoArtworkName(entry.name, fileEntryNames, "fanart");
+          const thumbName = findVideoArtworkName(entry.name, fileEntryNames, "thumb");
+          if (fanartName) {
+            try {
+              video.fanartFile = await fileEntriesByName.get(fanartName)?.getFile();
+            } catch {
+              // Unreadable alternatives are ignored.
+            }
+          }
+          if (thumbName) {
+            try {
+              video.thumbFile = await fileEntriesByName.get(thumbName)?.getFile();
+            } catch {
+              // Unreadable alternatives are ignored.
+            }
+          }
           const nfoName = findMatchingNfoName(entry.name);
           const nfoEntry = nfoName ? fileEntriesByName.get(nfoName) : undefined;
           if (nfoEntry) {
@@ -182,7 +199,11 @@ export function collectVideosFromFiles(files: FileList | File[]): MediaCollectio
       }
       const directoryPath = relativePath.includes("/") ? relativePath.slice(0, relativePath.lastIndexOf("/") + 1) : "";
       const posterName = findVideoPosterName(name, fileNamesByDirectoryPath.get(directoryPath.toLowerCase()) ?? []);
+      const fanartName = findVideoArtworkName(name, fileNamesByDirectoryPath.get(directoryPath.toLowerCase()) ?? [], "fanart");
+      const thumbName = findVideoArtworkName(name, fileNamesByDirectoryPath.get(directoryPath.toLowerCase()) ?? [], "thumb");
       const posterFile = posterName ? filesByRelativePath.get(`${directoryPath}${posterName}`.toLowerCase()) : undefined;
+      const fanartFile = fanartName ? filesByRelativePath.get(`${directoryPath}${fanartName}`.toLowerCase()) : undefined;
+      const thumbFile = thumbName ? filesByRelativePath.get(`${directoryPath}${thumbName}`.toLowerCase()) : undefined;
       collection.videos.push({
         id: createLegacyVideoId(relativePath, file),
         name,
@@ -193,6 +214,8 @@ export function collectVideosFromFiles(files: FileList | File[]): MediaCollectio
         lastModified: file.lastModified,
         playbackSource: "browser",
         posterFile,
+        fanartFile,
+        thumbFile,
       });
     } else if (isSubtitleFile(name)) {
       collection.scannedFiles += 1;

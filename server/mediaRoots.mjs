@@ -32,12 +32,12 @@ function shouldFilterVideoFile(fileName, size) {
   return size < smallVideoFileThresholdBytes || isIgnoredVideoFile(fileName);
 }
 
-function findVideoPosterName(videoName, fileNames) {
+function findVideoArtworkName(videoName, fileNames, suffix) {
   const videoExtension = path.extname(videoName);
   const baseName = path.basename(videoName, videoExtension);
   const namesByLowerCase = new Map(fileNames.map((fileName) => [fileName.toLowerCase(), fileName]));
   for (const extension of photoExtensions) {
-    const match = namesByLowerCase.get(`${baseName}-poster${extension}`.toLowerCase());
+    const match = namesByLowerCase.get(`${baseName}-${suffix}${extension}`.toLowerCase());
     if (match) return match;
   }
   return undefined;
@@ -310,9 +310,17 @@ export async function scanMediaRoot(root, options = {}) {
           mediaRootId: root.id,
           playbackSource: "server",
         };
-        const posterName = findVideoPosterName(entry.name, fileEntryNames);
+        const posterName = findVideoArtworkName(entry.name, fileEntryNames, "poster");
+        const fanartName = findVideoArtworkName(entry.name, fileEntryNames, "fanart");
+        const thumbName = findVideoArtworkName(entry.name, fileEntryNames, "thumb");
         if (posterName) {
           video.posterUrl = encodeMediaUrl(root.id, [...segments, posterName].join("/"));
+        }
+        if (fanartName) {
+          video.fanartUrl = encodeMediaUrl(root.id, [...segments, fanartName].join("/"));
+        }
+        if (thumbName) {
+          video.thumbUrl = encodeMediaUrl(root.id, [...segments, thumbName].join("/"));
         }
         const nfoName = findMatchingNfoName(entry.name);
         if (nfoName) {

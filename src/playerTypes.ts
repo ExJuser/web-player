@@ -41,6 +41,10 @@ export type VideoItem = {
   thumbnailStatus?: "idle" | "loading" | "ready" | "failed";
   posterFile?: File;
   posterUrl?: string;
+  fanartFile?: File;
+  fanartUrl?: string;
+  thumbFile?: File;
+  thumbUrl?: string;
   parentDirectory?: FileSystemDirectoryHandle;
   mediaRootId?: string;
   playbackSource?: "browser" | "server";

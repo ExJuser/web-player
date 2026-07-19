@@ -39,6 +39,8 @@ test("collects dropped browser videos and subtitles", () => {
       createFile({ name: "episode.srt", size: 200, webkitRelativePath: "Show/episode.srt" }),
       createFile({ name: "tiny.mp4", size: 1024, webkitRelativePath: "Show/tiny.mp4" }),
       createFile({ name: "episode-poster.jpg", size: 1024, webkitRelativePath: "Show/episode-poster.jpg" }),
+      createFile({ name: "episode-fanart.webp", size: 1024, webkitRelativePath: "Show/episode-fanart.webp" }),
+      createFile({ name: "episode-thumb.png", size: 1024, webkitRelativePath: "Show/episode-thumb.png" }),
       createFile({ name: "cover.jpg", size: 1024, webkitRelativePath: "Show/cover.jpg" }),
     ]);
 
@@ -48,6 +50,8 @@ test("collects dropped browser videos and subtitles", () => {
     assert.deepEqual(media.subtitles.map((subtitle) => subtitle.relativePath), ["Show/episode.srt"]);
     assert.equal(media.videos[0].url, "blob:episode.mp4");
     assert.equal(media.videos[0].posterFile?.name, "episode-poster.jpg");
+    assert.equal(media.videos[0].fanartFile?.name, "episode-fanart.webp");
+    assert.equal(media.videos[0].thumbFile?.name, "episode-thumb.png");
   } finally {
     URL.createObjectURL = originalCreateObjectUrl;
   }
@@ -77,6 +81,8 @@ test("collects videos from browser directories in batches", async () => {
       createDirectoryEntry("Season 1", [
         createFileEntry("Episode 01.mp4", { size: 100 * 1024 * 1024, lastModified: 10 }),
         createFileEntry("episode 01-POSTER.webp", { size: 1024, lastModified: 9 }),
+        createFileEntry("episode 01-FANART.jpg", { size: 1024, lastModified: 9 }),
+        createFileEntry("episode 01-THUMB.png", { size: 1024, lastModified: 9 }),
         createFileEntry("Episode 01.srt", { size: 200, lastModified: 11 }),
         createFileEntry("tiny.mp4", { size: 1024, lastModified: 12 }),
       ]),
@@ -96,6 +102,8 @@ test("collects videos from browser directories in batches", async () => {
     assert.equal(batches[0].videos[0].id, "root-a|Season 1/Episode 01.mp4|104857600|10");
     assert.equal(batches[0].videos[0].url, "blob:Episode 01.mp4");
     assert.equal(batches[0].videos[0].posterFile?.name, "episode 01-POSTER.webp");
+    assert.equal(batches[0].videos[0].fanartFile?.name, "episode 01-FANART.jpg");
+    assert.equal(batches[0].videos[0].thumbFile?.name, "episode 01-THUMB.png");
     assert.equal(batches[0].subtitles[0].mediaRootId, "root-a");
   } finally {
     URL.createObjectURL = originalCreateObjectUrl;

@@ -56,6 +56,8 @@ test("media root scan cache keeps valid server entries and drops invalid records
         lastModified: 200,
         mediaRootId: "anime",
         posterUrl: "/api/media/anime/Show/01-poster.jpg",
+        fanartUrl: "/api/media/anime/Show/01-fanart.jpg",
+        thumbUrl: "/api/media/anime/Show/01-thumb.jpg",
         thumbnailUrl: "blob:runtime",
       },
       { id: "bad", name: "bad.mkv" },
@@ -89,6 +91,8 @@ test("media root scan cache keeps valid server entries and drops invalid records
   assert.equal(parsed.videos[0].relativePath, "Show/01.mkv");
   assert.equal(parsed.videos[0].playbackSource, "server");
   assert.equal(parsed.videos[0].posterUrl, "/api/media/anime/Show/01-poster.jpg");
+  assert.equal(parsed.videos[0].fanartUrl, "/api/media/anime/Show/01-fanart.jpg");
+  assert.equal(parsed.videos[0].thumbUrl, "/api/media/anime/Show/01-thumb.jpg");
   assert.equal(parsed.videos[0].thumbnailUrl, undefined);
   assert.equal(parsed.subtitles.length, 1);
   assert.equal(parsed.subtitles[0].relativePath, "Show/01.srt");

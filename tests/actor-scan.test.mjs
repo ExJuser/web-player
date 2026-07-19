@@ -13,6 +13,8 @@ test("server media scan attaches actors from only the same-basename nfo", async 
     await writeFile(videoPath, "");
     await truncate(videoPath, 51 * 1024 * 1024);
     await writeFile(path.join(root, "movie-POSTER.jpg"), "poster");
+    await writeFile(path.join(root, "movie-FANART.webp"), "fanart");
+    await writeFile(path.join(root, "movie-THUMB.png"), "thumb");
     await writeFile(path.join(root, "movie.NFO"), "<movie><actor><name>Actor A</name><type>Actor</type></actor></movie>", "utf8");
     await writeFile(path.join(root, "other.nfo"), "<movie><actor><name>Wrong Actor</name></actor></movie>", "utf8");
 
@@ -20,6 +22,8 @@ test("server media scan attaches actors from only the same-basename nfo", async 
     assert.equal(result.videos.length, 1);
     assert.deepEqual(result.videos[0].actorHints, { fileName: "movie.NFO", names: ["Actor A"], status: "parsed" });
     assert.equal(result.videos[0].posterUrl, "/api/media/special/movie-POSTER.jpg");
+    assert.equal(result.videos[0].fanartUrl, "/api/media/special/movie-FANART.webp");
+    assert.equal(result.videos[0].thumbUrl, "/api/media/special/movie-THUMB.png");
   } finally {
     await rm(root, { recursive: true, force: true });
   }
