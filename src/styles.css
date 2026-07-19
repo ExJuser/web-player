@@ -8313,6 +8313,11 @@ button {
   gap: 5px;
 }
 
+.actor-new-field small {
+  color: var(--muted-text);
+  font-size: 12px;
+}
+
 .actor-unresolved-list {
   display: grid;
   gap: 8px;
