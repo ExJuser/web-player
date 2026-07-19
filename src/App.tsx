@@ -614,6 +614,7 @@ export default function App() {
   const [videoActorOverrides, setVideoActorOverrides] = useState<VideoActorOverrideStore>({});
   const [specialHomeSection, setSpecialHomeSection] = useState<"overview" | "actors">("overview");
   const [selectedActorId, setSelectedActorId] = useState<string | null>(null);
+  const [visibleActorThumbnailVideoIds, setVisibleActorThumbnailVideoIds] = useState<string[]>([]);
   const [actorEditVideoId, setActorEditVideoId] = useState<string | null>(null);
   const [videoHighlights, setVideoHighlights] = useState<VideoHighlightStore>({});
   const [videoEditSegments, setVideoEditSegments] = useState<VideoEditSegmentStore>({});
@@ -1732,8 +1733,11 @@ export default function App() {
     const selectedActor = actorInsights.actors.find((entry) => entry.actor.id === selectedActorId);
     return selectedActor
       ? selectedActor.videos.slice(0, 50).map((entry) => entry.video)
-      : actorInsights.actors.slice(0, 24).map((entry) => entry.representativeVideo);
-  }, [actorInsights.actors, homeMediaMode, selectedActorId, specialHomeSection]);
+      : visibleActorThumbnailVideoIds.flatMap((videoId) => {
+          const video = modeFilteredVideoById.get(videoId);
+          return video ? [video] : [];
+        });
+  }, [actorInsights.actors, homeMediaMode, modeFilteredVideoById, selectedActorId, specialHomeSection, visibleActorThumbnailVideoIds]);
   const thumbnailQueueVideoIds = useMemo(
     () =>
       createThumbnailQueueVideoIds({
@@ -5375,6 +5379,12 @@ export default function App() {
   const primaryHomeTitle = primaryHomeLabels.title;
   const primaryHomeAction = primaryHomeLabels.action;
   const markVideoThumbnailFailed = useCallback((videoId: string) => setVideoThumbnailState(videoId, "failed"), []);
+  const updateVisibleActorThumbnailVideos = useCallback((videoIds: string[]) => {
+    setVisibleActorThumbnailVideoIds((currentVideoIds) => currentVideoIds.length === videoIds.length
+      && currentVideoIds.every((videoId, index) => videoId === videoIds[index])
+      ? currentVideoIds
+      : videoIds);
+  }, []);
   const specialInsightRankingVideos = specialModeInsights
     ? {
         played: specialModeInsights.videosByPlayedDuration,
@@ -5608,6 +5618,7 @@ export default function App() {
                   onOpenVideo={openVideoFromHome}
                   onEditVideoActors={(video) => setActorEditVideoId(video.id)}
                   onThumbnailError={markVideoThumbnailFailed}
+                  onVisibleActorThumbnailVideosChange={updateVisibleActorThumbnailVideos}
                 />
               ) : (
                 <HomeSpecialInsightsSection

@@ -8401,6 +8401,32 @@ button {
   object-fit: cover;
 }
 
+.actor-cover-loading {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, 0.16) 50%, transparent 70%);
+  background-size: 220% 100%;
+  animation: actor-cover-loading 1.25s ease-in-out infinite;
+}
+
+.actor-avatar-fallback {
+  font-size: clamp(28px, 4vw, 48px);
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.actor-cover.has-fallback.actor-tone-0 { background: linear-gradient(135deg, #4338ca, #7c3aed); }
+.actor-cover.has-fallback.actor-tone-1 { background: linear-gradient(135deg, #0369a1, #0891b2); }
+.actor-cover.has-fallback.actor-tone-2 { background: linear-gradient(135deg, #047857, #65a30d); }
+.actor-cover.has-fallback.actor-tone-3 { background: linear-gradient(135deg, #b45309, #dc2626); }
+.actor-cover.has-fallback.actor-tone-4 { background: linear-gradient(135deg, #be185d, #9333ea); }
+.actor-cover.has-fallback.actor-tone-5 { background: linear-gradient(135deg, #475569, #334155); }
+
+@keyframes actor-cover-loading {
+  from { background-position: 100% 0; }
+  to { background-position: -120% 0; }
+}
+
 .actor-video-card > button {
   display: grid;
   width: 100%;

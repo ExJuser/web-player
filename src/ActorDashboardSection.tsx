@@ -1,4 +1,4 @@
-import { ArrowLeft, Film, Pencil, Search, UserRound, Users } from "lucide-react";
+import { ArrowLeft, Film, Pencil, Search, Users } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { ActorInsight } from "./actorUtils";
@@ -17,6 +17,7 @@ type ActorDashboardSectionProps = {
   onOpenVideo: (video: VideoItem) => void;
   onEditVideoActors: (video: VideoItem) => void;
   onThumbnailError: (videoId: string) => void;
+  onVisibleActorThumbnailVideosChange: (videoIds: string[]) => void;
 };
 
 export function ActorDashboardSection({
@@ -27,6 +28,7 @@ export function ActorDashboardSection({
   onOpenVideo,
   onEditVideoActors,
   onThumbnailError,
+  onVisibleActorThumbnailVideosChange,
 }: ActorDashboardSectionProps) {
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<"name" | "count" | "recent">("count");
@@ -74,8 +76,14 @@ export function ActorDashboardSection({
     observer.observe(target);
     return () => observer.disconnect();
   }, [selected?.videos.length, visibleActorVideoCount]);
-  const visibleActors = filteredActors.slice(0, visibleActorCount);
+  const visibleActors = useMemo(() => filteredActors.slice(0, visibleActorCount), [filteredActors, visibleActorCount]);
   const visibleActorVideos = selected?.videos.slice(0, visibleActorVideoCount) ?? [];
+  const visibleActorThumbnailVideoIds = useMemo(() => [0, 1, 2].flatMap((candidateIndex) => visibleActors
+    .map((entry) => entry.videos[candidateIndex]?.video.id)
+    .filter((videoId): videoId is string => Boolean(videoId))), [visibleActors]);
+  useEffect(() => {
+    onVisibleActorThumbnailVideosChange(selected || showUnresolved ? [] : visibleActorThumbnailVideoIds);
+  }, [onVisibleActorThumbnailVideosChange, selected, showUnresolved, visibleActorThumbnailVideoIds]);
   const pagedUnresolvedVideos = unresolvedVideos.slice((unresolvedPage - 1) * unresolvedPageSize, unresolvedPage * unresolvedPageSize);
 
   if (selected) {
@@ -115,7 +123,14 @@ export function ActorDashboardSection({
     <section className="actor-dashboard" aria-label="演员视图">
       <div className="actor-dashboard-header"><div><h2>演员视图</h2><p>{actors.length} 名演员 · {unresolvedVideos.length} 部未识别影片</p></div><button className="secondary-button" type="button" onClick={() => { setUnresolvedPage(1); setShowUnresolved(true); }}><Film size={15} /> 未识别影片</button></div>
       <div className="actor-toolbar"><label><Search size={16} /><input value={query} placeholder="搜索演员姓名或别名" onChange={(event) => setQuery(event.target.value)} /></label><div className="actor-sort-controls"><ControlSelect label="" ariaLabel="演员排序字段" value={sort} options={[{ value: "count", label: "影片数" }, { value: "name", label: "姓名" }, { value: "recent", label: "最近影片" }]} onChange={setSort} className="actor-sort-control" /><ControlSelect label="" ariaLabel="演员排序方向" value={sortDirection} options={[{ value: "desc", label: "降序" }, { value: "asc", label: "升序" }]} onChange={setSortDirection} className="actor-sort-direction-control" /></div></div>
-      {visibleActors.length ? <div className="actor-card-grid">{visibleActors.map((entry) => <button className="actor-card" type="button" key={entry.actor.id} onClick={() => onSelectActor(entry.actor.id)}><span className={`actor-cover ${entry.representativeVideo.thumbnailUrl ? "has-image" : ""}`}>{entry.representativeVideo.thumbnailUrl ? <img src={entry.representativeVideo.thumbnailUrl} alt="" onError={() => onThumbnailError(entry.representativeVideo.id)} /> : <UserRound size={32} />}</span><span><strong>{entry.actor.name}</strong><small><Users size={13} /> {entry.videos.length} 部影片</small></span></button>)}</div> : <div className="ai-empty-state">没有符合条件的演员。</div>}
+      {visibleActors.length ? <div className="actor-card-grid">{visibleActors.map((entry) => {
+        const candidates = entry.videos.slice(0, 3);
+        const coverVideo = candidates.find(({ video }) => Boolean(video.thumbnailUrl))?.video;
+        const isCoverLoading = !coverVideo && candidates.some(({ video }) => video.thumbnailStatus !== "failed");
+        const actorInitial = Array.from(entry.actor.name.trim())[0] ?? "人";
+        const actorTone = Array.from(entry.actor.name).reduce((value, character) => value + (character.codePointAt(0) ?? 0), 0) % 6;
+        return <button className="actor-card" type="button" key={entry.actor.id} onClick={() => onSelectActor(entry.actor.id)}><span className={`actor-cover actor-tone-${actorTone} ${coverVideo ? "has-image" : isCoverLoading ? "is-loading" : "has-fallback"}`}>{coverVideo ? <img src={coverVideo.thumbnailUrl} alt="" onError={() => onThumbnailError(coverVideo.id)} /> : isCoverLoading ? <span className="actor-cover-loading" /> : <span className="actor-avatar-fallback">{actorInitial}</span>}</span><span><strong>{entry.actor.name}</strong><small><Users size={13} /> {entry.videos.length} 部影片</small></span></button>;
+      })}</div> : <div className="ai-empty-state">没有符合条件的演员。</div>}
       {visibleActorCount < filteredActors.length ? <div ref={actorLoadMoreRef} className="actor-infinite-loader">继续向下滚动加载更多演员</div> : null}
     </section>
   );
