@@ -21,6 +21,7 @@ export type ResolvedVideoActors = {
 export type ActorVideoEntry = {
   video: VideoItem;
   source: ActorSource;
+  lastWatchedAt: number | null;
 };
 
 export type ActorInsight = {
@@ -178,7 +179,7 @@ export function buildActorInsights(input: {
     }
     resolved.actorIds.forEach((actorId) => {
       const entries = entriesByActor.get(actorId) ?? [];
-      entries.push({ video, source: resolved.source! });
+      entries.push({ video, source: resolved.source!, lastWatchedAt: lastWatchedAtByVideoId.get(video.id) ?? null });
       entriesByActor.set(actorId, entries);
     });
   });
@@ -193,7 +194,7 @@ export function buildActorInsights(input: {
     let playCount = 0;
     let totalPlayedSeconds = 0;
     let lastWatchedAt = 0;
-    sortedEntries.forEach(({ video }) => {
+    sortedEntries.forEach(({ video, lastWatchedAt: videoLastWatchedAt }) => {
       const seenTagKeys = new Set<string>();
       (input.videoTags[video.id] ?? []).forEach((tag) => {
         const key = normalizeTagKey(tag);
@@ -206,7 +207,7 @@ export function buildActorInsights(input: {
       emissionCount += stats?.emissionCount ?? 0;
       playCount += stats?.playCount ?? 0;
       totalPlayedSeconds += stats?.totalPlayedSeconds ?? 0;
-      lastWatchedAt = Math.max(lastWatchedAt, lastWatchedAtByVideoId.get(video.id) ?? 0);
+      lastWatchedAt = Math.max(lastWatchedAt, videoLastWatchedAt ?? 0);
     });
     actors.push({
       actor,

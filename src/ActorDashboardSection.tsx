@@ -201,19 +201,22 @@ export function ActorDashboardSection({
           <div><h2>{selected.actor.name}</h2><p>{selected.videos.length} 部影片</p></div>
         </div>
         <div className="actor-video-grid">
-          {visibleActorVideos.map(({ video, source }) => {
+          {visibleActorVideos.map(({ video, source, lastWatchedAt }) => {
             const stats = videoStats[createVideoStatsKey(video)];
             return <article className="actor-video-card" key={video.id}>
               <button type="button" onClick={() => onOpenVideo(video)}>
                 <span className={`actor-cover ${video.thumbnailUrl ? "has-image" : ""} ${video.thumbnailUrl && !hasNamedVideoArtwork(video) ? "generated-thumbnail" : ""}`}>{video.thumbnailUrl ? <img src={video.thumbnailUrl} alt="" onError={() => onThumbnailError(video.id)} /> : <Film size={28} />}</span>
                 <strong>{video.name}</strong>
                 <span className="actor-video-metadata">
-                  <TagChips tags={videoTags[video.id] ?? []} limit={8} compact />
-                  <RatingChip rating={videoRatings[video.id]} comment={videoComments[video.id]} />
+                  <span className="actor-video-rating-tags">
+                    <RatingChip rating={videoRatings[video.id]} comment={videoComments[video.id]} />
+                    <TagChips tags={videoTags[video.id] ?? []} limit={8} compact />
+                  </span>
                   <span className="actor-video-playback-stats">
                     <small title={`播放次数：${stats?.playCount ?? 0}`}><Play size={13} /> {stats?.playCount ?? 0} 次播放</small>
                     <small title={`累计播放时长：${formatDuration(stats?.totalPlayedSeconds ?? 0)}`}><Clock3 size={13} /> {formatDuration(stats?.totalPlayedSeconds ?? 0)}</small>
                     <small title={`发射次数：${stats?.emissionCount ?? 0}`}><Rocket size={13} /> {stats?.emissionCount ?? 0} 次</small>
+                    <small title={`上次播放：${lastWatchedAt ? formatRelativeTime(lastWatchedAt) : "暂无"}`}><History size={13} /> {lastWatchedAt ? `上次 ${formatRelativeTime(lastWatchedAt)}` : "暂无播放"}</small>
                   </span>
                 </span>
               </button>

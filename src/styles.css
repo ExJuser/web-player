@@ -8491,6 +8491,18 @@ button {
   padding: 0 12px;
 }
 
+.actor-video-rating-tags {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 7px;
+  overflow: hidden;
+}
+
+.actor-video-rating-tags .rating-chip {
+  flex: 0 0 auto;
+}
+
 .actor-video-playback-stats {
   display: flex;
   flex-wrap: wrap;

@@ -77,6 +77,7 @@ test("builds cached actor card tags and playback summaries", () => {
 
   assert.equal(insight.commonTags.length, 5);
   assert.equal(insight.commonTags[0], "剧情");
+  assert.equal(insight.videos.find((entry) => entry.video.id === "two").lastWatchedAt, 200);
   assert.deepEqual(insight.stats, { emissionCount: 3, playCount: 5, totalPlayedSeconds: 300, lastWatchedAt: 200 });
 });
 
