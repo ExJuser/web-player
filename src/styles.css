@@ -8478,6 +8478,26 @@ button {
   background: transparent;
 }
 
+.actor-video-metadata {
+  display: grid;
+  min-width: 0;
+  gap: 7px;
+  padding: 0 12px;
+}
+
+.actor-video-playback-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  color: var(--muted-text);
+}
+
+.actor-video-playback-stats small {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .actor-video-card > div {
   display: flex;
   align-items: center;

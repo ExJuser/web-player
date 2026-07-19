@@ -4,8 +4,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ActorInsight } from "./actorUtils";
 import { ControlSelect } from "./ControlSelect";
 import { DeleteConfirmDialog } from "./DeleteConfirmDialog";
+import { RatingChip, TagChips } from "./MetadataChips";
 import { readActorCover } from "./playerStorage";
-import type { VideoItem } from "./playerTypes";
+import type { VideoCommentStore, VideoItem, VideoRatingStore, VideoStatsStore, VideoTagStore } from "./playerTypes";
+import { createVideoStatsKey } from "./playerUiState";
 
 const actorPageSize = 12;
 const actorVideoPageSize = 12;
@@ -26,6 +28,10 @@ type ActorDashboardSectionProps = {
   libraryId: string | null;
   actorCoverVersions: Record<string, number>;
   actorCoverPendingAction: string | null;
+  videoComments: VideoCommentStore;
+  videoRatings: VideoRatingStore;
+  videoStats: VideoStatsStore;
+  videoTags: VideoTagStore;
   formatDuration: (seconds: number) => string;
   formatRelativeTime: (timestamp: number) => string;
   onSetActorCover: (actorId: string, video: VideoItem) => void;
@@ -85,6 +91,10 @@ export function ActorDashboardSection({
   libraryId,
   actorCoverVersions,
   actorCoverPendingAction,
+  videoComments,
+  videoRatings,
+  videoStats,
+  videoTags,
   formatDuration,
   formatRelativeTime,
   onSetActorCover,
@@ -187,15 +197,25 @@ export function ActorDashboardSection({
           <div><h2>{selected.actor.name}</h2><p>{selected.videos.length} 部影片</p></div>
         </div>
         <div className="actor-video-grid">
-          {visibleActorVideos.map(({ video, source }) => (
-            <article className="actor-video-card" key={video.id}>
+          {visibleActorVideos.map(({ video, source }) => {
+            const stats = videoStats[createVideoStatsKey(video)];
+            return <article className="actor-video-card" key={video.id}>
               <button type="button" onClick={() => onOpenVideo(video)}>
                 <span className={`actor-cover ${video.thumbnailUrl ? "has-image" : ""} ${video.thumbnailUrl && !hasNamedVideoArtwork(video) ? "generated-thumbnail" : ""}`}>{video.thumbnailUrl ? <img src={video.thumbnailUrl} alt="" onError={() => onThumbnailError(video.id)} /> : <Film size={28} />}</span>
                 <strong>{video.name}</strong>
+                <span className="actor-video-metadata">
+                  <TagChips tags={videoTags[video.id] ?? []} limit={8} compact />
+                  <RatingChip rating={videoRatings[video.id]} comment={videoComments[video.id]} />
+                  <span className="actor-video-playback-stats">
+                    <small title={`播放次数：${stats?.playCount ?? 0}`}><Play size={13} /> {stats?.playCount ?? 0} 次播放</small>
+                    <small title={`累计播放时长：${formatDuration(stats?.totalPlayedSeconds ?? 0)}`}><Clock3 size={13} /> {formatDuration(stats?.totalPlayedSeconds ?? 0)}</small>
+                    <small title={`发射次数：${stats?.emissionCount ?? 0}`}><Rocket size={13} /> {stats?.emissionCount ?? 0} 次</small>
+                  </span>
+                </span>
               </button>
               <div><span className={`actor-source ${source}`}>{source === "manual" ? "人工" : source === "nfo" ? "NFO" : "演员标签"}</span><span className="actor-video-actions"><button className="secondary-button actor-correction-button" type="button" disabled={Boolean(actorCoverPendingAction)} onClick={() => { setPendingCoverRemovalActorId(null); onSetActorCover(selected.actor.id, video); }}><ImagePlus size={13} /> {actorCoverPendingAction === `set:${video.id}` ? "保存中..." : "设为封面"}</button><button className="secondary-button actor-correction-button" type="button" onClick={() => onEditVideoActors(video)}><Pencil size={13} /> 纠正演员</button></span></div>
             </article>
-          ))}
+          })}
         </div>
         {visibleActorVideoCount < selected.videos.length ? <div ref={actorVideoLoadMoreRef} className="actor-infinite-loader">继续向下滚动加载更多影片</div> : null}
         <DeleteConfirmDialog

@@ -5676,6 +5676,10 @@ export default function App() {
                   libraryId={libraryId}
                   actorCoverVersions={actorCoverVersions}
                   actorCoverPendingAction={actorCoverPendingAction}
+                  videoComments={videoComments}
+                  videoRatings={videoRatings}
+                  videoStats={videoStatsRef.current}
+                  videoTags={videoTags}
                   formatDuration={formatCumulativeDuration}
                   formatRelativeTime={formatRelativeTime}
                   onSelectActor={setSelectedActorId}
