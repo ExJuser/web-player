@@ -648,7 +648,8 @@ function buildDuplicateVideoGroups(videos: VideoItem[], pairScores: Map<string, 
   });
 
   suspiciousPairs.forEach((pair) => {
-    if (duplicateRootsWithGroups.has(disjointSet.find(pair.aId)) && disjointSet.find(pair.aId) === disjointSet.find(pair.bId)) return;
+    const aRoot = disjointSet.find(pair.aId);
+    if (duplicateRootsWithGroups.has(aRoot) && aRoot === disjointSet.find(pair.bId)) return;
     const group = createDuplicateGroupFromPairs(videoById, [pair], "suspicious");
     if (group) groups.push(group);
   });

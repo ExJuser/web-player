@@ -77,11 +77,14 @@ export function createWatchActivityKey(date: string, videoId: string) {
   return `${date}::${videoId}`;
 }
 
-export function getWatchActivityMetricValue(day: WatchActivityDayInsight, metric: WatchActivityMetric) {
-  if (metric === "plays") return day.playCount;
-  if (metric === "completed") return day.completedCount;
-  if (metric === "emission") return day.emissionCount;
-  return day.watchedSeconds;
+export function getWatchActivityMetricValue(
+  activity: Pick<WatchActivityDayInsight, "watchedSeconds" | "playCount" | "completedCount" | "emissionCount">,
+  metric: WatchActivityMetric,
+) {
+  if (metric === "plays") return activity.playCount;
+  if (metric === "completed") return activity.completedCount;
+  if (metric === "emission") return activity.emissionCount;
+  return activity.watchedSeconds;
 }
 
 export function formatWatchActivityDate(date: string) {
@@ -151,10 +154,6 @@ function createDateRange(rangeDays: number, todayKey: string) {
   return dates;
 }
 
-function addUniqueVideoId(videoIds: string[], videoId: string) {
-  if (!videoIds.includes(videoId)) videoIds.push(videoId);
-}
-
 export function buildWatchActivityInsights(
   activityStore: WatchActivityStore,
   videos: VideoItem[],
@@ -172,7 +171,9 @@ export function buildWatchActivityInsights(
   const tagLimit = options.tagLimit ?? 8;
   const videoIds = new Set(videos.map((video) => video.id));
   const daysByDate = new Map(createDateRange(rangeDays, today).map((date) => [date, createEmptyDay(date)]));
+  const dayVideoIdsByDate = new Map<string, Set<string>>();
   const tagStatsByKey = new Map<string, WatchActivityTagInsight>();
+  const tagVideoIdsByKey = new Map<string, Set<string>>();
 
   Object.values(activityStore).forEach((item) => {
     if (!videoIds.has(item.videoId)) return;
@@ -182,7 +183,12 @@ export function buildWatchActivityInsights(
     day.playCount += item.playCount;
     day.completedCount += item.completedCount;
     day.emissionCount += item.emissionCount;
-    addUniqueVideoId(day.videoIds, item.videoId);
+    const dayVideoIds = dayVideoIdsByDate.get(item.date) ?? new Set<string>();
+    if (!dayVideoIds.has(item.videoId)) {
+      dayVideoIds.add(item.videoId);
+      day.videoIds.push(item.videoId);
+      dayVideoIdsByDate.set(item.date, dayVideoIds);
+    }
 
     const seenTagKeys = new Set<string>();
     (videoTags[item.videoId] ?? []).forEach((tag) => {
@@ -195,9 +201,14 @@ export function buildWatchActivityInsights(
         existing.playCount += item.playCount;
         existing.completedCount += item.completedCount;
         existing.emissionCount += item.emissionCount;
-        addUniqueVideoId(existing.videoIds, item.videoId);
+        const tagVideoIds = tagVideoIdsByKey.get(key);
+        if (!tagVideoIds?.has(item.videoId)) {
+          tagVideoIds?.add(item.videoId);
+          existing.videoIds.push(item.videoId);
+        }
         return;
       }
+      tagVideoIdsByKey.set(key, new Set([item.videoId]));
       tagStatsByKey.set(key, {
         key,
         tag,
@@ -218,37 +229,36 @@ export function buildWatchActivityInsights(
       return (bActivity?.watchedSeconds ?? 0) - (aActivity?.watchedSeconds ?? 0);
     });
   });
-  const totalWatchedSeconds = days.reduce((sum, day) => sum + day.watchedSeconds, 0);
-  const totalPlayCount = days.reduce((sum, day) => sum + day.playCount, 0);
-  const totalCompletedCount = days.reduce((sum, day) => sum + day.completedCount, 0);
-  const totalEmissionCount = days.reduce((sum, day) => sum + day.emissionCount, 0);
-  const maxMetricValue = days.reduce((max, day) => Math.max(max, getWatchActivityMetricValue(day, metric)), 0);
-  const activeDays = days.filter(hasWatchActivity).length;
+  const totals = days.reduce(
+    (summary, day) => {
+      summary.watchedSeconds += day.watchedSeconds;
+      summary.playCount += day.playCount;
+      summary.completedCount += day.completedCount;
+      summary.emissionCount += day.emissionCount;
+      summary.maxMetricValue = Math.max(summary.maxMetricValue, getWatchActivityMetricValue(day, metric));
+      if (hasWatchActivity(day)) summary.activeDays += 1;
+      return summary;
+    },
+    { watchedSeconds: 0, playCount: 0, completedCount: 0, emissionCount: 0, maxMetricValue: 0, activeDays: 0 },
+  );
   const topTags = Array.from(tagStatsByKey.values())
-    .filter((tag) => {
-      if (metric === "plays") return tag.playCount > 0;
-      if (metric === "completed") return tag.completedCount > 0;
-      if (metric === "emission") return tag.emissionCount > 0;
-      return tag.watchedSeconds > 0;
-    })
-    .sort((a, b) => {
-      const aValue =
-        metric === "plays" ? a.playCount : metric === "completed" ? a.completedCount : metric === "emission" ? a.emissionCount : a.watchedSeconds;
-      const bValue =
-        metric === "plays" ? b.playCount : metric === "completed" ? b.completedCount : metric === "emission" ? b.emissionCount : b.watchedSeconds;
-      return bValue - aValue || a.tag.localeCompare(b.tag, "zh-Hans-CN", { numeric: true });
-    })
+    .filter((tag) => getWatchActivityMetricValue(tag, metric) > 0)
+    .sort(
+      (a, b) =>
+        getWatchActivityMetricValue(b, metric) - getWatchActivityMetricValue(a, metric) ||
+        a.tag.localeCompare(b.tag, "zh-Hans-CN", { numeric: true }),
+    )
     .slice(0, tagLimit);
 
   return {
     rangeDays,
     days,
-    activeDays,
-    maxMetricValue,
-    totalWatchedSeconds,
-    totalPlayCount,
-    totalCompletedCount,
-    totalEmissionCount,
+    activeDays: totals.activeDays,
+    maxMetricValue: totals.maxMetricValue,
+    totalWatchedSeconds: totals.watchedSeconds,
+    totalPlayCount: totals.playCount,
+    totalCompletedCount: totals.completedCount,
+    totalEmissionCount: totals.emissionCount,
     topTags,
   };
 }
