@@ -100,6 +100,7 @@ export function ActorDashboardSection({
   const actorCoverFileInputRef = useRef<HTMLInputElement>(null);
   const wasRemovingActorCoverRef = useRef(false);
   const selected = actors.find((entry) => entry.actor.id === selectedActorId) ?? null;
+  const selectedActorCoverVersion = selected ? actorCoverVersions[selected.actor.id] ?? 0 : 0;
   const handleActorCoverAvailabilityChange = useCallback((actorId: string, isAvailable: boolean) => {
     setActorCoverAvailability((availability) => availability[actorId] === isAvailable ? availability : { ...availability, [actorId]: isAvailable });
   }, []);
@@ -121,6 +122,18 @@ export function ActorDashboardSection({
   useEffect(() => setActorPage(1), [query, sort, sortDirection]);
   useEffect(() => setVisibleActorVideoCount(actorVideoPageSize), [selected?.actor.id]);
   useEffect(() => setPendingCoverRemovalActorId(null), [selected?.actor.id]);
+  useEffect(() => {
+    if (!selected) return undefined;
+    let isCancelled = false;
+    void readActorCover(libraryId, selected.actor.id).then((cover) => {
+      if (!isCancelled) handleActorCoverAvailabilityChange(selected.actor.id, Boolean(cover));
+    }).catch(() => {
+      if (!isCancelled) handleActorCoverAvailabilityChange(selected.actor.id, false);
+    });
+    return () => {
+      isCancelled = true;
+    };
+  }, [handleActorCoverAvailabilityChange, libraryId, selected, selectedActorCoverVersion]);
   useEffect(() => {
     const isRemoving = actorCoverPendingAction?.startsWith("remove:") ?? false;
     if (wasRemovingActorCoverRef.current && !isRemoving) setPendingCoverRemovalActorId(null);
@@ -161,7 +174,7 @@ export function ActorDashboardSection({
               if (file) onUploadActorCover(selected.actor.id, file);
             }} />
             <button className="secondary-button" type="button" disabled={Boolean(actorCoverPendingAction)} onClick={() => { setPendingCoverRemovalActorId(null); actorCoverFileInputRef.current?.click(); }}><Upload size={15} /> {actorCoverPendingAction === `upload:${selected.actor.id}` ? "上传中..." : "上传封面"}</button>
-            <button className="secondary-button" type="button" disabled={Boolean(actorCoverPendingAction)} onClick={() => setPendingCoverRemovalActorId(selected.actor.id)}><ImageMinus size={15} /> 移除独立封面</button>
+            {actorCoverAvailability[selected.actor.id] ? <button className="secondary-button" type="button" disabled={Boolean(actorCoverPendingAction)} onClick={() => setPendingCoverRemovalActorId(selected.actor.id)}><ImageMinus size={15} /> 移除独立封面</button> : null}
           </span>
           <div><h2>{selected.actor.name}</h2><p>{selected.videos.length} 部影片</p></div>
         </div>
