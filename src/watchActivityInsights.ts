@@ -1,4 +1,4 @@
-import type { VideoItem, VideoTagStore, WatchActivityItem, WatchActivityStore } from "./playerTypes";
+import type { VideoItem, VideoTagStore, WatchActivityStore } from "./playerTypes";
 import { normalizeTagKey } from "./tagUtils";
 
 export type WatchActivityMetric = "watched" | "plays" | "completed" | "emission";

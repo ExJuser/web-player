@@ -92,13 +92,9 @@ import type {
   HomeVideoCard,
   MediaCollection,
   PlaybackMode,
-  PlaybackProgress,
   PlayerDataStore,
   PlayerGlobalMetadata,
   PlayerMediaRootStatus,
-  PlayerPersistentSettings,
-  PlayerPreferences,
-  CachedMediaRootScan,
   CachedPhotoAlbumScan,
   PhotoAlbum,
   PhotoAlbumImage,
@@ -117,9 +113,7 @@ import type {
   VideoMetadata,
   VideoCommentStore,
   VideoRatingStore,
-  VideoStatsStore,
   VideoTagStore,
-  WatchActivityStore
 } from "./playerTypes";
 import {
   addActorNamesToSelection,
@@ -144,7 +138,6 @@ import {
 } from "./photoAlbumStorage";
 import {
   PROGRESS_FILE_NAME,
-  collator,
   createPlaybackRateOptions,
   createRateSelectOptions,
   createSeekStepSelectOptions,
@@ -245,7 +238,6 @@ import {
   type LocalConfig,
   type LocalMediaRoot,
   type MediaRootsScanResponse,
-  type ScannedServerSubtitle,
   type ScannedServerVideo,
   type UpsertMediaRootResponse,
 } from "./mediaRootScanCache";
@@ -262,7 +254,6 @@ import type {
   PlaybackSourceChoice,
   TagMergePrompt,
 } from "./appTypes";
-import { ControlSelect } from "./ControlSelect";
 import {
   createPersistedEmbeddedSubtitles,
   createDuplicatePlaylistMetaByVideoId,
@@ -312,11 +303,9 @@ import {
   resolvePlaylistIndexVideos,
   resolveSelectedWatchActivityDay,
   resolveVisiblePlaylistVideos,
-  resolveRestoredEmbeddedSubtitleSelection,
   resolveSubtitleSelection,
   shouldShowHomeRecapCard,
   shouldShowNextEpisodeCard,
-  type DuplicatePlaylistVideoMeta,
   type HomeMediaMode,
   type RatingFilterOperator,
   type RatingPlaylistMode,
@@ -380,7 +369,7 @@ import { HomeRecentSection } from "./HomeRecentSection";
 import { HomeResumeSection } from "./HomeResumeSection";
 import { HomeSideColumn } from "./HomeSideColumn";
 import { HomeSpecialInsightsSection } from "./HomeSpecialInsightsSection";
-import { HomeCardThumbnail, HomeListCard } from "./HomeVideoCards";
+import { HomeListCard } from "./HomeVideoCards";
 import { MediaRootDialogsGroup } from "./MediaRootDialogsGroup";
 import { LibrarySearchResultItem } from "./LibrarySearchResultItem";
 import { PhotoAlbumCard } from "./PhotoAlbumCard";
@@ -523,7 +512,7 @@ export default function App() {
   const [isEmbeddedSubtitleDialogOpen, setIsEmbeddedSubtitleDialogOpen] = useState(false);
   const [embeddedSubtitleMessage, setEmbeddedSubtitleMessage] = useState("");
   const [isEmbeddedSubtitleLoading, setIsEmbeddedSubtitleLoading] = useState(false);
-  const [mediaProbeVideoId, setMediaProbeVideoId] = useState<string | null>(null);
+  const [, setMediaProbeVideoId] = useState<string | null>(null);
   const mediaProbeVideoIdRef = useRef<string | null>(null);
   const [compatibleMediaVideoId, setCompatibleMediaVideoId] = useState<string | null>(null);
   const [compatibleMediaConfirm, setCompatibleMediaConfirm] = useState<CompatibleMediaConfirmState | null>(null);
