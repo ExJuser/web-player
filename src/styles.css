@@ -8498,7 +8498,7 @@ button {
   overflow: hidden;
   padding: 3px 7px;
   border-radius: 999px;
-  font-size: 11px;
+  font-size: 12px;
   color: #cffafe;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -8513,7 +8513,7 @@ button {
 
 .actor-card-tags em {
   color: var(--muted-text);
-  font-size: 11px;
+  font-size: 12px;
   font-style: normal;
 }
 
@@ -8524,6 +8524,7 @@ button {
 }
 
 .actor-card-stats small {
+  font-size: 13px;
   white-space: nowrap;
 }
 
