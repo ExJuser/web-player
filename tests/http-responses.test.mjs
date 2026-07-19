@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { parseHttpRange, sendJson, sendNdjson, writeStreamEvent } from "../server/httpResponses.mjs";
+import { parseHttpRange, sendBlob, sendJson, sendNdjson, writeStreamEvent } from "../server/httpResponses.mjs";
 
 function createMockResponse() {
   const headers = {};
@@ -42,7 +42,26 @@ test("sendJson writes json response headers and body", () => {
 
   assert.equal(response.statusCode, 201);
   assert.equal(response.headers["Content-Type"], "application/json; charset=utf-8");
+  assert.equal(response.headers["Content-Length"], "11");
+  assert.equal(response.headers["X-Response-Bytes"], "11");
+  assert.match(response.headers["Server-Timing"], /^json;dur=/);
   assert.equal(response.body, "{\"ok\":true}");
+});
+
+test("sendBlob writes immutable cache metadata", () => {
+  const response = createMockResponse();
+  const body = Buffer.from("image");
+
+  sendBlob(response, 200, body, {
+    contentType: "image/jpeg",
+    cacheControl: "public, max-age=31536000, immutable",
+    etag: '"thumbnail"',
+  });
+
+  assert.equal(response.headers["Content-Type"], "image/jpeg");
+  assert.equal(response.headers["Content-Length"], "5");
+  assert.equal(response.headers["Cache-Control"], "public, max-age=31536000, immutable");
+  assert.equal(response.headers.ETag, '"thumbnail"');
 });
 
 test("ndjson helpers set streaming headers and append newline events", () => {

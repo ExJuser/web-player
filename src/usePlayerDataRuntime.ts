@@ -2,7 +2,7 @@ import { useCallback, useRef, type Dispatch, type MutableRefObject, type SetStat
 
 import type { AppTheme } from "./appBrowserUtils";
 import { defaultDanmakuPreferences, defaultPlayerPreferences, defaultPlayerSettings } from "./playerConstants";
-import { saveGlobalPlayerDataStore } from "./playerStorage";
+import { patchGlobalPlayerDataStore } from "./playerStorage";
 import type {
   ActorProfileStore,
   ActorTagDefinitionStore,
@@ -92,7 +92,7 @@ export function usePlayerDataRuntime(initialVolume: number) {
     async (overrides?: Partial<PlayerDataStore>) => {
       const saveOperation = playerDataSaveQueueRef.current
         .catch(() => undefined)
-        .then(() => saveGlobalPlayerDataStore(buildPlayerDataStore(overrides)));
+        .then(() => patchGlobalPlayerDataStore(overrides ?? buildPlayerDataStore()));
       playerDataSaveQueueRef.current = saveOperation.catch(() => undefined);
       await saveOperation;
     },

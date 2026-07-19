@@ -45,6 +45,33 @@ test("sqlite store preserves actor aliases, actor tags, and an empty manual acto
   }
 });
 
+test("sqlite player data patch updates selected fields without clearing deferred data", async () => {
+  const context = await createTempStore();
+  try {
+    await context.store.initialize();
+    context.store.savePlayerDataStore("global", {
+      items: { video1: { currentTime: 1, duration: 10, completed: false, updatedAt: 1 } },
+      videoTags: { video1: ["old"] },
+      embeddedSubtitles: [{ id: "subtitle1", videoId: "video1", name: "字幕", relativePath: "video.mkv", format: "vtt" }],
+      duplicateDetections: { all: { mode: "all", pairs: [], updatedAt: 1 } },
+    });
+
+    context.store.patchPlayerDataStore("global", {
+      progress: { video1: { currentTime: 5, duration: 10, completed: false, updatedAt: 2 } },
+      videoTags: { video1: ["new"] },
+    });
+
+    const stored = context.store.loadPlayerDataStore("global");
+    assert.equal(stored.items.video1.currentTime, 5);
+    assert.deepEqual(stored.videoTags.video1, ["new"]);
+    assert.equal(stored.embeddedSubtitles[0].id, "subtitle1");
+    assert.deepEqual(stored.duplicateDetections.all.pairs, []);
+  } finally {
+    context.store.close();
+    await rm(context.root, { recursive: true, force: true });
+  }
+});
+
 test("sqlite store imports legacy player and photo album json once", async () => {
   const context = await createTempStore();
   try {

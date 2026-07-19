@@ -892,6 +892,16 @@ export class LocalDataSqliteStore {
     };
   }
 
+  patchPlayerDataStore(libraryId, patch) {
+    const current = this.loadPlayerDataStore(libraryId) ?? {};
+    const normalizedPatch = { ...asObject(patch) };
+    if (Object.hasOwn(normalizedPatch, "progress")) {
+      normalizedPatch.items = normalizedPatch.progress;
+      delete normalizedPatch.progress;
+    }
+    this.savePlayerDataStore(libraryId, { ...current, ...normalizedPatch });
+  }
+
   updateIndex(libraryId, metadata) {
     return this.transaction(() => this.saveMetadataSync(libraryId, metadata));
   }
@@ -1369,6 +1379,12 @@ export class LocalDataSqliteStore {
         .prepare("INSERT INTO cache_entries (kind, cache_id, path, content_type, bytes, updated_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(kind, cache_id) DO UPDATE SET path = excluded.path, content_type = excluded.content_type, bytes = excluded.bytes, updated_at = excluded.updated_at")
         .run(kind, cacheId, filePath, contentType, bytes, now());
     });
+  }
+
+  getCacheEntry(kind, cacheId) {
+    return this.db
+      .prepare("SELECT path, content_type, bytes, updated_at FROM cache_entries WHERE kind = ? AND cache_id = ?")
+      .get(kind, cacheId) ?? null;
   }
 
   getMediaProbeCache(rootId, relativePath, fileIdentity) {

@@ -9,8 +9,10 @@ import type {
   PlaybackProgress,
   TagMergeDecisionStore,
   PlayerDataStore,
+  PlayerDeferredData,
   PlayerGlobalMetadata,
   PlayerLibraryMetadata,
+  PlayerStartupData,
   PersistedDuplicateVideoPair,
   PlayerPersistentSettings,
   PlayerPreferences,
@@ -898,13 +900,18 @@ async function loadPlayerDataStoreFromApi(
   path: string,
   metadata?: PlayerDataStore["metadata"],
 ): Promise<PlayerDataStore> {
+  const metricName = path.replace(/[^a-z0-9]+/gi, "-");
+  const fetchStartedAt = performance.now();
   const response = await fetch(createApiUrl(path), {
     headers: { Accept: "application/json" },
   });
   if (response.status === 404) return createDefaultPlayerDataStore(metadata);
   if (!response.ok) throw new Error(await readApiError(response));
-  const raw = JSON.stringify(await response.json());
+  const raw = await response.text();
+  performance.measure(`startup:${metricName}:fetch`, { start: fetchStartedAt, end: performance.now() });
+  const parseStartedAt = performance.now();
   const parsed = parsePlayerDataStore(raw);
+  performance.measure(`startup:${metricName}:parse`, { start: parseStartedAt, end: performance.now() });
   return {
     ...parsed,
     metadata: parsed.metadata ?? metadata,
@@ -915,14 +922,54 @@ export async function loadGlobalPlayerDataStore(metadata?: PlayerGlobalMetadata)
   return loadPlayerDataStoreFromApi("global", metadata);
 }
 
+export async function loadGlobalPlayerStartupData(metadata?: PlayerGlobalMetadata): Promise<PlayerStartupData> {
+  const store = await loadPlayerDataStoreFromApi("global?view=startup", metadata);
+  return {
+    version: store.version,
+    progress: store.progress,
+    favorites: store.favorites,
+    videoRatings: store.videoRatings,
+    videoComments: store.videoComments,
+    videoTags: store.videoTags,
+    actorProfiles: store.actorProfiles,
+    actorTagDefinitions: store.actorTagDefinitions,
+    videoActorOverrides: store.videoActorOverrides,
+    videoStats: store.videoStats,
+    watchActivity: store.watchActivity,
+    tagMergeDecisions: store.tagMergeDecisions,
+    danmakuPreferences: store.danmakuPreferences,
+    preferences: store.preferences,
+    settings: store.settings,
+    metadata: store.metadata,
+  };
+}
+
+export async function loadGlobalPlayerDeferredData(): Promise<PlayerDeferredData> {
+  const store = await loadPlayerDataStoreFromApi("global?view=deferred");
+  return {
+    videoHighlights: store.videoHighlights,
+    videoEditSegments: store.videoEditSegments,
+    embeddedSubtitles: store.embeddedSubtitles,
+    danmakuSelections: store.danmakuSelections,
+    duplicateDetection: store.duplicateDetection,
+    duplicateDetections: store.duplicateDetections,
+  };
+}
+
 export async function loadCachedMediaRootScan(): Promise<CachedMediaRootScan | null> {
   try {
+    const fetchStartedAt = performance.now();
     const response = await fetch("/api/media-roots/scan-cache", {
       headers: { Accept: "application/json" },
     });
     if (response.status === 404) return null;
     if (!response.ok) throw new Error(await readApiError(response));
-    return parseCachedMediaRootScan(JSON.stringify(await response.json()));
+    const raw = await response.text();
+    performance.measure("startup:media-scan-cache:fetch", { start: fetchStartedAt, end: performance.now() });
+    const parseStartedAt = performance.now();
+    const parsed = parseCachedMediaRootScan(raw);
+    performance.measure("startup:media-scan-cache:parse", { start: parseStartedAt, end: performance.now() });
+    return parsed;
   } catch {
     return null;
   }
@@ -1000,6 +1047,18 @@ async function savePlayerDataStoreToApi(path: string, store: PlayerDataStore) {
 
 export async function saveGlobalPlayerDataStore(store: PlayerDataStore) {
   await savePlayerDataStoreToApi("global", store);
+}
+
+export async function patchGlobalPlayerDataStore(patch: Partial<PlayerDataStore>) {
+  const response = await fetch(createApiUrl("global"), {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify(patch),
+  });
+  if (!response.ok) throw new Error(await readApiError(response));
 }
 
 export async function savePlayerDataStore(libraryId: string, store: PlayerDataStore) {

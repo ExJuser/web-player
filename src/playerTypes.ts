@@ -318,6 +318,36 @@ export type PlayerDataStore = {
   metadata?: PlayerLibraryMetadata | PlayerGlobalMetadata;
 };
 
+export type PlayerStartupData = Pick<
+  PlayerDataStore,
+  | "version"
+  | "progress"
+  | "favorites"
+  | "videoRatings"
+  | "videoComments"
+  | "videoTags"
+  | "actorProfiles"
+  | "actorTagDefinitions"
+  | "videoActorOverrides"
+  | "videoStats"
+  | "watchActivity"
+  | "tagMergeDecisions"
+  | "danmakuPreferences"
+  | "preferences"
+  | "settings"
+  | "metadata"
+>;
+
+export type PlayerDeferredData = Pick<
+  PlayerDataStore,
+  | "videoHighlights"
+  | "videoEditSegments"
+  | "embeddedSubtitles"
+  | "danmakuSelections"
+  | "duplicateDetection"
+  | "duplicateDetections"
+>;
+
 export type PlaylistFilter = "all" | "favorites";
 export type PlaylistSortMode =
   | "name"

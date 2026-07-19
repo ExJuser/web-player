@@ -334,7 +334,9 @@ import {
   isPlayerGlobalMetadata,
   loadCachedMediaRootScan,
   loadLegacyPlayerDataStore,
+  loadGlobalPlayerDeferredData,
   loadGlobalPlayerDataStore,
+  loadGlobalPlayerStartupData,
   loadPlayerDataStore,
   migrateLegacyCachedThumbnailsToLocalData,
   readPhotoAlbumFolderHandle,
@@ -455,6 +457,8 @@ export default function App() {
   } = usePlayerDataRuntime(initialVolumeRef.current);
   const localConfigRef = useRef<LocalConfig | null>(null);
   const mediaRootCacheLoadAttemptedRef = useRef(false);
+  const deferredPlayerDataPromiseRef = useRef<Promise<void> | null>(null);
+  const hasHydratedDeferredPlayerDataRef = useRef(false);
   const cachedEmbeddedSubtitleLookupKeysRef = useRef(new Set<string>());
   const photoAlbumAutoLoadAttemptedRef = useRef(false);
   const isScanningRef = useRef(false);
@@ -946,6 +950,46 @@ export default function App() {
     videoActorOverridesRef,
     watchActivityRef,
   });
+
+  const hydrateDeferredPlayerData = useCallback(async () => {
+    if (libraryIdRef.current !== "global" || hasHydratedDeferredPlayerDataRef.current) return;
+    deferredPlayerDataPromiseRef.current ??= (async () => {
+      const deferred = await loadGlobalPlayerDeferredData();
+      if (libraryIdRef.current !== "global" || hasHydratedDeferredPlayerDataRef.current) return;
+
+      videoHighlightsRef.current = deferred.videoHighlights;
+      videoEditSegmentsRef.current = deferred.videoEditSegments;
+      danmakuSelectionsRef.current = deferred.danmakuSelections;
+      duplicateDetectionResultsByModeRef.current = deferred.duplicateDetections ?? {};
+      setVideoHighlights(deferred.videoHighlights);
+      setVideoEditSegments(deferred.videoEditSegments);
+      setDanmakuSelections(deferred.danmakuSelections);
+      activateDuplicateDetectionForMode(
+        playerPreferencesRef.current.homeMediaMode,
+        videosRef.current,
+        deferred.duplicateDetections,
+      );
+
+      const restoredEmbeddedSubtitles = await restoreCachedEmbeddedSubtitles(
+        deferred.embeddedSubtitles,
+        videosRef.current,
+        null,
+        fetchJson,
+      );
+      if (restoredEmbeddedSubtitles.length) {
+        const restoredIds = new Set(restoredEmbeddedSubtitles.map((subtitle) => subtitle.id));
+        const mergedSubtitles = [
+          ...subtitlesRef.current.filter((subtitle) => !restoredIds.has(subtitle.id)),
+          ...restoredEmbeddedSubtitles,
+        ];
+        subtitlesRef.current = mergedSubtitles;
+        setSubtitles(mergedSubtitles);
+      }
+      hasHydratedDeferredPlayerDataRef.current = true;
+      performance.mark("startup:deferred-data-ready");
+    })();
+    await deferredPlayerDataPromiseRef.current;
+  }, [activateDuplicateDetectionForMode, danmakuSelectionsRef, duplicateDetectionResultsByModeRef, libraryIdRef, playerPreferencesRef, subtitlesRef, videoEditSegmentsRef, videoHighlightsRef, videosRef]);
 
   const loadPhotoAlbumDirectory = useCallback(
     async (directory: FileSystemDirectoryHandle, options?: { remember?: boolean }) => {
@@ -2452,12 +2496,18 @@ export default function App() {
   const restoreCachedGlobalMediaLibrary = useCallback(async () => {
     const currentConfig = localConfigRef.current;
     if (!currentConfig || videosRef.current.length) return;
-    const storedCache = await loadCachedMediaRootScan();
+    performance.mark("startup:restore-start");
+    const [storedCache, startupData] = await Promise.all([
+      loadCachedMediaRootScan(),
+      loadGlobalPlayerStartupData().catch(() => null),
+    ]);
     if (!storedCache || !storedCache.videos.length) return;
     const cache = alignCachedMediaRootScanWithConfig(storedCache, currentConfig);
     if (!cache.videos.length) return;
 
-    const nextDataStore = await loadGlobalPlayerDataStore(cache.metadata).catch(() => createDefaultPlayerDataStore(cache.metadata));
+    const nextDataStore = startupData
+      ? { ...createDefaultPlayerDataStore(cache.metadata), ...startupData, metadata: cache.metadata }
+      : await loadGlobalPlayerDataStore(cache.metadata).catch(() => createDefaultPlayerDataStore(cache.metadata));
     const nextVideos = mergeVideoRuntimeState(cache.videos, videosRef.current);
     videosRef.current = nextVideos;
     subtitlesRef.current = cache.subtitles;
@@ -2468,21 +2518,12 @@ export default function App() {
     setMediaRootStatuses(cache.metadata.mediaRoots);
     setVideos(nextVideos);
     setSubtitles(cache.subtitles);
+    const applyStartedAt = performance.now();
     applyPlayerDataStore({
       ...nextDataStore,
       metadata: cache.metadata,
     });
-
-    const restoredEmbeddedSubtitles = await restoreCachedEmbeddedSubtitles(nextDataStore.embeddedSubtitles, nextVideos, null, fetchJson);
-    if (restoredEmbeddedSubtitles.length) {
-      const restoredIds = new Set(restoredEmbeddedSubtitles.map((subtitle) => subtitle.id));
-      const mergedSubtitles = [
-        ...cache.subtitles.filter((subtitle) => !restoredIds.has(subtitle.id)),
-        ...restoredEmbeddedSubtitles,
-      ];
-      subtitlesRef.current = mergedSubtitles;
-      setSubtitles(mergedSubtitles);
-    }
+    performance.measure("startup:react-state-apply", { start: applyStartedAt, end: performance.now() });
 
     const sortedVideos = getSortedVideos(
       nextVideos,
@@ -2493,15 +2534,23 @@ export default function App() {
     setCurrentVideoId((currentId) => currentId ?? resumeTarget?.video.id ?? sortedVideos[0]?.id ?? null);
     setActiveView("home");
     setMessage(`已加载上次媒体库结果：${nextVideos.length} 个视频，未重新扫描磁盘`);
+    requestAnimationFrame(() => {
+      performance.mark("startup:home-interactive");
+      performance.measure("startup:home-interactive", "startup:restore-start", "startup:home-interactive");
+    });
   }, [applyPlayerDataStore]);
 
   const loadGlobalMediaLibrary = useCallback(async () => {
     if (!localConfigRef.current) return;
+    performance.mark("startup:scan-start");
     setIsScanning(true);
     setMessage("正在扫描全局媒体库...");
     try {
-      const scan = await fetchJson<MediaRootsScanResponse>("/api/media-roots/scan");
-      let nextDataStore = await loadGlobalPlayerDataStore(scan.metadata).catch(() => createDefaultPlayerDataStore(scan.metadata));
+      const [scan, storedData] = await Promise.all([
+        fetchJson<MediaRootsScanResponse>("/api/media-roots/scan"),
+        loadGlobalPlayerDataStore().catch(() => null),
+      ]);
+      let nextDataStore = storedData ?? createDefaultPlayerDataStore(scan.metadata);
       nextDataStore = {
         ...nextDataStore,
         metadata: scan.metadata,
@@ -2529,7 +2578,10 @@ export default function App() {
       setMediaRootStatuses(scan.metadata.mediaRoots);
       setVideos(nextVideos);
       setSubtitles(nextSubtitles);
+      const applyStartedAt = performance.now();
       applyPlayerDataStore(nextDataStore);
+      performance.measure("startup:react-state-apply", { start: applyStartedAt, end: performance.now() });
+      hasHydratedDeferredPlayerDataRef.current = true;
 
       const restoredEmbeddedSubtitles = await restoreCachedEmbeddedSubtitles(nextDataStore.embeddedSubtitles, nextVideos, null, fetchJson);
       if (restoredEmbeddedSubtitles.length) {
@@ -2557,6 +2609,10 @@ export default function App() {
       const resumeTarget = getLatestResumableVideo(nextVideos, nextDataStore.progress);
       setCurrentVideoId((currentId) => currentId ?? resumeTarget?.video.id ?? sortedVideos[0]?.id ?? null);
       setActiveView("home");
+      requestAnimationFrame(() => {
+        performance.mark("startup:home-interactive");
+        performance.measure("startup:home-interactive", "startup:scan-start", "startup:home-interactive");
+      });
       setMessage(
         nextVideos.length
           ? `已加载全局媒体库 ${nextVideos.length} 个视频，已过滤 ${scan.filteredSmallVideos} 个小文件或特殊命名视频`
@@ -2579,6 +2635,17 @@ export default function App() {
     mediaRootCacheLoadAttemptedRef.current = true;
     void restoreCachedGlobalMediaLibrary();
   }, [loadGlobalMediaLibrary, localConfig, restoreCachedGlobalMediaLibrary]);
+
+  useEffect(() => {
+    if (libraryId !== "global" || hasHydratedDeferredPlayerDataRef.current) return;
+    const delay = activeView === "home" && homeMediaMode !== "special" ? 1000 : 0;
+    const timer = window.setTimeout(() => {
+      void hydrateDeferredPlayerData().catch(() => {
+        deferredPlayerDataPromiseRef.current = null;
+      });
+    }, delay);
+    return () => window.clearTimeout(timer);
+  }, [activeView, homeMediaMode, hydrateDeferredPlayerData, libraryId]);
 
   const setVideoThumbnailState = useCallback((videoId: string, status: VideoItem["thumbnailStatus"], url?: string) => {
     setVideos((previous) => {

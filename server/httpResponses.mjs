@@ -2,10 +2,31 @@ import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import { mediaContentTypeForPath } from "./mediaCompatibility.mjs";
 
-export function sendJson(response, status, payload) {
+function formatServerTiming(timings) {
+  return Object.entries(timings)
+    .filter(([, duration]) => Number.isFinite(duration))
+    .map(([name, duration]) => `${name};dur=${Number(duration).toFixed(2)}`)
+    .join(", ");
+}
+
+export function sendSerializedJson(response, status, body, options = {}) {
   response.statusCode = status;
   response.setHeader("Content-Type", "application/json; charset=utf-8");
-  response.end(JSON.stringify(payload));
+  response.setHeader("Content-Length", String(Buffer.byteLength(body)));
+  response.setHeader("X-Response-Bytes", String(Buffer.byteLength(body)));
+  const serverTiming = formatServerTiming(options.timings ?? {});
+  if (serverTiming) response.setHeader("Server-Timing", serverTiming);
+  if (options.cacheStatus) response.setHeader("X-Cache", options.cacheStatus);
+  response.end(body);
+}
+
+export function sendJson(response, status, payload, options = {}) {
+  const startedAt = performance.now();
+  const body = JSON.stringify(payload);
+  sendSerializedJson(response, status, body, {
+    ...options,
+    timings: { ...(options.timings ?? {}), json: performance.now() - startedAt },
+  });
 }
 
 export function sendNdjson(response, status) {
@@ -19,9 +40,12 @@ export function writeStreamEvent(response, payload) {
   response.write(`${JSON.stringify(payload)}\n`);
 }
 
-export function sendBlob(response, status, buffer) {
+export function sendBlob(response, status, buffer, options = {}) {
   response.statusCode = status;
-  response.setHeader("Content-Type", "image/jpeg");
+  response.setHeader("Content-Type", options.contentType || "application/octet-stream");
+  response.setHeader("Content-Length", String(buffer.length));
+  if (options.cacheControl) response.setHeader("Cache-Control", options.cacheControl);
+  if (options.etag) response.setHeader("ETag", options.etag);
   response.end(buffer);
 }
 

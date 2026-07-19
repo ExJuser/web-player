@@ -54,7 +54,7 @@ import { clearLocalCacheItems, createCacheStatus as createLocalCacheStatus, crea
 import { callDeepSeek, chunkText, streamDeepSeek } from "./deepSeekClient.mjs";
 import { createEmbeddedSubtitleService } from "./embeddedSubtitles.mjs";
 import { hashValue } from "./hashUtils.mjs";
-import { sendBlob, sendJson, sendMediaFile, sendNdjson, writeStreamEvent } from "./httpResponses.mjs";
+import { sendBlob, sendJson, sendMediaFile, sendNdjson, sendSerializedJson, writeStreamEvent } from "./httpResponses.mjs";
 import { readJsonFile, writeJsonFile } from "./jsonFiles.mjs";
 import { createPublicLocalConfig, defaultAppConfig } from "./localConfig.mjs";
 import { createMediaProcessingTaskApi, createMediaProcessingTaskManager } from "./mediaProcessingTask.mjs";
@@ -62,6 +62,8 @@ import { detectTools, runProcess } from "./processRunner.mjs";
 import { formatRemoteFetchError, requestExternalJson, requestExternalText } from "./remoteFetch.mjs";
 import { parseJsonBody, readBody, sanitizeStorageId } from "./requestUtils.mjs";
 import { LocalDataSqliteStore } from "./sqliteStorage.mjs";
+import { BoundedLruCache } from "./boundedLruCache.mjs";
+import { createPlayerDeferredData, createPlayerStartupData } from "./playerDataViews.mjs";
 
 let dataRoot;
 let librariesRoot;
@@ -738,6 +740,7 @@ async function updateIndex(libraryId, metadata) {
 
 export function playerDataApiPlugin({ projectRoot, env }) {
   initializeApiServices(projectRoot);
+  const mediaRootScanCache = new BoundedLruCache({ maxEntries: 2, maxBytes: 8 * 1024 * 1024 });
   let toolsPromise = null;
   let ladaAvailablePromise = null;
   let mediaRootsScanPromise = null;
@@ -848,13 +851,30 @@ export function playerDataApiPlugin({ projectRoot, env }) {
 
       if (url.pathname === "/api/media-roots/scan-cache") {
         if (request.method === "GET") {
+          const cached = mediaRootScanCache.get("global");
+          if (cached) {
+            sendSerializedJson(response, 200, cached.serialized, { cacheStatus: "HIT", timings: { cache: 0 } });
+            return;
+          }
+          const startedAt = performance.now();
           const payload = store.loadMediaRootScanCache();
-          sendJson(response, payload ? 200 : 404, payload ?? { error: "Media root scan cache not found." });
+          if (!payload) {
+            sendJson(response, 404, { error: "Media root scan cache not found." }, { cacheStatus: "MISS" });
+            return;
+          }
+          const serialized = JSON.stringify(payload);
+          mediaRootScanCache.set("global", { serialized }, Buffer.byteLength(serialized));
+          sendSerializedJson(response, 200, serialized, {
+            cacheStatus: "MISS",
+            timings: { sqlite: performance.now() - startedAt },
+          });
           return;
         }
         if (request.method === "PUT") {
           const payload = await parseJsonBody(request);
           store.saveMediaRootScanCache(payload);
+          const serialized = JSON.stringify(payload);
+          mediaRootScanCache.set("global", { serialized }, Buffer.byteLength(serialized));
           sendJson(response, 200, { ok: true });
           return;
         }
@@ -1089,14 +1109,30 @@ export function playerDataApiPlugin({ projectRoot, env }) {
 
       if (url.pathname === "/api/player-data/global") {
         if (request.method === "GET") {
+          const startedAt = performance.now();
           const payload = store.loadPlayerDataStore("global");
-          sendJson(response, payload ? 200 : 404, payload ?? { error: "Global data not found." });
+          const view = url.searchParams.get("view");
+          const responsePayload = view === "startup"
+            ? createPlayerStartupData(payload)
+            : view === "deferred"
+              ? createPlayerDeferredData(payload)
+              : payload;
+          sendJson(response, responsePayload ? 200 : 404, responsePayload ?? { error: "Global data not found." }, {
+            timings: { sqlite: performance.now() - startedAt },
+          });
           return;
         }
 
         if (request.method === "PUT") {
           const payload = await parseJsonBody(request);
           store.savePlayerDataStore("global", payload);
+          sendJson(response, 200, { ok: true });
+          return;
+        }
+
+        if (request.method === "PATCH") {
+          const payload = await parseJsonBody(request);
+          store.patchPlayerDataStore("global", payload);
           sendJson(response, 200, { ok: true });
           return;
         }
@@ -1371,7 +1407,22 @@ export function playerDataApiPlugin({ projectRoot, env }) {
         const filePath = path.join(thumbnailsRoot, `${thumbnailId}.blob`);
         if (request.method === "GET") {
           try {
-            sendBlob(response, 200, await readFile(filePath));
+            const etag = `"${thumbnailId}"`;
+            const cacheEntry = store.getCacheEntry("thumbnail", thumbnailId);
+            const headers = {
+              contentType: cacheEntry?.content_type || "image/jpeg",
+              cacheControl: "public, max-age=31536000, immutable",
+              etag,
+            };
+            await stat(filePath);
+            if (request.headers["if-none-match"] === etag) {
+              response.statusCode = 304;
+              response.setHeader("Cache-Control", headers.cacheControl);
+              response.setHeader("ETag", etag);
+              response.end();
+              return;
+            }
+            sendBlob(response, 200, await readFile(filePath), headers);
           } catch {
             response.statusCode = 404;
             response.end();
