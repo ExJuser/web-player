@@ -8272,6 +8272,14 @@ button {
   padding: 0 12px 12px;
 }
 
+.actor-correction-button {
+  min-width: auto;
+  height: 30px;
+  gap: 5px;
+  padding: 0 9px;
+  font-size: 12px;
+}
+
 .actor-source {
   padding: 3px 7px;
   border-radius: 999px;
