@@ -405,7 +405,10 @@ export default function App() {
   const currentVideoIdRef = useRef<string | null>(null);
   const selectVideoRef = useRef<(videoId: string) => void>(() => undefined);
   const playbackClockFrameRef = useRef<number | null>(null);
+  const playbackClockLastSyncRef = useRef(0);
   const saveTimerRef = useRef<number | null>(null);
+  const seekTimerRef = useRef<number | null>(null);
+  const pendingSeekTimeRef = useRef<number | null>(null);
   const saveTimerVideoIdRef = useRef<string | null>(null);
   const launchEffectTimerRef = useRef<number | null>(null);
   const rightKeyHoldTimerRef = useRef<number | null>(null);
@@ -4301,20 +4304,24 @@ export default function App() {
       window.cancelAnimationFrame(playbackClockFrameRef.current);
       playbackClockFrameRef.current = null;
     }
+    playbackClockLastSyncRef.current = 0;
     if (!isPlaying || !currentVideo || !shouldUseDanmakuPlaybackClock) return;
 
-    const syncPlaybackClock = () => {
+    const syncPlaybackClock = (timestamp: number) => {
       const element = videoRef.current;
       if (!element || element.paused || element.ended) {
         playbackClockFrameRef.current = null;
         return;
       }
 
-      setCurrentTime(element.currentTime);
-      const nextDuration = selectTrustedDuration([currentVideo.duration, element.duration]) || 0;
-      setDuration((previousDuration) =>
-        Math.abs(previousDuration - nextDuration) > 0.05 ? nextDuration : previousDuration,
-      );
+      if (timestamp - playbackClockLastSyncRef.current >= 100) {
+        playbackClockLastSyncRef.current = timestamp;
+        setCurrentTime(element.currentTime);
+        const nextDuration = selectTrustedDuration([currentVideo.duration, element.duration]) || 0;
+        setDuration((previousDuration) =>
+          Math.abs(previousDuration - nextDuration) > 0.05 ? nextDuration : previousDuration,
+        );
+      }
       playbackClockFrameRef.current = window.requestAnimationFrame(syncPlaybackClock);
     };
 
@@ -4464,6 +4471,11 @@ export default function App() {
     (value: number) => {
       const element = videoRef.current;
       if (!element || !Number.isFinite(element.duration)) return;
+      if (seekTimerRef.current) {
+        window.clearTimeout(seekTimerRef.current);
+        seekTimerRef.current = null;
+      }
+      pendingSeekTimeRef.current = null;
       const nextTime = clamp(value, 0, element.duration);
       element.currentTime = nextTime;
       setCurrentTime(nextTime);
@@ -4480,13 +4492,33 @@ export default function App() {
     (seconds: number) => {
       const element = videoRef.current;
       if (!element || !Number.isFinite(element.duration)) return;
-      seekTo(element.currentTime + seconds);
+      const nextTime = clamp((pendingSeekTimeRef.current ?? element.currentTime) + seconds, 0, element.duration);
+      pendingSeekTimeRef.current = nextTime;
+      if (seekTimerRef.current) {
+        window.clearTimeout(seekTimerRef.current);
+      }
+      seekTimerRef.current = window.setTimeout(() => {
+        seekTimerRef.current = null;
+        const pendingTime = pendingSeekTimeRef.current;
+        pendingSeekTimeRef.current = null;
+        if (pendingTime !== null) seekTo(pendingTime);
+      }, 200);
       if (isCinemaMode) {
         showPlayerOverlayFeedback(`${seconds > 0 ? "+" : ""}${seconds}s`);
       }
     },
     [isCinemaMode, seekTo, showPlayerOverlayFeedback],
   );
+
+  useEffect(() => {
+    return () => {
+      if (seekTimerRef.current) {
+        window.clearTimeout(seekTimerRef.current);
+        seekTimerRef.current = null;
+      }
+      pendingSeekTimeRef.current = null;
+    };
+  }, [currentVideo?.id]);
 
   const { chooseSubtitleFile } = useManualSubtitleController({
     currentVideo,
@@ -5296,7 +5328,7 @@ export default function App() {
       updateProgress(scheduledVideo, scheduledElement.currentTime, scheduledDuration);
       recordPlaybackProgressForActivity(scheduledVideo, scheduledElement.currentTime);
       recordPlaybackProgressForStats(scheduledVideo, scheduledElement.currentTime, scheduledDuration);
-    }, 1500);
+    }, 5000);
   };
 
   const handleEnded = () => {

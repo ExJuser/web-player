@@ -1,4 +1,4 @@
-import type { CSSProperties, ChangeEvent, PointerEvent as ReactPointerEvent, Ref } from "react";
+import { useRef, type CSSProperties, type ChangeEvent, type PointerEvent as ReactPointerEvent, type Ref } from "react";
 
 import { clamp } from "./playerInteractionUtils";
 import { PlayerEditSegmentMenu } from "./PlayerEditSegmentMenu";
@@ -60,15 +60,22 @@ export function PlayerTimelineControls({
   onUpdateTimelinePreview,
   onUpdateTimelinePreviewFromTime,
 }: PlayerTimelineControlsProps) {
+  const isPointerDraggingRef = useRef(false);
+  const displayTime = timelinePreview.isDragging ? timelinePreview.time : currentTime;
+  const displayProgressPercent = duration ? clamp((displayTime / duration) * 100, 0, 100) : progressPercent;
+
   const handleTimelineChange = (event: ChangeEvent<HTMLInputElement>) => {
     if (isPrivacyMode) return;
     const nextTime = Number(event.target.value);
-    onSeek(nextTime);
-    onUpdateTimelinePreviewFromTime(nextTime, timelinePreview.isDragging);
+    if (!isPointerDraggingRef.current) {
+      onSeek(nextTime);
+    }
+    onUpdateTimelinePreviewFromTime(nextTime, isPointerDraggingRef.current);
   };
 
   const handleTimelinePointerDown = (event: ReactPointerEvent<HTMLInputElement>) => {
     if (isPrivacyMode) return;
+    isPointerDraggingRef.current = true;
     event.currentTarget.setPointerCapture(event.pointerId);
     onUpdateTimelinePreview(event.clientX, true);
   };
@@ -80,21 +87,25 @@ export function PlayerTimelineControls({
 
   const handleTimelinePointerUp = (event: ReactPointerEvent<HTMLInputElement>) => {
     if (isPrivacyMode) return;
+    isPointerDraggingRef.current = false;
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
+    onSeek(Number(event.currentTarget.value));
     onStopTimelineDragPreview();
     onReturnFocusToPlayer();
   };
 
-  const handleTimelinePointerCancel = () => {
+  const handleTimelinePointerCancel = (event: ReactPointerEvent<HTMLInputElement>) => {
+    isPointerDraggingRef.current = false;
+    onSeek(Number(event.currentTarget.value));
     onStopTimelineDragPreview();
     onReturnFocusToPlayer();
   };
 
   return (
     <div className="timeline-row">
-      <span>{formatTime(currentTime)}</span>
+      <span>{formatTime(displayTime)}</span>
       <div
         className={`timeline-track ${timelinePreview.isVisible ? "preview-visible" : ""}`}
         style={
@@ -146,7 +157,7 @@ export function PlayerTimelineControls({
           min={0}
           max={duration || 0}
           step={0.1}
-          value={duration ? currentTime : 0}
+          value={duration ? displayTime : 0}
           onChange={handleTimelineChange}
           onPointerDown={handleTimelinePointerDown}
           onPointerMove={handleTimelinePointerMove}
@@ -155,7 +166,7 @@ export function PlayerTimelineControls({
           onPointerLeave={() => {
             if (!isPrivacyMode) onHideTimelinePreview();
           }}
-          style={{ "--progress": `${progressPercent}%` } as CSSProperties}
+          style={{ "--progress": `${displayProgressPercent}%` } as CSSProperties}
           disabled={!hasCurrentVideo || isPrivacyMode}
         />
       </div>
