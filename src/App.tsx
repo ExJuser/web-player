@@ -1453,6 +1453,7 @@ export default function App() {
     () => visibleVideos.slice(pagedPlaylistStartIndex, pagedPlaylistStartIndex + playlistPageSize),
     [pagedPlaylistStartIndex, playlistPageSize, visibleVideos],
   );
+  const pagedPlaylistVideoIdsKey = useMemo(() => pagedPlaylistVideos.map((video) => video.id).join("\n"), [pagedPlaylistVideos]);
   const { startLabel: playlistPageStartLabel, endLabel: playlistPageEndLabel } = createPlaylistPageLabels({ totalCount: visibleVideos.length, startIndex: pagedPlaylistStartIndex, pageCount: pagedPlaylistVideos.length });
   const syncPlaylistPageInput = useCallback((page: number) => {
     const nextPage = Math.min(Math.max(page, 1), playlistPageCount);
@@ -1472,23 +1473,37 @@ export default function App() {
     () => createPlaylistPageSizeSelectOptions(),
     [],
   );
-  const playlistThumbnailVideos = useMemo(
-    () => createPlaylistThumbnailVideos({ visibleVideos, pagedVideos: pagedPlaylistVideos, visibleVideoIndexById, currentVideoId, activeRadius: playlistActiveThumbnailRadius }),
-    [currentVideoId, pagedPlaylistVideos, visibleVideoIndexById, visibleVideos],
-  );
   const {
     markPlaylistUserScroll,
+    playlistThumbnailVideoIdsKey,
     playlistViewport,
     scrollPlaylistToTop,
     scrollToCurrentPlaylistItem,
   } = usePlaylistScrollController({
     currentVideoId,
     isScanning,
+    playlistItemIdsKey: pagedPlaylistVideoIdsKey,
     playlistPageSize,
     playlistRef,
     setPlaylistPage,
     visibleVideoIndexById,
   });
+  const playlistThumbnailVideos = useMemo(() => {
+    const pagedVideoById = new Map(pagedPlaylistVideos.map((video) => [video.id, video]));
+    const viewportVideos = playlistThumbnailVideoIdsKey
+      ? playlistThumbnailVideoIdsKey.split("\n").flatMap((videoId) => {
+          const video = pagedVideoById.get(videoId);
+          return video ? [video] : [];
+        })
+      : [];
+    return createPlaylistThumbnailVideos({
+      visibleVideos,
+      viewportVideos,
+      visibleVideoIndexById,
+      currentVideoId,
+      activeRadius: playlistActiveThumbnailRadius,
+    });
+  }, [currentVideoId, pagedPlaylistVideos, playlistThumbnailVideoIdsKey, visibleVideoIndexById, visibleVideos]);
   const isCurrentVideoVisible = useMemo(
     () => isVideoVisible(currentVideoId, visibleVideos),
     [currentVideoId, visibleVideos],

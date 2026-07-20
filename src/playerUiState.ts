@@ -610,7 +610,7 @@ export function createPlaylistPanelLabels(input: {
 
 export function createPlaylistThumbnailVideos<Video extends IdentifiedVideoForUi>(input: {
   visibleVideos: Video[];
-  pagedVideos: Video[];
+  viewportVideos: Video[];
   visibleVideoIndexById: ReadonlyMap<string, number>;
   currentVideoId: string | null | undefined;
   activeRadius: number;
@@ -633,7 +633,7 @@ export function createPlaylistThumbnailVideos<Video extends IdentifiedVideoForUi
     }
   }
 
-  input.pagedVideos.forEach((video) => {
+  input.viewportVideos.forEach((video) => {
     if (seenIds.has(video.id)) return;
     seenIds.add(video.id);
     queuedVideos.push(video);

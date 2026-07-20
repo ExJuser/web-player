@@ -213,8 +213,9 @@ export function getPlayerFrameAspectRatio(width?: number, height?: number) {
   return width / height;
 }
 
-function isCanvasNearlyBlack(context: CanvasRenderingContext2D, width: number, height: number) {
-  const pixels = context.getImageData(0, 0, width, height).data;
+function isCanvasNearlyBlack(canvas: HTMLCanvasElement, sampleContext: CanvasRenderingContext2D) {
+  sampleContext.drawImage(canvas, 0, 0, sampleContext.canvas.width, sampleContext.canvas.height);
+  const pixels = sampleContext.getImageData(0, 0, sampleContext.canvas.width, sampleContext.canvas.height).data;
   let brightPixels = 0;
 
   for (let index = 0; index < pixels.length; index += 4) {
@@ -223,7 +224,7 @@ function isCanvasNearlyBlack(context: CanvasRenderingContext2D, width: number, h
     }
   }
 
-  return brightPixels / (width * height) < 0.01;
+  return brightPixels / (sampleContext.canvas.width * sampleContext.canvas.height) < 0.01;
 }
 
 function encodeCanvasAsJpeg(canvas: HTMLCanvasElement) {
@@ -249,6 +250,7 @@ function encodeCanvasAsJpeg(canvas: HTMLCanvasElement) {
 async function createVideoThumbnailBlob(video: VideoItem) {
   const element = document.createElement("video");
   const canvas = document.createElement("canvas");
+  const sampleCanvas = document.createElement("canvas");
   const cleanup = () => {
     element.removeAttribute("src");
     element.load();
@@ -274,8 +276,11 @@ async function createVideoThumbnailBlob(video: VideoItem) {
 
     canvas.width = thumbnailWidth;
     canvas.height = thumbnailHeight;
+    sampleCanvas.width = 32;
+    sampleCanvas.height = 18;
     const context = canvas.getContext("2d");
-    if (!context) {
+    const sampleContext = sampleCanvas.getContext("2d", { willReadFrequently: true });
+    if (!context || !sampleContext) {
       throw new Error("Unable to create thumbnail.");
     }
 
@@ -291,8 +296,6 @@ async function createVideoThumbnailBlob(video: VideoItem) {
             .map((time) => Math.min(Math.max(time, 0.1), Math.max(0.1, duration - 0.1)))
             .filter((time, index, times) => times.findIndex((other) => Math.abs(other - time) < 0.05) === index)
         : [0];
-    let fallbackBlob: Blob | null = null;
-
     for (const targetTime of targetTimes) {
       if (Math.abs(element.currentTime - targetTime) > 0.05) {
         const seeked = waitForMediaEvent(element, "seeked");
@@ -308,16 +311,12 @@ async function createVideoThumbnailBlob(video: VideoItem) {
       context.fillRect(0, 0, canvas.width, canvas.height);
       context.drawImage(element, drawLeft, drawTop, drawWidth, drawHeight);
 
-      const blob = await encodeCanvasAsJpeg(canvas);
-      if (!fallbackBlob) fallbackBlob = blob;
-      if (!isCanvasNearlyBlack(context, canvas.width, canvas.height)) {
-        cleanup();
-        return { thumbnailBlob: blob, metadata };
-      }
+      if (!isCanvasNearlyBlack(canvas, sampleContext)) break;
     }
 
+    const thumbnailBlob = await encodeCanvasAsJpeg(canvas);
     cleanup();
-    return { thumbnailBlob: fallbackBlob ?? (await encodeCanvasAsJpeg(canvas)), metadata };
+    return { thumbnailBlob, metadata };
   } catch (error) {
     cleanup();
     throw error;

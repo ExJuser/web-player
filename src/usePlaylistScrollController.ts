@@ -7,6 +7,7 @@ type PlaylistViewport = { scrollTop: number; height: number };
 type UsePlaylistScrollControllerOptions = {
   currentVideoId: string | null;
   isScanning: boolean;
+  playlistItemIdsKey: string;
   playlistPageSize: number;
   playlistRef: RefObject<HTMLDivElement | null>;
   setPlaylistPage: Dispatch<SetStateAction<number>>;
@@ -19,6 +20,7 @@ const playlistRecentUserScrollThresholdMs = 800;
 export function usePlaylistScrollController({
   currentVideoId,
   isScanning,
+  playlistItemIdsKey,
   playlistPageSize,
   playlistRef,
   setPlaylistPage,
@@ -30,6 +32,25 @@ export function usePlaylistScrollController({
   const lastPlaylistAutoScrollKeyRef = useRef<string | null>(null);
   const lastPlaylistUserScrollAtRef = useRef(0);
   const [playlistViewport, setPlaylistViewport] = useState<PlaylistViewport>({ scrollTop: 0, height: 0 });
+  const [playlistThumbnailVideoIdsKey, setPlaylistThumbnailVideoIdsKey] = useState("");
+
+  const updatePlaylistViewport = useCallback(() => {
+    const playlist = playlistRef.current;
+    if (!playlist) return;
+    setPlaylistViewport({ scrollTop: playlist.scrollTop, height: playlist.clientHeight });
+
+    const playlistRect = playlist.getBoundingClientRect();
+    const preloadMargin = playlist.clientHeight / 2;
+    const visibleVideoIds = Array.from(playlist.querySelectorAll<HTMLElement>(".playlist-item"))
+      .filter((item) => {
+        const rect = item.getBoundingClientRect();
+        return rect.bottom >= playlistRect.top - preloadMargin && rect.top <= playlistRect.bottom + preloadMargin;
+      })
+      .map((item) => item.dataset.videoId)
+      .filter((videoId): videoId is string => Boolean(videoId));
+    const nextKey = visibleVideoIds.join("\n");
+    setPlaylistThumbnailVideoIdsKey((previous) => previous === nextKey ? previous : nextKey);
+  }, [playlistRef]);
 
   const clearPlaylistAutoScrollTimer = useCallback(() => {
     if (!playlistAutoScrollTimerRef.current) return;
@@ -108,29 +129,22 @@ export function usePlaylistScrollController({
     if (element && playlistScrollFrameRef.current === null) {
       playlistScrollFrameRef.current = window.setTimeout(() => {
         playlistScrollFrameRef.current = null;
-        const playlist = playlistRef.current;
-        if (playlist) {
-          setPlaylistViewport({ scrollTop: playlist.scrollTop, height: playlist.clientHeight });
-        }
+        updatePlaylistViewport();
       }, playlistScrollFrameDelay);
     }
     if (isPlaylistAutoScrollingRef.current) return;
     lastPlaylistUserScrollAtRef.current = Date.now();
-  }, [playlistRef]);
+  }, [playlistItemIdsKey, playlistRef, updatePlaylistViewport]);
 
   useLayoutEffect(() => {
     const playlist = playlistRef.current;
     if (!playlist) return;
 
-    const updatePlaylistViewport = () => {
-      setPlaylistViewport({ scrollTop: playlist.scrollTop, height: playlist.clientHeight });
-    };
-
     updatePlaylistViewport();
     const observer = new ResizeObserver(updatePlaylistViewport);
     observer.observe(playlist);
     return () => observer.disconnect();
-  }, [playlistRef]);
+  }, [playlistRef, updatePlaylistViewport]);
 
   useEffect(() => {
     return () => {
@@ -143,6 +157,7 @@ export function usePlaylistScrollController({
 
   return {
     markPlaylistUserScroll,
+    playlistThumbnailVideoIdsKey,
     playlistViewport,
     scrollPlaylistToTop,
     scrollToCurrentPlaylistItem,
