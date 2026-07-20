@@ -34,7 +34,7 @@ import type {
   WatchActivityItem,
   WatchActivityStore
 } from "./playerTypes";
-import { normalizeActorKey } from "./actorNfoCore.mjs";
+import { isUnknownActorName, normalizeActorKey } from "./actorNfoCore.mjs";
 import { normalizeTagKey as normalizeVideoTagKey } from "./tagUtils";
 
 export function isPlayerGlobalMetadata(
@@ -752,10 +752,13 @@ function parseVideoActorHints(source: unknown): VideoItem["actorHints"] | null {
     !Array.isArray(hints.names) ||
     (hints.status !== "parsed" && hints.status !== "noActors" && hints.status !== "invalid" && hints.status !== "tooLarge")
   ) return null;
+  const names = hints.names
+    .filter((name): name is string => typeof name === "string" && Boolean(name.trim()) && !isUnknownActorName(name))
+    .slice(0, 100);
   return {
     fileName: hints.fileName,
-    names: hints.names.filter((name): name is string => typeof name === "string" && Boolean(name.trim())).slice(0, 100),
-    status: hints.status,
+    names,
+    status: hints.status === "parsed" && !names.length ? "noActors" : hints.status,
   };
 }
 

@@ -14,6 +14,10 @@ export function normalizeActorKey(value) {
   return String(value ?? "").normalize("NFKC").replace(/\s+/gu, " ").trim().toLowerCase();
 }
 
+export function isUnknownActorName(value) {
+  return normalizeActorKey(value) === "未知演员";
+}
+
 function decodeXmlEntities(value) {
   return value.replace(/&(#x[\da-f]+|#\d+|amp|apos|gt|lt|quot);/giu, (match, entity) => {
     const normalized = entity.toLowerCase();
@@ -80,7 +84,7 @@ export function parseActorNfoBytes(input, fileName = "") {
     if (type && type.toLocaleLowerCase() !== "actor") continue;
     const name = readElementText(block[1], "name");
     const key = normalizeActorKey(name);
-    if (!key || name.length > maxActorNameLength || seen.has(key)) continue;
+    if (!key || isUnknownActorName(name) || name.length > maxActorNameLength || seen.has(key)) continue;
     seen.add(key);
     names.push(name);
     if (names.length >= maxActorsPerVideo) break;

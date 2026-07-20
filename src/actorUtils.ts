@@ -1,4 +1,4 @@
-import { normalizeActorKey } from "./actorNfoCore.mjs";
+import { isUnknownActorName, normalizeActorKey } from "./actorNfoCore.mjs";
 import { createVideoStatsKey } from "./playerUiState";
 import { normalizeTagKey } from "./tagUtils";
 import type {
@@ -60,6 +60,7 @@ function ensureActorProfile(
   label: string,
   timestamp: number,
 ) {
+  if (isUnknownActorName(label)) return null;
   const key = normalizeActorKey(label);
   if (!key) return null;
   const existingId = aliasIndex.get(key);
@@ -91,7 +92,9 @@ export function addActorNamesToSelection(input: {
   now?: number;
 }) {
   const profiles: ActorProfileStore = Object.fromEntries(
-    Object.entries(input.profiles).map(([id, profile]) => [id, { ...profile, aliases: [...profile.aliases] }]),
+    Object.entries(input.profiles)
+      .filter(([, profile]) => !isUnknownActorName(profile.name))
+      .map(([id, profile]) => [id, { ...profile, aliases: [...profile.aliases] }]),
   );
   const aliasIndex = createActorAliasIndex(profiles);
   const actorIds = new Set(input.actorIds.filter((actorId) => Boolean(profiles[actorId])));
@@ -111,7 +114,9 @@ export function reconcileActorProfiles(input: {
   now?: number;
 }) {
   const profiles: ActorProfileStore = Object.fromEntries(
-    Object.entries(input.profiles).map(([id, profile]) => [id, { ...profile, aliases: [...profile.aliases] }]),
+    Object.entries(input.profiles)
+      .filter(([, profile]) => !isUnknownActorName(profile.name))
+      .map(([id, profile]) => [id, { ...profile, aliases: [...profile.aliases] }]),
   );
   const aliasIndex = createActorAliasIndex(profiles);
   const timestamp = input.now ?? Date.now();

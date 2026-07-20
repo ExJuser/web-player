@@ -4,6 +4,7 @@ export const maxActorNfoBytes: number;
 export const maxActorsPerVideo: number;
 export const maxActorNameLength: number;
 export function normalizeActorKey(value: unknown): string;
+export function isUnknownActorName(value: unknown): boolean;
 export function parseActorNfoBytes(input: Uint8Array | ArrayBuffer, fileName?: string): VideoActorHints;
 export function createMatchingNfoNameLookup(entryNames: string[]): (videoName: string) => string | null;
 export function findMatchingNfoName(videoName: string, entryNames: string[]): string | null;

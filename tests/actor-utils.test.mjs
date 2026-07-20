@@ -28,6 +28,20 @@ test("resolves manual over nfo over actor tags and keeps manual empty lists", ()
   assert.deepEqual(empty, { actorIds: [], source: "manual" });
 });
 
+test("ignores unknown actor placeholders from nfo data and existing profiles", () => {
+  const videos = [video("unknown", { actorHints: { fileName: "unknown.nfo", names: ["未知演员"], status: "parsed" } })];
+  const profiles = actors.reconcileActorProfiles({
+    profiles: { "actor:未知演员": { id: "actor:未知演员", name: "未知演员", aliases: [{ key: "未知演员", label: "未知演员" }], updatedAt: 1 } },
+    videos,
+    videoTags: {},
+    actorTagDefinitions: {},
+    now: 2,
+  });
+
+  assert.deepEqual(profiles, {});
+  assert.deepEqual(actors.resolveVideoActors({ video: videos[0], profiles, videoTags: {}, actorTagDefinitions: {}, videoActorOverrides: {} }), { actorIds: [], source: null });
+});
+
 test("adds actor names to an existing selection and deduplicates names and aliases", () => {
   const profiles = {
     "actor:existing": {
@@ -83,7 +97,7 @@ test("builds cached actor card tags and playback summaries", () => {
 
 test("media scan cache preserves optional nfo actor hints and accepts old videos without them", () => {
   const base = {
-    version: 1,
+    version: storage.mediaRootScanCacheVersion,
     videos: [{ id: "root|movie.mp4|1|1", name: "movie.mp4", relativePath: "movie.mp4", url: "/movie", size: 1, lastModified: 1, mediaRootId: "root", actorHints: { fileName: "movie.nfo", names: ["Actor"], status: "parsed" } }],
     subtitles: [],
     scannedFiles: 1,
@@ -92,6 +106,8 @@ test("media scan cache preserves optional nfo actor hints and accepts old videos
     updatedAt: 1,
   };
   assert.deepEqual(storage.parseCachedMediaRootScan(JSON.stringify(base)).videos[0].actorHints.names, ["Actor"]);
+  base.videos[0].actorHints.names = ["未知演员"];
+  assert.deepEqual(storage.parseCachedMediaRootScan(JSON.stringify(base)).videos[0].actorHints, { fileName: "movie.nfo", names: [], status: "noActors" });
   delete base.videos[0].actorHints;
   assert.equal(storage.parseCachedMediaRootScan(JSON.stringify(base)).videos[0].actorHints, undefined);
 });

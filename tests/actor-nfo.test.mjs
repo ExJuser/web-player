@@ -11,6 +11,7 @@ test("parses repeated actor names, filters non-actors, decodes entities, and ded
       <actor><name>はやのうた</name><type>Actor</type></actor>
       <actor><name> Alice &amp; Bob </name></actor>
       <actor><name>はやのうた</name><type>actor</type></actor>
+      <actor><name>未知演员</name></actor>
       <actor><name>导演</name><type>Director</type></actor>
     </movie>`), "movie.nfo");
 
@@ -26,4 +27,3 @@ test("matches only same-basename nfo files without case sensitivity", () => {
   assert.equal(findMatchingNfoName("Movie.MKV", ["movie.NFO", "other.nfo"]), "movie.NFO");
   assert.equal(findMatchingNfoName("Movie.MKV", ["other.nfo"]), null);
 });
-
