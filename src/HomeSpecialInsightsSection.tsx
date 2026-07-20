@@ -24,7 +24,6 @@ type HomeSpecialInsightsSectionProps = {
   formatRelativeTime: (timestamp: number) => string;
   formatVideoMetric: (insight: SpecialModeVideoInsight) => string;
   onOpenVideo: (video: VideoItem) => void;
-  onSelectTag: (tag: string) => void;
   onTabChange: (tab: SpecialInsightTab) => void;
   onThumbnailError: (videoId: string) => void;
   onToggle: () => void;
@@ -42,7 +41,6 @@ export function HomeSpecialInsightsSection({
   formatRelativeTime,
   formatVideoMetric,
   onOpenVideo,
-  onSelectTag,
   onTabChange,
   onThumbnailError,
   onToggle,
@@ -59,7 +57,6 @@ export function HomeSpecialInsightsSection({
       insights={insights}
       isExpanded={isExpanded}
       onOpenVideo={onOpenVideo}
-      onSelectTag={onSelectTag}
       onTabChange={onTabChange}
       onThumbnailError={onThumbnailError}
       onToggle={onToggle}

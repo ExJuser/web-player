@@ -5,76 +5,9 @@ import {
   createDuckDuckGoAutoTagQuery,
   parseDuckDuckGoHtmlResults,
   scoreDuplicateNameSimilarityWithAi,
-  searchLibraryWithAi,
   suggestAutoTagsWithAi,
   suggestTagMergeWithAi,
 } from "../server/aiLibraryService.mjs";
-
-test("searchLibraryWithAi rejects missing query or candidates", async () => {
-  await assert.rejects(
-    () => searchLibraryWithAi({}, { query: "", candidates: [{ id: "a", name: "A" }] }),
-    /Search query is required/,
-  );
-  await assert.rejects(
-    () => searchLibraryWithAi({}, { query: "find", candidates: [] }),
-    /Library candidates are required/,
-  );
-});
-
-test("searchLibraryWithAi sends normalized candidates and keeps only valid match ids", async () => {
-  const calls = [];
-  const result = await searchLibraryWithAi(
-    { DEEPSEEK_API_KEY: "secret" },
-    {
-      query: `  ${"找片".repeat(200)}  `,
-      candidates: [
-        {
-          id: "video-1",
-          name: "Episode 1",
-          relativePath: "Series/Episode 1.mkv",
-          seriesTitle: "Series",
-          tags: ["  tag-a  "],
-          progressLabel: "看过一半",
-          isFavorite: true,
-          isCompleted: false,
-        },
-        { id: "missing-name" },
-      ],
-    },
-    {
-      callDeepSeekImpl: async (env, messages, options) => {
-        calls.push({ env, messages, options });
-        return JSON.stringify({
-          answer: "命中第一集",
-          matchIds: ["video-1", "missing-name", "video-1", "other"],
-        });
-      },
-    },
-  );
-
-  assert.deepEqual(result, { answer: "命中第一集", matchIds: ["video-1", "video-1"] });
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0].env.DEEPSEEK_API_KEY, "secret");
-  assert.deepEqual(calls[0].options, { responseFormat: { type: "json_object" } });
-  assert.match(calls[0].messages[1].content, /搜索需求：找片/);
-  assert.match(calls[0].messages[1].content, /id="video-1"/);
-  assert.doesNotMatch(calls[0].messages[1].content, /missing-name/);
-});
-
-test("searchLibraryWithAi uses the no-match fallback when the model returns no valid ids", async () => {
-  const result = await searchLibraryWithAi(
-    {},
-    { query: "find", candidates: [{ id: "video-1", name: "Episode 1" }] },
-    {
-      callDeepSeekImpl: async () => JSON.stringify({ answer: "自由解释", matchIds: ["not-a-candidate"] }),
-    },
-  );
-
-  assert.deepEqual(result, {
-    answer: "AI 未找到明确匹配，已保留本地结果。",
-    matchIds: [],
-  });
-});
 
 test("suggestTagMergeWithAi returns an empty object without usable tag inputs", async () => {
   assert.deepEqual(await suggestTagMergeWithAi({}, { newTags: [], existingTags: ["旧"] }), {});

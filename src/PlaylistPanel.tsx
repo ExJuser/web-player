@@ -1,6 +1,6 @@
-import type { FocusEvent as ReactFocusEvent, ReactNode, Ref } from "react";
+import type { Ref } from "react";
 
-import { PlayerLibrarySearchSection } from "./PlayerLibrarySearchSection";
+import { PlayerSearchInput } from "./PlayerSearchInput";
 import { PlaylistPagination } from "./PlaylistPagination";
 import { PlaylistTools } from "./PlaylistTools";
 import { PlaylistVideoList } from "./PlaylistVideoList";
@@ -21,12 +21,10 @@ type PlaylistPanelProps = {
   bangumiButtonTitle: string;
   canOpenBangumiSubject: boolean;
   currentVideoId: string | null;
-  defaultLibrarySearchStatus: string;
   duplicatePlaylistMetaByVideoId: Map<string, DuplicatePlaylistVideoMeta>;
   versionPlaylistMetaByVideoId: Map<string, VideoVersionPlaylistMeta>;
   favoriteVideoIds: Set<string>;
   hasModeFilteredVideos: boolean;
-  hasMorePlayerLibrarySearchResults: boolean;
   hasVisibleVideos: boolean;
   homeMediaMode: HomeMediaMode;
   homeMediaModeLabel: string;
@@ -34,8 +32,6 @@ type PlaylistPanelProps = {
   isCurrentVideoVisible: boolean;
   isDuplicatePlaylistActive: boolean;
   isVersionPlaylistActive: boolean;
-  isPlayerLibrarySearchEmpty: boolean;
-  isPlayerLibrarySearchLoading: boolean;
   isPlaylistSeriesMode: boolean;
   isPlaylistSortReversed: boolean;
   isRatingPlaylistActive: boolean;
@@ -44,17 +40,6 @@ type PlaylistPanelProps = {
   message: string;
   modeFilteredVideoCount: number;
   pagedPlaylistVideos: VideoItem[];
-  playerLibrarySearchAnswer: string;
-  playerLibrarySearchDisabled: boolean;
-  playerLibrarySearchEmptyTarget: string;
-  playerLibrarySearchInput: string;
-  playerLibrarySearchLoadMoreRef: Ref<HTMLDivElement>;
-  playerLibrarySearchPlaceholder: string;
-  playerLibrarySearchPreviewItems: ReactNode;
-  playerLibrarySearchResultsRef: Ref<HTMLDivElement>;
-  playerLibrarySearchSearchMode: string;
-  playerLibrarySearchStatusMessage: string;
-  playerLibrarySearchTotalCount: number;
   playerMediaModeLabel: string;
   playlistFilter: PlaylistFilter;
   playlistIndexById: Map<string, number>;
@@ -73,11 +58,7 @@ type PlaylistPanelProps = {
   selectedSeriesKey: string;
   seriesOptions: SeriesOption[];
   seriesTitleByVideoId: Map<string, string>;
-  shouldShowPlayerLibrarySearchPreview: boolean;
-  shouldShowPlayerLibrarySearchStatus: boolean;
   totalVideoCount: number;
-  visiblePlayerLibrarySearchItems: ReactNode;
-  visiblePlayerLibrarySearchResultCount: number;
   visiblePlaylistPage: number;
   visibleVideoCount: number;
   videoComments: VideoCommentStore;
@@ -93,11 +74,6 @@ type PlaylistPanelProps = {
   onCommitPlaylistPageInput: () => void;
   onDeleteVideo: (video: VideoItem) => void;
   onFavoriteToggle: (video: VideoItem) => void;
-  onLibrarySearchBlur: (event: ReactFocusEvent<HTMLElement>) => void;
-  onLibrarySearchFocus: () => void;
-  onLibrarySearchInputChange: (value: string) => void;
-  onLibrarySearchLoadMore: () => void;
-  onLibrarySearchSubmit: () => void;
   onOpenBangumiSubject: () => void;
   onOpenRating: (video: VideoItem) => void;
   onPageInputChange: (value: string) => void;
@@ -119,12 +95,10 @@ export function PlaylistPanel({
   bangumiButtonTitle,
   canOpenBangumiSubject,
   currentVideoId,
-  defaultLibrarySearchStatus,
   duplicatePlaylistMetaByVideoId,
   versionPlaylistMetaByVideoId,
   favoriteVideoIds,
   hasModeFilteredVideos,
-  hasMorePlayerLibrarySearchResults,
   hasVisibleVideos,
   homeMediaMode,
   homeMediaModeLabel,
@@ -132,8 +106,6 @@ export function PlaylistPanel({
   isCurrentVideoVisible,
   isDuplicatePlaylistActive,
   isVersionPlaylistActive,
-  isPlayerLibrarySearchEmpty,
-  isPlayerLibrarySearchLoading,
   isPlaylistSeriesMode,
   isPlaylistSortReversed,
   isRatingPlaylistActive,
@@ -142,17 +114,6 @@ export function PlaylistPanel({
   message,
   modeFilteredVideoCount,
   pagedPlaylistVideos,
-  playerLibrarySearchAnswer,
-  playerLibrarySearchDisabled,
-  playerLibrarySearchEmptyTarget,
-  playerLibrarySearchInput,
-  playerLibrarySearchLoadMoreRef,
-  playerLibrarySearchPlaceholder,
-  playerLibrarySearchPreviewItems,
-  playerLibrarySearchResultsRef,
-  playerLibrarySearchSearchMode,
-  playerLibrarySearchStatusMessage,
-  playerLibrarySearchTotalCount,
   playerMediaModeLabel,
   playlistFilter,
   playlistIndexById,
@@ -171,11 +132,7 @@ export function PlaylistPanel({
   selectedSeriesKey,
   seriesOptions,
   seriesTitleByVideoId,
-  shouldShowPlayerLibrarySearchPreview,
-  shouldShowPlayerLibrarySearchStatus,
   totalVideoCount,
-  visiblePlayerLibrarySearchItems,
-  visiblePlayerLibrarySearchResultCount,
   visiblePlaylistPage,
   visibleVideoCount,
   videoComments,
@@ -191,11 +148,6 @@ export function PlaylistPanel({
   onCommitPlaylistPageInput,
   onDeleteVideo,
   onFavoriteToggle,
-  onLibrarySearchBlur,
-  onLibrarySearchFocus,
-  onLibrarySearchInputChange,
-  onLibrarySearchLoadMore,
-  onLibrarySearchSubmit,
   onOpenBangumiSubject,
   onOpenRating,
   onPageInputChange,
@@ -253,32 +205,7 @@ export function PlaylistPanel({
         />
       </div>
 
-      <PlayerLibrarySearchSection
-        answer={playerLibrarySearchAnswer}
-        defaultStatus={defaultLibrarySearchStatus}
-        disabled={playerLibrarySearchDisabled}
-        emptyTarget={playerLibrarySearchEmptyTarget}
-        hasMoreResults={hasMorePlayerLibrarySearchResults}
-        inputValue={playerLibrarySearchInput}
-        isEmpty={isPlayerLibrarySearchEmpty}
-        isLoading={isPlayerLibrarySearchLoading}
-        loadMoreRef={playerLibrarySearchLoadMoreRef}
-        placeholder={playerLibrarySearchPlaceholder}
-        previewResults={playerLibrarySearchPreviewItems}
-        results={visiblePlayerLibrarySearchItems}
-        resultsRef={playerLibrarySearchResultsRef}
-        searchMode={playerLibrarySearchSearchMode}
-        shouldShowPreview={shouldShowPlayerLibrarySearchPreview}
-        shouldShowStatus={shouldShowPlayerLibrarySearchStatus}
-        statusMessage={playerLibrarySearchStatusMessage}
-        totalCount={playerLibrarySearchTotalCount}
-        visibleCount={visiblePlayerLibrarySearchResultCount}
-        onBlur={onLibrarySearchBlur}
-        onFocus={onLibrarySearchFocus}
-        onInputChange={onLibrarySearchInputChange}
-        onLoadMore={onLibrarySearchLoadMore}
-        onSubmit={onLibrarySearchSubmit}
-      />
+      <PlayerSearchInput />
 
       <PlaylistVideoList
         currentVideoId={currentVideoId}

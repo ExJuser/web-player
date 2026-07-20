@@ -8,18 +8,6 @@ import type {
   VideoMetadata,
   VideoPlayability,
 } from "./playerTypes";
-import type { LibrarySearchEntry } from "./librarySearchUtils";
-
-export type LibrarySearchMode = "idle" | "local" | "ai" | "empty";
-export type LibrarySearchSurface = "home" | "player";
-
-export type LibrarySearchResult = LibrarySearchEntry<VideoItem, PlaybackProgress>;
-
-export type LibraryAiSearchResponse = {
-  answer: string;
-  matchIds: string[];
-};
-
 export type DanmakuSourcePayload = {
   source: DanmakuSource;
   comments: DanmakuComment[];

@@ -27,7 +27,6 @@ import { useHomeProgressRecapController } from "./useHomeProgressRecapController
 import { useHighEnergySegmentController } from "./useHighEnergySegmentController";
 import { useHighlightMontageController } from "./useHighlightMontageController";
 import { useLadaRestorationController } from "./useLadaRestorationController";
-import { useLibrarySearchState } from "./useLibrarySearchState";
 import { useManualSubtitleController } from "./useManualSubtitleController";
 import { useMediaLibraryInputController } from "./useMediaLibraryInputController";
 import { useMediaProcessingTaskSync } from "./useMediaProcessingTaskSync";
@@ -60,10 +59,6 @@ import type { HighlightMontageConfirmState, HighlightMontageResultState } from "
 import type { LadaRestorationConfirmState, LadaRestorationResultState } from "./LadaRestorationDialogs";
 import { readStoredLadaOptions, resolveLadaOptions, type LadaCapabilities, type LadaRestoreOptions } from "./ladaPreferences";
 import type { MediaProcessingTaskState } from "./MediaProcessingTaskDialog";
-import {
-  buildLibrarySearchCandidates,
-  type LibrarySearchCandidate,
-} from "./librarySearchUtils";
 import {
   buildSpecialModeInsights,
   type SpecialInsightTab,
@@ -182,7 +177,6 @@ import {
   formatFileSize,
   formatHomeMeta,
   formatHomeProgressLabel,
-  formatLibrarySearchProgressLabel,
   formatModifiedTime,
   formatRelativeTime,
   formatTime,
@@ -249,8 +243,6 @@ import {
 } from "./appConfig";
 import type {
   AutoTagSuggestionResponse,
-  LibrarySearchResult,
-  LibrarySearchSurface,
   PlaybackSourceChoice,
   TagMergePrompt,
 } from "./appTypes";
@@ -258,7 +250,6 @@ import {
   createPersistedEmbeddedSubtitles,
   createDuplicatePlaylistMetaByVideoId,
   createLibraryStats,
-  createLibrarySearchScopeKey,
   createMediaRootIdSet,
   createFavoriteHomeCards,
   createNextEpisodeCard,
@@ -371,7 +362,6 @@ import { HomeSideColumn } from "./HomeSideColumn";
 import { HomeSpecialInsightsSection } from "./HomeSpecialInsightsSection";
 import { HomeListCard } from "./HomeVideoCards";
 import { MediaRootDialogsGroup } from "./MediaRootDialogsGroup";
-import { LibrarySearchResultItem } from "./LibrarySearchResultItem";
 import { PhotoAlbumCard } from "./PhotoAlbumCard";
 import { PhotoAlbumTagDialog } from "./PhotoAlbumTagDialog";
 import type { PhotoAlbumViewFilter } from "./PhotoAlbumToolbar";
@@ -476,10 +466,6 @@ export default function App() {
   const photoObjectUrlAccessRef = useRef<Record<string, number>>({});
   const decodedPhotoImageIdsRef = useRef(new Set<string>());
   const photoImageFilePromisesRef = useRef<Record<string, Promise<File | null>>>({});
-  const librarySearchResultsRef = useRef<HTMLDivElement | null>(null);
-  const librarySearchLoadMoreRef = useRef<HTMLDivElement | null>(null);
-  const playerLibrarySearchResultsRef = useRef<HTMLDivElement | null>(null);
-  const playerLibrarySearchLoadMoreRef = useRef<HTMLDivElement | null>(null);
   const duplicateDetectionRunIdRef = useRef(0);
   const duplicateDetectionAbortRef = useRef<AbortController | null>(null);
   const duplicateFingerprintCacheRef = useRef(new Map<string, DuplicateFingerprintCacheEntry>());
@@ -1448,15 +1434,6 @@ export default function App() {
   const isRatingPlaylistActive = Boolean(ratingPlaylistMode);
   const activeRatingPlaylistLabel = getActiveRatingPlaylistLabel(ratingPlaylistMode, ratingFilterLabel);
   const isPlaylistSeriesMode = isSeriesMode && !isDuplicatePlaylistActive && !isVersionPlaylistActive && !isRatingPlaylistActive;
-  const isAnimePlaylistSearchScope = homeMediaMode === "anime" && isPlaylistSeriesMode;
-  const homeLibrarySearchVideos = modeFilteredVideos;
-  const playerLibrarySearchVideos = isDuplicatePlaylistActive || isVersionPlaylistActive || isRatingPlaylistActive || isAnimePlaylistSearchScope ? visibleVideos : modeFilteredVideos;
-  const librarySearchScopeKey = useMemo(
-    () => createLibrarySearchScopeKey(homeLibrarySearchVideos, playerLibrarySearchVideos),
-    [homeLibrarySearchVideos, playerLibrarySearchVideos],
-  );
-  const homeLibrarySearchEmptyTarget = homeMediaMode === "special" ? "视频" : "文件夹";
-  const playerLibrarySearchEmptyTarget = isAnimePlaylistSearchScope ? "剧集" : homeLibrarySearchEmptyTarget;
   const playlistIndexById = useMemo(
     () =>
       createVideoIndexById(
@@ -1564,25 +1541,6 @@ export default function App() {
       };
     },
     [mediaRootLabelsById, progressStore, seriesTitleByVideoId, videoActorTags, videoComments, videoRatings, videoTags],
-  );
-  const homeLibrarySearchContext = useMemo(
-    () => ({
-      mode: homeMediaMode,
-      mediaRootLabelsById,
-      progressByVideoId: progressStore,
-      favoriteVideoIds,
-      isResumableProgress,
-      videoTags,
-      videoRatings,
-    }),
-    [favoriteVideoIds, homeMediaMode, mediaRootLabelsById, progressStore, videoRatings, videoTags],
-  );
-  const playerLibrarySearchContext = useMemo(
-    () => ({
-      ...homeLibrarySearchContext,
-      resultKind: isAnimePlaylistSearchScope ? ("video" as const) : undefined,
-    }),
-    [homeLibrarySearchContext, isAnimePlaylistSearchScope],
   );
   const resumableHomeCards = useMemo(
     () =>
@@ -1957,86 +1915,6 @@ export default function App() {
       localConfig.ffmpeg.ffprobe,
   );
   const canUseHomeRecapSubtitle = Boolean(homeRecapSubtitle || canUseHomeEmbeddedSubtitles);
-  const createLibrarySearchCandidates = useCallback(
-    (localResults: LibrarySearchResult[], surface: LibrarySearchSurface): LibrarySearchCandidate[] => {
-      const videos = surface === "player" ? playerLibrarySearchVideos : homeLibrarySearchVideos;
-      const extraCards = surface === "home" ? [...resumableHomeCards, ...favoriteHomeCards, ...recentHomeCards] : [];
-      return buildLibrarySearchCandidates({
-        localResults,
-        videos,
-        extraCards,
-        createCard: createHomeVideoCard,
-        getTags: (videoId) => videoTags[videoId],
-        isFavorite: (videoId) => favoriteVideoIds.has(videoId),
-        formatProgressLabel: formatLibrarySearchProgressLabel,
-      });
-    },
-    [
-      createHomeVideoCard,
-      favoriteHomeCards,
-      favoriteVideoIds,
-      homeLibrarySearchVideos,
-      playerLibrarySearchVideos,
-      recentHomeCards,
-      resumableHomeCards,
-      videoTags,
-    ],
-  );
-  const {
-    defaultStatus: defaultLibrarySearchStatus,
-    filterResults: filterLibrarySearchResults,
-    handleBlur: handleLibrarySearchBlur,
-    hasMoreHomeResults: hasMoreHomeLibrarySearchResults,
-    hasMorePlayerResults: hasMorePlayerLibrarySearchResults,
-    homeAnswer: homeLibrarySearchAnswer,
-    homeMessage: homeLibrarySearchMessage,
-    homeMode: homeLibrarySearchMode,
-    homePlaceholder: homeLibrarySearchPlaceholder,
-    homePreviewResults: homeLibrarySearchPreviewResults,
-    homeQuery: homeLibrarySearchQuery,
-    homeResults: homeLibrarySearchResults,
-    isHomeLoading: isHomeLibrarySearchLoading,
-    isHomeSurface: isHomeLibrarySearchSurface,
-    isLoading: isLibrarySearchLoading,
-    isPlayerLoading: isPlayerLibrarySearchLoading,
-    isPlayerSurface: isPlayerLibrarySearchSurface,
-    loadMore: loadMoreLibrarySearchResults,
-    mode: librarySearchMode,
-    playerAnswer: playerLibrarySearchAnswer,
-    playerMessage: playerLibrarySearchMessage,
-    playerMode: playerLibrarySearchMode,
-    playerPreviewResults: playerLibrarySearchPreviewResults,
-    playerQuery: playerLibrarySearchQuery,
-    playerResults: playerLibrarySearchResults,
-    runSearch: runLibrarySearch,
-    runTagSearch: runSpecialInsightTagSearch,
-    setFocusedSurface: setFocusedLibrarySearchSurface,
-    setHomeQuery: setHomeLibrarySearchQuery,
-    setPlayerQuery: setPlayerLibrarySearchQuery,
-    shouldShowHomePreview: shouldShowHomeLibrarySearchPreview,
-    shouldShowHomeStatus: shouldShowHomeLibrarySearchStatus,
-    shouldShowPlayerPreview: shouldShowPlayerLibrarySearchPreview,
-    shouldShowPlayerStatus: shouldShowPlayerLibrarySearchStatus,
-    visibleHomeResults: visibleHomeLibrarySearchResults,
-    visiblePlayerResults: visiblePlayerLibrarySearchResults,
-  } = useLibrarySearchState({
-    createCandidates: createLibrarySearchCandidates,
-    homeMediaMode,
-    homeVideos: homeLibrarySearchVideos,
-    homeContext: homeLibrarySearchContext,
-    isCinemaMode,
-    isNonPlayerViewVisible,
-    isPrivacyMode,
-    localConfig,
-    playerVideos: playerLibrarySearchVideos,
-    playerContext: playerLibrarySearchContext,
-    scopeKey: librarySearchScopeKey,
-    homeResultsRef: librarySearchResultsRef,
-    homeLoadMoreRef: librarySearchLoadMoreRef,
-    playerResultsRef: playerLibrarySearchResultsRef,
-    playerLoadMoreRef: playerLibrarySearchLoadMoreRef,
-  });
-  const playerLibrarySearchPlaceholder = isAnimePlaylistSearchScope ? "搜索当前列表内的剧集" : homeLibrarySearchPlaceholder;
   const currentVideoSubtitles = useMemo(() => {
     if (!currentVideo) return [];
     const currentBasePath = basePathOf(currentVideo.relativePath);
@@ -3213,21 +3091,6 @@ export default function App() {
       setWatchActivityRevision((revision) => revision + 1);
       setDanmakuSelections(nextDanmakuSelections);
       setFavoriteVideoIds(nextFavorites);
-      filterLibrarySearchResults((results) =>
-        results.flatMap((result) => {
-          if (result.kind === "video") return result.representativeVideo.id === video.id ? [] : [result];
-          const nextResultVideos = result.videos.filter((entry) => entry.video.id !== video.id);
-          if (!nextResultVideos.length) return [];
-          return [
-            {
-              ...result,
-              videos: nextResultVideos,
-              representativeVideo:
-                result.representativeVideo.id === video.id ? nextResultVideos[0].video : result.representativeVideo,
-            },
-          ];
-        }),
-      );
       setPlaybackSourceChoices((previous) => {
         if (!(video.id in previous)) return previous;
         const nextChoices = { ...previous };
@@ -3339,7 +3202,7 @@ export default function App() {
         saveDanmakuSelection(video.id, null).catch(() => undefined),
       ]);
     },
-    [filterLibrarySearchResults, homeMediaMode, mediaRootStatuses, saveCurrentPlayerDataStore],
+    [homeMediaMode, mediaRootStatuses, saveCurrentPlayerDataStore],
   );
 
   const deleteBrowserVideoFile = useCallback(async (video: VideoItem) => {
@@ -3517,26 +3380,6 @@ export default function App() {
     setIsSeriesMenuOpen(false);
     selectVideo(firstVideo.id, { keepRatingPlaylist: true, syncSeriesMode: false });
   }, [isRatingFilterEnabled, playlistVideos, ratingFilterOperator, ratingFilterThreshold, selectVideo, videoRatings]);
-
-  const openLibraryFolderFromSearch = useCallback(
-    (result: LibrarySearchResult) => {
-      const targetVideo = result.videos[0]?.video ?? result.representativeVideo;
-      if (result.kind === "video") {
-        selectVideo(targetVideo.id);
-        return;
-      }
-      setIsSeriesMenuOpen(false);
-      setPlaylistPage(1);
-      setPlaylistFilter("all");
-      replacePlayerPreferences({
-        ...playerPreferencesRef.current,
-        isSeriesMode: true,
-        selectedSeriesKey: result.key,
-      });
-      selectVideo(targetVideo.id, { syncSeriesMode: false });
-    },
-    [replacePlayerPreferences, selectVideo],
-  );
 
   const showHomeView = useCallback(() => {
     persistCurrentProgress();
@@ -5516,36 +5359,6 @@ export default function App() {
       onThumbnailError={markVideoThumbnailFailed}
     />
   ), [markVideoThumbnailFailed, openVideoFromHome]);
-  const renderLibrarySearchResult = useCallback((result: LibrarySearchResult) => {
-    return (
-      <LibrarySearchResultItem
-        createCard={createHomeVideoCard}
-        formatProgressLabel={formatLibrarySearchProgressLabel}
-        isResumableProgress={isResumableProgress}
-        key={result.key}
-        onOpen={openLibraryFolderFromSearch}
-        result={result}
-        videoRatings={videoRatings}
-        videoTags={videoTags}
-      />
-    );
-  }, [createHomeVideoCard, formatLibrarySearchProgressLabel, isResumableProgress, openLibraryFolderFromSearch, videoRatings, videoTags]);
-  const homeLibrarySearchPreviewItems = useMemo(
-    () => (homeLibrarySearchPreviewResults.length ? homeLibrarySearchPreviewResults.map(renderLibrarySearchResult) : null),
-    [homeLibrarySearchPreviewResults, renderLibrarySearchResult],
-  );
-  const visibleHomeLibrarySearchItems = useMemo(
-    () => visibleHomeLibrarySearchResults.map(renderLibrarySearchResult),
-    [renderLibrarySearchResult, visibleHomeLibrarySearchResults],
-  );
-  const playerLibrarySearchPreviewItems = useMemo(
-    () => (playerLibrarySearchPreviewResults.length ? playerLibrarySearchPreviewResults.map(renderLibrarySearchResult) : null),
-    [playerLibrarySearchPreviewResults, renderLibrarySearchResult],
-  );
-  const visiblePlayerLibrarySearchItems = useMemo(
-    () => visiblePlayerLibrarySearchResults.map(renderLibrarySearchResult),
-    [renderLibrarySearchResult, visiblePlayerLibrarySearchResults],
-  );
   const getPhotoImageUrl = useCallback(
     (image?: PhotoAlbumImage | null) => (image ? image.url || photoObjectUrls[image.id] || "" : ""),
     [photoObjectUrls],
@@ -5713,7 +5526,6 @@ export default function App() {
                   onOpenVideo={openVideoFromHome}
                   onRangeChange={setWatchActivityRange}
                   onSelectDate={setSelectedWatchActivityDate}
-                  onSelectTag={runSpecialInsightTagSearch}
                   onThumbnailError={markVideoThumbnailFailed}
                   onToggle={() => setIsWatchActivityExpanded((current) => !current)}
                 />
@@ -5752,7 +5564,6 @@ export default function App() {
                   insights={specialModeInsights}
                   isExpanded={isSpecialInsightsExpanded}
                   onOpenVideo={openVideoFromHome}
-                  onSelectTag={runSpecialInsightTagSearch}
                   onTabChange={setSpecialInsightTab}
                   onThumbnailError={markVideoThumbnailFailed}
                   onToggle={() => setIsSpecialInsightsExpanded((current) => !current)}
@@ -5819,33 +5630,6 @@ export default function App() {
                 onConfigureLocalPath: openMediaRootLocalPathDialog,
                 onLoadRecap: () => void loadHomeProgressRecap(),
               } : null}
-              librarySearch={{
-                answer: homeLibrarySearchAnswer,
-                defaultStatus: defaultLibrarySearchStatus,
-                disabled: isLibrarySearchLoading || !homeLibrarySearchVideos.length,
-                emptyTarget: homeLibrarySearchEmptyTarget,
-                hasMoreResults: hasMoreHomeLibrarySearchResults,
-                headerModeLabel: homeMediaMode === "special" ? "本地筛选" : homeLibrarySearchMode === "ai" ? "AI 辅助" : "本地优先",
-                inputValue: homeLibrarySearchQuery,
-                isEmpty: isHomeLibrarySearchSurface && librarySearchMode === "empty",
-                isLoading: isHomeLibrarySearchLoading,
-                loadMoreRef: librarySearchLoadMoreRef,
-                placeholder: homeLibrarySearchPlaceholder,
-                previewResults: homeLibrarySearchPreviewItems,
-                results: visibleHomeLibrarySearchItems,
-                resultsRef: librarySearchResultsRef,
-                searchMode: homeLibrarySearchMode,
-                shouldShowPreview: shouldShowHomeLibrarySearchPreview,
-                shouldShowStatus: shouldShowHomeLibrarySearchStatus,
-                statusMessage: homeLibrarySearchMessage,
-                totalCount: homeLibrarySearchResults.length,
-                visibleCount: visibleHomeLibrarySearchResults.length,
-                onBlur: handleLibrarySearchBlur,
-                onFocus: () => setFocusedLibrarySearchSurface("home"),
-                onInputChange: setHomeLibrarySearchQuery,
-                onLoadMore: loadMoreLibrarySearchResults,
-                onSubmit: () => void runLibrarySearch("home"),
-              }}
               duplicateSummary={{
                 detectionMessage: duplicateDetectionDisplayMessage,
                 detectionPercent: duplicateDetectionPercent,
@@ -6116,12 +5900,10 @@ export default function App() {
           bangumiButtonTitle={bangumiButtonTitle}
           canOpenBangumiSubject={canOpenBangumiSubject}
           currentVideoId={currentVideoId}
-          defaultLibrarySearchStatus={defaultLibrarySearchStatus}
           duplicatePlaylistMetaByVideoId={duplicatePlaylistMetaByVideoId}
           versionPlaylistMetaByVideoId={versionPlaylistMetaByVideoId}
           favoriteVideoIds={favoriteVideoIds}
           hasModeFilteredVideos={Boolean(modeFilteredVideos.length)}
-          hasMorePlayerLibrarySearchResults={hasMorePlayerLibrarySearchResults}
           hasVisibleVideos={Boolean(visibleVideos.length)}
           homeMediaMode={homeMediaMode}
           homeMediaModeLabel={homeMediaModeLabel}
@@ -6129,8 +5911,6 @@ export default function App() {
           isCurrentVideoVisible={isCurrentVideoVisible}
           isDuplicatePlaylistActive={isDuplicatePlaylistActive}
           isVersionPlaylistActive={isVersionPlaylistActive}
-          isPlayerLibrarySearchEmpty={isPlayerLibrarySearchSurface && librarySearchMode === "empty"}
-          isPlayerLibrarySearchLoading={isPlayerLibrarySearchLoading}
           isPlaylistSeriesMode={isPlaylistSeriesMode}
           isPlaylistSortReversed={isPlaylistSortReversed}
           isRatingPlaylistActive={isRatingPlaylistActive}
@@ -6139,17 +5919,6 @@ export default function App() {
           message={message}
           modeFilteredVideoCount={modeFilteredVideos.length}
           pagedPlaylistVideos={pagedPlaylistVideos}
-          playerLibrarySearchAnswer={playerLibrarySearchAnswer}
-          playerLibrarySearchDisabled={isLibrarySearchLoading || !playerLibrarySearchVideos.length}
-          playerLibrarySearchEmptyTarget={playerLibrarySearchEmptyTarget}
-          playerLibrarySearchInput={playerLibrarySearchQuery}
-          playerLibrarySearchLoadMoreRef={playerLibrarySearchLoadMoreRef}
-          playerLibrarySearchPlaceholder={playerLibrarySearchPlaceholder}
-          playerLibrarySearchPreviewItems={playerLibrarySearchPreviewItems}
-          playerLibrarySearchResultsRef={playerLibrarySearchResultsRef}
-          playerLibrarySearchSearchMode={playerLibrarySearchMode}
-          playerLibrarySearchStatusMessage={playerLibrarySearchMessage}
-          playerLibrarySearchTotalCount={playerLibrarySearchResults.length}
           playerMediaModeLabel={playerMediaModeLabel}
           playlistFilter={playlistFilter}
           playlistIndexById={playlistIndexById}
@@ -6168,11 +5937,7 @@ export default function App() {
           selectedSeriesKey={selectedSeriesKey}
           seriesOptions={seriesOptions}
           seriesTitleByVideoId={seriesTitleByVideoId}
-          shouldShowPlayerLibrarySearchPreview={shouldShowPlayerLibrarySearchPreview}
-          shouldShowPlayerLibrarySearchStatus={shouldShowPlayerLibrarySearchStatus}
           totalVideoCount={videos.length}
-          visiblePlayerLibrarySearchItems={visiblePlayerLibrarySearchItems}
-          visiblePlayerLibrarySearchResultCount={visiblePlayerLibrarySearchResults.length}
           visiblePlaylistPage={visiblePlaylistPage}
           visibleVideoCount={visibleVideos.length}
           videoComments={videoComments}
@@ -6203,11 +5968,6 @@ export default function App() {
           }}
           onDeleteVideo={requestDeleteVideo}
           onFavoriteToggle={toggleFavorite}
-          onLibrarySearchBlur={handleLibrarySearchBlur}
-          onLibrarySearchFocus={() => setFocusedLibrarySearchSurface("player")}
-          onLibrarySearchInputChange={setPlayerLibrarySearchQuery}
-          onLibrarySearchLoadMore={loadMoreLibrarySearchResults}
-          onLibrarySearchSubmit={() => void runLibrarySearch("player")}
           onOpenBangumiSubject={openBangumiSubject}
           onOpenRating={openVideoRatingDialog}
           onPageInputChange={setPlaylistPageInput}

@@ -473,13 +473,6 @@ export function resolvePlaylistIndexVideos<Video>(input: {
   return input.playlistVideos;
 }
 
-export function createLibrarySearchScopeKey<Video extends IdentifiedVideoForUi>(homeVideos: Video[], playerVideos: Video[]) {
-  return [
-    homeVideos.map((video) => video.id).join("\n"),
-    playerVideos.map((video) => video.id).join("\n"),
-  ].join("\n---player---\n");
-}
-
 export function isVideoVisible<Video extends IdentifiedVideoForUi>(videoId: string | null | undefined, visibleVideos: Video[]) {
   return Boolean(videoId && visibleVideos.some((video) => video.id === videoId));
 }

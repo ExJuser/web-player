@@ -1,4 +1,4 @@
-import { normalizeAiLibrarySearchAnswer, normalizeLibrarySearchCandidates, parseAiJsonObject } from "./aiResponseUtils.mjs";
+import { parseAiJsonObject } from "./aiResponseUtils.mjs";
 import { callDeepSeek } from "./deepSeekClient.mjs";
 import { requestExternalText } from "./remoteFetch.mjs";
 
@@ -199,44 +199,6 @@ export async function scoreDuplicateNameSimilarityWithAi(env, payload, options =
     scores.push({ id, similarity: Math.round(similarity) });
   }
   return { scores };
-}
-
-export async function searchLibraryWithAi(env, payload, options = {}) {
-  const callDeepSeekImpl = options.callDeepSeekImpl || callDeepSeek;
-  const query = typeof payload?.query === "string" ? payload.query.trim().slice(0, 300) : "";
-  const candidates = normalizeLibrarySearchCandidates(payload?.candidates);
-  if (!query) throw new Error("Search query is required.");
-  if (!candidates.length) throw new Error("Library candidates are required.");
-
-  const catalog = candidates
-    .map(
-      (candidate, index) =>
-        `${index + 1}. id=${JSON.stringify(candidate.id)} | series=${candidate.seriesTitle || "未分组"} | name=${candidate.name} | path=${candidate.relativePath} | tags=${candidate.tags.join(", ") || "无"} | progress=${candidate.progressLabel || "未知"} | favorite=${candidate.isFavorite ? "yes" : "no"} | completed=${candidate.isCompleted ? "yes" : "no"}`,
-    )
-    .join("\n");
-
-  const raw = await callDeepSeekImpl(
-    env,
-    [
-      {
-        role: "system",
-        content:
-          "你是本地片库搜索助手。搜索范围是用户提供的当前媒体模式候选视频，不是当前继续观看条目。只能从候选视频中选择，不能编造片名或使用候选外内容。answer 只能解释 matchIds 中已选中的条目；如果没有明确匹配，answer 写“AI 未找到明确匹配”。请返回严格 JSON：{\"answer\":\"简短中文理由\",\"matchIds\":[\"候选 id\"]}。matchIds 最多 5 个。",
-      },
-      {
-        role: "user",
-        content: `搜索需求：${query}\n\n候选片库：\n${catalog}`,
-      },
-    ],
-    { responseFormat: { type: "json_object" } },
-  );
-  const parsed = parseAiJsonObject(raw) ?? {};
-  const candidateIds = new Set(candidates.map((candidate) => candidate.id));
-  const matchIds = Array.isArray(parsed?.matchIds)
-    ? parsed.matchIds.filter((id) => typeof id === "string" && candidateIds.has(id)).slice(0, 5)
-    : [];
-  const answer = normalizeAiLibrarySearchAnswer(parsed, matchIds);
-  return { answer, matchIds };
 }
 
 export async function suggestTagMergeWithAi(env, payload, options = {}) {

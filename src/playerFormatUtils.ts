@@ -71,15 +71,6 @@ export function formatResolution(width?: number, height?: number) {
   return `${width} x ${height}`;
 }
 
-export function formatLibrarySearchProgressLabel(card: HomeVideoCard) {
-  if (card.progress?.completed) return "已看完";
-  if (card.progress) {
-    const total = card.progress.duration || card.video.duration || 0;
-    return `${formatTime(card.progress.currentTime)} / ${formatTime(total)}`;
-  }
-  return card.video.duration ? `未开始 / ${formatTime(card.video.duration)}` : "未开始";
-}
-
 export function formatHomeProgressLabel(card: HomeVideoCard) {
   if (card.progress?.completed) return "已看完";
   if (!card.progress) return "未开始";

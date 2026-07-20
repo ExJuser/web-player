@@ -366,7 +366,6 @@ test("playlist visibility helpers preserve playlist priority and indexes", () =>
     favoriteVideos,
   );
   assert.deepEqual(Array.from(uiState.createVideoIndexById(allVideos).entries()), [["all", 0], ["fav", 1], ["series", 2]]);
-  assert.equal(uiState.createLibrarySearchScopeKey([allVideos[0]], [ratingVideos[0]]), "all\n---player---\nrating");
   assert.equal(uiState.isVideoVisible("fav", allVideos), true);
   assert.equal(uiState.isVideoVisible(null, allVideos), false);
 });

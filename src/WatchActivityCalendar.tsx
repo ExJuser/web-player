@@ -145,10 +145,9 @@ type WatchActivityTagButtonProps = {
   index: number;
   metric: WatchActivityMetric;
   formatMetric: (value: number, metric: WatchActivityMetric) => string;
-  onSelectTag: (tag: string) => void;
 };
 
-export function WatchActivityTagButton({ insight, index, metric, formatMetric, onSelectTag }: WatchActivityTagButtonProps) {
+export function WatchActivityTagButton({ insight, index, metric, formatMetric }: WatchActivityTagButtonProps) {
   const metricValue =
     metric === "plays"
       ? insight.playCount
@@ -159,10 +158,10 @@ export function WatchActivityTagButton({ insight, index, metric, formatMetric, o
           : insight.watchedSeconds;
 
   return (
-    <button className="watch-activity-tag" type="button" onClick={() => onSelectTag(insight.tag)} title={`筛选标签：${insight.tag}`}>
+    <div className="watch-activity-tag" title={insight.tag}>
       <span>{index + 1}</span>
       <strong>{insight.tag}</strong>
       <small>{formatMetric(metricValue, metric)}</small>
-    </button>
+    </div>
   );
 }

@@ -35,7 +35,6 @@ type WatchActivitySectionProps = {
   onOpenVideo: (video: VideoItem) => void;
   onRangeChange: (range: WatchActivityRange) => void;
   onSelectDate: (date: string) => void;
-  onSelectTag: (tag: string) => void;
   onThumbnailError: (videoId: string) => void;
   onToggle: () => void;
 };
@@ -61,7 +60,6 @@ export function WatchActivitySection({
   onOpenVideo,
   onRangeChange,
   onSelectDate,
-  onSelectTag,
   onThumbnailError,
   onToggle,
 }: WatchActivitySectionProps) {
@@ -194,7 +192,6 @@ export function WatchActivitySection({
               insight={insight}
               key={insight.key}
               metric={metric}
-              onSelectTag={onSelectTag}
             />
           ))
         ) : (

@@ -39,7 +39,7 @@ import {
   createSubtitleSummaryCache,
   writeCachedAiStreamResult,
 } from "./aiStreamCache.mjs";
-import { scoreDuplicateNameSimilarityWithAi, searchLibraryWithAi, suggestAutoTagsWithAi, suggestTagMergeWithAi } from "./aiLibraryService.mjs";
+import { scoreDuplicateNameSimilarityWithAi, suggestAutoTagsWithAi, suggestTagMergeWithAi } from "./aiLibraryService.mjs";
 import {
   createBangumiMatchResult,
   normalizeBangumiMatchPayload,
@@ -1102,12 +1102,6 @@ export function playerDataApiPlugin({ projectRoot, env }) {
       if (url.pathname === "/api/ai/subtitles/recap" && request.method === "POST") {
         const payload = await parseJsonBody(request);
         await streamProgressRecap(env, payload, response);
-        return;
-      }
-
-      if (url.pathname === "/api/ai/library/search" && request.method === "POST") {
-        const payload = await parseJsonBody(request);
-        sendJson(response, 200, await searchLibraryWithAi(env, payload));
         return;
       }
 

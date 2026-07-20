@@ -29,7 +29,6 @@ type SpecialInsightsCardProps = {
   formatVideoMetric: (insight: SpecialModeVideoInsight) => string;
   onTabChange: (tab: SpecialInsightTab) => void;
   onOpenVideo: (video: VideoItem) => void;
-  onSelectTag: (tag: string) => void;
   onThumbnailError: (videoId: string) => void;
   onToggle: () => void;
 };
@@ -84,14 +83,12 @@ function SpecialTagInsightButton({
   maxValue,
   index,
   formatDuration,
-  onSelectTag,
 }: {
   insight: SpecialModeTagInsight;
   metric: SpecialTagMetric;
   maxValue: number;
   index: number;
   formatDuration: (seconds: number) => string;
-  onSelectTag: (tag: string) => void;
 }) {
   const metricValue = getSpecialTagMetricValue(insight, metric);
   const valueLabel =
@@ -103,14 +100,12 @@ function SpecialTagInsightButton({
   const share = maxValue > 0 ? Math.max(8, Math.round((metricValue / maxValue) * 100)) : 0;
 
   return (
-    <button
+    <div
       className="special-tag-insight"
-      type="button"
-      onClick={() => onSelectTag(insight.tag)}
       style={{
         "--tag-share": `${share}%`,
       } as CSSProperties}
-      title={`筛选标签：${insight.tag}`}
+      title={insight.tag}
     >
       <span className="special-tag-insight-meter" aria-hidden="true">
         <span />
@@ -121,7 +116,7 @@ function SpecialTagInsightButton({
         <small>{insight.videoCount} 个视频</small>
       </span>
       <strong>{valueLabel}</strong>
-    </button>
+    </div>
   );
 }
 
@@ -132,7 +127,6 @@ function SpecialTagChartGroup({
   metric,
   emptyText,
   formatDuration,
-  onSelectTag,
 }: {
   label: string;
   icon: ReactNode;
@@ -140,7 +134,6 @@ function SpecialTagChartGroup({
   metric: SpecialTagMetric;
   emptyText: string;
   formatDuration: (seconds: number) => string;
-  onSelectTag: (tag: string) => void;
 }) {
   const maxValue = insights.reduce((max, insight) => Math.max(max, getSpecialTagMetricValue(insight, metric)), 0);
 
@@ -160,7 +153,6 @@ function SpecialTagChartGroup({
               key={`${metric}-${insight.key}`}
               maxValue={maxValue}
               metric={metric}
-              onSelectTag={onSelectTag}
             />
           ))
         ) : (
@@ -186,7 +178,6 @@ export function SpecialInsightsCard({
   formatVideoMetric,
   onTabChange,
   onOpenVideo,
-  onSelectTag,
   onThumbnailError,
   onToggle,
 }: SpecialInsightsCardProps) {
@@ -269,7 +260,6 @@ export function SpecialInsightsCard({
           insights={insights.tagsByVideoCount}
           label="热门标签"
           metric="videoCount"
-          onSelectTag={onSelectTag}
         />
         <SpecialTagChartGroup
           emptyText="暂无播放统计"
@@ -278,7 +268,6 @@ export function SpecialInsightsCard({
           insights={insights.tagsByPlayedDuration}
           label="播放标签"
           metric="played"
-          onSelectTag={onSelectTag}
         />
         <SpecialTagChartGroup
           emptyText="暂无发射统计"
@@ -287,7 +276,6 @@ export function SpecialInsightsCard({
           insights={insights.tagsByEmissionCount}
           label="发射标签"
           metric="emission"
-          onSelectTag={onSelectTag}
         />
       </div>
         </div>
