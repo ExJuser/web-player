@@ -5467,9 +5467,7 @@ export default function App() {
         : message;
   const currentVideoPlayabilityMessage = currentVideo?.playability?.performanceWarning ?? "";
   const isCurrentHighEnergyMarkPending = pendingHighEnergyStart?.videoId === currentVideo?.id;
-  const pendingHighEnergyStartTime = isCurrentHighEnergyMarkPending ? pendingHighEnergyStart?.time ?? null : null;
   const isCurrentEditSegmentMarkPending = pendingEditSegmentStart?.videoId === currentVideo?.id;
-  const pendingEditSegmentStartTime = isCurrentEditSegmentMarkPending ? pendingEditSegmentStart?.time ?? null : null;
   const { ariaLabel: playlistPanelAriaLabel, title: playlistPanelTitle } = createPlaylistPanelLabels({ isDuplicatePlaylistActive, isVersionPlaylistActive, isRatingPlaylistActive, isPlaylistSeriesMode, playlistVisibleCountLabel, duplicateGroupCount: activeDuplicateVideoGroups.length, versionGroupCount: videoVersionGroups.length, activeRatingPlaylistLabel, modeFilteredVideoCount: modeFilteredVideos.length, playlistFilter, homeMediaMode, homeMediaModeLabel, totalVideoCount: videos.length });
 
   return (
@@ -5849,8 +5847,6 @@ export default function App() {
             isSeriesMode={isSeriesMode}
             ladaDisabledReason={ladaRestorationDisabledReason}
             normalizedVideoRotation={normalizedVideoRotation}
-            pendingEditSegmentStartTime={homeMediaMode === "special" ? pendingEditSegmentStartTime : null}
-            pendingHighlightStartTime={homeMediaMode === "special" ? pendingHighEnergyStartTime : null}
             montageDisabledReason={highlightMontageDisabledReason}
             playbackMode={playbackMode}
             playbackModeOptions={playbackModeOptions}

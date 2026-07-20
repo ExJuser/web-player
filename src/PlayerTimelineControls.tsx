@@ -1,4 +1,5 @@
-import { useRef, type CSSProperties, type ChangeEvent, type PointerEvent as ReactPointerEvent, type Ref } from "react";
+import { Pencil, X } from "lucide-react";
+import { useEffect, useRef, useState, type CSSProperties, type ChangeEvent, type PointerEvent as ReactPointerEvent, type Ref } from "react";
 
 import { clamp } from "./playerInteractionUtils";
 import { PlayerEditSegmentMenu } from "./PlayerEditSegmentMenu";
@@ -29,6 +30,8 @@ type PlayerTimelineControlsProps = {
   timelineRef: Ref<HTMLInputElement>;
   onHideTimelinePreview: () => void;
   onGenerateMontage: () => void;
+  onEditHighlight: (highlight: VideoHighlightSegment) => void;
+  onRemoveHighlight: (highlightId: string) => void;
   onRemoveEditSegment: (segmentId: string) => void;
   onReturnFocusToPlayer: () => void;
   onSeek: (time: number) => void;
@@ -53,6 +56,8 @@ export function PlayerTimelineControls({
   timelineRef,
   onHideTimelinePreview,
   onGenerateMontage,
+  onEditHighlight,
+  onRemoveHighlight,
   onRemoveEditSegment,
   onReturnFocusToPlayer,
   onSeek,
@@ -61,8 +66,43 @@ export function PlayerTimelineControls({
   onUpdateTimelinePreviewFromTime,
 }: PlayerTimelineControlsProps) {
   const isPointerDraggingRef = useRef(false);
+  const segmentPopoverRef = useRef<HTMLDivElement | null>(null);
+  const [selectedMarker, setSelectedMarker] = useState<{ type: "highlight" | "edit"; id: string } | null>(null);
   const displayTime = timelinePreview.isDragging ? timelinePreview.time : currentTime;
   const displayProgressPercent = duration ? clamp((displayTime / duration) * 100, 0, 100) : progressPercent;
+  const selectedHighlight = selectedMarker?.type === "highlight"
+    ? highlights.find((highlight) => highlight.id === selectedMarker.id) ?? null
+    : null;
+  const selectedEditSegment = selectedMarker?.type === "edit"
+    ? editSegments.find((segment) => segment.id === selectedMarker.id) ?? null
+    : null;
+  const selectedSegment = selectedHighlight ?? selectedEditSegment;
+  const selectedSegmentLeft = selectedSegment && duration
+    ? clamp((((selectedSegment.startTime + selectedSegment.endTime) / 2) / duration) * 100, 0, 100)
+    : 0;
+
+  useEffect(() => {
+    if (!selectedMarker) return;
+
+    const closeOnPointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node) || !segmentPopoverRef.current?.contains(target)) setSelectedMarker(null);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setSelectedMarker(null);
+    };
+
+    document.addEventListener("pointerdown", closeOnPointerDown);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnPointerDown);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [selectedMarker]);
+
+  useEffect(() => {
+    if (selectedMarker && !selectedSegment) setSelectedMarker(null);
+  }, [selectedMarker, selectedSegment]);
 
   const handleTimelineChange = (event: ChangeEvent<HTMLInputElement>) => {
     if (isPrivacyMode) return;
@@ -127,10 +167,14 @@ export function PlayerTimelineControls({
           <span className="timeline-preview-time">{formatTime(timelinePreview.time)}</span>
         </output>
         {duration && highlights.length ? (
-          <div className="timeline-highlights" aria-hidden="true">
+          <div className="timeline-highlights" aria-label="高能片段">
             {highlights.map((highlight) => (
-              <span
+              <button
                 key={highlight.id}
+                className={selectedHighlight?.id === highlight.id ? "active" : ""}
+                type="button"
+                aria-label={`高能片段 ${highlight.tag || "未命名"}，${formatTime(highlight.startTime)} 至 ${formatTime(highlight.endTime)}`}
+                onClick={() => setSelectedMarker((current) => current?.type === "highlight" && current.id === highlight.id ? null : { type: "highlight", id: highlight.id })}
                 style={{
                   left: `${clamp((highlight.startTime / duration) * 100, 0, 100)}%`,
                   width: `${clamp(((highlight.endTime - highlight.startTime) / duration) * 100, 0.5, 100)}%`,
@@ -140,13 +184,55 @@ export function PlayerTimelineControls({
           </div>
         ) : null}
         {showEditSegmentControls && duration && editSegments.length ? (
-          <div className="timeline-edit-segments" aria-hidden="true">
+          <div className="timeline-edit-segments" aria-label="剪辑保留片段">
             {editSegments.map((segment) => (
-              <span key={segment.id} style={{
-                left: `${clamp((segment.startTime / duration) * 100, 0, 100)}%`,
-                width: `${clamp(((segment.endTime - segment.startTime) / duration) * 100, 0.5, 100)}%`,
-              }} />
+              <button
+                key={segment.id}
+                className={selectedEditSegment?.id === segment.id ? "active" : ""}
+                type="button"
+                aria-label={`剪辑保留片段，${formatTime(segment.startTime)} 至 ${formatTime(segment.endTime)}`}
+                onClick={() => setSelectedMarker((current) => current?.type === "edit" && current.id === segment.id ? null : { type: "edit", id: segment.id })}
+                style={{
+                  left: `${clamp((segment.startTime / duration) * 100, 0, 100)}%`,
+                  width: `${clamp(((segment.endTime - segment.startTime) / duration) * 100, 0.5, 100)}%`,
+                }}
+              />
             ))}
+          </div>
+        ) : null}
+        {selectedSegment ? (
+          <div
+            className="timeline-segment-popover"
+            ref={segmentPopoverRef}
+            style={{ "--segment-left": `${selectedSegmentLeft}%` } as CSSProperties}
+          >
+            <strong>{selectedHighlight ? selectedHighlight.tag || "高能片段" : "剪辑保留片段"}</strong>
+            <span>{formatTime(selectedSegment.startTime)} - {formatTime(selectedSegment.endTime)}</span>
+            <div>
+              <button type="button" onClick={() => {
+                onSeek(selectedSegment.startTime);
+                setSelectedMarker(null);
+              }}>跳转</button>
+              {selectedHighlight ? (
+                <button type="button" onClick={() => {
+                  onEditHighlight(selectedHighlight);
+                  setSelectedMarker(null);
+                }}>
+                  <Pencil size={13} />修改标签
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className="danger"
+                onClick={() => {
+                  if (selectedHighlight) onRemoveHighlight(selectedHighlight.id);
+                  if (selectedEditSegment) onRemoveEditSegment(selectedEditSegment.id);
+                  setSelectedMarker(null);
+                }}
+              >
+                <X size={13} />删除
+              </button>
+            </div>
           </div>
         ) : null}
         <input

@@ -1,6 +1,5 @@
 import type { FocusEventHandler, MouseEventHandler, Ref } from "react";
 
-import { PlayerHighlightControls } from "./PlayerHighlightControls";
 import { PlayerMediaActionControls } from "./PlayerMediaActionControls";
 import { PlayerOptionControls } from "./PlayerOptionControls";
 import { PlayerPlaybackControls } from "./PlayerPlaybackControls";
@@ -65,8 +64,6 @@ type PlayerControlBarProps = {
   isSeriesMode: boolean;
   ladaDisabledReason: string;
   normalizedVideoRotation: number;
-  pendingEditSegmentStartTime: number | null;
-  pendingHighlightStartTime: number | null;
   montageDisabledReason: string;
   playbackMode: PlaybackMode;
   playbackModeOptions: Array<{ value: PlaybackMode; label: string }>;
@@ -160,8 +157,6 @@ export function PlayerControlBar({
   isSeriesMode,
   ladaDisabledReason,
   normalizedVideoRotation,
-  pendingEditSegmentStartTime,
-  pendingHighlightStartTime,
   montageDisabledReason,
   playbackMode,
   playbackModeOptions,
@@ -248,6 +243,8 @@ export function PlayerControlBar({
         timelineRef={timelineRef}
         onHideTimelinePreview={onHideTimelinePreview}
         onGenerateMontage={onGenerateMontage}
+        onEditHighlight={onEditHighlight}
+        onRemoveHighlight={onRemoveHighlight}
         onRemoveEditSegment={onRemoveEditSegment}
         onReturnFocusToPlayer={onReturnFocusToPlayer}
         onSeek={onSeek}
@@ -255,18 +252,6 @@ export function PlayerControlBar({
         onUpdateTimelinePreview={onUpdateTimelinePreview}
         onUpdateTimelinePreviewFromTime={onUpdateTimelinePreviewFromTime}
       />
-
-      {hasCurrentVideo ? (
-        <PlayerHighlightControls
-          highlights={currentVideoHighlights}
-          pendingEditSegmentStartTime={pendingEditSegmentStartTime}
-          pendingStartTime={pendingHighlightStartTime}
-          formatTime={formatTime}
-          onEditHighlight={onEditHighlight}
-          onRemoveHighlight={onRemoveHighlight}
-          onSeekToHighlight={onSeek}
-        />
-      ) : null}
 
       <div className="control-row">
         <PlayerPlaybackControls
