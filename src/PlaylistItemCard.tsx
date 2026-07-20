@@ -17,6 +17,7 @@ type PlaylistItemCardProps = {
   rating?: number;
   ratingComment?: string;
   seriesTitle?: string;
+  showVideoMetadata: boolean;
   tags: string[];
   actorTags?: string[];
   title: string;
@@ -41,6 +42,7 @@ export function PlaylistItemCard({
   rating,
   ratingComment,
   seriesTitle,
+  showVideoMetadata,
   tags,
   actorTags,
   title,
@@ -89,8 +91,8 @@ export function PlaylistItemCard({
             </small>
           ) : null}
           {seriesTitle ? <small className="episode-series">{seriesTitle}</small> : null}
-          <TagChips tags={tags} actorTags={actorTags} compact />
-          <RatingChip rating={rating} comment={ratingComment} />
+          {showVideoMetadata ? <TagChips tags={tags} actorTags={actorTags} compact /> : null}
+          {showVideoMetadata ? <RatingChip rating={rating} comment={ratingComment} /> : null}
           {isCompleted ? (
             <span className="episode-progress compact">
               <CheckCircle2 size={15} />
@@ -115,15 +117,17 @@ export function PlaylistItemCard({
         >
           <Heart size={15} fill={isFavorite ? "currentColor" : "none"} />
         </button>
-        <button
-          className={`episode-action-button rating ${typeof rating === "number" ? "active" : ""}`}
-          type="button"
-          onClick={() => onOpenRating(video)}
-          title={typeof rating === "number" ? `当前评分 ${rating}/10` : "给视频评分"}
-          aria-label="给视频评分"
-        >
-          <Star size={15} fill={typeof rating === "number" ? "currentColor" : "none"} />
-        </button>
+        {showVideoMetadata ? (
+          <button
+            className={`episode-action-button rating ${typeof rating === "number" ? "active" : ""}`}
+            type="button"
+            onClick={() => onOpenRating(video)}
+            title={typeof rating === "number" ? `当前评分 ${rating}/10` : "给视频评分"}
+            aria-label="给视频评分"
+          >
+            <Star size={15} fill={typeof rating === "number" ? "currentColor" : "none"} />
+          </button>
+        ) : null}
         <button
           className="episode-action-button"
           type="button"

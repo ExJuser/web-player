@@ -10,7 +10,7 @@ import { RatingFilterCard } from "./RatingFilterCard";
 import { VideoVersionSummaryCard } from "./VideoVersionSummaryCard";
 
 type HomeSideColumnProps = {
-  duplicateSummary: ComponentProps<typeof DuplicateVideoSummaryCard>;
+  duplicateSummary: ComponentProps<typeof DuplicateVideoSummaryCard> | null;
   favorites: ComponentProps<typeof FavoriteHomeSection>;
   libraryStats: ComponentProps<typeof HomeLibraryStats>;
   mediaLibrary: ComponentProps<typeof HomeMediaLibraryCard>;
@@ -42,7 +42,7 @@ export function HomeSideColumn({
 
       {recap ? <HomeRecapCard {...recap} /> : null}
 
-      <DuplicateVideoSummaryCard {...duplicateSummary} />
+      {duplicateSummary ? <DuplicateVideoSummaryCard {...duplicateSummary} /> : null}
 
       {videoVersions ? <VideoVersionSummaryCard {...videoVersions} /> : null}
 

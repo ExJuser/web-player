@@ -30,6 +30,7 @@ type PlaylistVideoListProps = {
   playlistRef: Ref<HTMLDivElement>;
   progressStore: ProgressStore;
   seriesTitleByVideoId: Map<string, string>;
+  showVideoMetadata: boolean;
   totalVideoCount: number;
   videoComments: VideoCommentStore;
   videoRatings: VideoRatingStore;
@@ -64,6 +65,7 @@ export function PlaylistVideoList({
   playlistRef,
   progressStore,
   seriesTitleByVideoId,
+  showVideoMetadata,
   totalVideoCount,
   videoComments,
   videoRatings,
@@ -108,6 +110,7 @@ export function PlaylistVideoList({
             rating={rating}
             ratingComment={ratingComment}
             seriesTitle={seriesTitle}
+            showVideoMetadata={showVideoMetadata}
             tags={tags}
             actorTags={videoActorTags[video.id]}
             title={createVideoTitle(video)}

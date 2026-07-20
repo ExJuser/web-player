@@ -5,6 +5,7 @@ type PlayerViewControlsProps = {
   isCinemaMode: boolean;
   isPrivacyMode: boolean;
   normalizedVideoRotation: number;
+  showStartFromHighEnergy: boolean;
   startFromHighEnergy: boolean;
   onRotateVideo: () => void;
   onToggleCinemaMode: () => void;
@@ -20,6 +21,7 @@ export function PlayerViewControls({
   isCinemaMode,
   isPrivacyMode,
   normalizedVideoRotation,
+  showStartFromHighEnergy,
   startFromHighEnergy,
   onRotateVideo,
   onToggleCinemaMode,
@@ -31,16 +33,18 @@ export function PlayerViewControls({
 }: PlayerViewControlsProps) {
   return (
     <>
-      <label className={`control-toggle ${startFromHighEnergy ? "active" : ""}`} title="播放视频默认从高能片段开始">
-        <input
-          type="checkbox"
-          checked={startFromHighEnergy}
-          onChange={onToggleStartFromHighEnergy}
-          aria-label="播放视频默认从高能时刻开始"
-        />
-        <Zap size={16} aria-hidden="true" />
-        <span>高能开播</span>
-      </label>
+      {showStartFromHighEnergy ? (
+        <label className={`control-toggle ${startFromHighEnergy ? "active" : ""}`} title="播放视频默认从高能片段开始">
+          <input
+            type="checkbox"
+            checked={startFromHighEnergy}
+            onChange={onToggleStartFromHighEnergy}
+            aria-label="播放视频默认从高能时刻开始"
+          />
+          <Zap size={16} aria-hidden="true" />
+          <span>高能开播</span>
+        </label>
+      ) : null}
 
       <button className="icon-button" type="button" onClick={onTogglePictureInPicture} disabled={!hasCurrentVideo} title="画中画">
         <PictureInPicture2 size={20} />

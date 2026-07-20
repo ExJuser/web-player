@@ -23,6 +23,7 @@ type PlayerTimelineControlsProps = {
   canGenerateMontage: boolean;
   montageDisabledReason: string;
   isPrivacyMode: boolean;
+  showEditSegmentControls: boolean;
   progressPercent: number;
   timelinePreview: TimelinePreviewState;
   timelineRef: Ref<HTMLInputElement>;
@@ -46,6 +47,7 @@ export function PlayerTimelineControls({
   canGenerateMontage,
   montageDisabledReason,
   isPrivacyMode,
+  showEditSegmentControls,
   progressPercent,
   timelinePreview,
   timelineRef,
@@ -126,7 +128,7 @@ export function PlayerTimelineControls({
             ))}
           </div>
         ) : null}
-        {duration && editSegments.length ? (
+        {showEditSegmentControls && duration && editSegments.length ? (
           <div className="timeline-edit-segments" aria-hidden="true">
             {editSegments.map((segment) => (
               <span key={segment.id} style={{
@@ -158,15 +160,17 @@ export function PlayerTimelineControls({
         />
       </div>
       <span>{formatTime(duration)}</span>
-      <PlayerEditSegmentMenu
-        segments={editSegments}
-        canGenerate={canGenerateMontage}
-        disabledReason={montageDisabledReason}
-        formatTime={formatTime}
-        onGenerate={onGenerateMontage}
-        onRemove={onRemoveEditSegment}
-        onSeek={onSeek}
-      />
+      {showEditSegmentControls ? (
+        <PlayerEditSegmentMenu
+          segments={editSegments}
+          canGenerate={canGenerateMontage}
+          disabledReason={montageDisabledReason}
+          formatTime={formatTime}
+          onGenerate={onGenerateMontage}
+          onRemove={onRemoveEditSegment}
+          onSeek={onSeek}
+        />
+      ) : null}
     </div>
   );
 }

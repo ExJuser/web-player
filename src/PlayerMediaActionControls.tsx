@@ -110,58 +110,62 @@ export function PlayerMediaActionControls({
           弹
         </button>
       ) : null}
-      <button
-        className={`icon-button ${videoTagCount ? "active" : ""}`}
-        type="button"
-        onClick={onOpenTagDialog}
-        disabled={!hasCurrentVideo}
-        title="管理视频标签"
-        aria-label="管理视频标签"
-      >
-        <Tags size={18} />
-      </button>
-      <button
-        className={`icon-button ${hasRating ? "active" : ""}`}
-        type="button"
-        onClick={onOpenRatingDialog}
-        disabled={!hasCurrentVideo}
-        title={hasRating ? `当前评分 ${currentVideoRating}/10` : "给视频评分"}
-        aria-label="给视频评分"
-      >
-        <Star size={18} fill={hasRating ? "currentColor" : "none"} />
-      </button>
-      <button
-        className="icon-button lada-restoration-button"
-        type="button"
-        onClick={onOpenLadaRestoration}
-        disabled={!canRestoreWithLada}
-        title={canRestoreWithLada ? "修复当前影片马赛克" : ladaDisabledReason}
-        aria-label="修复当前影片马赛克"
-      >
-        <Sparkles size={18} />
-      </button>
-      <button
-        className={`icon-button highlight-mark-button ${isHighEnergyMarkPending ? "active" : ""}`}
-        type="button"
-        onClick={onMarkHighEnergySegment}
-        disabled={isHighEnergyMarkDisabled}
-        title={highEnergyMarkLabel}
-        aria-label={highEnergyMarkLabel}
-        aria-pressed={isHighEnergyMarkPending}
-      >
-        <Zap size={18} />
-      </button>
-      <button
-        className={`icon-button edit-segment-mark-button ${isEditSegmentMarkPending ? "active" : ""}`}
-        type="button"
-        onClick={onMarkEditSegment}
-        disabled={isEditSegmentMarkDisabled}
-        title={isEditSegmentMarkPending ? "标记剪辑保留终点" : "标记剪辑保留起点"}
-        aria-label={isEditSegmentMarkPending ? "标记剪辑保留终点" : "标记剪辑保留起点"}
-        aria-pressed={isEditSegmentMarkPending}
-      >
-        <Scissors size={18} />
-      </button>
+      {homeMediaMode === "special" ? (
+        <>
+          <button
+            className={`icon-button ${videoTagCount ? "active" : ""}`}
+            type="button"
+            onClick={onOpenTagDialog}
+            disabled={!hasCurrentVideo}
+            title="管理视频标签"
+            aria-label="管理视频标签"
+          >
+            <Tags size={18} />
+          </button>
+          <button
+            className={`icon-button ${hasRating ? "active" : ""}`}
+            type="button"
+            onClick={onOpenRatingDialog}
+            disabled={!hasCurrentVideo}
+            title={hasRating ? `当前评分 ${currentVideoRating}/10` : "给视频评分"}
+            aria-label="给视频评分"
+          >
+            <Star size={18} fill={hasRating ? "currentColor" : "none"} />
+          </button>
+          <button
+            className="icon-button lada-restoration-button"
+            type="button"
+            onClick={onOpenLadaRestoration}
+            disabled={!canRestoreWithLada}
+            title={canRestoreWithLada ? "修复当前影片马赛克" : ladaDisabledReason}
+            aria-label="修复当前影片马赛克"
+          >
+            <Sparkles size={18} />
+          </button>
+          <button
+            className={`icon-button highlight-mark-button ${isHighEnergyMarkPending ? "active" : ""}`}
+            type="button"
+            onClick={onMarkHighEnergySegment}
+            disabled={isHighEnergyMarkDisabled}
+            title={highEnergyMarkLabel}
+            aria-label={highEnergyMarkLabel}
+            aria-pressed={isHighEnergyMarkPending}
+          >
+            <Zap size={18} />
+          </button>
+          <button
+            className={`icon-button edit-segment-mark-button ${isEditSegmentMarkPending ? "active" : ""}`}
+            type="button"
+            onClick={onMarkEditSegment}
+            disabled={isEditSegmentMarkDisabled}
+            title={isEditSegmentMarkPending ? "标记剪辑保留终点" : "标记剪辑保留起点"}
+            aria-label={isEditSegmentMarkPending ? "标记剪辑保留终点" : "标记剪辑保留起点"}
+            aria-pressed={isEditSegmentMarkPending}
+          >
+            <Scissors size={18} />
+          </button>
+        </>
+      ) : null}
     </>
   );
 }

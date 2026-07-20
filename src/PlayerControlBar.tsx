@@ -242,6 +242,7 @@ export function PlayerControlBar({
         canGenerateMontage={canGenerateMontage}
         montageDisabledReason={montageDisabledReason}
         isPrivacyMode={isPrivacyMode}
+        showEditSegmentControls={homeMediaMode === "special"}
         progressPercent={progressPercent}
         timelinePreview={timelinePreview}
         timelineRef={timelineRef}
@@ -338,6 +339,7 @@ export function PlayerControlBar({
           isCinemaMode={isCinemaMode}
           isPrivacyMode={isPrivacyMode}
           normalizedVideoRotation={normalizedVideoRotation}
+          showStartFromHighEnergy={homeMediaMode === "special"}
           startFromHighEnergy={startFromHighEnergy}
           onRotateVideo={onRotateVideo}
           onToggleCinemaMode={onToggleCinemaMode}

@@ -4353,7 +4353,9 @@ export default function App() {
       progressCompleted: progress?.completed,
       progressDuration: progress?.duration,
       highlights: videoHighlightsRef.current[currentVideo.id],
-      startFromHighEnergy: playerPreferencesRef.current.startFromHighEnergy,
+      startFromHighEnergy:
+        playerPreferencesRef.current.homeMediaMode === "special"
+        && playerPreferencesRef.current.startFromHighEnergy,
       forceBeginning: shouldStartFromBeginning,
     });
 
@@ -5630,7 +5632,7 @@ export default function App() {
                 onConfigureLocalPath: openMediaRootLocalPathDialog,
                 onLoadRecap: () => void loadHomeProgressRecap(),
               } : null}
-              duplicateSummary={{
+              duplicateSummary={homeMediaMode === "special" ? {
                 detectionMessage: duplicateDetectionDisplayMessage,
                 detectionPercent: duplicateDetectionPercent,
                 duplicatePlaylistCount: duplicatePlaylistVideos.length,
@@ -5641,7 +5643,7 @@ export default function App() {
                 progress: duplicateDetectionProgress,
                 renderGroup: renderDuplicateVideoGroup,
                 totalVideoCount: modeFilteredVideos.length,
-              }}
+              } : null}
               videoVersions={homeMediaMode === "special" ? {
                 editCount: videoVersionGroups.reduce((count, group) => count + group.edits.length, 0),
                 groupCount: videoVersionGroups.length,
@@ -5809,8 +5811,8 @@ export default function App() {
             isSeriesMode={isSeriesMode}
             ladaDisabledReason={ladaRestorationDisabledReason}
             normalizedVideoRotation={normalizedVideoRotation}
-            pendingEditSegmentStartTime={pendingEditSegmentStartTime}
-            pendingHighlightStartTime={pendingHighEnergyStartTime}
+            pendingEditSegmentStartTime={homeMediaMode === "special" ? pendingEditSegmentStartTime : null}
+            pendingHighlightStartTime={homeMediaMode === "special" ? pendingHighEnergyStartTime : null}
             montageDisabledReason={highlightMontageDisabledReason}
             playbackMode={playbackMode}
             playbackModeOptions={playbackModeOptions}

@@ -225,6 +225,7 @@ export function PlaylistPanel({
         playlistRef={playlistRef}
         progressStore={progressStore}
         seriesTitleByVideoId={seriesTitleByVideoId}
+        showVideoMetadata={homeMediaMode === "special"}
         totalVideoCount={totalVideoCount}
         videoComments={videoComments}
         videoRatings={videoRatings}
