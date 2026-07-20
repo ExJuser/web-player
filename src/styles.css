@@ -2143,6 +2143,10 @@ button {
   aspect-ratio: 800 / 538;
 }
 
+.home-recent-section .home-list-card .home-card-thumbnail.has-image img {
+  object-fit: cover;
+}
+
 .home-list-copy {
   display: grid;
   min-width: 0;
