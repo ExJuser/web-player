@@ -69,7 +69,6 @@ export const PlayerTopBar = forwardRef<HTMLElement, PlayerTopBarProps>(function 
     const handlePointerDown = (event: PointerEvent) => {
       if (metadataCardRef.current?.contains(event.target as Node)) return;
       setIsMetadataPinnedOpen(false);
-      metadataCardRef.current?.blur();
     };
 
     document.addEventListener("pointerdown", handlePointerDown);
@@ -102,7 +101,7 @@ export const PlayerTopBar = forwardRef<HTMLElement, PlayerTopBarProps>(function 
 
   return (
     <header className="top-bar" ref={ref}>
-      <div className="video-summary">
+      <div className={`video-summary${shouldShowMetadata ? " has-metadata" : ""}`}>
         {shouldShowMetadata ? (
           <button
             ref={metadataCardRef}
@@ -114,7 +113,6 @@ export const PlayerTopBar = forwardRef<HTMLElement, PlayerTopBarProps>(function 
             onKeyDown={(event) => {
               if (event.key !== "Escape") return;
               setIsMetadataPinnedOpen(false);
-              event.currentTarget.blur();
             }}
           >
             <span className="video-metadata-summary">

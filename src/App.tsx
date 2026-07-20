@@ -336,7 +336,6 @@ import {
   selectTrustedDuration,
 } from "./videoThumbnail";
 import {
-  blurClickedButton,
   isFormControl,
   readStoredTheme,
   readStoredVolume,
@@ -2009,12 +2008,14 @@ export default function App() {
 
     const shellRect = shell.getBoundingClientRect();
     const shellStyles = window.getComputedStyle(shell);
+    const paddingLeft = Number.parseFloat(shellStyles.paddingLeft) || 0;
     const paddingRight = Number.parseFloat(shellStyles.paddingRight) || 0;
     const gap = Number.parseFloat(shellStyles.columnGap) || 12;
     const minPlayerWidth = 420;
+    const availableWidth = shell.clientWidth - paddingLeft - paddingRight;
     const maxWidth = Math.max(
       playlistResizeMinWidth,
-      Math.min(playlistResizeMaxWidth, shell.clientWidth - gap - minPlayerWidth),
+      Math.min(playlistResizeMaxWidth, availableWidth - gap - minPlayerWidth),
     );
     const pointerWidth = shellRect.right - clientX - paddingRight;
     setPlaylistWidthOverride(Math.round(clamp(pointerWidth, playlistResizeMinWidth, maxWidth)));
@@ -2931,17 +2932,6 @@ export default function App() {
     };
   }, [isSeriesMenuOpen]);
 
-  useEffect(() => {
-    const handleClick = (event: MouseEvent) => {
-      blurClickedButton(event.target);
-    };
-
-    document.addEventListener("click", handleClick);
-    return () => {
-      document.removeEventListener("click", handleClick);
-    };
-  }, []);
-
   const requestDeleteVideo = useCallback((video: VideoItem) => {
     setVideoDeleteCandidate(video);
     setVideoDeleteError("");
@@ -3849,7 +3839,10 @@ export default function App() {
 
       const shellStyles = window.getComputedStyle(shell);
       const gap = Number.parseFloat(shellStyles.columnGap) || 16;
-      const availableWidth = shell.clientWidth;
+      const paddingX =
+        (Number.parseFloat(shellStyles.paddingLeft) || 0) +
+        (Number.parseFloat(shellStyles.paddingRight) || 0);
+      const availableWidth = shell.clientWidth - paddingX;
       const playerColumnStyles = window.getComputedStyle(playerColumn);
       const playerColumnGap = Number.parseFloat(playerColumnStyles.rowGap) || 14;
       const topBarHeight = topBarRef.current?.getBoundingClientRect().height ?? 0;
@@ -3863,20 +3856,18 @@ export default function App() {
       const maxVideoHeight = Math.max(180, Math.floor(maxFrameHeight - controlsHeight - frameBorderY));
       const minPlayerWidth = 420;
       const minPlaylistWidth = playlistResizeMinWidth;
-      const activeVideoAspectRatio = Number.isFinite(videoAspectRatio) && videoAspectRatio > 0 ? videoAspectRatio : 16 / 9;
-      const minVideoWidth = Math.max(1, Math.round(minPlayerWidth - frameBorderX));
-      const maxVideoWidth = Math.max(minVideoWidth, Math.floor(availableWidth - gap - minPlaylistWidth - frameBorderX));
+      const sourceVideoAspectRatio = Number.isFinite(videoAspectRatio) && videoAspectRatio > 0 ? videoAspectRatio : 16 / 9;
+      const activeVideoAspectRatio = isVideoSideways ? 1 / sourceVideoAspectRatio : sourceVideoAspectRatio;
+      const maxVideoWidth = Math.max(1, Math.floor(availableWidth - gap - minPlaylistWidth - frameBorderX));
       let videoHeight = maxVideoHeight;
       let videoWidth = Math.round(videoHeight * activeVideoAspectRatio);
       if (videoWidth > maxVideoWidth) {
         videoWidth = maxVideoWidth;
         videoHeight = Math.round(videoWidth / activeVideoAspectRatio);
       }
-      if (videoWidth < minVideoWidth) {
-        videoWidth = minVideoWidth;
-        videoHeight = Math.round(videoWidth / activeVideoAspectRatio);
-      }
-      const remainingPlaylistWidth = Math.round(availableWidth - gap - (videoWidth + frameBorderX));
+      const remainingPlaylistWidth = Math.round(
+        availableWidth - gap - Math.max(minPlayerWidth, videoWidth + frameBorderX),
+      );
       const maxPlaylistWidth = Math.max(
         minPlaylistWidth,
         Math.min(playlistResizeMaxWidth, availableWidth - gap - minPlayerWidth),
@@ -3913,7 +3904,7 @@ export default function App() {
       resizeObserver.disconnect();
       window.removeEventListener("resize", updateAdaptiveColumns);
     };
-  }, [activeView, isFullscreen, playlistWidthOverride, videoAspectRatio]);
+  }, [activeView, isFullscreen, isVideoSideways, playlistWidthOverride, videoAspectRatio]);
 
   useLayoutEffect(() => {
     const layer = danmakuLayerRef.current;
@@ -4374,7 +4365,7 @@ export default function App() {
         updateVideoMetadata(currentVideoId, metadata);
       });
       if (element.videoWidth > 0 && element.videoHeight > 0) {
-        setVideoAspectRatio(getPlayerFrameAspectRatio());
+        setVideoAspectRatio(getPlayerFrameAspectRatio(element.videoWidth, element.videoHeight));
       }
       if (resumeAt > 0) {
         element.currentTime = resumeAt;
@@ -4883,7 +4874,7 @@ export default function App() {
 
   const handlePlayerWheel = useCallback(
     (event: React.WheelEvent<HTMLDivElement>) => {
-      if (!currentVideo || event.deltaY === 0) return;
+      if (!currentVideo || event.deltaY === 0 || event.target !== videoRef.current) return;
       event.preventDefault();
       revealControls();
       adjustVolume(event.deltaY < 0 ? volumeStep : -volumeStep);

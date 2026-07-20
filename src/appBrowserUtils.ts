@@ -28,16 +28,3 @@ export function isFormControl(target: EventTarget | null) {
   if (!(target instanceof HTMLElement)) return false;
   return target.isContentEditable || ["INPUT", "SELECT", "TEXTAREA", "BUTTON"].includes(target.tagName);
 }
-
-export function blurClickedButton(target: EventTarget | null) {
-  if (!(target instanceof Element)) return;
-  const button = target.closest("button");
-  if (!(button instanceof HTMLButtonElement) || button.disabled) return;
-  if (button.classList.contains("shortcut-key-button")) return;
-
-  window.setTimeout(() => {
-    if (document.activeElement === button) {
-      button.blur();
-    }
-  }, 0);
-}

@@ -208,8 +208,9 @@ export function getVideoDisplaySize(width?: number, height?: number) {
   return { width, height };
 }
 
-export function getPlayerFrameAspectRatio() {
-  return widescreenAspectRatio;
+export function getPlayerFrameAspectRatio(width?: number, height?: number) {
+  if (!width || !height || !Number.isFinite(width) || !Number.isFinite(height)) return widescreenAspectRatio;
+  return width / height;
 }
 
 function isCanvasNearlyBlack(context: CanvasRenderingContext2D, width: number, height: number) {

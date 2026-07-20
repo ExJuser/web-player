@@ -27,8 +27,10 @@ test("getVideoDisplaySize returns dimensions only when both sides are known", ()
   assert.equal(videoThumbnailUtils.getVideoDisplaySize(1920, undefined), null);
 });
 
-test("getPlayerFrameAspectRatio keeps the widescreen player fallback", () => {
+test("getPlayerFrameAspectRatio uses video dimensions with a widescreen fallback", () => {
   assert.equal(videoThumbnailUtils.getPlayerFrameAspectRatio(), 16 / 9);
+  assert.equal(videoThumbnailUtils.getPlayerFrameAspectRatio(1920, 1080), 16 / 9);
+  assert.equal(videoThumbnailUtils.getPlayerFrameAspectRatio(1080, 1920), 9 / 16);
 });
 
 function createCanvasContext(pixels) {
