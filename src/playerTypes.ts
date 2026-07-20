@@ -407,6 +407,7 @@ export type HomeVideoCard = {
   seriesTitle?: string;
   mediaRootLabel?: string;
   tags?: string[];
+  actorTags?: string[];
   rating?: number;
   ratingComment?: string;
 };

@@ -47,7 +47,7 @@ export function LibrarySearchResultItem({
           {directoryLabel || result.mediaRootLabel ? (
             <small>{[result.mediaRootLabel, directoryLabel].filter(Boolean).join(" · ")}</small>
           ) : null}
-          <TagChips tags={videoTags[video.id] ?? []} limit={3} compact />
+          <TagChips tags={videoTags[video.id] ?? []} actorTags={card.actorTags} limit={3} compact />
           <RatingChip rating={videoRatings[video.id]} />
         </span>
       </button>

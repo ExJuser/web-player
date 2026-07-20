@@ -5042,6 +5042,12 @@ button {
   background: rgba(255, 255, 255, 0.07);
 }
 
+.tag-chip.actor {
+  border-color: rgba(244, 114, 182, 0.38);
+  background: rgba(219, 39, 119, 0.16);
+  color: #f9a8d4;
+}
+
 .rating-chip {
   display: inline-flex;
   align-items: center;
@@ -7565,6 +7571,12 @@ button {
   color: #0077a8;
 }
 
+.app-shell.theme-light .tag-chip.actor {
+  border-color: rgba(190, 24, 93, 0.28);
+  background: #fce7f3;
+  color: #9d174d;
+}
+
 .app-shell.theme-light .rating-chip {
   border-color: rgba(180, 118, 18, 0.3);
   background: #fff4d6;
@@ -9137,6 +9149,12 @@ button {
   border-color: rgba(0, 161, 214, 0.28);
   background: #e1f5fd;
   color: #0077a8;
+}
+
+:root[data-theme="light"] .tag-chip.actor {
+  border-color: rgba(190, 24, 93, 0.28);
+  background: #fce7f3;
+  color: #9d174d;
 }
 
 :root[data-theme="light"] .rating-chip {

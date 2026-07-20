@@ -18,6 +18,7 @@ type PlaylistItemCardProps = {
   ratingComment?: string;
   seriesTitle?: string;
   tags: string[];
+  actorTags?: string[];
   title: string;
   video: VideoItem;
   onDelete: (video: VideoItem) => void;
@@ -41,6 +42,7 @@ export function PlaylistItemCard({
   ratingComment,
   seriesTitle,
   tags,
+  actorTags,
   title,
   video,
   onDelete,
@@ -87,7 +89,7 @@ export function PlaylistItemCard({
             </small>
           ) : null}
           {seriesTitle ? <small className="episode-series">{seriesTitle}</small> : null}
-          <TagChips tags={tags} compact />
+          <TagChips tags={tags} actorTags={actorTags} compact />
           <RatingChip rating={rating} comment={ratingComment} />
           {isCompleted ? (
             <span className="episode-progress compact">

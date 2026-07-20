@@ -34,6 +34,7 @@ type PlaylistVideoListProps = {
   videoComments: VideoCommentStore;
   videoRatings: VideoRatingStore;
   videoTags: VideoTagStore;
+  videoActorTags: Record<string, string[]>;
   visibleVideoCount: number;
   createVideoTitle: (video: VideoItem) => string;
   onDelete: (video: VideoItem) => void;
@@ -67,6 +68,7 @@ export function PlaylistVideoList({
   videoComments,
   videoRatings,
   videoTags,
+  videoActorTags,
   visibleVideoCount,
   createVideoTitle,
   onDelete,
@@ -107,6 +109,7 @@ export function PlaylistVideoList({
             ratingComment={ratingComment}
             seriesTitle={seriesTitle}
             tags={tags}
+            actorTags={videoActorTags[video.id]}
             title={createVideoTitle(video)}
             video={video}
             onDelete={onDelete}

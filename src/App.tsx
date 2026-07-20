@@ -1540,6 +1540,10 @@ export default function App() {
       setRatingPlaylistMode(null);
     }
   }, [isRatingFilterEnabled, ratingPlaylistMode]);
+  const videoActorTags = useMemo(() => Object.fromEntries(videos.map((video) => {
+    const resolved = resolveVideoActors({ video, profiles: actorProfiles, videoTags, actorTagDefinitions, videoActorOverrides });
+    return [video.id, resolved.actorIds.map((actorId) => actorProfiles[actorId]?.name).filter((name): name is string => Boolean(name))];
+  })), [actorProfiles, actorTagDefinitions, videoActorOverrides, videoTags, videos]);
   const createHomeVideoCard = useCallback(
     (video: VideoItem): HomeVideoCard => {
       const progress = progressStore[video.id];
@@ -1554,11 +1558,12 @@ export default function App() {
         seriesTitle: seriesTitleByVideoId.get(video.id) ?? inferSeriesTitle(video),
         mediaRootLabel: (video.mediaRootId ? mediaRootLabelsById[video.mediaRootId] : "") || fallbackMediaRootLabelForVideo(video),
         tags: videoTags[video.id] ?? [],
+        actorTags: videoActorTags[video.id] ?? [],
         rating: videoRatings[video.id],
         ratingComment: videoComments[video.id],
       };
     },
-    [mediaRootLabelsById, progressStore, seriesTitleByVideoId, videoComments, videoRatings, videoTags],
+    [mediaRootLabelsById, progressStore, seriesTitleByVideoId, videoActorTags, videoComments, videoRatings, videoTags],
   );
   const homeLibrarySearchContext = useMemo(
     () => ({
@@ -6173,6 +6178,7 @@ export default function App() {
           videoComments={videoComments}
           videoRatings={videoRatings}
           videoTags={videoTags}
+          videoActorTags={videoActorTags}
           createVideoTitle={createVideoMetadataTitle}
           onChangePlaylistFilter={(nextFilter) => {
             setPlaylistPage(1);

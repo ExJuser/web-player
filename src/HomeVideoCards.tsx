@@ -47,7 +47,7 @@ export function HomeListCard({ card, index, title, meta, onOpen, onThumbnailErro
       <span className="home-list-copy">
         <strong>{card.video.name}</strong>
         <small>{meta}</small>
-        <TagChips tags={card.tags ?? []} limit={10} compact />
+        <TagChips tags={card.tags ?? []} actorTags={card.actorTags} limit={10} compact />
         <RatingChip rating={card.rating} comment={card.ratingComment} />
       </span>
     </button>
