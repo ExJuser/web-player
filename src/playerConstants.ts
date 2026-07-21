@@ -58,6 +58,7 @@ export const thumbnailWidth = 480;
 export const thumbnailHeight = 270;
 export const thumbnailCacheTimeout = 3000;
 export const thumbnailGenerationTimeout = 12000;
+export const thumbnailServerGenerationTimeout = 35000;
 export const thumbnailEncodeTimeout = 3000;
 export const playlistScrollFrameDelay = 16;
 export const danmakuSpeedMin = 16;

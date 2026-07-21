@@ -3,9 +3,10 @@ import {
   thumbnailEncodeTimeout,
   thumbnailGenerationTimeout,
   thumbnailHeight,
+  thumbnailServerGenerationTimeout,
   thumbnailWidth,
 } from "./playerConstants";
-import { readCachedThumbnail, writeCachedThumbnail } from "./playerStorage";
+import { findCachedThumbnailUrl, generateServerThumbnail, writeCachedThumbnail } from "./playerStorage";
 import { revokeObjectUrl } from "./appResourceCleanup";
 import type { VideoItem, VideoMetadata } from "./playerTypes";
 import { getPlayableVideoUrl } from "./playerUiState";
@@ -387,19 +388,44 @@ export async function loadVideoThumbnail(libraryId: string | null, video: VideoI
   const artworkUrl = await selectVideoArtworkThumbnail(video, readArtworkSize, signal);
   if (artworkUrl) return { thumbnailUrl: artworkUrl, metadata: undefined };
 
-  let cachedThumbnail: Blob | null;
+  let cachedThumbnailUrl: string | null;
   try {
-    cachedThumbnail = await withTimeout(
-      readCachedThumbnail(libraryId, video.id, signal),
+    cachedThumbnailUrl = await withTimeout(
+      findCachedThumbnailUrl(libraryId, video.id, signal),
       thumbnailCacheTimeout,
       "Timed out reading cached thumbnail.",
     );
   } catch (error) {
     throwIfAborted(signal);
-    cachedThumbnail = null;
+    cachedThumbnailUrl = null;
   }
-  if (cachedThumbnail) {
-    return { thumbnailUrl: URL.createObjectURL(cachedThumbnail), metadata: undefined };
+  if (cachedThumbnailUrl) {
+    return { thumbnailUrl: cachedThumbnailUrl, metadata: undefined };
+  }
+
+  if (video.mediaRootId) {
+    const serverController = new AbortController();
+    const abortServerRequest = () => serverController.abort();
+    signal?.addEventListener("abort", abortServerRequest, { once: true });
+    try {
+      const serverThumbnailUrl = await withTimeout(
+        generateServerThumbnail(
+          libraryId,
+          video.id,
+          video.mediaRootId,
+          video.relativePath,
+          serverController.signal,
+        ),
+        thumbnailServerGenerationTimeout,
+        "Timed out generating server thumbnail.",
+        abortServerRequest,
+      );
+      if (serverThumbnailUrl) return { thumbnailUrl: serverThumbnailUrl, metadata: undefined };
+    } catch (error) {
+      throwIfAborted(signal);
+    } finally {
+      signal?.removeEventListener("abort", abortServerRequest);
+    }
   }
 
   const generationController = new AbortController();

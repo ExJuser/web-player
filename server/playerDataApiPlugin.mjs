@@ -65,6 +65,7 @@ import { LocalDataSqliteStore } from "./sqliteStorage.mjs";
 import { BoundedLruCache } from "./boundedLruCache.mjs";
 import { createPlayerDeferredData, createPlayerStartupData } from "./playerDataViews.mjs";
 import { createSystemResourceStatus } from "./systemResources.mjs";
+import { createVideoThumbnailService } from "./videoThumbnailService.mjs";
 
 let dataRoot;
 let librariesRoot;
@@ -744,6 +745,7 @@ async function updateIndex(libraryId, metadata) {
 
 export function playerDataApiPlugin({ projectRoot, env }) {
   initializeApiServices(projectRoot);
+  const videoThumbnailService = createVideoThumbnailService({ cacheRoot: thumbnailsRoot, runProcess, maxConcurrency: 1 });
   const mediaRootScanCache = new BoundedLruCache({ maxEntries: 2, maxBytes: 8 * 1024 * 1024 });
   let toolsPromise = null;
   let ladaAvailablePromise = null;
@@ -801,6 +803,7 @@ export function playerDataApiPlugin({ projectRoot, env }) {
 
     const url = new URL(request.url, "http://127.0.0.1");
     const libraryMatch = url.pathname.match(/^\/api\/player-data\/libraries\/([^/]+)$/);
+    const thumbnailGenerateMatch = url.pathname.match(/^\/api\/player-data\/thumbnails\/([^/]+)\/generate$/);
     const thumbnailMatch = url.pathname.match(/^\/api\/player-data\/thumbnails\/([^/]+)$/);
     const actorCoverMatch = url.pathname.match(/^\/api\/player-data\/actor-covers\/([^/]+)$/);
     const mediaMatch = url.pathname.match(/^\/api\/media\/([^/]+)\/(.+)$/);
@@ -1401,6 +1404,38 @@ export function playerDataApiPlugin({ projectRoot, env }) {
         }
       }
 
+      if (thumbnailGenerateMatch && request.method === "POST") {
+        const thumbnailId = sanitizeStorageId(decodeURIComponent(thumbnailGenerateMatch[1]));
+        if (!thumbnailId) {
+          sendJson(response, 400, { error: "Invalid thumbnail id." });
+          return;
+        }
+        const payload = await parseJsonBody(request);
+        const config = await loadAppConfig();
+        const root = findMediaRoot(config, payload?.rootId);
+        if (!root) {
+          sendJson(response, 400, { error: "Unknown media root." });
+          return;
+        }
+        if (root.source === "browser" && !root.localPath) {
+          sendJson(response, 409, { error: "浏览器媒体库需要先配置本机路径，才能由服务端生成缩略图。" });
+          return;
+        }
+        if (!(await getTools()).ffmpeg) {
+          sendJson(response, 409, { error: "未检测到 ffmpeg，无法由服务端生成缩略图。" });
+          return;
+        }
+        const sourcePath = resolveVideoPathFromConfig(config, root.id, payload?.relativePath);
+        await ensureFileExists(sourcePath);
+        const generated = await videoThumbnailService.generate({ thumbnailId, sourcePath });
+        store.recordCacheEntry("thumbnail", thumbnailId, generated.filePath, "image/jpeg", generated.size);
+        sendJson(response, 200, {
+          thumbnailUrl: `/api/player-data/thumbnails/${encodeURIComponent(thumbnailId)}`,
+          cached: generated.cached,
+        });
+        return;
+      }
+
       if (thumbnailMatch) {
         const thumbnailId = sanitizeStorageId(decodeURIComponent(thumbnailMatch[1]));
         if (!thumbnailId) {
@@ -1409,7 +1444,7 @@ export function playerDataApiPlugin({ projectRoot, env }) {
         }
 
         const filePath = path.join(thumbnailsRoot, `${thumbnailId}.blob`);
-        if (request.method === "GET") {
+        if (request.method === "GET" || request.method === "HEAD") {
           try {
             const etag = `"${thumbnailId}"`;
             const cacheEntry = store.getCacheEntry("thumbnail", thumbnailId);
@@ -1418,9 +1453,18 @@ export function playerDataApiPlugin({ projectRoot, env }) {
               cacheControl: "public, max-age=31536000, immutable",
               etag,
             };
-            await stat(filePath);
+            const fileStat = await stat(filePath);
             if (request.headers["if-none-match"] === etag) {
               response.statusCode = 304;
+              response.setHeader("Cache-Control", headers.cacheControl);
+              response.setHeader("ETag", etag);
+              response.end();
+              return;
+            }
+            if (request.method === "HEAD") {
+              response.statusCode = 200;
+              response.setHeader("Content-Type", headers.contentType);
+              response.setHeader("Content-Length", fileStat.size);
               response.setHeader("Cache-Control", headers.cacheControl);
               response.setHeader("ETag", etag);
               response.end();

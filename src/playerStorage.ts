@@ -1139,22 +1139,47 @@ function createLegacyVideoIdCandidate(videoId: string) {
   return parts.slice(1).join("|");
 }
 
-export async function readCachedThumbnail(libraryId: string | null, videoId: string, signal?: AbortSignal) {
-  if (!libraryId) return null;
+function createThumbnailIds(libraryId: string, videoId: string) {
   const thumbnailIds = [createThumbnailId(libraryId, videoId)];
   const legacyVideoId = libraryId === "global" ? createLegacyVideoIdCandidate(videoId) : null;
-  if (legacyVideoId) {
-    thumbnailIds.push(createThumbnailId(libraryId, legacyVideoId));
-  }
+  if (legacyVideoId) thumbnailIds.push(createThumbnailId(libraryId, legacyVideoId));
+  return thumbnailIds;
+}
 
-  for (const thumbnailId of thumbnailIds) {
-    const response = await fetch(createApiUrl(`thumbnails/${encodeURIComponent(thumbnailId)}`), { signal });
+function createThumbnailUrl(thumbnailId: string) {
+  return createApiUrl(`thumbnails/${encodeURIComponent(thumbnailId)}`);
+}
+
+export async function findCachedThumbnailUrl(libraryId: string | null, videoId: string, signal?: AbortSignal) {
+  if (!libraryId) return null;
+  for (const thumbnailId of createThumbnailIds(libraryId, videoId)) {
+    const thumbnailUrl = createThumbnailUrl(thumbnailId);
+    const response = await fetch(thumbnailUrl, { method: "HEAD", signal });
     if (response.status === 404) continue;
     if (!response.ok) throw new Error(await readApiError(response));
-    return response.blob();
+    return thumbnailUrl;
   }
-
   return null;
+}
+
+export async function generateServerThumbnail(
+  libraryId: string | null,
+  videoId: string,
+  rootId: string,
+  relativePath: string,
+  signal?: AbortSignal,
+) {
+  if (!libraryId) return null;
+  const thumbnailId = createThumbnailId(libraryId, videoId);
+  const thumbnailUrl = createThumbnailUrl(thumbnailId);
+  const response = await fetch(`${thumbnailUrl}/generate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ rootId, relativePath }),
+    signal,
+  });
+  if (!response.ok) return null;
+  return thumbnailUrl;
 }
 
 export async function writeCachedThumbnail(libraryId: string | null, videoId: string, thumbnail: Blob) {
