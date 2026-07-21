@@ -111,7 +111,7 @@ export function PlayerMediaActionControls({
         </button>
       ) : null}
       {homeMediaMode === "special" ? (
-        <>
+        <div className="special-player-actions" role="group" aria-label="常用影片操作">
           <button
             className={`icon-button ${videoTagCount ? "active" : ""}`}
             type="button"
@@ -164,7 +164,7 @@ export function PlayerMediaActionControls({
           >
             <Scissors size={18} />
           </button>
-        </>
+        </div>
       ) : null}
     </>
   );

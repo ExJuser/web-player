@@ -3769,6 +3769,22 @@ button {
   cursor: pointer;
 }
 
+.special-player-actions {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid #2d3540;
+  border-radius: 8px;
+  background: #171b21;
+}
+
+.special-player-actions .icon-button {
+  width: 34px;
+  height: 34px;
+}
+
 .icon-button:disabled {
   cursor: not-allowed;
   color: #5f6875;
@@ -6908,6 +6924,12 @@ button {
   border-color: #cfd8e3;
   background: #ffffff;
   color: #243044;
+}
+
+.app-shell.theme-light .special-player-actions,
+:root[data-theme="light"] .special-player-actions {
+  border-color: #d8e0e8;
+  background: #f4f7fa;
 }
 
 .app-shell.theme-light .video-metadata-details,
