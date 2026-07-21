@@ -10,6 +10,7 @@ import type {
   VideoTagStore,
 } from "./playerTypes";
 import type { DuplicatePlaylistVideoMeta } from "./playerUiState";
+import type { PlaylistSearchMatch } from "./playerPlaylistSearch";
 import type { VideoVersionPlaylistMeta } from "./videoVersionUtils";
 
 const emptyVideoTags: string[] = [];
@@ -23,6 +24,7 @@ type PlaylistVideoListProps = {
   isDuplicatePlaylistActive: boolean;
   isVersionPlaylistActive: boolean;
   isRatingPlaylistActive: boolean;
+  isSearchPending: boolean;
   isPlaylistSeriesMode: boolean;
   isVideoDeletePending: boolean;
   message: string;
@@ -30,9 +32,13 @@ type PlaylistVideoListProps = {
   pagedPlaylistVideos: VideoItem[];
   playlistIndexById: Map<string, number>;
   playlistRef: Ref<HTMLDivElement>;
+  playlistScopeVideoCount: number;
   progressStore: ProgressStore;
   seriesTitleByVideoId: Map<string, string>;
   showVideoMetadata: boolean;
+  searchMatchesByVideoId: ReadonlyMap<string, PlaylistSearchMatch>;
+  searchQuery: string;
+  searchTerms: string[];
   totalVideoCount: number;
   videoComments: VideoCommentStore;
   videoRatings: VideoRatingStore;
@@ -41,6 +47,7 @@ type PlaylistVideoListProps = {
   visibleVideoCount: number;
   createVideoTitle: (video: VideoItem) => string;
   onDelete: (video: VideoItem) => void;
+  onClearSearch: () => void;
   onFavoriteToggle: (video: VideoItem) => void;
   onOpenRating: (video: VideoItem) => void;
   onResetProgress: (video: VideoItem) => void;
@@ -58,6 +65,7 @@ export function PlaylistVideoList({
   isDuplicatePlaylistActive,
   isVersionPlaylistActive,
   isRatingPlaylistActive,
+  isSearchPending,
   isPlaylistSeriesMode,
   isVideoDeletePending,
   message,
@@ -65,9 +73,13 @@ export function PlaylistVideoList({
   pagedPlaylistVideos,
   playlistIndexById,
   playlistRef,
+  playlistScopeVideoCount,
   progressStore,
   seriesTitleByVideoId,
   showVideoMetadata,
+  searchMatchesByVideoId,
+  searchQuery,
+  searchTerms,
   totalVideoCount,
   videoComments,
   videoRatings,
@@ -76,6 +88,7 @@ export function PlaylistVideoList({
   visibleVideoCount,
   createVideoTitle,
   onDelete,
+  onClearSearch,
   onFavoriteToggle,
   onOpenRating,
   onResetProgress,
@@ -84,7 +97,7 @@ export function PlaylistVideoList({
   onThumbnailError,
 }: PlaylistVideoListProps) {
   return (
-    <div className="playlist" ref={playlistRef} onScroll={onScroll}>
+    <div className="playlist" id="player-playlist-results" ref={playlistRef} onScroll={onScroll}>
       {pagedPlaylistVideos.map((video) => {
         const isActive = video.id === currentVideoId;
         const progress = progressStore[video.id];
@@ -111,6 +124,8 @@ export function PlaylistVideoList({
             playlistIndex={playlistIndex}
             rating={rating}
             ratingComment={ratingComment}
+            searchMatch={searchMatchesByVideoId.get(video.id)}
+            searchTerms={searchTerms}
             seriesTitle={seriesTitle}
             showVideoMetadata={showVideoMetadata}
             tags={tags}
@@ -129,11 +144,15 @@ export function PlaylistVideoList({
       <PlaylistEmptyState
         homeMediaModeLabel={homeMediaModeLabel}
         isDuplicatePlaylistActive={isDuplicatePlaylistActive}
+        isSearchPending={isSearchPending}
         isRatingPlaylistActive={isRatingPlaylistActive}
         message={message}
         modeFilteredVideoCount={modeFilteredVideoCount}
+        playlistScopeVideoCount={playlistScopeVideoCount}
+        searchQuery={searchQuery}
         totalVideoCount={totalVideoCount}
         visibleVideoCount={visibleVideoCount}
+        onClearSearch={onClearSearch}
       />
     </div>
   );

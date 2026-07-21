@@ -1,4 +1,4 @@
-import type { Ref } from "react";
+import type { RefObject } from "react";
 
 import { PlayerSearchInput } from "./PlayerSearchInput";
 import { PlaylistPagination } from "./PlaylistPagination";
@@ -6,6 +6,7 @@ import { PlaylistTools } from "./PlaylistTools";
 import { PlaylistVideoList } from "./PlaylistVideoList";
 import type { HomeMediaMode, SeriesOption, DuplicatePlaylistVideoMeta } from "./playerUiState";
 import type { VideoVersionPlaylistMeta } from "./videoVersionUtils";
+import type { PlaylistSearchMatch } from "./playerPlaylistSearch";
 import type {
   PlaylistFilter,
   PlaylistSortMode,
@@ -35,6 +36,7 @@ type PlaylistPanelProps = {
   isPlaylistSeriesMode: boolean;
   isPlaylistSortReversed: boolean;
   isRatingPlaylistActive: boolean;
+  isSearchPending: boolean;
   isSeriesMenuOpen: boolean;
   isVideoDeletePending: boolean;
   message: string;
@@ -49,7 +51,11 @@ type PlaylistPanelProps = {
   playlistPageSize: number;
   playlistPageSizeOptions: Array<{ value: number; label: string }>;
   playlistPageStartLabel: number;
-  playlistRef: Ref<HTMLDivElement>;
+  playlistRef: RefObject<HTMLDivElement | null>;
+  playlistScopeVideoCount: number;
+  playlistSearchMatchesByVideoId: ReadonlyMap<string, PlaylistSearchMatch>;
+  playlistSearchQuery: string;
+  playlistSearchTerms: string[];
   playlistScrollTop: number;
   playlistSortMode: PlaylistSortMode;
   playlistSortOptions: Array<{ value: PlaylistSortMode; label: string }>;
@@ -68,6 +74,8 @@ type PlaylistPanelProps = {
   createVideoTitle: (video: VideoItem) => string;
   onChangePlaylistFilter: (filter: PlaylistFilter) => void;
   onChangePlaylistSortMode: (sortMode: PlaylistSortMode) => void;
+  onChangePlaylistSearch: (query: string) => void;
+  onClearPlaylistSearch: () => void;
   onClearDuplicatePlaylist: () => void;
   onClearVersionPlaylist: () => void;
   onClearRatingPlaylist: () => void;
@@ -109,6 +117,7 @@ export function PlaylistPanel({
   isPlaylistSeriesMode,
   isPlaylistSortReversed,
   isRatingPlaylistActive,
+  isSearchPending,
   isSeriesMenuOpen,
   isVideoDeletePending,
   message,
@@ -124,6 +133,10 @@ export function PlaylistPanel({
   playlistPageSizeOptions,
   playlistPageStartLabel,
   playlistRef,
+  playlistScopeVideoCount,
+  playlistSearchMatchesByVideoId,
+  playlistSearchQuery,
+  playlistSearchTerms,
   playlistScrollTop,
   playlistSortMode,
   playlistSortOptions,
@@ -142,6 +155,8 @@ export function PlaylistPanel({
   createVideoTitle,
   onChangePlaylistFilter,
   onChangePlaylistSortMode,
+  onChangePlaylistSearch,
+  onClearPlaylistSearch,
   onClearDuplicatePlaylist,
   onClearVersionPlaylist,
   onClearRatingPlaylist,
@@ -205,7 +220,30 @@ export function PlaylistPanel({
         />
       </div>
 
-      <PlayerSearchInput />
+      <PlayerSearchInput
+        isPending={isSearchPending}
+        query={playlistSearchQuery}
+        resultCount={visibleVideoCount}
+        scopeCount={playlistScopeVideoCount}
+        onChange={onChangePlaylistSearch}
+        onClear={onClearPlaylistSearch}
+        onSubmit={() => {
+          const firstVideo = pagedPlaylistVideos[0];
+          if (!firstVideo) return;
+          if (visibleVideoCount === 1) {
+            onSelectVideo(firstVideo, firstVideo.id === currentVideoId);
+            return;
+          }
+          onRequestPage(1);
+          window.requestAnimationFrame(() => {
+            window.requestAnimationFrame(() => {
+              const firstResult = playlistRef.current?.querySelector<HTMLButtonElement>(".playlist-select");
+              firstResult?.focus();
+              firstResult?.scrollIntoView({ block: "nearest" });
+            });
+          });
+        }}
+      />
 
       <PlaylistVideoList
         currentVideoId={currentVideoId}
@@ -216,6 +254,7 @@ export function PlaylistPanel({
         isDuplicatePlaylistActive={isDuplicatePlaylistActive}
         isVersionPlaylistActive={isVersionPlaylistActive}
         isRatingPlaylistActive={isRatingPlaylistActive}
+        isSearchPending={isSearchPending}
         isPlaylistSeriesMode={isPlaylistSeriesMode}
         isVideoDeletePending={isVideoDeletePending}
         message={message}
@@ -223,9 +262,13 @@ export function PlaylistPanel({
         pagedPlaylistVideos={pagedPlaylistVideos}
         playlistIndexById={playlistIndexById}
         playlistRef={playlistRef}
+        playlistScopeVideoCount={playlistScopeVideoCount}
         progressStore={progressStore}
         seriesTitleByVideoId={seriesTitleByVideoId}
         showVideoMetadata={homeMediaMode === "special"}
+        searchMatchesByVideoId={playlistSearchMatchesByVideoId}
+        searchQuery={playlistSearchQuery}
+        searchTerms={playlistSearchTerms}
         totalVideoCount={totalVideoCount}
         videoComments={videoComments}
         videoRatings={videoRatings}
@@ -233,6 +276,7 @@ export function PlaylistPanel({
         videoActorTags={videoActorTags}
         visibleVideoCount={visibleVideoCount}
         createVideoTitle={createVideoTitle}
+        onClearSearch={onClearPlaylistSearch}
         onDelete={onDeleteVideo}
         onFavoriteToggle={onFavoriteToggle}
         onOpenRating={onOpenRating}

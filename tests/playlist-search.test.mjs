@@ -1,0 +1,73 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+
+import { importTsModule } from "./importTsModule.mjs";
+
+const search = await importTsModule(new URL("../src/playerPlaylistSearch.ts", import.meta.url));
+
+test("normalizes case, full-width text, path separators, whitespace, and traditional Chinese", () => {
+  assert.equal(search.normalizePlaylistSearchText("  ＡＮＩＭＥ\\動畫   Final  "), "anime/动画 final");
+});
+
+test("parses quoted phrases, recovers unmatched quotes, and removes duplicate tokens", () => {
+  assert.deepEqual(
+    search.parsePlaylistSearchQuery('  "最终 回"  喜多 喜多 "動畫').map((token) => token.normalized),
+    ["最终 回", "喜多", "动画"],
+  );
+});
+
+test("matches all query tokens across different metadata fields while preserving playlist order", () => {
+  const videos = [{ id: "first" }, { id: "second" }, { id: "third" }];
+  const documents = search.createPlaylistSearchDocuments([
+    { id: "first", title: "孤独摇滚 08", path: "Anime/Bocchi/08.mkv", actors: ["青山吉能"] },
+    { id: "second", title: "孤独摇滚 01", path: "Anime/Bocchi/01.mkv", actors: ["喜多郁代"] },
+    { id: "third", title: "其他作品", path: "Anime/Other.mkv", tags: ["喜多"] },
+  ]);
+
+  const result = search.searchPlaylistVideos(videos, documents, "孤独 喜多");
+
+  assert.deepEqual(result.videos, [videos[1]]);
+  assert.deepEqual(result.matchesByVideoId.get("second").reasons, [
+    { field: "actor", label: "演员", value: "喜多郁代" },
+  ]);
+});
+
+test("matches actor aliases, comments, library names, and traditional Chinese queries", () => {
+  const videos = [{ id: "video" }];
+  const documents = search.createPlaylistSearchDocuments([
+    {
+      id: "video",
+      title: "动画短片",
+      path: "Short/clip.mp4",
+      actorAliases: ["Aoyama Yoshino"],
+      comment: "最终回镜头很好",
+      library: "特别收藏",
+    },
+  ]);
+
+  assert.deepEqual(search.searchPlaylistVideos(videos, documents, "動畫").videos, videos);
+  assert.equal(search.searchPlaylistVideos(videos, documents, '"最终回" yoshino 特别').videos.length, 1);
+});
+
+test("returns non-title reasons but suppresses redundant path reasons for title matches", () => {
+  const videos = [{ id: "video" }];
+  const documents = search.createPlaylistSearchDocuments([
+    { id: "video", title: "Final Episode", path: "Show/Final Episode.mkv", tags: ["Final"] },
+  ]);
+
+  const titleResult = search.searchPlaylistVideos(videos, documents, "Final");
+  const pathResult = search.searchPlaylistVideos(videos, documents, "Show");
+
+  assert.deepEqual(titleResult.matchesByVideoId.get("video").reasons, []);
+  assert.deepEqual(pathResult.matchesByVideoId.get("video").reasons, [
+    { field: "path", label: "路径", value: "Show/Final Episode.mkv" },
+  ]);
+});
+
+test("returns the original list and no match metadata for an empty query", () => {
+  const videos = [{ id: "video" }];
+  const result = search.searchPlaylistVideos(videos, new Map(), "  ");
+
+  assert.equal(result.videos, videos);
+  assert.equal(result.matchesByVideoId.size, 0);
+});

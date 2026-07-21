@@ -3,6 +3,7 @@ import {
 } from "lucide-react";
 import {
   useCallback,
+  useDeferredValue,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -302,6 +303,7 @@ import {
   type RatingPlaylistMode,
 } from "./playerUiState";
 import { normalizeTagKey } from "./tagUtils";
+import { createPlaylistSearchDocuments, searchPlaylistVideos } from "./playerPlaylistSearch";
 import {
   createVideoVersionGroups,
   createVideoVersionPlaylistMetaByVideoId,
@@ -665,6 +667,7 @@ export default function App() {
   const [playlistPageSize, setPlaylistPageSize] = useState(defaultPlayerPreferences.playlistPageSize);
   const [playlistPage, setPlaylistPage] = useState(1);
   const [playlistPageInput, setPlaylistPageInput] = useState("1");
+  const [playlistSearchQuery, setPlaylistSearchQuery] = useState("");
   const [shortcuts, setShortcuts] = useState<ShortcutMap>(defaultPlayerPreferences.shortcuts);
   const [homeMediaMode, setHomeMediaMode] = useState<HomeMediaMode>(defaultPlayerPreferences.homeMediaMode);
   const [isSeriesMode, setIsSeriesMode] = useState(defaultPlayerPreferences.isSeriesMode);
@@ -1261,6 +1264,18 @@ export default function App() {
     [localConfig, playlistVideos],
   );
   const seriesTitleByVideoId = useMemo(() => createSeriesTitleByVideoId(playlistVideos), [playlistVideos]);
+  const videoActorSearchMetadata = useMemo(() => Object.fromEntries(videos.map((video) => {
+    const resolved = resolveVideoActors({ video, profiles: actorProfiles, videoTags, actorTagDefinitions, videoActorOverrides });
+    const profiles = resolved.actorIds.flatMap((actorId) => actorProfiles[actorId] ? [actorProfiles[actorId]] : []);
+    return [video.id, {
+      names: profiles.map((profile) => profile.name),
+      aliases: profiles.flatMap((profile) => profile.aliases.map((alias) => alias.label)),
+    }];
+  })), [actorProfiles, actorTagDefinitions, videoActorOverrides, videoTags, videos]);
+  const videoActorTags = useMemo(
+    () => Object.fromEntries(Object.entries(videoActorSearchMetadata).map(([videoId, metadata]) => [videoId, metadata.names])),
+    [videoActorSearchMetadata],
+  );
   const seriesFilteredVideos = useMemo(
     () => filterVideosBySeries(playlistVideos, seriesOptions, seriesTitleByVideoId, isSeriesMode, selectedSeriesKey),
     [isSeriesMode, playlistVideos, selectedSeriesKey, seriesOptions, seriesTitleByVideoId],
@@ -1426,12 +1441,42 @@ export default function App() {
     () => createVideoVersionPlaylistMetaByVideoId(videoVersionGroups),
     [videoVersionGroups],
   );
-  const visibleVideos = useMemo(
+  const playlistScopeVideos = useMemo(
     () =>
       resolveVisiblePlaylistVideos({
         isDuplicatePlaylistActive, duplicatePlaylistVideos, isVersionPlaylistActive, versionPlaylistVideos, ratingPlaylistMode, ratingPlaylistVideos, playlistFilter, favoritePlaylistVideos, seriesFilteredVideos,
       }),
     [duplicatePlaylistVideos, favoritePlaylistVideos, isDuplicatePlaylistActive, isVersionPlaylistActive, playlistFilter, ratingPlaylistMode, ratingPlaylistVideos, seriesFilteredVideos, versionPlaylistVideos],
+  );
+  const playlistSearchDocumentsById = useMemo(
+    () => createPlaylistSearchDocuments(videos.map((video) => {
+      const actorMetadata = videoActorSearchMetadata[video.id] ?? { names: [], aliases: [] };
+      const actorKeys = new Set([...actorMetadata.names, ...actorMetadata.aliases].map(normalizeTagKey));
+      return {
+        id: video.id,
+        title: video.name,
+        path: video.relativePath,
+        series: seriesTitleByVideoId.get(video.id) ?? inferSeriesTitle(video),
+        tags: (videoTags[video.id] ?? []).filter((tag) => !actorKeys.has(normalizeTagKey(tag))),
+        actors: actorMetadata.names,
+        actorAliases: actorMetadata.aliases,
+        comment: videoComments[video.id],
+        library: (video.mediaRootId ? mediaRootLabelsById[video.mediaRootId] : "") || fallbackMediaRootLabelForVideo(video),
+      };
+    })),
+    [mediaRootLabelsById, seriesTitleByVideoId, videoActorSearchMetadata, videoComments, videoTags, videos],
+  );
+  const deferredPlaylistSearchQuery = useDeferredValue(playlistSearchQuery);
+  const effectivePlaylistSearchQuery = playlistSearchQuery.trim() ? deferredPlaylistSearchQuery : "";
+  const isPlaylistSearchPending = Boolean(playlistSearchQuery.trim()) && deferredPlaylistSearchQuery !== playlistSearchQuery;
+  const playlistSearchResult = useMemo(
+    () => searchPlaylistVideos(playlistScopeVideos, playlistSearchDocumentsById, effectivePlaylistSearchQuery),
+    [effectivePlaylistSearchQuery, playlistScopeVideos, playlistSearchDocumentsById],
+  );
+  const visibleVideos = playlistSearchResult.videos;
+  const playlistSearchTerms = useMemo(
+    () => playlistSearchResult.tokens.map((token) => token.raw),
+    [playlistSearchResult.tokens],
   );
   const isRatingPlaylistActive = Boolean(ratingPlaylistMode);
   const activeRatingPlaylistLabel = getActiveRatingPlaylistLabel(ratingPlaylistMode, ratingFilterLabel);
@@ -1534,10 +1579,6 @@ export default function App() {
       setRatingPlaylistMode(null);
     }
   }, [isRatingFilterEnabled, ratingPlaylistMode]);
-  const videoActorTags = useMemo(() => Object.fromEntries(videos.map((video) => {
-    const resolved = resolveVideoActors({ video, profiles: actorProfiles, videoTags, actorTagDefinitions, videoActorOverrides });
-    return [video.id, resolved.actorIds.map((actorId) => actorProfiles[actorId]?.name).filter((name): name is string => Boolean(name))];
-  })), [actorProfiles, actorTagDefinitions, videoActorOverrides, videoTags, videos]);
   const createHomeVideoCard = useCallback(
     (video: VideoItem): HomeVideoCard => {
       const progress = progressStore[video.id];
@@ -2334,6 +2375,7 @@ export default function App() {
     setCurrentTime(0);
     setDuration(0);
     setIsPlaying(false);
+    setPlaylistSearchQuery("");
   }, [cancelAutoNextPrompt, revokeVideoUrls, updateSelectedSubtitleId]);
 
   const importLegacyStoreForScannedRoot = useCallback(
@@ -2498,6 +2540,7 @@ export default function App() {
     if (!localConfigRef.current) return;
     performance.mark("startup:scan-start");
     setIsScanning(true);
+    setPlaylistSearchQuery("");
     setMessage("正在扫描全局媒体库...");
     try {
       const [scan, storedData] = await Promise.all([
@@ -3240,11 +3283,11 @@ export default function App() {
     }
     const root = video.mediaRootId ? localConfigRef.current?.mediaRoots.find((item) => item.id === video.mediaRootId) : null;
     const shouldUseBrowserDelete = video.playbackSource === "browser" || (root?.source === "browser" && !root.localPath);
-    const currentVisibleIndex = visibleVideos.findIndex((item) => item.id === video.id);
+    const currentVisibleIndex = playlistScopeVideos.findIndex((item) => item.id === video.id);
     const nextVideo =
       currentVisibleIndex >= 0
-        ? visibleVideos[currentVisibleIndex + 1] ?? visibleVideos[currentVisibleIndex - 1] ?? null
-        : visibleVideos.find((item) => item.id !== video.id) ?? null;
+        ? playlistScopeVideos[currentVisibleIndex + 1] ?? playlistScopeVideos[currentVisibleIndex - 1] ?? null
+        : playlistScopeVideos.find((item) => item.id !== video.id) ?? null;
     const isDeletingCurrentVideo = video.id === currentVideoIdRef.current;
 
     setVideoDeleteError("");
@@ -3314,7 +3357,7 @@ export default function App() {
     removeDeletedVideoFromState,
     resetTimelinePreview,
     videoDeleteCandidate,
-    visibleVideos,
+    playlistScopeVideos,
     updateSelectedSubtitleId,
   ]);
 
@@ -3974,6 +4017,7 @@ export default function App() {
           setMessage("无法匹配媒体根，请重新添加媒体库。");
           return;
         }
+        setPlaylistSearchQuery("");
 
         let media = createEmptyMediaCollection();
         directoryRef.current = directory;
@@ -4154,6 +4198,7 @@ export default function App() {
     async (files: FileList | File[], messageSuffix = "播放进度仅在本次会话保留") => {
       setIsFolderDialogOpen(false);
       setIsScanning(true);
+      setPlaylistSearchQuery("");
       setMessage("正在扫描媒体文件...");
       const media = collectVideosFromFiles(files);
       const nextSubtitles = await Promise.all(
@@ -5947,6 +5992,7 @@ export default function App() {
           isPlaylistSeriesMode={isPlaylistSeriesMode}
           isPlaylistSortReversed={isPlaylistSortReversed}
           isRatingPlaylistActive={isRatingPlaylistActive}
+          isSearchPending={isPlaylistSearchPending}
           isSeriesMenuOpen={isSeriesMenuOpen}
           isVideoDeletePending={isVideoDeletePending}
           message={message}
@@ -5962,6 +6008,10 @@ export default function App() {
           playlistPageSizeOptions={playlistPageSizeSelectOptions}
           playlistPageStartLabel={playlistPageStartLabel}
           playlistRef={playlistRef}
+          playlistScopeVideoCount={playlistScopeVideos.length}
+          playlistSearchMatchesByVideoId={playlistSearchResult.matchesByVideoId}
+          playlistSearchQuery={playlistSearchQuery}
+          playlistSearchTerms={playlistSearchTerms}
           playlistScrollTop={playlistViewport.scrollTop}
           playlistSortMode={playlistSortMode}
           playlistSortOptions={playlistSortOptions}
@@ -5983,6 +6033,16 @@ export default function App() {
             setPlaylistFilter(nextFilter);
           }}
           onChangePlaylistSortMode={updatePlaylistSortMode}
+          onChangePlaylistSearch={(query) => {
+            setPlaylistSearchQuery(query);
+            setPlaylistPage(1);
+            scrollPlaylistToTop("auto");
+          }}
+          onClearPlaylistSearch={() => {
+            setPlaylistSearchQuery("");
+            setPlaylistPage(1);
+            scrollPlaylistToTop("auto");
+          }}
           onClearDuplicatePlaylist={() => {
             setPlaylistPage(1);
             setIsDuplicatePlaylistActive(false);
