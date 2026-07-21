@@ -2,6 +2,7 @@ import { CheckCircle2, Heart, RotateCcw, Star, Trash2 } from "lucide-react";
 
 import { RatingChip, TagChips } from "./MetadataChips";
 import type { VideoItem } from "./playerTypes";
+import type { PlaylistSearchMatch } from "./playerPlaylistSearch";
 import type { DuplicatePlaylistVideoMeta } from "./playerUiState";
 import type { VideoVersionPlaylistMeta } from "./videoVersionUtils";
 
@@ -16,6 +17,8 @@ type PlaylistItemCardProps = {
   playlistIndex: number;
   rating?: number;
   ratingComment?: string;
+  searchMatch?: PlaylistSearchMatch;
+  searchTerms: string[];
   seriesTitle?: string;
   showVideoMetadata: boolean;
   tags: string[];
@@ -41,6 +44,8 @@ export function PlaylistItemCard({
   playlistIndex,
   rating,
   ratingComment,
+  searchMatch,
+  searchTerms,
   seriesTitle,
   showVideoMetadata,
   tags,
@@ -78,8 +83,9 @@ export function PlaylistItemCard({
           )}
         </span>
         <span className="episode-main">
-          <strong>{video.name}</strong>
+          <strong>{highlightSearchTerms(video.name, searchTerms)}</strong>
           <small>{video.relativePath}</small>
+          {searchMatch?.reasons.length ? <SearchMatchReasons match={searchMatch} /> : null}
           {duplicateMeta ? (
             <small className={`episode-duplicate-meta severity-${duplicateMeta.severity}`}>
               第 {duplicateMeta.groupIndex} 组 · {duplicateMeta.severity === "duplicate" ? "高度重复" : "疑似重复"} · {duplicateMeta.groupSize} 个 · {duplicateMeta.reasons.join("、")}
@@ -149,5 +155,31 @@ export function PlaylistItemCard({
         </button>
       </span>
     </div>
+  );
+}
+
+function highlightSearchTerms(text: string, terms: string[]) {
+  const escapedTerms = terms
+    .filter(Boolean)
+    .sort((left, right) => right.length - left.length)
+    .map((term) => term.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&"));
+  if (!escapedTerms.length) return text;
+
+  const parts = text.split(new RegExp(`(${escapedTerms.join("|")})`, "giu"));
+  return parts.map((part, index) => index % 2 ? <mark key={`${part}:${index}`}>{part}</mark> : part);
+}
+
+function SearchMatchReasons({ match }: { match: PlaylistSearchMatch }) {
+  const visibleReasons = match.reasons.slice(0, 2);
+  const hiddenCount = match.reasons.length - visibleReasons.length;
+  const title = match.reasons.map((reason) => `${reason.label}：${reason.value}`).join("\n");
+
+  return (
+    <small className="playlist-search-reasons" title={title}>
+      {visibleReasons.map((reason) => (
+        <span key={`${reason.field}:${reason.value}`}><b>{reason.label}</b> · {reason.value}</span>
+      ))}
+      {hiddenCount ? <span>+{hiddenCount}</span> : null}
+    </small>
   );
 }

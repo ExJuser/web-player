@@ -4358,12 +4358,20 @@ button {
   width: 100%;
   min-width: 0;
   height: 32px;
-  padding: 0 36px 0 10px;
+  padding: 0 10px 0 34px;
   border: 1px solid #303743;
   border-radius: 6px;
   background: #20252d;
   color: #f5f7fb;
   outline: 0;
+}
+
+.player-search-form.has-query input {
+  padding-right: 72px;
+}
+
+.player-search-form input::-webkit-search-cancel-button {
+  display: none;
 }
 
 .player-search-form input:focus {
@@ -4374,10 +4382,63 @@ button {
 .player-search-icon {
   position: absolute;
   top: 50%;
-  right: 10px;
+  left: 10px;
   color: #8b95a3;
   pointer-events: none;
   transform: translateY(-50%);
+}
+
+.player-search-actions {
+  position: absolute;
+  top: 50%;
+  right: 5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 24px;
+  transform: translateY(-50%);
+}
+
+.player-search-count {
+  min-width: 18px;
+  max-width: 34px;
+  overflow: hidden;
+  color: #8b95a3;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  line-height: 24px;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.player-search-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 5px;
+  background: transparent;
+  color: #8b95a3;
+  cursor: pointer;
+}
+
+.player-search-actions button:hover,
+.player-search-actions button:focus-visible {
+  background: #303743;
+  color: #f5f7fb;
+}
+
+.player-search-loading {
+  color: #00a1d6;
+  animation: player-search-spin 0.9s linear infinite;
+}
+
+@keyframes player-search-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .playlist-sort-control + .playlist-order-button,
@@ -4946,6 +5007,38 @@ button {
   color: #79dfff;
 }
 
+.episode-main mark {
+  border-radius: 2px;
+  background: rgba(0, 161, 214, 0.28);
+  color: inherit;
+}
+
+.episode-main .playlist-search-reasons {
+  display: flex;
+  min-width: 0;
+  gap: 8px;
+  color: #79dfff;
+}
+
+.playlist-search-reasons span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.playlist-search-reasons span:first-child {
+  flex: 1 1 auto;
+}
+
+.playlist-search-reasons span:not(:first-child) {
+  flex: 0 1 auto;
+}
+
+.playlist-search-reasons b {
+  font-weight: 600;
+}
+
 .tag-chip-row {
   display: flex;
   max-width: 100%;
@@ -5097,6 +5190,34 @@ button {
   border-radius: 8px;
   color: #8e97a5;
   text-align: center;
+}
+
+.playlist-search-empty {
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px;
+  overflow-wrap: anywhere;
+}
+
+.playlist-search-empty strong {
+  color: #f5f7fb;
+  font-weight: 600;
+}
+
+.playlist-search-empty button {
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid #3a4654;
+  border-radius: 6px;
+  background: #20252d;
+  color: #c9d0db;
+  cursor: pointer;
+}
+
+.playlist-search-empty button:hover,
+.playlist-search-empty button:focus-visible {
+  border-color: #00a1d6;
+  color: #f5f7fb;
 }
 
 .modal-backdrop {
@@ -7682,6 +7803,51 @@ button {
 .app-shell.theme-light .player-search-icon,
 :root[data-theme="light"] .player-search-icon {
   color: #667085;
+}
+
+.app-shell.theme-light .player-search-count,
+:root[data-theme="light"] .player-search-count,
+.app-shell.theme-light .player-search-actions button,
+:root[data-theme="light"] .player-search-actions button {
+  color: #667085;
+}
+
+.app-shell.theme-light .player-search-actions button:hover,
+.app-shell.theme-light .player-search-actions button:focus-visible,
+:root[data-theme="light"] .player-search-actions button:hover,
+:root[data-theme="light"] .player-search-actions button:focus-visible {
+  background: #e9eef5;
+  color: #172033;
+}
+
+.app-shell.theme-light .episode-main mark,
+:root[data-theme="light"] .episode-main mark {
+  background: rgba(0, 161, 214, 0.18);
+}
+
+.app-shell.theme-light .episode-main .playlist-search-reasons,
+:root[data-theme="light"] .episode-main .playlist-search-reasons {
+  color: #0077b6;
+}
+
+.app-shell.theme-light .playlist-search-empty strong,
+:root[data-theme="light"] .playlist-search-empty strong {
+  color: #172033;
+}
+
+.app-shell.theme-light .playlist-search-empty button,
+:root[data-theme="light"] .playlist-search-empty button {
+  border-color: #cfd8e3;
+  background: #ffffff;
+  color: #475467;
+}
+
+.app-shell.theme-light .playlist-search-empty button:hover,
+.app-shell.theme-light .playlist-search-empty button:focus-visible,
+:root[data-theme="light"] .playlist-search-empty button:hover,
+:root[data-theme="light"] .playlist-search-empty button:focus-visible {
+  border-color: #00a1d6;
+  color: #0077a8;
 }
 
 .app-shell.theme-light .home-list-card:hover,
