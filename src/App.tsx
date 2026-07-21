@@ -599,7 +599,7 @@ export default function App() {
   const [selectedActorId, setSelectedActorId] = useState<string | null>(null);
   const [actorCoverVersions, setActorCoverVersions] = useState<Record<string, number>>({});
   const [actorCoverPendingAction, setActorCoverPendingAction] = useState<string | null>(null);
-  const [missingActorThumbnailVideoIds, setMissingActorThumbnailVideoIds] = useState<string[]>([]);
+  const [actorThumbnailVideoIds, setActorThumbnailVideoIds] = useState<string[]>([]);
   const [actorEditVideoId, setActorEditVideoId] = useState<string | null>(null);
   const [videoHighlights, setVideoHighlights] = useState<VideoHighlightStore>({});
   const [videoEditSegments, setVideoEditSegments] = useState<VideoEditSegmentStore>({});
@@ -1761,14 +1761,11 @@ export default function App() {
   );
   const actorThumbnailVideos = useMemo(() => {
     if (homeMediaMode !== "special" || specialHomeSection !== "actors") return [];
-    const selectedActor = actorInsights.actors.find((entry) => entry.actor.id === selectedActorId);
-    return selectedActor
-      ? selectedActor.videos.slice(0, 50).map((entry) => entry.video)
-      : missingActorThumbnailVideoIds.flatMap((videoId) => {
-          const video = modeFilteredVideoById.get(videoId);
-          return video ? [video] : [];
-        });
-  }, [actorInsights.actors, homeMediaMode, missingActorThumbnailVideoIds, modeFilteredVideoById, selectedActorId, specialHomeSection]);
+    return actorThumbnailVideoIds.flatMap((videoId) => {
+      const video = modeFilteredVideoById.get(videoId);
+      return video ? [video] : [];
+    });
+  }, [actorThumbnailVideoIds, homeMediaMode, modeFilteredVideoById, specialHomeSection]);
   const thumbnailQueueVideoIds = useMemo(
     () =>
       createThumbnailQueueVideoIds({
@@ -5370,8 +5367,8 @@ export default function App() {
   const primaryHomeTitle = primaryHomeLabels.title;
   const primaryHomeAction = primaryHomeLabels.action;
   const markVideoThumbnailFailed = useCallback((videoId: string) => setVideoThumbnailState(videoId, "failed"), []);
-  const updateMissingActorThumbnailVideos = useCallback((videoIds: string[]) => {
-    setMissingActorThumbnailVideoIds((currentVideoIds) => currentVideoIds.length === videoIds.length
+  const updateActorThumbnailVideos = useCallback((videoIds: string[]) => {
+    setActorThumbnailVideoIds((currentVideoIds) => currentVideoIds.length === videoIds.length
       && currentVideoIds.every((videoId, index) => videoId === videoIds[index])
       ? currentVideoIds
       : videoIds);
@@ -5590,7 +5587,7 @@ export default function App() {
                   onSetActorCover={(actorId, video) => void saveActorCoverFromVideo(actorId, video)}
                   onUploadActorCover={(actorId, file) => void saveUploadedActorCover(actorId, file)}
                   onRemoveActorCover={(actorId) => void removeStoredActorCover(actorId)}
-                  onMissingActorThumbnailVideosChange={updateMissingActorThumbnailVideos}
+                  onActorThumbnailVideosChange={updateActorThumbnailVideos}
                 />
               ) : (
                 <HomeSpecialInsightsSection

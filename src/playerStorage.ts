@@ -1139,7 +1139,7 @@ function createLegacyVideoIdCandidate(videoId: string) {
   return parts.slice(1).join("|");
 }
 
-export async function readCachedThumbnail(libraryId: string | null, videoId: string) {
+export async function readCachedThumbnail(libraryId: string | null, videoId: string, signal?: AbortSignal) {
   if (!libraryId) return null;
   const thumbnailIds = [createThumbnailId(libraryId, videoId)];
   const legacyVideoId = libraryId === "global" ? createLegacyVideoIdCandidate(videoId) : null;
@@ -1148,7 +1148,7 @@ export async function readCachedThumbnail(libraryId: string | null, videoId: str
   }
 
   for (const thumbnailId of thumbnailIds) {
-    const response = await fetch(createApiUrl(`thumbnails/${encodeURIComponent(thumbnailId)}`));
+    const response = await fetch(createApiUrl(`thumbnails/${encodeURIComponent(thumbnailId)}`), { signal });
     if (response.status === 404) continue;
     if (!response.ok) throw new Error(await readApiError(response));
     return response.blob();

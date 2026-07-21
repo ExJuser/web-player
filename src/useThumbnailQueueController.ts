@@ -29,12 +29,14 @@ export function useThumbnailQueueController({
     const runId = thumbnailLoadRunIdRef.current + 1;
     thumbnailLoadRunIdRef.current = runId;
     let isCancelled = false;
+    const abortController = new AbortController();
     const orderedVideoIds = thumbnailQueueVideoIdsKey ? thumbnailQueueVideoIdsKey.split("\n") : [];
     const videoById = new Map(videosRef.current.map((video) => [video.id, video]));
 
     if (isScanning || isMainVideoLoading || !orderedVideoIds.length) {
       return () => {
         isCancelled = true;
+        abortController.abort();
       };
     }
 
@@ -43,28 +45,22 @@ export function useThumbnailQueueController({
         if (isCancelled || thumbnailLoadRunIdRef.current !== runId) return;
 
         const video = videoById.get(videoId);
-        if (!video || video.thumbnailStatus === "ready" || video.thumbnailStatus === "loading") {
+        if (!video || video.thumbnailStatus === "ready") {
           continue;
         }
 
-        setVideoThumbnailState(video.id, "loading");
-
         try {
-          const { thumbnailUrl, metadata } = await loadVideoThumbnail(libraryIdRef.current, video);
+          const { thumbnailUrl, metadata } = await loadVideoThumbnail(libraryIdRef.current, video, abortController.signal);
           if (isCancelled || thumbnailLoadRunIdRef.current !== runId) {
             revokeObjectUrl(thumbnailUrl);
-            const currentVideo = videosRef.current.find((item) => item.id === video.id);
-            if (currentVideo?.thumbnailStatus === "loading") {
-              setVideoThumbnailState(video.id, "idle");
-            }
             return;
           }
           if (metadata) {
             updateVideoMetadata(video.id, metadata);
           }
           setVideoThumbnailState(video.id, "ready", thumbnailUrl);
-        } catch {
-          if (!isCancelled && thumbnailLoadRunIdRef.current === runId) {
+        } catch (error) {
+          if (!isCancelled && thumbnailLoadRunIdRef.current === runId && !(error instanceof Error && error.name === "AbortError")) {
             setVideoThumbnailState(video.id, "failed");
           }
         }
@@ -75,6 +71,7 @@ export function useThumbnailQueueController({
 
     return () => {
       isCancelled = true;
+      abortController.abort();
     };
   }, [isMainVideoLoading, isScanning, libraryIdRef, setVideoThumbnailState, thumbnailQueueVideoIdsKey, updateVideoMetadata, videosRef]);
 }

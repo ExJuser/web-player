@@ -14,12 +14,15 @@ export function waitForMediaEvent(
   element: HTMLVideoElement,
   eventName: keyof HTMLMediaElementEventMap,
   timeout = 7000,
+  signal?: AbortSignal,
 ) {
   return new Promise<void>((resolve, reject) => {
+    throwIfAborted(signal);
     const cleanup = () => {
       window.clearTimeout(timer);
       element.removeEventListener(eventName, handleEvent);
       element.removeEventListener("error", handleError);
+      signal?.removeEventListener("abort", handleAbort);
     };
     const handleEvent = () => {
       cleanup();
@@ -29,6 +32,10 @@ export function waitForMediaEvent(
       cleanup();
       reject(new Error("Unable to load video."));
     };
+    const handleAbort = () => {
+      cleanup();
+      reject(createAbortError());
+    };
     const timer = window.setTimeout(() => {
       cleanup();
       reject(new Error(`Timed out waiting for ${eventName}.`));
@@ -36,12 +43,16 @@ export function waitForMediaEvent(
 
     element.addEventListener(eventName, handleEvent, { once: true });
     element.addEventListener("error", handleError, { once: true });
+    signal?.addEventListener("abort", handleAbort, { once: true });
   });
 }
 
-export function withTimeout<T>(promise: Promise<T>, timeout: number, message: string) {
+export function withTimeout<T>(promise: Promise<T>, timeout: number, message: string, onTimeout?: () => void) {
   return new Promise<T>((resolve, reject) => {
-    const timer = window.setTimeout(() => reject(new Error(message)), timeout);
+    const timer = window.setTimeout(() => {
+      onTimeout?.();
+      reject(new Error(message));
+    }, timeout);
     promise.then(
       (value) => {
         window.clearTimeout(timer);
@@ -83,7 +94,41 @@ function readArtworkSize(url: string) {
   });
 }
 
-export async function selectVideoArtworkThumbnail(video: VideoItem, readSize: ArtworkSizeReader = readArtworkSize) {
+function createAbortError() {
+  const error = new Error("Thumbnail loading was aborted.");
+  error.name = "AbortError";
+  return error;
+}
+
+function throwIfAborted(signal?: AbortSignal) {
+  if (signal?.aborted) throw createAbortError();
+}
+
+function withAbort<T>(promise: Promise<T>, signal?: AbortSignal) {
+  if (!signal) return promise;
+  throwIfAborted(signal);
+  return new Promise<T>((resolve, reject) => {
+    const handleAbort = () => reject(createAbortError());
+    const cleanup = () => signal.removeEventListener("abort", handleAbort);
+    signal.addEventListener("abort", handleAbort, { once: true });
+    promise.then(
+      (value) => {
+        cleanup();
+        resolve(value);
+      },
+      (error) => {
+        cleanup();
+        reject(error);
+      },
+    );
+  });
+}
+
+export async function selectVideoArtworkThumbnail(
+  video: VideoItem,
+  readSize: ArtworkSizeReader = readArtworkSize,
+  signal?: AbortSignal,
+) {
   const candidates = [
     { file: video.posterFile, url: video.posterUrl },
     { file: video.fanartFile, url: video.fanartUrl },
@@ -92,12 +137,14 @@ export async function selectVideoArtworkThumbnail(video: VideoItem, readSize: Ar
   let fallbackUrl: string | null = null;
 
   for (const candidate of candidates) {
+    throwIfAborted(signal);
     const url = candidate.file ? URL.createObjectURL(candidate.file) : candidate.url!;
     let size: ArtworkSize;
     try {
-      size = await readSize(url);
+      size = await withAbort(readSize(url), signal);
     } catch {
       revokeObjectUrl(url);
+      throwIfAborted(signal);
       continue;
     }
     if (size.width >= size.height) {
@@ -111,18 +158,29 @@ export async function selectVideoArtworkThumbnail(video: VideoItem, readSize: Ar
   return fallbackUrl;
 }
 
-function waitForDrawableVideoFrame(element: HTMLVideoElement) {
+function waitForDrawableVideoFrame(element: HTMLVideoElement, signal?: AbortSignal) {
   if ("requestVideoFrameCallback" in element) {
-    return new Promise<void>((resolve) => {
-      const timer = window.setTimeout(resolve, 160);
-      element.requestVideoFrameCallback(() => {
+    return new Promise<void>((resolve, reject) => {
+      throwIfAborted(signal);
+      let isSettled = false;
+      const finish = (callback: () => void) => {
+        if (isSettled) return;
+        isSettled = true;
         window.clearTimeout(timer);
-        resolve();
-      });
+        signal?.removeEventListener("abort", handleAbort);
+        callback();
+      };
+      const handleAbort = () => {
+        element.cancelVideoFrameCallback(frameId);
+        finish(() => reject(createAbortError()));
+      };
+      const timer = window.setTimeout(() => finish(resolve), 160);
+      const frameId = element.requestVideoFrameCallback(() => finish(resolve));
+      signal?.addEventListener("abort", handleAbort, { once: true });
     });
   }
 
-  return new Promise<void>((resolve) => window.setTimeout(resolve, 80));
+  return withAbort(new Promise<void>((resolve) => window.setTimeout(resolve, 80)), signal);
 }
 
 export function readUint64(data: DataView, offset: number) {
@@ -227,9 +285,9 @@ function isCanvasNearlyBlack(canvas: HTMLCanvasElement, sampleContext: CanvasRen
   return brightPixels / (sampleContext.canvas.width * sampleContext.canvas.height) < 0.01;
 }
 
-function encodeCanvasAsJpeg(canvas: HTMLCanvasElement) {
+function encodeCanvasAsJpeg(canvas: HTMLCanvasElement, signal?: AbortSignal) {
   return withTimeout(
-    new Promise<Blob>((resolve, reject) => {
+    withAbort(new Promise<Blob>((resolve, reject) => {
       canvas.toBlob(
         (blob) => {
           if (!blob) {
@@ -241,13 +299,13 @@ function encodeCanvasAsJpeg(canvas: HTMLCanvasElement) {
         "image/jpeg",
         0.82,
       );
-    }),
+    }), signal),
     thumbnailEncodeTimeout,
     "Timed out encoding thumbnail.",
   );
 }
 
-async function createVideoThumbnailBlob(video: VideoItem) {
+async function createVideoThumbnailBlob(video: VideoItem, signal?: AbortSignal) {
   const element = document.createElement("video");
   const canvas = document.createElement("canvas");
   const sampleCanvas = document.createElement("canvas");
@@ -257,16 +315,18 @@ async function createVideoThumbnailBlob(video: VideoItem) {
   };
 
   try {
+    throwIfAborted(signal);
     element.muted = true;
-    element.preload = "auto";
+    element.preload = "metadata";
     element.playsInline = true;
     element.src = getPlayableVideoUrl(video);
 
     if (element.readyState < HTMLMediaElement.HAVE_METADATA) {
-      await waitForMediaEvent(element, "loadedmetadata");
+      await waitForMediaEvent(element, "loadedmetadata", 7000, signal);
     }
 
     const metadata = await getVideoElementMetadata(element, video);
+    throwIfAborted(signal);
     const displaySize = getVideoDisplaySize(metadata.width, metadata.height);
     const width = displaySize?.width;
     const height = displaySize?.height;
@@ -297,15 +357,16 @@ async function createVideoThumbnailBlob(video: VideoItem) {
             .filter((time, index, times) => times.findIndex((other) => Math.abs(other - time) < 0.05) === index)
         : [0];
     for (const targetTime of targetTimes) {
+      throwIfAborted(signal);
       if (Math.abs(element.currentTime - targetTime) > 0.05) {
-        const seeked = waitForMediaEvent(element, "seeked");
+        const seeked = waitForMediaEvent(element, "seeked", 7000, signal);
         element.currentTime = targetTime;
         await seeked;
       } else if (element.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
-        await waitForMediaEvent(element, "loadeddata");
+        await waitForMediaEvent(element, "loadeddata", 7000, signal);
       }
 
-      await waitForDrawableVideoFrame(element);
+      await waitForDrawableVideoFrame(element, signal);
 
       context.fillStyle = "#050607";
       context.fillRect(0, 0, canvas.width, canvas.height);
@@ -314,33 +375,48 @@ async function createVideoThumbnailBlob(video: VideoItem) {
       if (!isCanvasNearlyBlack(canvas, sampleContext)) break;
     }
 
-    const thumbnailBlob = await encodeCanvasAsJpeg(canvas);
-    cleanup();
+    const thumbnailBlob = await encodeCanvasAsJpeg(canvas, signal);
     return { thumbnailBlob, metadata };
-  } catch (error) {
+  } finally {
     cleanup();
-    throw error;
   }
 }
 
-export async function loadVideoThumbnail(libraryId: string | null, video: VideoItem) {
-  const artworkUrl = await selectVideoArtworkThumbnail(video);
+export async function loadVideoThumbnail(libraryId: string | null, video: VideoItem, signal?: AbortSignal) {
+  throwIfAborted(signal);
+  const artworkUrl = await selectVideoArtworkThumbnail(video, readArtworkSize, signal);
   if (artworkUrl) return { thumbnailUrl: artworkUrl, metadata: undefined };
 
-  const cachedThumbnail = await withTimeout(
-    readCachedThumbnail(libraryId, video.id),
-    thumbnailCacheTimeout,
-    "Timed out reading cached thumbnail.",
-  ).catch(() => null);
+  let cachedThumbnail: Blob | null;
+  try {
+    cachedThumbnail = await withTimeout(
+      readCachedThumbnail(libraryId, video.id, signal),
+      thumbnailCacheTimeout,
+      "Timed out reading cached thumbnail.",
+    );
+  } catch (error) {
+    throwIfAborted(signal);
+    cachedThumbnail = null;
+  }
   if (cachedThumbnail) {
     return { thumbnailUrl: URL.createObjectURL(cachedThumbnail), metadata: undefined };
   }
 
-  const { thumbnailBlob, metadata } = await withTimeout(
-    createVideoThumbnailBlob(video),
-    thumbnailGenerationTimeout,
-    "Timed out creating thumbnail.",
-  );
+  const generationController = new AbortController();
+  const abortGeneration = () => generationController.abort();
+  signal?.addEventListener("abort", abortGeneration, { once: true });
+  let thumbnailBlob: Blob;
+  let metadata: VideoMetadata;
+  try {
+    ({ thumbnailBlob, metadata } = await withTimeout(
+      createVideoThumbnailBlob(video, generationController.signal),
+      thumbnailGenerationTimeout,
+      "Timed out creating thumbnail.",
+      abortGeneration,
+    ));
+  } finally {
+    signal?.removeEventListener("abort", abortGeneration);
+  }
   void writeCachedThumbnail(libraryId, video.id, thumbnailBlob).catch(() => undefined);
   return { thumbnailUrl: URL.createObjectURL(thumbnailBlob), metadata };
 }

@@ -37,7 +37,7 @@ type ActorDashboardSectionProps = {
   onSetActorCover: (actorId: string, video: VideoItem) => void;
   onUploadActorCover: (actorId: string, file: File) => void;
   onRemoveActorCover: (actorId: string) => void;
-  onMissingActorThumbnailVideosChange: (videoIds: string[]) => void;
+  onActorThumbnailVideosChange: (videoIds: string[]) => void;
 };
 
 function StoredActorCover({ actorId, actorName, fallbackVideo, libraryId, onAvailabilityChange, onThumbnailError, version }: { actorId: string; actorName: string; fallbackVideo: VideoItem; libraryId: string | null; onAvailabilityChange: (actorId: string, isAvailable: boolean) => void; onThumbnailError: (videoId: string) => void; version: number }) {
@@ -70,7 +70,7 @@ function StoredActorCover({ actorId, actorName, fallbackVideo, libraryId, onAvai
 
   const visibleCoverUrl = coverUrl ?? fallbackVideo.thumbnailUrl;
   const isGeneratedThumbnail = Boolean(visibleCoverUrl && !coverUrl && !hasNamedVideoArtwork(fallbackVideo));
-  return <span className={`actor-cover ${visibleCoverUrl ? "has-image" : ""} ${isGeneratedThumbnail ? "generated-thumbnail" : ""}`}>{visibleCoverUrl ? <img src={visibleCoverUrl} alt="" onError={() => {
+  return <span className={`actor-cover ${visibleCoverUrl ? "has-image" : ""} ${isGeneratedThumbnail ? "generated-thumbnail" : ""}`}>{visibleCoverUrl ? <img src={visibleCoverUrl} alt="" decoding="async" loading="lazy" draggable={false} onError={() => {
     if (coverUrl) {
       setCoverUrl(null);
       onAvailabilityChange(actorId, false);
@@ -100,7 +100,7 @@ export function ActorDashboardSection({
   onSetActorCover,
   onUploadActorCover,
   onRemoveActorCover,
-  onMissingActorThumbnailVideosChange,
+  onActorThumbnailVideosChange,
 }: ActorDashboardSectionProps) {
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<"name" | "count" | "recent" | "playCount" | "duration" | "emissionCount">("count");
@@ -175,13 +175,22 @@ export function ActorDashboardSection({
     return () => observer.disconnect();
   }, [selected?.videos.length, visibleActorVideoCount]);
   const visibleActors = useMemo(() => filteredActors.slice((actorPage - 1) * actorPageSize, actorPage * actorPageSize), [actorPage, filteredActors]);
-  const visibleActorVideos = selected?.videos.slice(0, visibleActorVideoCount) ?? [];
+  const visibleActorVideos = useMemo(
+    () => selected?.videos.slice(0, visibleActorVideoCount) ?? [],
+    [selected?.videos, visibleActorVideoCount],
+  );
   const missingActorThumbnailVideoIds = useMemo(() => visibleActors.every((entry) => actorCoverAvailability[entry.actor.id] !== undefined)
     ? visibleActors.filter((entry) => !actorCoverAvailability[entry.actor.id]).map((entry) => entry.representativeVideo.id)
     : [], [actorCoverAvailability, visibleActors]);
+  const actorThumbnailVideoIds = useMemo(() => selected
+    ? visibleActorVideos.map(({ video }) => video.id)
+    : showUnresolved
+      ? []
+      : missingActorThumbnailVideoIds,
+  [missingActorThumbnailVideoIds, selected, showUnresolved, visibleActorVideos]);
   useEffect(() => {
-    onMissingActorThumbnailVideosChange(selected || showUnresolved ? [] : missingActorThumbnailVideoIds);
-  }, [missingActorThumbnailVideoIds, onMissingActorThumbnailVideosChange, selected, showUnresolved]);
+    onActorThumbnailVideosChange(actorThumbnailVideoIds);
+  }, [actorThumbnailVideoIds, onActorThumbnailVideosChange]);
   const pagedUnresolvedVideos = unresolvedVideos.slice((unresolvedPage - 1) * unresolvedPageSize, unresolvedPage * unresolvedPageSize);
 
   if (selected) {
@@ -209,7 +218,7 @@ export function ActorDashboardSection({
             const hasRating = typeof rating === "number" || Boolean(comment?.trim());
             return <article className="actor-video-card" key={video.id}>
               <button type="button" onClick={() => onOpenVideo(video)}>
-                <span className={`actor-cover ${video.thumbnailUrl ? "has-image" : ""} ${video.thumbnailUrl && !hasNamedVideoArtwork(video) ? "generated-thumbnail" : ""}`}>{video.thumbnailUrl ? <img src={video.thumbnailUrl} alt="" onError={() => onThumbnailError(video.id)} /> : <Film size={28} />}</span>
+                <span className={`actor-cover ${video.thumbnailUrl ? "has-image" : ""} ${video.thumbnailUrl && !hasNamedVideoArtwork(video) ? "generated-thumbnail" : ""}`}>{video.thumbnailUrl ? <img src={video.thumbnailUrl} alt="" decoding="async" loading="lazy" draggable={false} onError={() => onThumbnailError(video.id)} /> : <Film size={28} />}</span>
                 <strong>{video.name}</strong>
                 <span className="actor-video-metadata">
                   <span className="actor-video-rating-tags">

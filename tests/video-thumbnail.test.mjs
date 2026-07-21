@@ -79,3 +79,21 @@ test("uses a landscape thumb when poster and fanart are portrait", async () => {
   );
   assert.equal(result, "thumb");
 });
+
+test("stops selecting artwork when thumbnail loading is aborted", async () => {
+  const controller = new AbortController();
+  let readCount = 0;
+  const selection = thumbnail.selectVideoArtworkThumbnail(
+    { posterUrl: "poster", fanartUrl: "fanart" },
+    async () => {
+      readCount += 1;
+      return new Promise(() => undefined);
+    },
+    controller.signal,
+  );
+
+  controller.abort();
+
+  await assert.rejects(selection, (error) => error?.name === "AbortError");
+  assert.equal(readCount, 1);
+});

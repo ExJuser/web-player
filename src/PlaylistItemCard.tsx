@@ -1,4 +1,5 @@
 import { CheckCircle2, Heart, RotateCcw, Star, Trash2 } from "lucide-react";
+import { memo } from "react";
 
 import { RatingChip, TagChips } from "./MetadataChips";
 import type { VideoItem } from "./playerTypes";
@@ -26,11 +27,11 @@ type PlaylistItemCardProps = {
   onFavoriteToggle: (video: VideoItem) => void;
   onOpenRating: (video: VideoItem) => void;
   onResetProgress: (video: VideoItem) => void;
-  onSelect: (video: VideoItem) => void;
+  onSelect: (video: VideoItem, isActive: boolean) => void;
   onThumbnailError: (videoId: string) => void;
 };
 
-export function PlaylistItemCard({
+export const PlaylistItemCard = memo(function PlaylistItemCard({
   duplicateMeta,
   versionMeta,
   hasProgress,
@@ -63,13 +64,15 @@ export function PlaylistItemCard({
       <button
         className="playlist-select"
         type="button"
-        onClick={() => onSelect(video)}
+        onClick={() => onSelect(video, isActive)}
       >
         <span className={`episode-thumbnail ${video.thumbnailUrl ? "has-image" : ""}`} aria-hidden="true">
           {video.thumbnailUrl ? (
             <img
               src={video.thumbnailUrl}
               alt=""
+              decoding="async"
+              loading="lazy"
               draggable={false}
               onError={() => onThumbnailError(video.id)}
             />
@@ -150,4 +153,4 @@ export function PlaylistItemCard({
       </span>
     </div>
   );
-}
+});

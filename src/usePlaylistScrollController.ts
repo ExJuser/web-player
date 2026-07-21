@@ -31,6 +31,7 @@ export function usePlaylistScrollController({
   const isPlaylistAutoScrollingRef = useRef(false);
   const lastPlaylistAutoScrollKeyRef = useRef<string | null>(null);
   const lastPlaylistUserScrollAtRef = useRef(0);
+  const visibleThumbnailVideoIdsRef = useRef(new Set<string>());
   const [playlistViewport, setPlaylistViewport] = useState<PlaylistViewport>({ scrollTop: 0, height: 0 });
   const [playlistThumbnailVideoIdsKey, setPlaylistThumbnailVideoIdsKey] = useState("");
 
@@ -38,14 +39,13 @@ export function usePlaylistScrollController({
     const playlist = playlistRef.current;
     if (!playlist) return;
     setPlaylistViewport({ scrollTop: playlist.scrollTop, height: playlist.clientHeight });
+  }, [playlistRef]);
 
-    const playlistRect = playlist.getBoundingClientRect();
-    const preloadMargin = playlist.clientHeight / 2;
+  const updatePlaylistThumbnailVideoIds = useCallback(() => {
+    const playlist = playlistRef.current;
+    if (!playlist) return;
     const visibleVideoIds = Array.from(playlist.querySelectorAll<HTMLElement>(".playlist-item"))
-      .filter((item) => {
-        const rect = item.getBoundingClientRect();
-        return rect.bottom >= playlistRect.top - preloadMargin && rect.top <= playlistRect.bottom + preloadMargin;
-      })
+      .filter((item) => visibleThumbnailVideoIdsRef.current.has(item.dataset.videoId ?? ""))
       .map((item) => item.dataset.videoId)
       .filter((videoId): videoId is string => Boolean(videoId));
     const nextKey = visibleVideoIds.join("\n");
@@ -134,17 +134,32 @@ export function usePlaylistScrollController({
     }
     if (isPlaylistAutoScrollingRef.current) return;
     lastPlaylistUserScrollAtRef.current = Date.now();
-  }, [playlistItemIdsKey, playlistRef, updatePlaylistViewport]);
+  }, [playlistRef, updatePlaylistViewport]);
 
   useLayoutEffect(() => {
     const playlist = playlistRef.current;
     if (!playlist) return;
 
     updatePlaylistViewport();
-    const observer = new ResizeObserver(updatePlaylistViewport);
-    observer.observe(playlist);
-    return () => observer.disconnect();
-  }, [playlistRef, updatePlaylistViewport]);
+    visibleThumbnailVideoIdsRef.current = new Set();
+    setPlaylistThumbnailVideoIdsKey("");
+    const intersectionObserver = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        const videoId = (entry.target as HTMLElement).dataset.videoId;
+        if (!videoId) return;
+        if (entry.isIntersecting) visibleThumbnailVideoIdsRef.current.add(videoId);
+        else visibleThumbnailVideoIdsRef.current.delete(videoId);
+      });
+      updatePlaylistThumbnailVideoIds();
+    }, { root: playlist, rootMargin: "50% 0px" });
+    playlist.querySelectorAll<HTMLElement>(".playlist-item").forEach((item) => intersectionObserver.observe(item));
+    const resizeObserver = new ResizeObserver(updatePlaylistViewport);
+    resizeObserver.observe(playlist);
+    return () => {
+      intersectionObserver.disconnect();
+      resizeObserver.disconnect();
+    };
+  }, [playlistItemIdsKey, playlistRef, updatePlaylistThumbnailVideoIds, updatePlaylistViewport]);
 
   useEffect(() => {
     return () => {

@@ -12,6 +12,8 @@ import type {
 import type { DuplicatePlaylistVideoMeta } from "./playerUiState";
 import type { VideoVersionPlaylistMeta } from "./videoVersionUtils";
 
+const emptyVideoTags: string[] = [];
+
 type PlaylistVideoListProps = {
   currentVideoId: string | null;
   duplicatePlaylistMetaByVideoId: Map<string, DuplicatePlaylistVideoMeta>;
@@ -92,7 +94,7 @@ export function PlaylistVideoList({
         const seriesTitle = isPlaylistSeriesMode ? seriesTitleByVideoId.get(video.id) : "";
         const duplicateMeta = isDuplicatePlaylistActive ? duplicatePlaylistMetaByVideoId.get(video.id) : null;
         const versionMeta = isVersionPlaylistActive ? versionPlaylistMetaByVideoId.get(video.id) : null;
-        const tags = videoTags[video.id] ?? [];
+        const tags = videoTags[video.id] ?? emptyVideoTags;
         const rating = videoRatings[video.id];
         const ratingComment = videoComments[video.id];
 
@@ -119,7 +121,7 @@ export function PlaylistVideoList({
             onFavoriteToggle={onFavoriteToggle}
             onOpenRating={onOpenRating}
             onResetProgress={onResetProgress}
-            onSelect={(selectedVideo) => onSelect(selectedVideo, isActive)}
+            onSelect={onSelect}
             onThumbnailError={onThumbnailError}
           />
         );
