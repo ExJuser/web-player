@@ -10079,8 +10079,13 @@ button {
 :root[data-theme="light"] .mosaic-progressive-preview { background: radial-gradient(circle at center, rgba(126,91,224,.12), transparent 55%), #f8f7fc; }
 
 @media (min-width: 901px) {
-  .mosaic-studio-layout { min-height: max(720px, calc(100dvh - 68px)); }
-  .mosaic-viewport-shell { height: auto; min-height: 660px; flex: 1; }
+  .home-dashboard.mosaic-active .home-primary-column { overflow: hidden; }
+  .mosaic-studio { display: flex; min-height: 0; flex: 1; flex-direction: column; }
+  .mosaic-studio-hero { flex: 0 0 auto; }
+  .mosaic-studio-layout { min-height: 0; flex: 1; overflow: hidden; }
+  .mosaic-sidebar { min-height: 0; overflow: auto; scrollbar-color: rgba(170,141,255,.45) transparent; scrollbar-width: thin; }
+  .mosaic-main-stage { min-height: 0; }
+  .mosaic-viewport-shell { height: auto; min-height: 0; flex: 1; }
 }
 
 @media (max-width: 900px) {
