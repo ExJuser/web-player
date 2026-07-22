@@ -7,6 +7,7 @@ import {
   Images,
   LoaderCircle,
   Play,
+  Search,
   Shuffle,
   Sparkles,
   Trash2,
@@ -493,7 +494,10 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
             <header><div><Sparkles size={24} /><span><h2 id="mosaic-picker-title">选择项目内目标图</h2><p>目标本身仍可出现在小图中，形成套娃效果。</p></span></div><button type="button" onClick={() => setIsPickerOpen(false)}><X size={20} /></button></header>
             <div className="mosaic-picker-toolbar">
               <div className="special-view-switch"><button className={pickerKind === "video" ? "active" : ""} type="button" onClick={() => { setPickerKind("video"); setPickerAlbumId(null); setPickerSearch(""); setPickerPage(1); }}>影片缩略图</button><button className={pickerKind === "photo" ? "active" : ""} type="button" onClick={() => { setPickerKind("photo"); setPickerAlbumId(null); setPickerSearch(""); setPickerPage(1); }}>图集图片</button></div>
-              <input type="search" value={pickerSearch} placeholder={selectedPickerAlbum ? "搜索照片名称" : pickerKind === "photo" ? "搜索图集名称" : "搜索影片名称"} onChange={(event) => { setPickerSearch(event.target.value); setPickerPage(1); }} />
+              <label className="mosaic-picker-search">
+                <Search size={17} />
+                <input aria-label="搜索名称" type="search" value={pickerSearch} placeholder={selectedPickerAlbum ? "搜索照片名称" : pickerKind === "photo" ? "搜索图集名称" : "搜索影片名称"} onChange={(event) => { setPickerSearch(event.target.value); setPickerPage(1); }} />
+              </label>
             </div>
             {pickerKind === "photo" && selectedPickerAlbum ? (
               <div className="mosaic-picker-album-nav">

@@ -9986,7 +9986,13 @@ button {
 .mosaic-picker > header > button { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; color: inherit; background: rgba(255,255,255,.06); }
 .mosaic-picker-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 13px 20px; }
 .mosaic-picker-toolbar .special-view-switch { margin: 0; }
-.mosaic-picker-toolbar input { width: min(320px, 40vw); }
+.mosaic-picker-search { display: flex; align-items: center; gap: 9px; width: min(320px, 40vw); height: 40px; padding: 0 12px; border: 1px solid rgba(182,164,232,.2); border-radius: 12px; color: rgba(220,212,243,.58); background: rgba(255,255,255,.045); box-shadow: inset 0 1px 0 rgba(255,255,255,.035); transition: border-color .18s ease, background .18s ease, box-shadow .18s ease; }
+.mosaic-picker-search:hover { border-color: rgba(170,146,240,.38); background: rgba(255,255,255,.065); }
+.mosaic-picker-search:focus-within { border-color: rgba(83,214,255,.7); background: rgba(44,37,73,.72); box-shadow: 0 0 0 3px rgba(57,202,255,.11), inset 0 1px 0 rgba(255,255,255,.05); }
+.mosaic-picker-search:focus-within > svg { color: #8be7ff; }
+.mosaic-picker-search input { min-width: 0; width: 100%; padding: 0; border: 0; outline: 0; color: #f6f3ff; font: inherit; background: transparent; }
+.mosaic-picker-search input::placeholder { color: rgba(220,212,243,.42); }
+.mosaic-picker-search input::-webkit-search-cancel-button { opacity: .65; filter: invert(1); }
 .mosaic-picker-album-nav { display: flex; align-items: center; gap: 12px; padding: 0 20px 13px; }
 .mosaic-picker-album-nav > span { display: grid; min-width: 0; }
 .mosaic-picker-album-nav strong, .mosaic-picker-album-nav small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -10044,7 +10050,7 @@ button {
   .mosaic-stage-header input { width: 100%; flex-basis: 100%; }
   .mosaic-viewport-shell { height: 480px; }
   .mosaic-picker-toolbar { align-items: stretch; flex-direction: column; }
-  .mosaic-picker-toolbar input { width: 100%; }
+  .mosaic-picker-search { width: 100%; }
   .mosaic-picker-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .mosaic-source-card { grid-template-columns: 82px minmax(0,1fr); }
   .mosaic-source-card > img, .mosaic-source-card > svg { width: 82px; height: 62px; }
