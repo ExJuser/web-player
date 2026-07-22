@@ -2,7 +2,7 @@ import { Maximize2, RotateCcw, ZoomIn, ZoomOut } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode, type WheelEvent } from "react";
 
 import { acquireMosaicBitmap, type MosaicBitmapLease } from "./mosaicImagePipeline";
-import type { MosaicRuntimeSource, MosaicTileFit } from "./mosaicTypes";
+import type { MosaicRuntimeSource, MosaicTargetRotation, MosaicTileFit } from "./mosaicTypes";
 import { calculateMosaicGeometry, calculateMosaicPopoverAnchor, locateMosaicCell, type MosaicViewTransform } from "./mosaicViewportGeometry";
 
 type MosaicViewportProps = {
@@ -12,6 +12,11 @@ type MosaicViewportProps = {
   previewUrl: string;
   sources: MosaicRuntimeSource[];
   sourceCard?: ReactNode;
+  targetColors: number[][];
+  targetClarity: number;
+  targetRotation: MosaicTargetRotation;
+  targetUrl: string;
+  colorPreservation: number;
   tileFit: MosaicTileFit;
   onSelectSource: (source: MosaicRuntimeSource | null) => void;
 };
@@ -94,11 +99,21 @@ function drawDetailContain(context: CanvasRenderingContext2D, bitmap: ImageBitma
   context.drawImage(bitmap, x + (width - drawWidth) / 2, y + (height - drawHeight) / 2, drawWidth, drawHeight);
 }
 
-export function MosaicViewport({ assignments, columns, rows, previewUrl, sources, sourceCard, tileFit, onSelectSource }: MosaicViewportProps) {
+function drawDetailTarget(context: CanvasRenderingContext2D, bitmap: ImageBitmap, x: number, y: number, width: number, height: number, rotation: MosaicTargetRotation) {
+  context.save();
+  context.translate(x + width / 2, y + height / 2);
+  context.rotate(rotation * Math.PI / 180);
+  const quarterTurn = rotation === 90 || rotation === 270;
+  context.drawImage(bitmap, -(quarterTurn ? height : width) / 2, -(quarterTurn ? width : height) / 2, quarterTurn ? height : width, quarterTurn ? width : height);
+  context.restore();
+}
+
+export function MosaicViewport({ assignments, columns, rows, previewUrl, sources, sourceCard, targetColors, targetClarity, targetRotation, targetUrl, colorPreservation, tileFit, onSelectSource }: MosaicViewportProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const detailCanvasRef = useRef<HTMLCanvasElement>(null);
   const cellHighlightRef = useRef<HTMLDivElement>(null);
   const bitmapRef = useRef<ImageBitmap | null>(null);
+  const targetBitmapRef = useRef<ImageBitmap | null>(null);
   const drawRef = useRef<() => void>(() => undefined);
   const detailDrawRef = useRef<() => void>(() => undefined);
   const webGlRef = useRef<WebGlState | null | undefined>(undefined);
@@ -181,6 +196,7 @@ export function MosaicViewport({ assignments, columns, rows, previewUrl, sources
     context.setTransform(1, 0, 0, 1, 0, 0);
     context.clearRect(0, 0, width, height);
     if (transform.scale < 3) return;
+    if (targetColors.length < columns * rows) return;
 
     const geometry = calculateMosaicGeometry({
       viewportWidth,
@@ -216,6 +232,8 @@ export function MosaicViewport({ assignments, columns, rows, previewUrl, sources
     let availableLoads = Math.max(0, 6 - detailPendingRef.current.size);
     context.setTransform(ratio, 0, 0, ratio, 0, 0);
     context.globalAlpha = 1;
+    const drawnCells: typeof detailCells = [];
+    const tintOpacity = Math.max(0, Math.min(0.42, (1 - colorPreservation) * 0.42));
     detailCells.forEach((cell) => {
       const sourceId = assignments[cell.index];
       const source = sourceById.current.get(sourceId);
@@ -225,7 +243,18 @@ export function MosaicViewport({ assignments, columns, rows, previewUrl, sources
         detailBitmapsRef.current.delete(sourceId);
         detailBitmapsRef.current.set(sourceId, cachedLease);
         const drawTile = tileFit === "contain" ? drawDetailContain : drawDetailCover;
-        drawTile(context, cachedLease.bitmap, geometry.left + cell.column * cellWidth, geometry.top + cell.row * cellHeight, cellWidth, cellHeight);
+        const x = geometry.left + cell.column * cellWidth;
+        const y = geometry.top + cell.row * cellHeight;
+        drawTile(context, cachedLease.bitmap, x, y, cellWidth, cellHeight);
+        if (tintOpacity > 0) {
+          const color = targetColors[cell.index];
+          context.save();
+          context.globalCompositeOperation = "source-atop";
+          context.fillStyle = `rgba(${color[0]}, ${color[1]}, ${color[2]}, ${tintOpacity})`;
+          context.fillRect(x, y, Math.ceil(cellWidth + 0.5), Math.ceil(cellHeight + 0.5));
+          context.restore();
+        }
+        drawnCells.push(cell);
         return;
       }
       if (!availableLoads || detailPendingRef.current.has(sourceId) || detailFailedRef.current.has(sourceId)) return;
@@ -252,8 +281,19 @@ export function MosaicViewport({ assignments, columns, rows, previewUrl, sources
         detailDrawRef.current();
       });
     });
+    const overlayOpacity = Math.max(0, Math.min(0.28, targetClarity * 0.28));
+    const targetBitmap = targetBitmapRef.current;
+    if (overlayOpacity > 0 && targetBitmap && drawnCells.length) {
+      const clip = new Path2D();
+      drawnCells.forEach((cell) => clip.rect(geometry.left + cell.column * cellWidth, geometry.top + cell.row * cellHeight, cellWidth, cellHeight));
+      context.save();
+      context.clip(clip);
+      context.globalAlpha = overlayOpacity;
+      drawDetailTarget(context, targetBitmap, geometry.left, geometry.top, geometry.width, geometry.height, targetRotation);
+      context.restore();
+    }
     context.globalAlpha = 1;
-  }, [assignments, columns, rows, tileFit, transform]);
+  }, [assignments, colorPreservation, columns, rows, targetClarity, targetColors, targetRotation, tileFit, transform]);
   detailDrawRef.current = drawDetails;
 
   useEffect(() => {
@@ -271,6 +311,27 @@ export function MosaicViewport({ assignments, columns, rows, previewUrl, sources
       .catch(() => undefined);
     return () => { cancelled = true; };
   }, [previewUrl]);
+
+  useEffect(() => {
+    let cancelled = false;
+    targetBitmapRef.current?.close();
+    targetBitmapRef.current = null;
+    if (!targetUrl) return undefined;
+    fetch(targetUrl)
+      .then((response) => response.blob())
+      .then(createImageBitmap)
+      .then((bitmap) => {
+        if (cancelled) return bitmap.close();
+        targetBitmapRef.current = bitmap;
+        detailDrawRef.current();
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+      targetBitmapRef.current?.close();
+      targetBitmapRef.current = null;
+    };
+  }, [targetUrl]);
 
   useEffect(() => {
     draw();

@@ -178,6 +178,7 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
   const [maxReuse, setMaxReuse] = useState(3);
   const [seed, setSeed] = useState(() => Date.now() >>> 0);
   const [previewUrl, setPreviewUrl] = useState("");
+  const [detailTargetColors, setDetailTargetColors] = useState<number[][]>([]);
   const [progressivePreviewUrl, setProgressivePreviewUrl] = useState("");
   const [generation, setGeneration] = useState<GenerationState>(null);
   const [backend, setBackend] = useState("");
@@ -218,6 +219,21 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
     if (targetSource && !sampled.some((source) => source.id === targetSource.id)) sampled[sampled.length - 1] = targetSource;
     return sampled;
   }, [seed, sourceFilter, sourceLimit, sources, target]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setDetailTargetColors([]);
+    if (!activeProject || !target) return undefined;
+    void readMosaicTargetGrid({
+      file: target.file,
+      url: target.url,
+      columns: activeProject.recipe.columns,
+      targetRotation: normalizeMosaicTargetRotation(activeProject.recipe.targetRotation),
+    }).then((grid) => {
+      if (!cancelled && grid.rows === activeProject.recipe.rows) setDetailTargetColors(grid.colors);
+    }).catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [activeProject, target]);
   const normalizedPickerSearch = pickerSearch.trim().toLocaleLowerCase();
   const selectedPickerAlbum = pickerAlbumId ? albumById.get(pickerAlbumId) : undefined;
   const pickerVideoResults = useMemo(() => sources.filter((source) => source.kind === "video"
@@ -671,6 +687,11 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
                     <button className="primary-button" type="button" onClick={openSelectedSource}>{selectedSource.kind === "video" ? <><Play size={17} /> 播放影片</> : <><FolderOpen size={17} /> 打开图集</>}</button>
                   </aside>
                 ) : null}
+                targetColors={detailTargetColors}
+                targetClarity={activeProject.recipe.targetClarity}
+                targetRotation={normalizeMosaicTargetRotation(activeProject.recipe.targetRotation)}
+                targetUrl={target?.url ?? ""}
+                colorPreservation={activeProject.recipe.colorPreservation}
                 tileFit={activeProject.recipe.tileFit ?? "cover"}
                 onSelectSource={setSelectedSource}
               />
