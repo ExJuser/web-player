@@ -55,7 +55,9 @@ import {
   defaultDanmakuPreferences,
   defaultPlayerSettings,
   defaultPlayerPreferences,
+  holdRates,
   playlistPageSizeOptions,
+  seekSteps,
   defaultShortcuts
 } from "./playerConstants";
 import { createWatchActivityKey, isValidWatchActivityDate } from "./watchActivityInsights";
@@ -571,6 +573,21 @@ export function parsePlayerPreferences(source: unknown): PlayerPreferences {
       playlistPageSizeOptions.includes(preferences.playlistPageSize as (typeof playlistPageSizeOptions)[number])
         ? preferences.playlistPageSize
         : defaultPlayerPreferences.playlistPageSize,
+    playbackMode:
+      preferences.playbackMode === "single-loop" ||
+      preferences.playbackMode === "list-loop" ||
+      preferences.playbackMode === "shuffle" ||
+      preferences.playbackMode === "favorites-only"
+        ? preferences.playbackMode
+        : defaultPlayerPreferences.playbackMode,
+    seekStep:
+      typeof preferences.seekStep === "number" && seekSteps.includes(preferences.seekStep)
+        ? preferences.seekStep
+        : defaultPlayerPreferences.seekStep,
+    holdPlaybackRate:
+      typeof preferences.holdPlaybackRate === "number" && holdRates.includes(preferences.holdPlaybackRate)
+        ? preferences.holdPlaybackRate
+        : defaultPlayerPreferences.holdPlaybackRate,
     shortcuts: parseShortcuts(preferences.shortcuts),
     homeMediaMode:
       preferences.homeMediaMode === "anime" || preferences.homeMediaMode === "special"

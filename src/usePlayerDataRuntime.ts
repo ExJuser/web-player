@@ -10,6 +10,7 @@ import type {
   DanmakuSelectionStore,
   FileSystemDirectoryHandle,
   PlayerDataStore,
+  PlaybackMode,
   PlayerPersistentSettings,
   PlayerPreferences,
   PlaylistSortMode,
@@ -152,14 +153,17 @@ type UseApplyPlayerDataStoreOptions = {
   setDanmakuSelections: Dispatch<SetStateAction<DanmakuSelectionStore>>;
   setFavoriteVideoIds: Dispatch<SetStateAction<Set<string>>>;
   setHomeMediaMode: Dispatch<SetStateAction<HomeMediaMode>>;
+  setHoldPlaybackRate: Dispatch<SetStateAction<number>>;
   setIsCinemaMode: Dispatch<SetStateAction<boolean>>;
   setIsPlaylistSortReversed: Dispatch<SetStateAction<boolean>>;
   setIsSeriesMode: Dispatch<SetStateAction<boolean>>;
   setPlaylistPage: Dispatch<SetStateAction<number>>;
   setPlaylistPageSize: Dispatch<SetStateAction<number>>;
   setPlaylistSortMode: Dispatch<SetStateAction<PlaylistSortMode>>;
+  setPlaybackMode: Dispatch<SetStateAction<PlaybackMode>>;
   setProgressStore: Dispatch<SetStateAction<ProgressStore>>;
   setSelectedSeriesKey: Dispatch<SetStateAction<string>>;
+  setSeekStep: Dispatch<SetStateAction<number>>;
   setShortcuts: Dispatch<SetStateAction<ShortcutMap>>;
   setSkipFolderAccessPrompt: Dispatch<SetStateAction<boolean>>;
   setStartFromHighEnergy: Dispatch<SetStateAction<boolean>>;
@@ -204,14 +208,17 @@ export function useApplyPlayerDataStore({
   setDanmakuSelections,
   setFavoriteVideoIds,
   setHomeMediaMode,
+  setHoldPlaybackRate,
   setIsCinemaMode,
   setIsPlaylistSortReversed,
   setIsSeriesMode,
   setPlaylistPage,
   setPlaylistPageSize,
   setPlaylistSortMode,
+  setPlaybackMode,
   setProgressStore,
   setSelectedSeriesKey,
+  setSeekStep,
   setShortcuts,
   setSkipFolderAccessPrompt,
   setStartFromHighEnergy,
@@ -261,6 +268,9 @@ export function useApplyPlayerDataStore({
     setPlaylistSortMode(nextDataStore.preferences.playlistSortMode);
     setIsPlaylistSortReversed(nextDataStore.preferences.isPlaylistSortReversed);
     setPlaylistPageSize(nextDataStore.preferences.playlistPageSize);
+    setPlaybackMode(nextDataStore.preferences.playbackMode);
+    setSeekStep(nextDataStore.preferences.seekStep);
+    setHoldPlaybackRate(nextDataStore.preferences.holdPlaybackRate);
     setPlaylistPage(1);
     setShortcuts(nextDataStore.preferences.shortcuts);
     setHomeMediaMode(nextDataStore.preferences.homeMediaMode);
@@ -306,14 +316,17 @@ export function useApplyPlayerDataStore({
     setDanmakuSelections,
     setFavoriteVideoIds,
     setHomeMediaMode,
+    setHoldPlaybackRate,
     setIsCinemaMode,
     setIsPlaylistSortReversed,
     setIsSeriesMode,
     setPlaylistPage,
     setPlaylistPageSize,
     setPlaylistSortMode,
+    setPlaybackMode,
     setProgressStore,
     setSelectedSeriesKey,
+    setSeekStep,
     setShortcuts,
     setSkipFolderAccessPrompt,
     setStartFromHighEnergy,

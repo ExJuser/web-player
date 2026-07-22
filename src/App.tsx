@@ -751,10 +751,10 @@ export default function App() {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [playbackRate, setPlaybackRate] = useState(1);
-  const [seekStep, setSeekStep] = useState(15);
-  const [holdPlaybackRate, setHoldPlaybackRate] = useState(4);
+  const [seekStep, setSeekStep] = useState(defaultPlayerPreferences.seekStep);
+  const [holdPlaybackRate, setHoldPlaybackRate] = useState(defaultPlayerPreferences.holdPlaybackRate);
   const [isHoldSpeedActive, setIsHoldSpeedActive] = useState(false);
-  const [playbackMode, setPlaybackMode] = useState<PlaybackMode>("sequential");
+  const [playbackMode, setPlaybackMode] = useState<PlaybackMode>(defaultPlayerPreferences.playbackMode);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [videoAspectRatio, setVideoAspectRatio] = useState(16 / 9);
   const [videoRotation, setVideoRotation] = useState(0);
@@ -909,14 +909,17 @@ export default function App() {
     setDanmakuSelections,
     setFavoriteVideoIds,
     setHomeMediaMode,
+    setHoldPlaybackRate,
     setIsCinemaMode,
     setIsPlaylistSortReversed,
     setIsSeriesMode,
     setPlaylistPage,
     setPlaylistPageSize,
     setPlaylistSortMode,
+    setPlaybackMode,
     setProgressStore,
     setSelectedSeriesKey,
+    setSeekStep,
     setShortcuts,
     setSkipFolderAccessPrompt,
     setStartFromHighEnergy,
@@ -2955,8 +2958,11 @@ export default function App() {
     toggleStartFromHighEnergy,
     toggleTheme,
     updateHomeMediaMode,
+    updateHoldPlaybackRate,
+    updatePlaybackMode,
     updatePlaylistPageSize,
     updatePlaylistSortMode,
+    updateSeekStep,
     updateSelectedSeries,
   } = usePlayerPreferencesController({
     activateDuplicateDetectionForMode,
@@ -2966,6 +2972,7 @@ export default function App() {
     playerPreferencesRef,
     playerSettingsRef,
     setHomeMediaMode,
+    setHoldPlaybackRate,
     setIsCinemaMode,
     setIsDuplicateDetectionRunning,
     setIsPlaylistSortReversed,
@@ -2975,7 +2982,9 @@ export default function App() {
     setPlaylistPage,
     setPlaylistPageSize,
     setPlaylistSortMode,
+    setPlaybackMode,
     setSelectedSeriesKey,
+    setSeekStep,
     setShortcuts,
     setStartFromHighEnergy,
     setTheme,
@@ -4258,6 +4267,9 @@ export default function App() {
         playlistSortMode,
         isPlaylistSortReversed,
         playlistPageSize,
+        playbackMode,
+        seekStep,
+        holdPlaybackRate,
         shortcuts,
         homeMediaMode,
         isSeriesMode,
@@ -5934,10 +5946,10 @@ export default function App() {
             timelineRef={timelineRef}
             volume={volume}
             formatTime={formatTime}
-            onChangeHoldPlaybackRate={setHoldPlaybackRate}
-            onChangePlaybackMode={setPlaybackMode}
+            onChangeHoldPlaybackRate={updateHoldPlaybackRate}
+            onChangePlaybackMode={updatePlaybackMode}
             onChangePlaybackRate={setPlaybackRate}
-            onChangeSeekStep={setSeekStep}
+            onChangeSeekStep={updateSeekStep}
             onChangeSourceChoice={(value) => {
               if (!currentVideo) return;
               setPlaybackSourceChoices((previous) => ({ ...previous, [currentVideo.id]: value }));

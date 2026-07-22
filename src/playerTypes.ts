@@ -392,6 +392,9 @@ export type PlayerPreferences = {
   playlistSortMode: PlaylistSortMode;
   isPlaylistSortReversed: boolean;
   playlistPageSize: number;
+  playbackMode: PlaybackMode;
+  seekStep: number;
+  holdPlaybackRate: number;
   shortcuts: ShortcutMap;
   homeMediaMode: HomeMediaMode;
   isSeriesMode: boolean;

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
 
 import type { AppTheme } from "./appBrowserUtils";
-import type { HomeMediaMode, PlayerPersistentSettings, PlayerPreferences, PlaylistSortMode, ShortcutMap, VideoItem } from "./playerTypes";
+import type { HomeMediaMode, PlaybackMode, PlayerPersistentSettings, PlayerPreferences, PlaylistSortMode, ShortcutMap, VideoItem } from "./playerTypes";
 import { savePlayerPreference, savePlayerSetting } from "./playerStorage";
 
 type UsePlayerPreferencesControllerOptions = {
@@ -12,6 +12,7 @@ type UsePlayerPreferencesControllerOptions = {
   playerPreferencesRef: MutableRefObject<PlayerPreferences>;
   playerSettingsRef: MutableRefObject<PlayerPersistentSettings>;
   setHomeMediaMode: Dispatch<SetStateAction<HomeMediaMode>>;
+  setHoldPlaybackRate: Dispatch<SetStateAction<number>>;
   setIsCinemaMode: Dispatch<SetStateAction<boolean>>;
   setIsDuplicateDetectionRunning: Dispatch<SetStateAction<boolean>>;
   setIsPlaylistSortReversed: Dispatch<SetStateAction<boolean>>;
@@ -21,6 +22,8 @@ type UsePlayerPreferencesControllerOptions = {
   setPlaylistPage: Dispatch<SetStateAction<number>>;
   setPlaylistPageSize: Dispatch<SetStateAction<number>>;
   setPlaylistSortMode: Dispatch<SetStateAction<PlaylistSortMode>>;
+  setPlaybackMode: Dispatch<SetStateAction<PlaybackMode>>;
+  setSeekStep: Dispatch<SetStateAction<number>>;
   setSelectedSeriesKey: Dispatch<SetStateAction<string>>;
   setShortcuts: Dispatch<SetStateAction<ShortcutMap>>;
   setStartFromHighEnergy: Dispatch<SetStateAction<boolean>>;
@@ -37,6 +40,7 @@ export function usePlayerPreferencesController({
   playerPreferencesRef,
   playerSettingsRef,
   setHomeMediaMode,
+  setHoldPlaybackRate,
   setIsCinemaMode,
   setIsDuplicateDetectionRunning,
   setIsPlaylistSortReversed,
@@ -46,6 +50,8 @@ export function usePlayerPreferencesController({
   setPlaylistPage,
   setPlaylistPageSize,
   setPlaylistSortMode,
+  setPlaybackMode,
+  setSeekStep,
   setSelectedSeriesKey,
   setShortcuts,
   setStartFromHighEnergy,
@@ -58,6 +64,9 @@ export function usePlayerPreferencesController({
     setPlaylistSortMode(nextPreferences.playlistSortMode);
     setIsPlaylistSortReversed(nextPreferences.isPlaylistSortReversed);
     setPlaylistPageSize(nextPreferences.playlistPageSize);
+    setPlaybackMode(nextPreferences.playbackMode);
+    setSeekStep(nextPreferences.seekStep);
+    setHoldPlaybackRate(nextPreferences.holdPlaybackRate);
     setShortcuts(nextPreferences.shortcuts);
     setHomeMediaMode(nextPreferences.homeMediaMode);
     setIsSeriesMode(nextPreferences.isSeriesMode);
@@ -75,12 +84,15 @@ export function usePlayerPreferencesController({
   }, [
     playerPreferencesRef,
     setHomeMediaMode,
+    setHoldPlaybackRate,
     setIsCinemaMode,
     setIsPlaylistSortReversed,
     setIsSeriesMode,
     setMessage,
     setPlaylistPageSize,
     setPlaylistSortMode,
+    setPlaybackMode,
+    setSeekStep,
     setSelectedSeriesKey,
     setShortcuts,
     setStartFromHighEnergy,
@@ -109,6 +121,27 @@ export function usePlayerPreferencesController({
       playlistPageSize: nextPageSize,
     });
   }, [playerPreferencesRef, replacePlayerPreferences, setPlaylistPage]);
+
+  const updatePlaybackMode = useCallback((nextMode: PlaybackMode) => {
+    replacePlayerPreferences({
+      ...playerPreferencesRef.current,
+      playbackMode: nextMode,
+    });
+  }, [playerPreferencesRef, replacePlayerPreferences]);
+
+  const updateSeekStep = useCallback((nextStep: number) => {
+    replacePlayerPreferences({
+      ...playerPreferencesRef.current,
+      seekStep: nextStep,
+    });
+  }, [playerPreferencesRef, replacePlayerPreferences]);
+
+  const updateHoldPlaybackRate = useCallback((nextRate: number) => {
+    replacePlayerPreferences({
+      ...playerPreferencesRef.current,
+      holdPlaybackRate: nextRate,
+    });
+  }, [playerPreferencesRef, replacePlayerPreferences]);
 
   const updateHomeMediaMode = useCallback((nextMode: HomeMediaMode) => {
     setPlaylistPage(1);
@@ -176,8 +209,11 @@ export function usePlayerPreferencesController({
     toggleStartFromHighEnergy,
     toggleTheme,
     updateHomeMediaMode,
+    updateHoldPlaybackRate,
+    updatePlaybackMode,
     updatePlaylistPageSize,
     updatePlaylistSortMode,
+    updateSeekStep,
     updateSelectedSeries,
   };
 }

@@ -43,6 +43,31 @@ test("player preferences remember whether playback starts from high energy highl
   assert.equal(storage.parsePlayerPreferences({ startFromHighEnergy: "true" }).startFromHighEnergy, false);
 });
 
+test("player preferences parse playback controls with defaults", () => {
+  const defaults = storage.parsePlayerPreferences({});
+  assert.equal(defaults.playbackMode, "sequential");
+  assert.equal(defaults.seekStep, 15);
+  assert.equal(defaults.holdPlaybackRate, 4);
+
+  const parsed = storage.parsePlayerPreferences({
+    playbackMode: "shuffle",
+    seekStep: 10,
+    holdPlaybackRate: 3,
+  });
+  assert.equal(parsed.playbackMode, "shuffle");
+  assert.equal(parsed.seekStep, 10);
+  assert.equal(parsed.holdPlaybackRate, 3);
+
+  const invalid = storage.parsePlayerPreferences({
+    playbackMode: "invalid",
+    seekStep: 20,
+    holdPlaybackRate: 8,
+  });
+  assert.equal(invalid.playbackMode, "sequential");
+  assert.equal(invalid.seekStep, 15);
+  assert.equal(invalid.holdPlaybackRate, 4);
+});
+
 test("media root scan cache keeps valid server entries and drops invalid records", () => {
   const parsed = storage.parseCachedMediaRootScan(JSON.stringify({
     version: storage.mediaRootScanCacheVersion,
