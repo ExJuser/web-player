@@ -9986,7 +9986,7 @@ button {
 .mosaic-viewport-tools { position: absolute; top: 12px; right: 12px; z-index: 3; display: flex; align-items: center; gap: 5px; padding: 6px; border: 1px solid rgba(255,255,255,.1); border-radius: 13px; backdrop-filter: blur(12px); background: rgba(10,9,18,.78); }
 .mosaic-viewport-tools span { padding: 0 7px; color: #a7edff; font-size: 11px; }
 .mosaic-viewport-tools button { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 9px; color: #eeeaff; background: rgba(255,255,255,.06); }
-.mosaic-source-popover-anchor { position: absolute; z-index: 7; }
+.mosaic-source-popover-anchor { position: fixed; z-index: 130; }
 .mosaic-source-popover-anchor::before { position: absolute; top: var(--mosaic-source-arrow-y); width: 13px; height: 13px; border: solid rgba(139,224,255,.27); background: rgba(16,14,29,.96); content: ""; transform: translateY(-50%) rotate(45deg); }
 .mosaic-source-popover-anchor.opens-right::before { left: -6px; border-width: 0 0 1px 1px; }
 .mosaic-source-popover-anchor.opens-left::before { right: -6px; border-width: 1px 1px 0 0; }

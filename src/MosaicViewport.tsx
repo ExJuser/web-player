@@ -377,10 +377,10 @@ export function MosaicViewport({ assignments, columns, rows, previewUrl, sources
       const selection = ++sourceSelectionRef.current;
       setSourceAnchor(null);
       onSelectSource(source);
-      void acquireMosaicBitmap(source, 520, true).then((lease) => {
-        const maxWidth = Math.min(520, Math.max(1, rect.width - 24));
-        const maxHeight = Math.min(510, Math.max(1, rect.height - 24));
-        const scale = Math.min(1, Math.max(1, maxWidth - 24) / lease.bitmap.width, Math.max(1, maxHeight - 140) / lease.bitmap.height);
+      void acquireMosaicBitmap(source, 1040, true).then((lease) => {
+        const maxWidth = Math.min(1040, Math.max(1, window.innerWidth - 24));
+        const maxHeight = Math.min(1020, Math.max(1, window.innerHeight - 24));
+        const scale = Math.min(Math.max(1, maxWidth - 24) / lease.bitmap.width, Math.max(1, maxHeight - 140) / lease.bitmap.height);
         const previewWidth = Math.max(1, Math.round(lease.bitmap.width * scale));
         const previewHeight = Math.max(1, Math.round(lease.bitmap.height * scale));
         const popoverWidth = previewWidth + 24;
@@ -389,10 +389,10 @@ export function MosaicViewport({ assignments, columns, rows, previewUrl, sources
         if (sourceSelectionRef.current !== selection) return;
         setSourceAnchor({
           ...calculateMosaicPopoverAnchor({
-            viewportWidth: rect.width,
-            viewportHeight: rect.height,
-            cellLeft: hit.geometry.left + hit.column * cellWidth,
-            cellTop: hit.geometry.top + hit.row * cellHeight,
+            viewportWidth: window.innerWidth,
+            viewportHeight: window.innerHeight,
+            cellLeft: rect.left + hit.geometry.left + hit.column * cellWidth,
+            cellTop: rect.top + hit.geometry.top + hit.row * cellHeight,
             cellWidth,
             cellHeight,
             popoverWidth,
