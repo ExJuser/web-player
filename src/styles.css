@@ -8946,12 +8946,14 @@ button {
 
 .tag-actor-editor {
   display: grid;
-  gap: 10px;
+  gap: 0;
   padding: 14px;
   border: 1px solid rgba(167, 139, 250, 0.22);
   border-radius: 10px;
   background: rgba(15, 23, 42, 0.42);
 }
+
+.tag-actor-editor[open] { gap: 10px; }
 
 .tag-actor-editor-heading {
   display: flex;
