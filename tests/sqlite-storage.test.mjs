@@ -230,6 +230,45 @@ test("sqlite incremental writes keep unrelated player data", async () => {
   }
 });
 
+test("sqlite montage metadata migration copies descriptive data without playback data", async () => {
+  const context = await createTempStore();
+  try {
+    await context.store.initialize();
+    context.store.savePlayerDataStore("global", {
+      items: { source: { currentTime: 12, duration: 60, completed: false, updatedAt: 1 } },
+      favorites: ["source"],
+      videoRatings: { source: 9 },
+      videoComments: { source: "原片评论" },
+      videoTags: { source: ["剧情", "收藏级"] },
+      actorProfiles: { actor1: { id: "actor1", name: "演员一", aliases: [], updatedAt: 1 } },
+      videoActorOverrides: { source: { actorIds: ["actor1"], updatedAt: 1 } },
+      videoStats: { source: { totalPlayedSeconds: 30, playCount: 2, durationSeconds: 60, emissionCount: 1, updatedAt: 1 } },
+      watchActivity: { "2026-07-22::source": { date: "2026-07-22", videoId: "source", watchedSeconds: 30, playCount: 2, completedCount: 0, emissionCount: 1, updatedAt: 1 } },
+      videoEditSegments: { source: [{ id: "e1", startTime: 5, endTime: 20, updatedAt: 1 }] },
+    });
+
+    context.store.copyVideoMetadata("global", "source", "target", {
+      actorIds: ["actor1"],
+      highlights: [{ id: "edit-h1-1", startTime: 2, endTime: 5, tag: "高能", updatedAt: 2 }],
+    });
+
+    const stored = context.store.loadPlayerDataStore("global");
+    assert.equal(stored.favorites.includes("target"), true);
+    assert.deepEqual(stored.videoTags.target, ["剧情", "收藏级"]);
+    assert.equal(stored.videoRatings.target, 9);
+    assert.equal(stored.videoComments.target, "原片评论");
+    assert.deepEqual(stored.videoActorOverrides.target.actorIds, ["actor1"]);
+    assert.deepEqual(stored.videoHighlights.target, [{ id: "edit-h1-1", startTime: 2, endTime: 5, tag: "高能", updatedAt: 2 }]);
+    assert.equal(stored.items.target, undefined);
+    assert.equal(stored.videoStats.target, undefined);
+    assert.equal(Object.values(stored.watchActivity).some((item) => item.videoId === "target"), false);
+    assert.equal(stored.videoEditSegments.target, undefined);
+  } finally {
+    context.store.close();
+    await rm(context.root, { recursive: true, force: true });
+  }
+});
+
 test("sqlite player data stores preserve duplicate detections", async () => {
   const context = await createTempStore();
   try {

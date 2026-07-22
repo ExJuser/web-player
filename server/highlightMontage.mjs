@@ -64,7 +64,7 @@ export function normalizeMontageSegments(source, durationSeconds) {
   return merged;
 }
 
-export function mapHighlightsToMontage(source, segments, updatedAt = Date.now()) {
+export function mapHighlightsToMontage(source, segments, updatedAt = Date.now(), { omitOutside = false } = {}) {
   const boundaryTolerance = 0.001;
   let outputOffset = 0;
   const offsets = segments.map((segment) => {
@@ -73,7 +73,7 @@ export function mapHighlightsToMontage(source, segments, updatedAt = Date.now())
     return item;
   });
 
-  return (Array.isArray(source) ? source : []).map((highlight, index) => {
+  return (Array.isArray(source) ? source : []).flatMap((highlight, index) => {
     if (
       typeof highlight?.id !== "string" ||
       !highlight.id.trim() ||
@@ -89,18 +89,19 @@ export function mapHighlightsToMontage(source, segments, updatedAt = Date.now())
       highlight.endTime <= segment.endTime + boundaryTolerance
     ));
     if (!container) {
+      if (omitOutside) return [];
       throw new Error("存在不完全位于剪辑保留片段内的高能片段，请先调整标记。");
     }
     const segmentDurationSeconds = container.endTime - container.startTime;
     const mappedStart = Math.max(0, highlight.startTime - container.startTime);
     const mappedEnd = Math.min(segmentDurationSeconds, highlight.endTime - container.startTime);
-    return {
+    return [{
       id: `edit-${highlight.id.trim()}-${index + 1}`,
       startTime: asTimestamp(container.outputOffset + mappedStart),
       endTime: asTimestamp(container.outputOffset + mappedEnd),
       ...(typeof highlight.tag === "string" && highlight.tag.trim() ? { tag: highlight.tag.trim().slice(0, 40) } : {}),
       updatedAt,
-    };
+    }];
   });
 }
 
@@ -274,7 +275,7 @@ export async function createHighlightMontage({
   sourceHighlights = [],
   signal,
   onProgress,
-  persistHighlights,
+  persistMetadata,
   now = Date.now,
   mode = "precise",
 }) {
@@ -286,9 +287,7 @@ export async function createHighlightMontage({
   }
   const normalizedSegments = normalizeMontageSegments(segments, durationSeconds);
   const normalizedMode = mode === "lossless" ? "lossless" : "precise";
-  const mappedHighlights = normalizedMode === "precise"
-    ? mapHighlightsToMontage(sourceHighlights, normalizedSegments, now())
-    : [];
+  const mappedHighlights = mapHighlightsToMontage(sourceHighlights, normalizedSegments, now(), { omitOutside: true });
   const outputDuration = segmentDuration(normalizedSegments);
   const outputExtension = montageOutputExtension(sourcePath, normalizedMode);
   const temporaryPath = path.join(
@@ -340,9 +339,8 @@ export async function createHighlightMontage({
       const outputProbe = await probeMediaFile(runProcess, committed.outputPath);
       const probedDuration = Number(outputProbe?.format?.duration);
       if (Number.isFinite(probedDuration) && probedDuration > 0) completedDuration = probedDuration;
-    } else {
-      await persistHighlights?.(videoId, mappedHighlights);
     }
+    await persistMetadata?.(videoId, mappedHighlights);
     onProgress?.({ percent: 100, message: `已生成 ${committed.fileName}` });
     return {
       fileName: committed.fileName,

@@ -1102,6 +1102,57 @@ export class LocalDataSqliteStore {
     });
   }
 
+  copyVideoMetadata(libraryId, sourceVideoId, targetVideoId, metadata = {}) {
+    if (!sourceVideoId || !targetVideoId || sourceVideoId === targetVideoId) {
+      throw new Error("影片元数据迁移需要不同的有效来源和目标 ID。");
+    }
+    return this.transaction(() => {
+      const timestamp = now();
+      this.db.prepare("DELETE FROM video_favorites WHERE library_id = ? AND video_id = ?").run(libraryId, targetVideoId);
+      this.db.prepare("INSERT INTO video_favorites (library_id, video_id, created_at) SELECT library_id, ?, ? FROM video_favorites WHERE library_id = ? AND video_id = ?")
+        .run(targetVideoId, timestamp, libraryId, sourceVideoId);
+
+      this.db.prepare("DELETE FROM video_tags WHERE library_id = ? AND video_id = ?").run(libraryId, targetVideoId);
+      this.db.prepare("INSERT INTO video_tags (library_id, video_id, tag_key, tag_label, created_at) SELECT library_id, ?, tag_key, tag_label, ? FROM video_tags WHERE library_id = ? AND video_id = ?")
+        .run(targetVideoId, timestamp, libraryId, sourceVideoId);
+
+      this.db.prepare("DELETE FROM video_ratings WHERE library_id = ? AND video_id = ?").run(libraryId, targetVideoId);
+      this.db.prepare("INSERT INTO video_ratings (library_id, video_id, rating, updated_at) SELECT library_id, ?, rating, ? FROM video_ratings WHERE library_id = ? AND video_id = ?")
+        .run(targetVideoId, timestamp, libraryId, sourceVideoId);
+
+      this.db.prepare("DELETE FROM video_comments WHERE library_id = ? AND video_id = ?").run(libraryId, targetVideoId);
+      this.db.prepare("INSERT INTO video_comments (library_id, video_id, comment_text, updated_at) SELECT library_id, ?, comment_text, ? FROM video_comments WHERE library_id = ? AND video_id = ?")
+        .run(targetVideoId, timestamp, libraryId, sourceVideoId);
+
+      this.db.prepare("DELETE FROM video_actor_override_members WHERE library_id = ? AND video_id = ?").run(libraryId, targetVideoId);
+      this.db.prepare("DELETE FROM video_actor_overrides WHERE library_id = ? AND video_id = ?").run(libraryId, targetVideoId);
+      const actorIds = Array.isArray(metadata.actorIds)
+        ? Array.from(new Set(metadata.actorIds.filter((actorId) => typeof actorId === "string" && actorId)))
+        : null;
+      if (actorIds !== null) {
+        this.db.prepare("INSERT INTO video_actor_overrides (library_id, video_id, updated_at) VALUES (?, ?, ?)")
+          .run(libraryId, targetVideoId, timestamp);
+        const insertActor = this.db.prepare("INSERT INTO video_actor_override_members (library_id, video_id, actor_id, position) VALUES (?, ?, ?, ?)");
+        actorIds.forEach((actorId, position) => insertActor.run(libraryId, targetVideoId, actorId, position));
+      } else {
+        this.db.prepare("INSERT INTO video_actor_overrides (library_id, video_id, updated_at) SELECT library_id, ?, ? FROM video_actor_overrides WHERE library_id = ? AND video_id = ?")
+          .run(targetVideoId, timestamp, libraryId, sourceVideoId);
+        this.db.prepare("INSERT INTO video_actor_override_members (library_id, video_id, actor_id, position) SELECT library_id, ?, actor_id, position FROM video_actor_override_members WHERE library_id = ? AND video_id = ?")
+          .run(targetVideoId, libraryId, sourceVideoId);
+      }
+
+      this.db.prepare("DELETE FROM video_highlights WHERE library_id = ? AND video_id = ?").run(libraryId, targetVideoId);
+      const insertHighlight = this.db.prepare("INSERT INTO video_highlights (library_id, video_id, highlight_id, start_time, end_time, tag_label, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)");
+      for (const highlight of Array.isArray(metadata.highlights) ? metadata.highlights : []) {
+        const startTime = Number(highlight?.startTime);
+        const endTime = Number(highlight?.endTime);
+        if (typeof highlight?.id !== "string" || !highlight.id || !Number.isFinite(startTime) || !Number.isFinite(endTime) || startTime < 0 || endTime <= startTime) continue;
+        const tagLabel = typeof highlight.tag === "string" && highlight.tag.trim() ? highlight.tag.trim().slice(0, 40) : null;
+        insertHighlight.run(libraryId, targetVideoId, highlight.id, startTime, endTime, tagLabel, Number(highlight.updatedAt) || timestamp);
+      }
+    });
+  }
+
   replaceVideoEditSegments(libraryId, videoId, segments) {
     return this.transaction(() => {
       this.db.prepare("DELETE FROM video_edit_segments WHERE library_id = ? AND video_id = ?").run(libraryId, videoId);

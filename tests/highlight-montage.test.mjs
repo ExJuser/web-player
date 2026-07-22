@@ -210,7 +210,7 @@ test("writes an incremented edit file and persists mapped highlights", async () 
       relativePath: "Classics/霸王别姬.1993.mkv",
       segments: [{ startTime: 10, endTime: 30 }],
       sourceHighlights: [{ id: "h1", startTime: 12, endTime: 15, tag: "高能", updatedAt: 1 }],
-      persistHighlights: (videoId, highlights) => persisted.push({ videoId, highlights }),
+      persistMetadata: (videoId, highlights) => persisted.push({ videoId, highlights }),
       now: () => 999,
       onProgress: (event) => progressEvents.push(event),
     });
@@ -239,6 +239,7 @@ test("creates a lossless montage in the source container without probing encoder
   await writeFile(sourcePath, "source");
   let montageArgs = null;
   let concatScript = "";
+  const persisted = [];
 
   try {
     const result = await createHighlightMontage({
@@ -263,8 +264,12 @@ test("creates a lossless montage in the source container without probing encoder
       relativePath: "Movie.mkv",
       segments: [{ startTime: 10, endTime: 30 }],
       mode: "lossless",
+      sourceHighlights: [
+        { id: "h1", startTime: 12, endTime: 15, tag: "高能", updatedAt: 1 },
+        { id: "h2", startTime: 40, endTime: 45, tag: "范围外", updatedAt: 1 },
+      ],
       now: () => 1000,
-      persistHighlights: () => { throw new Error("lossless montage must not persist inaccurate highlights"); },
+      persistMetadata: (videoId, highlights) => persisted.push({ videoId, highlights }),
     });
 
     assert.equal(result.fileName, "Movie-edit.mkv");
@@ -273,6 +278,9 @@ test("creates a lossless montage in the source container without probing encoder
     assert.equal(result.durationSeconds, 20.75);
     assert.equal(montageArgs.includes("copy"), true);
     assert.match(concatScript, /inpoint 10\noutpoint 30/);
+    assert.deepEqual(persisted[0].highlights, [
+      { id: "edit-h1-1", startTime: 2, endTime: 5, tag: "高能", updatedAt: 1000 },
+    ]);
     assert.equal(await readFile(path.join(directory, result.fileName), "utf8"), "lossless-output");
     assert.deepEqual((await readdir(directory)).sort(), ["Movie-edit.mkv", "Movie.mkv"]);
   } finally {
@@ -315,7 +323,7 @@ test("cleans temporary and final output when generation or persistence fails", a
       rootId: "movies",
       relativePath: "Movie.mp4",
       segments: [{ startTime: 1, endTime: 5 }],
-      persistHighlights: () => { throw new Error("storage failed"); },
+      persistMetadata: () => { throw new Error("storage failed"); },
     }), /storage failed/);
     assert.deepEqual((await readdir(directory)).sort(), ["Movie.mp4"]);
   } finally {

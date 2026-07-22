@@ -32,6 +32,7 @@ export function useHighlightMontageController({ confirm, task, setConfirm, setRe
           rootId: request.rootId,
           relativePath: request.relativePath,
           sourceVideoId: request.sourceVideoId,
+          actorIds: request.actorIds,
           mode,
           segments: request.segments,
           highlights: request.highlights,

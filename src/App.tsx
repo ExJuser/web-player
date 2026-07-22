@@ -4675,6 +4675,7 @@ export default function App() {
       rootId: currentMediaRootId,
       relativePath: currentVideo.relativePath,
       sourceVideoId: currentVideo.id,
+      actorIds: currentVideoResolvedActors.actorIds,
       videoName: currentVideo.name,
       segments: currentVideoEditSegments,
       highlights: currentVideoHighlights,
@@ -4682,7 +4683,7 @@ export default function App() {
       mergedSegmentCount: summary.mergedSegmentCount,
       durationSeconds: summary.durationSeconds,
     });
-  }, [canGenerateHighlightMontage, currentMediaRootId, currentVideo, currentVideoEditSegments, currentVideoHighlights]);
+  }, [canGenerateHighlightMontage, currentMediaRootId, currentVideo, currentVideoEditSegments, currentVideoHighlights, currentVideoResolvedActors.actorIds]);
 
   const openLadaRestorationConfirm = useCallback(async () => {
     if (!currentVideo || !currentMediaRootId || !canRestoreWithLada) return;

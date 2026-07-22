@@ -9,6 +9,7 @@ export type HighlightMontageConfirmState = {
   rootId: string;
   relativePath: string;
   sourceVideoId: string;
+  actorIds: string[];
   videoName: string;
   segments: VideoEditSegment[];
   highlights: VideoHighlightSegment[];
@@ -92,8 +93,8 @@ export function HighlightMontageDialogs({
             <div className="dialog-copy">
               <h2 id="highlight-montage-result-title">剪辑版已生成</h2>
               <p>{result.mode === "lossless"
-                ? "已按关键帧快速无损拼接；实际切点和时长可能与标记范围略有差异。"
-                : "高能片段已映射为成片的独立快照；下次刷新媒体库后即可在列表中看到成片。"}</p>
+                ? "已按关键帧快速无损拼接；元数据和高能片段已迁移，实际时间可能有少量偏差。"
+                : "元数据和高能片段已映射到成片；下次刷新媒体库后即可在列表中看到。"}</p>
             </div>
             <div className="compatible-media-dialog-file"><strong>{result.fileName}</strong><span>{result.relativePath}</span><span>成片时长 {formatTime(result.durationSeconds)}</span></div>
             <div className="dialog-actions"><button className="primary-button" type="button" onClick={onCloseResult}>完成</button></div>

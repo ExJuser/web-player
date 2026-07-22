@@ -1003,7 +1003,10 @@ export function playerDataApiPlugin({ projectRoot, env }) {
               sourceHighlights,
               signal,
               onProgress,
-              persistHighlights: (videoId, highlights) => store.replaceVideoHighlights("global", videoId, highlights),
+              persistMetadata: (videoId, highlights) => store.copyVideoMetadata("global", sourceVideoId, videoId, {
+                actorIds: payload?.actorIds,
+                highlights,
+              }),
             }),
           }));
         } catch (error) {
