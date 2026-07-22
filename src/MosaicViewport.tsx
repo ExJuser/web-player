@@ -215,7 +215,7 @@ export function MosaicViewport({ assignments, columns, rows, previewUrl, sources
     const generation = detailGenerationRef.current;
     let availableLoads = Math.max(0, 6 - detailPendingRef.current.size);
     context.setTransform(ratio, 0, 0, ratio, 0, 0);
-    context.globalAlpha = 0.9;
+    context.globalAlpha = 1;
     detailCells.forEach((cell) => {
       const sourceId = assignments[cell.index];
       const source = sourceById.current.get(sourceId);
