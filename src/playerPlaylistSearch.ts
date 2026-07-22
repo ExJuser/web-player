@@ -8,6 +8,7 @@ export type PlaylistSearchRecord = {
   id: string;
   title: string;
   path: string;
+  score?: number;
   series?: string;
   tags?: string[];
   actors?: string[];
@@ -28,6 +29,8 @@ export type PlaylistSearchMatch = {
 
 export type PlaylistSearchDocument = {
   videoId: string;
+  score?: number;
+  normalizedTags: string[];
   entries: Array<{
     field: PlaylistSearchField;
     value: string;
@@ -68,6 +71,9 @@ export function parsePlaylistSearchQuery(query: string): PlaylistSearchToken[] {
   while ((match = pattern.exec(query)) !== null) {
     const raw = (match[1] ?? match[2] ?? "").trim();
     const normalized = normalizePlaylistSearchText(raw);
+    const scoreMatch = /^(?:>=|<=|>|<)(\d+(?:\.\d+)?)$/u.exec(normalized);
+    const isValidScoreFilter = scoreMatch && Number(scoreMatch[1]) >= 0 && Number(scoreMatch[1]) <= 10;
+    if (match[1] === undefined && (/^-(?!$).+/u.test(normalized) || isValidScoreFilter)) continue;
     if (!normalized || seen.has(normalized)) continue;
     seen.add(normalized);
     tokens.push({ raw, normalized });
@@ -98,7 +104,52 @@ function createPlaylistSearchDocument(record: PlaylistSearchRecord): PlaylistSea
   addValues("comment", [record.comment]);
   addValues("library", [record.library]);
 
-  return { videoId: record.id, entries };
+  return {
+    videoId: record.id,
+    score: record.score,
+    normalizedTags: (record.tags ?? []).map(normalizePlaylistSearchText),
+    entries,
+  };
+}
+
+type PlaylistScoreFilter = {
+  operator: ">" | ">=" | "<" | "<=";
+  value: number;
+};
+
+function parsePlaylistSearchFilters(query: string) {
+  const excludedTags: string[] = [];
+  const scoreFilters: PlaylistScoreFilter[] = [];
+  const pattern = /"([^"]*)"|([^\s"]+)/gu;
+  let match: RegExpExecArray | null;
+
+  while ((match = pattern.exec(query)) !== null) {
+    if (match[1] !== undefined) continue;
+    const normalized = normalizePlaylistSearchText(match[2] ?? "");
+    if (/^-(?!$).+/u.test(normalized)) {
+      excludedTags.push(normalized.slice(1));
+      continue;
+    }
+
+    const scoreMatch = /^(>=|<=|>|<)(\d+(?:\.\d+)?)$/u.exec(normalized);
+    if (!scoreMatch) continue;
+    const value = Number(scoreMatch[2]);
+    if (value < 0 || value > 10) continue;
+    scoreFilters.push({ operator: scoreMatch[1] as PlaylistScoreFilter["operator"], value });
+  }
+
+  return { excludedTags, scoreFilters };
+}
+
+function matchesScoreFilters(score: number | undefined, filters: PlaylistScoreFilter[]) {
+  if (!filters.length) return true;
+  if (typeof score !== "number") return false;
+  return filters.every(({ operator, value }) => {
+    if (operator === ">") return score > value;
+    if (operator === ">=") return score >= value;
+    if (operator === "<") return score < value;
+    return score <= value;
+  });
 }
 
 export function searchPlaylistVideos<Video extends { id: string }>(
@@ -107,12 +158,15 @@ export function searchPlaylistVideos<Video extends { id: string }>(
   query: string,
 ) {
   const tokens = parsePlaylistSearchQuery(query);
+  const { excludedTags, scoreFilters } = parsePlaylistSearchFilters(query);
   const matchesByVideoId = new Map<string, PlaylistSearchMatch>();
-  if (!tokens.length) return { videos, matchesByVideoId, tokens };
+  if (!tokens.length && !excludedTags.length && !scoreFilters.length) return { videos, matchesByVideoId, tokens };
 
   const matchingVideos = videos.filter((video) => {
     const document = documentsByVideoId.get(video.id);
     if (!document) return false;
+    if (excludedTags.some((tag) => document.normalizedTags.includes(tag))) return false;
+    if (!matchesScoreFilters(document.score, scoreFilters)) return false;
     const matchesByToken = tokens.map((token) =>
       document.entries.filter((entry) => entry.normalizedValue.includes(token.normalized)),
     );

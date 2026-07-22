@@ -14,6 +14,7 @@ test("parses quoted phrases, recovers unmatched quotes, and removes duplicate to
     search.parsePlaylistSearchQuery('  "最终 回"  喜多 喜多 "動畫').map((token) => token.normalized),
     ["最终 回", "喜多", "动画"],
   );
+  assert.deepEqual(search.parsePlaylistSearchQuery('"-3D" >11').map((token) => token.normalized), ["-3d", ">11"]);
 });
 
 test("matches all query tokens across different metadata fields while preserving playlist order", () => {
@@ -70,4 +71,30 @@ test("returns the original list and no match metadata for an empty query", () =>
 
   assert.equal(result.videos, videos);
   assert.equal(result.matchesByVideoId.size, 0);
+});
+
+test("excludes exact normalized tags with the minus syntax", () => {
+  const videos = [{ id: "3d" }, { id: "3dcg" }, { id: "plain" }];
+  const documents = search.createPlaylistSearchDocuments([
+    { id: "3d", title: "Movie", path: "3d.mkv", tags: ["３Ｄ"] },
+    { id: "3dcg", title: "Movie", path: "3dcg.mkv", tags: ["3DCG"] },
+    { id: "plain", title: "Movie", path: "plain.mkv", tags: ["科幻"] },
+  ]);
+
+  assert.deepEqual(search.searchPlaylistVideos(videos, documents, "-3D").videos, [videos[1], videos[2]]);
+  assert.deepEqual(search.searchPlaylistVideos(videos, documents, "Movie -科幻").videos, [videos[0], videos[1]]);
+});
+
+test("filters user scores with comparison syntax and excludes unrated videos", () => {
+  const videos = [{ id: "high" }, { id: "edge" }, { id: "low" }, { id: "unrated" }];
+  const documents = search.createPlaylistSearchDocuments([
+    { id: "high", title: "High", path: "high.mkv", score: 9 },
+    { id: "edge", title: "Edge", path: "edge.mkv", score: 8 },
+    { id: "low", title: "Low", path: "low.mkv", score: 6.5 },
+    { id: "unrated", title: "Unrated", path: "unrated.mkv" },
+  ]);
+
+  assert.deepEqual(search.searchPlaylistVideos(videos, documents, ">8").videos, [videos[0]]);
+  assert.deepEqual(search.searchPlaylistVideos(videos, documents, ">=8").videos, [videos[0], videos[1]]);
+  assert.deepEqual(search.searchPlaylistVideos(videos, documents, ">=7 <9").videos, [videos[1]]);
 });

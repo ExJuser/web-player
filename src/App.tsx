@@ -1461,6 +1461,7 @@ export default function App() {
         id: video.id,
         title: video.name,
         path: video.relativePath,
+        score: videoRatings[video.id],
         series: seriesTitleByVideoId.get(video.id) ?? inferSeriesTitle(video),
         tags: (videoTags[video.id] ?? []).filter((tag) => !actorKeys.has(normalizeTagKey(tag))),
         actors: actorMetadata.names,
@@ -1469,7 +1470,7 @@ export default function App() {
         library: (video.mediaRootId ? mediaRootLabelsById[video.mediaRootId] : "") || fallbackMediaRootLabelForVideo(video),
       };
     })),
-    [mediaRootLabelsById, seriesTitleByVideoId, videoActorSearchMetadata, videoComments, videoTags, videos],
+    [mediaRootLabelsById, seriesTitleByVideoId, videoActorSearchMetadata, videoComments, videoRatings, videoTags, videos],
   );
   const deferredPlaylistSearchQuery = useDeferredValue(playlistSearchQuery);
   const effectivePlaylistSearchQuery = playlistSearchQuery.trim() ? deferredPlaylistSearchQuery : "";
