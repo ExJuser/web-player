@@ -8979,6 +8979,8 @@ button {
   font-size: 13px;
 }
 
+.tag-actor-search { margin-top: 10px; }
+
 .tag-actor-checkbox-list {
   height: 240px;
   max-height: 240px;
