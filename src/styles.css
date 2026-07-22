@@ -9964,7 +9964,7 @@ button {
 .mosaic-target-preview > strong { max-width: min(560px, 70vw); overflow: hidden; color: rgba(244,240,255,.76); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .mosaic-orbit { position: relative; display: flex; align-items: center; gap: 22px; color: #c7edff; filter: drop-shadow(0 0 18px rgba(100,174,255,.65)); }
 .mosaic-orbit::before { position: absolute; inset: -32px -55px; border: 1px solid rgba(166,139,255,.32); border-radius: 50%; content: ""; transform: rotate(-12deg); }
-.mosaic-status-message { position: absolute; right: 14px; bottom: 14px; left: 14px; z-index: 5; padding: 10px 14px; border: 1px solid rgba(255,255,255,.1); border-radius: 12px; color: rgba(247,244,255,.8); font-size: 12px; backdrop-filter: blur(12px); background: rgba(18,16,31,.8); }
+.mosaic-status-message { flex: 0 0 auto; padding: 10px 12px; border: 1px solid rgba(255,255,255,.1); border-radius: 12px; color: rgba(247,244,255,.8); font-size: 12px; line-height: 1.5; background: rgba(18,16,31,.8); }
 .mosaic-progress-overlay { position: absolute; inset: 58px 0 0; z-index: 8; display: grid; place-items: center; align-content: center; gap: 10px; backdrop-filter: blur(12px); background: rgba(7,7,13,.78); }
 .mosaic-progress-overlay > span { color: rgba(240,235,255,.62); }
 .mosaic-progress-overlay > div { width: min(420px, 72%); height: 7px; overflow: hidden; border-radius: 999px; background: rgba(255,255,255,.1); }

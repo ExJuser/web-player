@@ -605,6 +605,8 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
             {generation ? <button className="secondary-button" type="button" onClick={cancelGeneration}><X size={17} /> 取消生成</button> : null}
           </section>
 
+          {message ? <div className="mosaic-status-message" role="status">{message}</div> : null}
+
           <section className="mosaic-panel mosaic-projects">
             <div className="mosaic-panel-title"><span>已保存作品</span><small>{projects.length}</small></div>
             {projects.length ? projects.map((project) => (
@@ -698,7 +700,6 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
               </div>
             </div>
           )}
-          {message ? <div className="mosaic-status-message">{message}</div> : null}
         </div>
       </div>
 
