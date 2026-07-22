@@ -45,6 +45,92 @@ export async function loadMosaicBitmap(input: { file?: Blob; url?: string }) {
   return createImageBitmap(await response.blob());
 }
 
+export type MosaicBitmapLease = { bitmap: ImageBitmap; release: () => void };
+type MosaicBitmapCacheEntry = {
+  bitmap?: ImageBitmap;
+  promise: Promise<ImageBitmap>;
+  users: number;
+  bytes: number;
+};
+
+const mosaicBitmapCache = new Map<string, MosaicBitmapCacheEntry>();
+const mosaicBitmapCacheBudget = 128 * 1024 * 1024;
+let mosaicBitmapCacheBytes = 0;
+
+function touchMosaicBitmapCache(key: string, entry: MosaicBitmapCacheEntry) {
+  mosaicBitmapCache.delete(key);
+  mosaicBitmapCache.set(key, entry);
+}
+
+function pruneMosaicBitmapCache() {
+  if (mosaicBitmapCacheBytes <= mosaicBitmapCacheBudget) return;
+  for (const [key, entry] of mosaicBitmapCache) {
+    if (entry.users || !entry.bitmap) continue;
+    entry.bitmap.close();
+    mosaicBitmapCacheBytes -= entry.bytes;
+    mosaicBitmapCache.delete(key);
+    if (mosaicBitmapCacheBytes <= mosaicBitmapCacheBudget) break;
+  }
+}
+
+async function createMosaicTileBitmap(source: MosaicRuntimeSource, maxEdge: number) {
+  const bitmap = await loadMosaicBitmap({ file: source.file, url: source.url });
+  const scale = Math.min(1, maxEdge / Math.max(bitmap.width, bitmap.height));
+  if (scale >= 1) return bitmap;
+  try {
+    return await createImageBitmap(bitmap, {
+      resizeWidth: Math.max(1, Math.round(bitmap.width * scale)),
+      resizeHeight: Math.max(1, Math.round(bitmap.height * scale)),
+      resizeQuality: "high",
+    });
+  } finally {
+    bitmap.close();
+  }
+}
+
+export async function acquireMosaicBitmap(source: MosaicRuntimeSource, maxEdge = 128): Promise<MosaicBitmapLease> {
+  const normalizedEdge = Math.max(32, Math.round(maxEdge));
+  const key = `${source.id}:${createMosaicSignature(source)}:${normalizedEdge}`;
+  let entry = mosaicBitmapCache.get(key);
+  if (entry) {
+    entry.users += 1;
+    touchMosaicBitmapCache(key, entry);
+  } else {
+    const createdEntry: MosaicBitmapCacheEntry = { promise: createMosaicTileBitmap(source, normalizedEdge), users: 1, bytes: 0 };
+    entry = createdEntry;
+    mosaicBitmapCache.set(key, createdEntry);
+    void createdEntry.promise.then((bitmap) => {
+      if (mosaicBitmapCache.get(key) !== createdEntry) {
+        bitmap.close();
+        return;
+      }
+      createdEntry.bitmap = bitmap;
+      createdEntry.bytes = bitmap.width * bitmap.height * 4;
+      mosaicBitmapCacheBytes += createdEntry.bytes;
+      pruneMosaicBitmapCache();
+    }).catch(() => {
+      if (mosaicBitmapCache.get(key) === createdEntry) mosaicBitmapCache.delete(key);
+    });
+  }
+  try {
+    const bitmap = entry.bitmap ?? await entry.promise;
+    let released = false;
+    return {
+      bitmap,
+      release: () => {
+        if (released) return;
+        released = true;
+        entry.users = Math.max(0, entry.users - 1);
+        touchMosaicBitmapCache(key, entry);
+        pruneMosaicBitmapCache();
+      },
+    };
+  } catch (error) {
+    entry.users = Math.max(0, entry.users - 1);
+    throw error;
+  }
+}
+
 export async function analyzeMosaicSources(input: {
   sources: MosaicRuntimeSource[];
   worker: Worker;
@@ -90,13 +176,13 @@ export async function analyzeMosaicSources(input: {
     input.onProgress(Math.min(input.sources.length, result.length + offset + batch.length - created.length), input.sources.length);
   }
   void saveMosaicFeatures(created).catch(() => undefined);
-  const availableIds = new Set(result.map((feature) => feature.sourceId));
+  const resultById = new Map(result.map((feature) => [feature.sourceId, feature]));
   return {
     features: input.sources.flatMap((source) => {
-      const feature = result.find((item) => item.sourceId === source.id);
+      const feature = resultById.get(source.id);
       return feature ? [feature] : [];
     }),
-    skipped: input.sources.length - availableIds.size,
+    skipped: input.sources.length - resultById.size,
   };
 }
 
@@ -286,41 +372,52 @@ export async function renderMosaic(input: {
   const entries = Array.from(cellsBySource.entries());
   const cellWidth = width / input.columns;
   const cellHeight = height / input.rows;
-  const previewStep = Math.max(1, Math.ceil(entries.length / 16));
+  const previewStep = Math.max(1, Math.ceil(entries.length / 8));
   let lastPreviewAt = Number.NEGATIVE_INFINITY;
   const overlayOpacity = Math.max(0, Math.min(0.28, input.targetClarity * 0.28));
   const targetBitmap = overlayOpacity > 0 ? await loadMosaicBitmap(input.target) : null;
   try {
-    for (let sourceIndex = 0; sourceIndex < entries.length; sourceIndex++) {
+    const renderConcurrency = 6;
+    for (let offset = 0; offset < entries.length; offset += renderConcurrency) {
       if (input.signal?.aborted) throw new DOMException("生成已取消。", "AbortError");
-      const [sourceId, cells] = entries[sourceIndex];
-      const source = sourceById.get(sourceId);
-      if (!source) continue;
-      try {
-        const bitmap = await loadMosaicBitmap({ file: source.file, url: source.url });
-        const drawTile = input.tileFit === "contain" ? drawContain : drawCover;
-        cells.forEach((cellIndex) => drawTile(
-          context,
-          bitmap,
-          (cellIndex % input.columns) * cellWidth,
-          Math.floor(cellIndex / input.columns) * cellHeight,
-          Math.ceil(cellWidth + 0.5),
-          Math.ceil(cellHeight + 0.5),
-        ));
-        bitmap.close();
-      } catch {
-        // Keep missing cells dark; the saved preview remains usable when a source disappears.
+      const batch = entries.slice(offset, offset + renderConcurrency);
+      const loaded = await Promise.all(batch.map(async ([sourceId, cells]) => {
+        const source = sourceById.get(sourceId);
+        if (!source) return { cells, lease: null };
+        try {
+          return { cells, lease: await acquireMosaicBitmap(source, 128) };
+        } catch {
+          return { cells, lease: null };
+        }
+      }));
+      for (let batchIndex = 0; batchIndex < loaded.length; batchIndex++) {
+        const { cells, lease } = loaded[batchIndex];
+        if (lease) {
+          try {
+            const drawTile = input.tileFit === "contain" ? drawContain : drawCover;
+            cells.forEach((cellIndex) => drawTile(
+              context,
+              lease.bitmap,
+              (cellIndex % input.columns) * cellWidth,
+              Math.floor(cellIndex / input.columns) * cellHeight,
+              Math.ceil(cellWidth + 0.5),
+              Math.ceil(cellHeight + 0.5),
+            ));
+          } finally {
+            lease.release();
+          }
+        }
+        const completed = offset + batchIndex + 1;
+        input.onProgress?.(completed, entries.length);
+        const now = performance.now();
+        if (input.onPreview && completed < entries.length && completed % previewStep === 0 && now - lastPreviewAt >= 700) {
+          const progressivePreview = await createProgressivePreview({ ...input, canvas, width, height, targetBitmap });
+          if (input.signal?.aborted) throw new DOMException("生成已取消。", "AbortError");
+          input.onPreview(progressivePreview, completed, entries.length);
+          lastPreviewAt = performance.now();
+        }
       }
-      const completed = sourceIndex + 1;
-      input.onProgress?.(completed, entries.length);
-      const now = performance.now();
-      if (input.onPreview && completed < entries.length && completed % previewStep === 0 && now - lastPreviewAt >= 400) {
-        const progressivePreview = await createProgressivePreview({ ...input, canvas, width, height, targetBitmap });
-        if (input.signal?.aborted) throw new DOMException("生成已取消。", "AbortError");
-        input.onPreview(progressivePreview, completed, entries.length);
-        lastPreviewAt = performance.now();
-      }
-      if (sourceIndex % 12 === 0) await new Promise((resolve) => setTimeout(resolve, 0));
+      await new Promise((resolve) => setTimeout(resolve, 0));
     }
 
     applyMosaicEffects({ ...input, context, width, height, targetBitmap });

@@ -1,7 +1,7 @@
 import { Maximize2, RotateCcw, ZoomIn, ZoomOut } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type WheelEvent } from "react";
 
-import { loadMosaicBitmap } from "./mosaicImagePipeline";
+import { acquireMosaicBitmap, type MosaicBitmapLease } from "./mosaicImagePipeline";
 import type { MosaicRuntimeSource, MosaicTileFit } from "./mosaicTypes";
 import { calculateMosaicGeometry, locateMosaicCell, type MosaicViewTransform } from "./mosaicViewportGeometry";
 
@@ -93,19 +93,6 @@ function drawDetailContain(context: CanvasRenderingContext2D, bitmap: ImageBitma
   context.drawImage(bitmap, x + (width - drawWidth) / 2, y + (height - drawHeight) / 2, drawWidth, drawHeight);
 }
 
-async function loadDetailBitmap(source: MosaicRuntimeSource) {
-  const bitmap = await loadMosaicBitmap({ file: source.file, url: source.url });
-  const scale = Math.min(1, 256 / Math.max(bitmap.width, bitmap.height));
-  if (scale >= 1) return bitmap;
-  const resized = await createImageBitmap(bitmap, {
-    resizeWidth: Math.max(1, Math.round(bitmap.width * scale)),
-    resizeHeight: Math.max(1, Math.round(bitmap.height * scale)),
-    resizeQuality: "high",
-  });
-  bitmap.close();
-  return resized;
-}
-
 export function MosaicViewport({ assignments, columns, rows, previewUrl, sources, tileFit, onSelectSource }: MosaicViewportProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const detailCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -114,7 +101,7 @@ export function MosaicViewport({ assignments, columns, rows, previewUrl, sources
   const drawRef = useRef<() => void>(() => undefined);
   const detailDrawRef = useRef<() => void>(() => undefined);
   const webGlRef = useRef<WebGlState | null | undefined>(undefined);
-  const detailBitmapsRef = useRef(new Map<string, ImageBitmap>());
+  const detailBitmapsRef = useRef(new Map<string, MosaicBitmapLease>());
   const detailPendingRef = useRef(new Set<string>());
   const detailFailedRef = useRef(new Set<string>());
   const detailGenerationRef = useRef(0);
@@ -223,35 +210,35 @@ export function MosaicViewport({ assignments, columns, rows, previewUrl, sources
     visibleCells.sort((left, right) => left.distance - right.distance);
     const detailCells = visibleCells.slice(0, 240);
     const generation = detailGenerationRef.current;
-    let scheduled = 0;
+    let availableLoads = Math.max(0, 6 - detailPendingRef.current.size);
     context.setTransform(ratio, 0, 0, ratio, 0, 0);
     context.globalAlpha = 0.9;
     detailCells.forEach((cell) => {
       const sourceId = assignments[cell.index];
       const source = sourceById.current.get(sourceId);
       if (!source) return;
-      const cached = detailBitmapsRef.current.get(sourceId);
-      if (cached) {
+      const cachedLease = detailBitmapsRef.current.get(sourceId);
+      if (cachedLease) {
         detailBitmapsRef.current.delete(sourceId);
-        detailBitmapsRef.current.set(sourceId, cached);
+        detailBitmapsRef.current.set(sourceId, cachedLease);
         const drawTile = tileFit === "contain" ? drawDetailContain : drawDetailCover;
-        drawTile(context, cached, geometry.left + cell.column * cellWidth, geometry.top + cell.row * cellHeight, cellWidth, cellHeight);
+        drawTile(context, cachedLease.bitmap, geometry.left + cell.column * cellWidth, geometry.top + cell.row * cellHeight, cellWidth, cellHeight);
         return;
       }
-      if (scheduled >= 12 || detailPendingRef.current.has(sourceId) || detailFailedRef.current.has(sourceId)) return;
-      scheduled += 1;
+      if (!availableLoads || detailPendingRef.current.has(sourceId) || detailFailedRef.current.has(sourceId)) return;
+      availableLoads -= 1;
       detailPendingRef.current.add(sourceId);
-      void loadDetailBitmap(source).then((bitmap) => {
+      void acquireMosaicBitmap(source, 256).then((lease) => {
         if (detailGenerationRef.current !== generation) {
-          bitmap.close();
+          lease.release();
           return;
         }
         detailPendingRef.current.delete(sourceId);
-        detailBitmapsRef.current.set(sourceId, bitmap);
+        detailBitmapsRef.current.set(sourceId, lease);
         while (detailBitmapsRef.current.size > 256) {
           const oldestId = detailBitmapsRef.current.keys().next().value as string | undefined;
           if (!oldestId) break;
-          detailBitmapsRef.current.get(oldestId)?.close();
+          detailBitmapsRef.current.get(oldestId)?.release();
           detailBitmapsRef.current.delete(oldestId);
         }
         detailDrawRef.current();
@@ -302,13 +289,13 @@ export function MosaicViewport({ assignments, columns, rows, previewUrl, sources
 
   useEffect(() => {
     detailGenerationRef.current += 1;
-    detailBitmapsRef.current.forEach((bitmap) => bitmap.close());
+    detailBitmapsRef.current.forEach((lease) => lease.release());
     detailBitmapsRef.current.clear();
     detailPendingRef.current.clear();
     detailFailedRef.current.clear();
     return () => {
       detailGenerationRef.current += 1;
-      detailBitmapsRef.current.forEach((bitmap) => bitmap.close());
+      detailBitmapsRef.current.forEach((lease) => lease.release());
       detailBitmapsRef.current.clear();
     };
   }, [previewUrl]);
