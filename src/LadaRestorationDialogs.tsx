@@ -10,6 +10,8 @@ export type LadaRestorationConfirmState = {
   sourceVideoId: string;
   videoName: string;
   highlights: VideoHighlightSegment[];
+  highlightsOnly: boolean;
+  canCreateHighlightsOnly: boolean;
   capabilities: LadaCapabilities | null;
   options: LadaRestoreOptions | null;
   isLoading: boolean;
@@ -27,6 +29,7 @@ type LadaRestorationDialogsProps = {
   result: LadaRestorationResultState | null;
   formatFileSize: (bytes: number) => string;
   onChangeOptions: (options: LadaRestoreOptions) => void;
+  onChangeHighlightsOnly: (value: boolean) => void;
   onCloseConfirm: () => void;
   onCreate: () => void;
   onCloseResult: () => void;
@@ -37,6 +40,7 @@ export function LadaRestorationDialogs({
   result,
   formatFileSize,
   onChangeOptions,
+  onChangeHighlightsOnly,
   onCloseConfirm,
   onCreate,
   onCloseResult,
@@ -53,11 +57,13 @@ export function LadaRestorationDialogs({
             <div className="dialog-icon"><Sparkles size={28} /></div>
             <div className="dialog-copy">
               <h2 id="lada-restoration-confirm-title">修复影片马赛克？</h2>
-              <p>将使用 LADA 处理整部原片，原片和已有修复结果不会被覆盖。</p>
+              <p>{confirm.highlightsOnly
+                ? `将按时间顺序拼接并修复 ${confirm.highlights.length} 个高能片段，原片和已有修复结果不会被覆盖。`
+                : "将使用 LADA 处理整部原片，原片和已有修复结果不会被覆盖。"}</p>
             </div>
             <div className="compatible-media-dialog-file">
               <strong>{confirm.videoName}</strong>
-              <span>输出命名为“原片名.restored.mp4”，重名时自动递增。</span>
+              <span>输出命名为“原片名{confirm.highlightsOnly ? ".highlights" : ""}.restored.mp4”，重名时自动递增。</span>
             </div>
             {confirm.isLoading ? <div className="lada-options-status"><LoaderCircle size={17} className="spin-icon" />正在读取 LADA 设备和编码预设...</div> : null}
             {confirm.error ? <div className="lada-options-error" role="alert">{confirm.error}</div> : null}
@@ -82,11 +88,22 @@ export function LadaRestorationDialogs({
                   />
                 </div>
                 <div className="lada-option-toggles">
+                  <label className="toggle-row">
+                    <input
+                      type="checkbox"
+                      checked={confirm.highlightsOnly}
+                      disabled={!confirm.highlights.length || !confirm.canCreateHighlightsOnly}
+                      onChange={(event) => onChangeHighlightsOnly(event.target.checked)}
+                    />
+                    仅修复高能片段并自动拼接
+                  </label>
                   <label className="toggle-row"><input type="checkbox" checked={confirm.options.fp16} onChange={(event) => updateOption("fp16", event.target.checked)} />启用 FP16</label>
                   <label className="toggle-row"><input type="checkbox" checked={confirm.options.detectFaceMosaics} onChange={(event) => updateOption("detectFaceMosaics", event.target.checked)} />检测并跳过人脸马赛克</label>
                 </div>
               </div>
             ) : null}
+            {!confirm.highlights.length ? <div className="lada-options-error">当前影片没有高能片段，无法使用片段修复。</div> : null}
+            {confirm.highlights.length && !confirm.canCreateHighlightsOnly ? <div className="lada-options-error">仅修复高能片段需要 ffmpeg 和 ffprobe。</div> : null}
             <div className="dialog-actions">
               <button className="secondary-button" type="button" onClick={onCloseConfirm}>取消</button>
               <button className="primary-button" type="button" onClick={onCreate} disabled={confirm.isLoading || !confirm.options || Boolean(confirm.error)}><Sparkles size={18} />开始修复</button>

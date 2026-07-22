@@ -39,6 +39,7 @@ export function useLadaRestorationController({
           relativePath: request.relativePath,
           sourceVideoId: request.sourceVideoId,
           highlights: request.highlights,
+          highlightsOnly: request.highlightsOnly,
           options: requestOptions,
         }),
       });

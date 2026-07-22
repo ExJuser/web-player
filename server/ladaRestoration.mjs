@@ -2,6 +2,13 @@ import { access, link, mkdir, mkdtemp, rm, stat } from "node:fs/promises";
 import path from "node:path";
 
 import { createGlobalVideoId } from "./mediaRoots.mjs";
+import { probeMediaFile } from "./mediaCompatibility.mjs";
+import {
+  createHighlightMontageArgs,
+  mapHighlightsToMontage,
+  normalizeMontageSegments,
+  selectHighlightMontageVideoEncoder,
+} from "./highlightMontage.mjs";
 
 export const ladaExecutablePath = "D:\\lada\\lada-cli.exe";
 export const ladaWorkingDirectory = "D:\\lada";
@@ -123,14 +130,15 @@ export function createLadaProgressParser(onProgress) {
   };
 }
 
-function outputFileName(sourcePath, sequence) {
+function outputFileName(sourcePath, sequence, highlightsOnly = false) {
   const stem = path.parse(sourcePath).name;
-  return sequence === 1 ? `${stem}.restored.mp4` : `${stem}.restored-${sequence}.mp4`;
+  const suffix = highlightsOnly ? ".highlights.restored" : ".restored";
+  return sequence === 1 ? `${stem}${suffix}.mp4` : `${stem}${suffix}-${sequence}.mp4`;
 }
 
-async function commitTemporaryOutput(temporaryPath, sourcePath) {
+async function commitTemporaryOutput(temporaryPath, sourcePath, highlightsOnly) {
   for (let sequence = 1; ; sequence += 1) {
-    const fileName = outputFileName(sourcePath, sequence);
+    const fileName = outputFileName(sourcePath, sequence, highlightsOnly);
     const outputPath = path.join(path.dirname(sourcePath), fileName);
     try {
       await link(temporaryPath, outputPath);
@@ -154,6 +162,7 @@ export async function restoreVideoWithLada({
   rootId,
   relativePath,
   sourceHighlights = [],
+  highlightsOnly = false,
   options,
   capabilities,
   signal,
@@ -167,6 +176,8 @@ export async function restoreVideoWithLada({
   let taskDirectory = null;
   let temporaryDirectory = null;
   let temporaryOutputPath = null;
+  let restorationSourcePath = sourcePath;
+  let outputHighlights = sourceHighlights;
   let committedPath = null;
   onProgress?.({ percent: 0, message: "正在准备马赛克修复..." });
 
@@ -175,11 +186,33 @@ export async function restoreVideoWithLada({
     temporaryDirectory = path.join(taskDirectory, "work");
     temporaryOutputPath = path.join(taskDirectory, "output.mp4");
     await mkdir(temporaryDirectory, { recursive: true });
+    if (highlightsOnly) {
+      if (!Array.isArray(sourceHighlights) || !sourceHighlights.length) throw new Error("请至少标记一个高能片段。");
+      const rawProbe = await probeMediaFile(runProcess, sourcePath);
+      const durationSeconds = Number(rawProbe?.format?.duration);
+      const streams = Array.isArray(rawProbe?.streams) ? rawProbe.streams : [];
+      if (!streams.some((stream) => stream?.codec_type === "video")) throw new Error("原片没有可用的视频流。");
+      const segments = normalizeMontageSegments(sourceHighlights, durationSeconds);
+      outputHighlights = mapHighlightsToMontage(sourceHighlights, segments);
+      restorationSourcePath = path.join(taskDirectory, "highlights.mp4");
+      onProgress?.({ percent: 0, message: "正在拼接高能片段..." });
+      await runProcess("ffmpeg", createHighlightMontageArgs(sourcePath, restorationSourcePath, segments, {
+        hasAudio: streams.some((stream) => stream?.codec_type === "audio"),
+        videoEncoder: await selectHighlightMontageVideoEncoder(runProcess, { signal }),
+      }), {
+        timeoutMs: 2 * 60 * 60 * 1000,
+        timeoutMessage: "拼接高能片段超时。",
+        signal,
+        abortMessage: "已取消马赛克修复。",
+      });
+      const montageStat = await stat(restorationSourcePath);
+      if (!montageStat.isFile() || montageStat.size <= 0) throw new Error("拼接高能片段失败。");
+    }
     const parseStdoutProgress = createLadaProgressParser(onProgress);
     const parseStderrProgress = createLadaProgressParser(onProgress);
     await runProcess(
       ladaExecutablePath,
-      createLadaArgs(sourcePath, temporaryOutputPath, temporaryDirectory, normalizedOptions),
+      createLadaArgs(restorationSourcePath, temporaryOutputPath, temporaryDirectory, normalizedOptions),
       {
         cwd: ladaWorkingDirectory,
         timeoutMs: 0,
@@ -201,14 +234,14 @@ export async function restoreVideoWithLada({
     }
     if (!temporaryStat.isFile() || temporaryStat.size <= 0) throw new Error("LADA 输出文件为空。");
 
-    const committed = await commitTemporaryOutput(temporaryOutputPath, sourcePath);
+    const committed = await commitTemporaryOutput(temporaryOutputPath, sourcePath, highlightsOnly);
     committedPath = committed.outputPath;
     await rm(temporaryOutputPath, { force: true });
     const outputStat = await stat(committed.outputPath);
     const outputRelativePath = createOutputRelativePath(relativePath, committed.fileName);
     const lastModified = Math.round(outputStat.mtimeMs);
     const videoId = createGlobalVideoId(rootId, outputRelativePath, outputStat.size, lastModified);
-    await persistHighlights?.(videoId, sourceHighlights);
+    await persistHighlights?.(videoId, outputHighlights);
     onProgress?.({ percent: 100, message: `已生成 ${committed.fileName}` });
     return {
       fileName: committed.fileName,

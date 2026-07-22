@@ -206,6 +206,53 @@ test("restores to an incremented file and removes all temporary content", async 
   }
 });
 
+test("restores only high energy segments after concatenating them", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "web-player-lada-highlights-"));
+  const sourcePath = path.join(directory, "Movie.mkv");
+  const sourceHighlights = [
+    { id: "h1", startTime: 10, endTime: 15, tag: "高能", updatedAt: 1 },
+    { id: "h2", startTime: 30, endTime: 34, tag: "爆发", updatedAt: 2 },
+  ];
+  const persisted = [];
+  await writeFile(sourcePath, "source");
+
+  try {
+    const result = await restoreVideoWithLada({
+      runProcess: async (command, args) => {
+        if (command === "ffprobe") return JSON.stringify({
+          format: { duration: "60" },
+          streams: [{ codec_type: "video" }, { codec_type: "audio" }],
+        });
+        if (command === "ffmpeg" && args.includes("-filter_complex")) {
+          await writeFile(args.at(-1), "highlight-montage");
+          return "";
+        }
+        if (command === "ffmpeg") throw new Error("encoder unavailable");
+        assert.equal(command, "D:\\lada\\lada-cli.exe");
+        assert.match(args[args.indexOf("--input") + 1], /highlights\.mp4$/);
+        await writeFile(args[args.indexOf("--output") + 1], "restored-highlights");
+        return "";
+      },
+      sourcePath,
+      rootId: "movies",
+      relativePath: "Movie.mkv",
+      sourceHighlights,
+      highlightsOnly: true,
+      persistHighlights: (videoId, highlights) => persisted.push({ videoId, highlights }),
+      options: capabilities.defaults,
+      capabilities,
+    });
+
+    assert.equal(result.fileName, "Movie.highlights.restored.mp4");
+    assert.deepEqual(persisted[0].highlights.map(({ startTime, endTime }) => ({ startTime, endTime })), [
+      { startTime: 0, endTime: 5 },
+      { startTime: 5, endTime: 9 },
+    ]);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("removes partial output and task directories after failure", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "web-player-lada-failure-"));
   const sourcePath = path.join(directory, "Movie.mp4");

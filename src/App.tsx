@@ -4695,6 +4695,8 @@ export default function App() {
       sourceVideoId: currentVideo.id,
       videoName: currentVideo.name,
       highlights: currentVideoHighlights,
+      highlightsOnly: false,
+      canCreateHighlightsOnly: Boolean(localConfig?.ffmpeg.ffmpeg && localConfig.ffmpeg.ffprobe),
       capabilities: null,
       options: null,
       isLoading: true,
@@ -4712,10 +4714,14 @@ export default function App() {
         ? { ...current, isLoading: false, error: message }
         : current);
     }
-  }, [canRestoreWithLada, currentMediaRootId, currentVideo, currentVideoHighlights]);
+  }, [canRestoreWithLada, currentMediaRootId, currentVideo, currentVideoHighlights, localConfig?.ffmpeg.ffmpeg, localConfig?.ffmpeg.ffprobe]);
 
   const updateLadaRestorationOptions = useCallback((options: LadaRestoreOptions) => {
     setLadaRestorationConfirm((current) => current ? { ...current, options } : current);
+  }, []);
+
+  const updateLadaRestorationHighlightsOnly = useCallback((highlightsOnly: boolean) => {
+    setLadaRestorationConfirm((current) => current ? { ...current, highlightsOnly } : current);
   }, []);
 
   const {
@@ -6254,6 +6260,7 @@ export default function App() {
         result: ladaRestorationResult,
         formatFileSize,
         onChangeOptions: updateLadaRestorationOptions,
+        onChangeHighlightsOnly: updateLadaRestorationHighlightsOnly,
         onCloseConfirm: () => setLadaRestorationConfirm(null),
         onCreate: () => void createLadaRestoration(),
         onCloseResult: () => setLadaRestorationResult(null),

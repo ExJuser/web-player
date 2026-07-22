@@ -1039,6 +1039,7 @@ export function playerDataApiPlugin({ projectRoot, env }) {
               rootId: root.id,
               relativePath: payload?.relativePath,
               sourceHighlights,
+              highlightsOnly: payload?.highlightsOnly === true,
               options: payload?.options,
               capabilities,
               signal,
