@@ -194,7 +194,7 @@ export function TagDialog({
         <details className="tag-actor-editor">
           <summary className="tag-actor-editor-heading">
             <strong id="tag-actor-editor-title">影片演员（{selectedActors.length}）</strong>
-            <span>当前来源：{actorSourceLabel}</span>
+            <span>当前来源：{actorSourceLabel} · 点击标题行可展开/收起</span>
           </summary>
           <div className="actor-selected-list custom-scrollbar">
             {selectedActors.length ? selectedActors.map((actor) => (
