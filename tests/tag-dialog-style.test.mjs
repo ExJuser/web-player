@@ -26,17 +26,6 @@ test("tag chips have explicit light theme colors in app and root theme scopes", 
   }
 });
 
-test("auto tag controls have stable loading and light theme styles", () => {
-  assert.match(styles, /\.auto-tag-button:disabled \.lucide-refresh-cw\s*\{(?<body>[^}]+animation:\s*tag-query-spin 0\.9s linear infinite;[^}]+)\}/);
-  assert.match(styles, /\.auto-tag-dialog \.dialog-icon\.loading\s*\{(?<body>[^}]+animation:\s*auto-tag-icon-pulse 1\.2s ease-in-out infinite;[^}]+)\}/);
-  assert.match(styles, /\.auto-tag-dialog \.dialog-icon\.loading \.lucide-refresh-cw\s*\{(?<body>[^}]+animation:\s*tag-query-spin 0\.9s linear infinite;[^}]+)\}/);
-  assert.match(styles, /\.auto-tag-sources a span\s*\{(?<body>[^}]+text-overflow:\s*ellipsis;[^}]+)\}/);
-  assert.match(styles, /\.app-shell\.theme-light \.auto-tag-chip\.selected\s*\{/);
-  assert.match(styles, /:root\[data-theme="light"\] \.auto-tag-chip\.selected\s*\{/);
-  assert.match(styles, /\.app-shell\.theme-light \.auto-tag-sources\s*\{/);
-  assert.match(styles, /:root\[data-theme="light"\] \.auto-tag-sources\s*\{/);
-});
-
 test("special insight controls have light theme coverage in app and root theme scopes", () => {
   assert.match(styles, /\.special-tag-group\s*\{(?<body>[^}]+align-content:\s*start;[^}]+)\}/);
   assert.match(styles, /\.special-tag-chart\s*\{(?<body>[^}]+align-content:\s*start;[^}]+)\}/);

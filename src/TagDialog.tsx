@@ -1,4 +1,4 @@
-import { CheckCircle2, ChevronDown, ExternalLink, RefreshCw, RotateCcw, Sparkles, Tags, UserPlus, X } from "lucide-react";
+import { ChevronDown, RefreshCw, RotateCcw, Tags, UserPlus, X } from "lucide-react";
 import { useEffect, useMemo, useState, type PointerEvent as ReactPointerEvent, type Ref } from "react";
 
 import type { ActorProfileStore, ActorSource } from "./playerTypes";
@@ -12,11 +12,6 @@ type DialogOffset = {
 export type TagDialogMergePrompt = {
   pendingTags: string[];
   suggestion: TagMergeSuggestion;
-};
-
-type AutoTagSource = {
-  title: string;
-  url: string;
 };
 
 const COMMON_TAG_LIMIT = 30;
@@ -40,15 +35,8 @@ type TagDialogProps = {
   resolvedActiveTagSuggestionIndex: number;
   activeTagSuggestionId?: string;
   isTagSuggestionLoading: boolean;
-  isAutoTagLoading: boolean;
-  autoTagSuggestions: string[];
-  selectedAutoTags: Set<string>;
-  autoTagSummary: string;
-  autoTagSources: AutoTagSource[];
-  autoTagMessage: string;
   tagMergePrompt: TagDialogMergePrompt | null;
   tagMessage: string;
-  isAiConfigured: boolean;
   hasCurrentVideo: boolean;
   onClose: () => void;
   onRemoveTag: (tag: string) => void;
@@ -60,9 +48,6 @@ type TagDialogProps = {
   onTagInputActorChange: (value: boolean) => void;
   onActiveTagSuggestionIndexChange: (updater: (index: number) => number) => void;
   onSelectTagSuggestion: (tag: string) => void;
-  onGenerateAutoTags: () => void;
-  onToggleAutoTag: (tag: string) => void;
-  onConfirmAutoTags: () => void;
   onApplyTagMergeSuggestion: () => void;
   onKeepTagMergeSuggestion: () => void;
   onCancelTagMergeSuggestion: () => void;
@@ -91,15 +76,8 @@ export function TagDialog({
   resolvedActiveTagSuggestionIndex,
   activeTagSuggestionId,
   isTagSuggestionLoading,
-  isAutoTagLoading,
-  autoTagSuggestions,
-  selectedAutoTags,
-  autoTagSummary,
-  autoTagSources,
-  autoTagMessage,
   tagMergePrompt,
   tagMessage,
-  isAiConfigured,
   hasCurrentVideo,
   onClose,
   onRemoveTag,
@@ -111,9 +89,6 @@ export function TagDialog({
   onTagInputActorChange,
   onActiveTagSuggestionIndexChange,
   onSelectTagSuggestion,
-  onGenerateAutoTags,
-  onToggleAutoTag,
-  onConfirmAutoTags,
   onApplyTagMergeSuggestion,
   onKeepTagMergeSuggestion,
   onCancelTagMergeSuggestion,
@@ -338,63 +313,6 @@ export function TagDialog({
           <span aria-hidden="true" className="tag-actor-toggle-box" />
           <span>本次添加的标签是演员人名</span>
         </label>
-        <button
-          className={`secondary-button auto-tag-button${isAutoTagLoading ? " loading" : ""}`}
-          type="button"
-          onClick={onGenerateAutoTags}
-          disabled={!hasCurrentVideo || isAutoTagLoading}
-          title={isAiConfigured ? "AI 自动标签" : "需要先配置大模型 API"}
-        >
-          {isAutoTagLoading ? <RefreshCw size={16} /> : <Sparkles size={16} />}
-          {isAutoTagLoading ? "生成中" : "AI 自动标签"}
-        </button>
-
-        {isAutoTagLoading ? <div className="ai-empty-state">正在基于视频元信息和 DuckDuckGo 搜索结果生成建议标签。</div> : null}
-
-        {autoTagSuggestions.length ? (
-          <div className="auto-tag-suggestion-list" aria-label="建议标签">
-            {autoTagSuggestions.map((tag) => {
-              const isSelected = selectedAutoTags.has(tag);
-              return (
-                <button
-                  className={`tag-editor-chip auto-tag-chip${isSelected ? " selected" : ""}`}
-                  key={tag}
-                  type="button"
-                  onClick={() => onToggleAutoTag(tag)}
-                  aria-pressed={isSelected}
-                >
-                  <span>{tag}</span>
-                  {isSelected ? <CheckCircle2 size={14} /> : null}
-                </button>
-              );
-            })}
-            <button className="primary-button" type="button" onClick={onConfirmAutoTags}>
-              确认写入
-            </button>
-          </div>
-        ) : null}
-
-        {autoTagSummary ? (
-          <div className="tag-merge-prompt auto-tag-summary">
-            <strong>生成依据</strong>
-            <p>{autoTagSummary}</p>
-          </div>
-        ) : null}
-
-        {autoTagSources.length ? (
-          <div className="auto-tag-sources">
-            <strong>搜索来源</strong>
-            {autoTagSources.map((source) => (
-              <a href={source.url} key={source.url} target="_blank" rel="noreferrer">
-                <ExternalLink size={14} />
-                <span>{source.title}</span>
-              </a>
-            ))}
-          </div>
-        ) : null}
-
-        {autoTagMessage ? <div className="ai-empty-state">{autoTagMessage}</div> : null}
-
         {tagMergePrompt ? (
           <div className="tag-merge-prompt">
             <strong>发现相近标签</strong>

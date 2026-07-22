@@ -243,11 +243,7 @@ import {
   photoAlbumScanCacheStaleMs,
   shouldStartLegacyThumbnailMigration,
 } from "./appConfig";
-import type {
-  AutoTagSuggestionResponse,
-  PlaybackSourceChoice,
-  TagMergePrompt,
-} from "./appTypes";
+import type { PlaybackSourceChoice, TagMergePrompt } from "./appTypes";
 import {
   createPersistedEmbeddedSubtitles,
   createDuplicatePlaylistMetaByVideoId,
@@ -644,12 +640,6 @@ export default function App() {
   const [tagMessage, setTagMessage] = useState("");
   const [isTagSuggestionLoading, setIsTagSuggestionLoading] = useState(false);
   const [tagMergePrompt, setTagMergePrompt] = useState<TagMergePrompt | null>(null);
-  const [isAutoTagLoading, setIsAutoTagLoading] = useState(false);
-  const [autoTagSuggestions, setAutoTagSuggestions] = useState<string[]>([]);
-  const [selectedAutoTags, setSelectedAutoTags] = useState<Set<string>>(() => new Set());
-  const [autoTagSummary, setAutoTagSummary] = useState("");
-  const [autoTagSources, setAutoTagSources] = useState<Array<{ title: string; url: string }>>([]);
-  const [autoTagMessage, setAutoTagMessage] = useState("");
   const [playlistFilter, setPlaylistFilter] = useState<PlaylistFilter>("all");
   const [playlistSortMode, setPlaylistSortMode] = useState<PlaylistSortMode>(
     defaultPlayerPreferences.playlistSortMode,
@@ -2829,93 +2819,6 @@ export default function App() {
     updateWatchActivity,
     videoRef,
   });
-
-  const generateAutoTagsForCurrentVideo = useCallback(async () => {
-    setAutoTagSuggestions([]);
-    setSelectedAutoTags(new Set());
-    setAutoTagSummary("");
-    setAutoTagSources([]);
-
-    if (!currentVideo) {
-      setAutoTagMessage("请先选择一个视频。");
-      return;
-    }
-    if (!localConfig?.ai.configured) {
-      setAutoTagMessage("需要先配置大模型 API，才能生成 AI 自动标签。");
-      return;
-    }
-
-    setAutoTagMessage("");
-    setTagMessage("");
-    setIsTagDialogOpen(true);
-    setIsAutoTagLoading(true);
-    try {
-      const response = await fetchJson<AutoTagSuggestionResponse>("/api/ai/tags/auto-suggest", {
-        method: "POST",
-        body: JSON.stringify({
-          id: currentVideo.id,
-          name: currentVideo.name,
-          relativePath: currentVideo.relativePath,
-          mediaRootLabel: currentVideoMediaRootLabel,
-          size: currentVideo.size,
-          duration: currentVideo.duration,
-          width: currentVideo.width,
-          height: currentVideo.height,
-          existingTags: currentVideoTags,
-          libraryTags: getAllLibraryTags(),
-        }),
-      });
-      const seenAutoTagKeys = new Set<string>();
-      const tags = (response.tags ?? [])
-        .map((tag) => tag.trim())
-        .filter((tag) => {
-          const key = normalizeTagKey(tag);
-          if (!key || seenAutoTagKeys.has(key)) return false;
-          seenAutoTagKeys.add(key);
-          return true;
-        });
-      const sources = (response.sources ?? [])
-        .filter((source): source is { title: string; url: string } => Boolean(source?.title && source?.url))
-        .slice(0, 5);
-      setAutoTagSuggestions(tags);
-      setSelectedAutoTags(new Set(tags));
-      setAutoTagSummary(response.summary?.trim() ?? "");
-      setAutoTagSources(sources);
-      setAutoTagMessage(tags.length ? "" : response.summary?.trim() || "AI 没有生成可用标签。");
-    } catch (error) {
-      setAutoTagMessage(error instanceof Error ? `AI 自动标签生成失败：${error.message}` : "AI 自动标签生成失败。");
-    } finally {
-      setIsAutoTagLoading(false);
-    }
-  }, [currentVideo, currentVideoMediaRootLabel, currentVideoTags, getAllLibraryTags, localConfig]);
-
-  const toggleSelectedAutoTag = useCallback((tag: string) => {
-    setSelectedAutoTags((selectedTags) => {
-      const nextTags = new Set(selectedTags);
-      if (nextTags.has(tag)) {
-        nextTags.delete(tag);
-      } else {
-        nextTags.add(tag);
-      }
-      return nextTags;
-    });
-  }, []);
-
-  const confirmAutoTags = useCallback(() => {
-    const tags = autoTagSuggestions.filter((tag) => selectedAutoTags.has(tag));
-    if (!tags.length) {
-      setAutoTagMessage("请选择至少一个建议标签。");
-      return;
-    }
-    setTagMessage("");
-    setTagMergePrompt(null);
-    setAutoTagSuggestions([]);
-    setSelectedAutoTags(new Set());
-    setAutoTagSummary("");
-    setAutoTagSources([]);
-    setAutoTagMessage("");
-    void addTagsToCurrentVideo(tags);
-  }, [addTagsToCurrentVideo, autoTagSuggestions, selectedAutoTags]);
 
   const clearCurrentLibraryRuntimeData = useCallback(() => {
     progressStoreRef.current = {};
@@ -6361,15 +6264,8 @@ export default function App() {
       resolvedActiveTagSuggestionIndex={resolvedActiveTagSuggestionIndex}
       activeTagSuggestionId={activeTagSuggestionId}
       isTagSuggestionLoading={isTagSuggestionLoading}
-      isAutoTagLoading={isAutoTagLoading}
-      autoTagSuggestions={autoTagSuggestions}
-      selectedAutoTags={selectedAutoTags}
-      autoTagSummary={autoTagSummary}
-      autoTagSources={autoTagSources}
-      autoTagMessage={autoTagMessage}
       tagMergePrompt={tagMergePrompt}
       tagMessage={tagMessage}
-      isAiConfigured={Boolean(localConfig?.ai.configured)}
       hasCurrentVideo={Boolean(currentVideo)}
       onClose={() => setIsTagDialogOpen(false)}
       onRemoveTag={removeTagFromCurrentVideo}
@@ -6384,9 +6280,6 @@ export default function App() {
       onTagInputActorChange={setIsTagInputActor}
       onActiveTagSuggestionIndexChange={setActiveTagSuggestionIndex}
       onSelectTagSuggestion={submitTagInputSuggestion}
-      onGenerateAutoTags={() => void generateAutoTagsForCurrentVideo()}
-      onToggleAutoTag={toggleSelectedAutoTag}
-      onConfirmAutoTags={confirmAutoTags}
       onApplyTagMergeSuggestion={applyTagMergeSuggestion}
       onKeepTagMergeSuggestion={keepTagMergeSuggestion}
       onCancelTagMergeSuggestion={() => setTagMergePrompt(null)}

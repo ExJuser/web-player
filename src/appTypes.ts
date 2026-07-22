@@ -21,15 +21,6 @@ export type AiTagMergeSuggestionResponse = {
   reason?: string;
 };
 
-export type AutoTagSuggestionResponse = {
-  tags?: string[];
-  summary?: string;
-  sources?: Array<{
-    title?: string;
-    url?: string;
-  }>;
-};
-
 export type TagMergePrompt = {
   pendingTags: string[];
   suggestion: TagMergeSuggestion;
