@@ -1,19 +1,9 @@
-import { Activity, FolderOpen, HardDrive, Images, Info, Moon, Scissors, Sparkles, Sun } from "lucide-react";
+import { FolderOpen, HardDrive, Images, Info, Moon, Scissors, Sparkles, Sun } from "lucide-react";
 import { forwardRef, useEffect, useRef, useState } from "react";
 
-import { fetchLocalJson as fetchJson } from "./localApiClient";
 import type { MediaProcessingTaskState } from "./MediaProcessingTaskDialog";
-import { formatFileSize } from "./playerFormatUtils";
 
 type VideoMetadataRow = readonly [string, string];
-
-type SystemResourceStatus = {
-  workingSetBytes: number;
-  privateBytes: number;
-  processCount: number;
-  cpuPercent: number | null;
-  scope: "project" | "server";
-};
 
 type PlayerTopBarProps = {
   currentVideoId: string | null;
@@ -58,7 +48,6 @@ export const PlayerTopBar = forwardRef<HTMLElement, PlayerTopBarProps>(function 
   ref
 ) {
   const [isMetadataPinnedOpen, setIsMetadataPinnedOpen] = useState(false);
-  const [systemResourceStatus, setSystemResourceStatus] = useState<SystemResourceStatus | null>(null);
   const metadataCardRef = useRef<HTMLButtonElement>(null);
   const shouldShowMetadata = Boolean(currentVideoId) && !isPrivacyMode && !isNonPlayerViewVisible;
   const themeToggleLabel = theme === "dark" ? "切换到白天模式" : "切换到黑夜模式";
@@ -74,30 +63,6 @@ export const PlayerTopBar = forwardRef<HTMLElement, PlayerTopBarProps>(function 
     document.addEventListener("pointerdown", handlePointerDown);
     return () => document.removeEventListener("pointerdown", handlePointerDown);
   }, [isMetadataPinnedOpen]);
-
-  useEffect(() => {
-    if (!isHomeViewVisible || isPrivacyMode) {
-      setSystemResourceStatus(null);
-      return;
-    }
-
-    let cancelled = false;
-    const refresh = async () => {
-      try {
-        const status = await fetchJson<SystemResourceStatus>("/api/system-resources");
-        if (!cancelled) setSystemResourceStatus(status);
-      } catch {
-        if (!cancelled) setSystemResourceStatus(null);
-      }
-    };
-
-    void refresh();
-    const timer = window.setInterval(refresh, 5_000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
-    };
-  }, [isHomeViewVisible, isPrivacyMode]);
 
   return (
     <header className="top-bar" ref={ref}>
@@ -153,22 +118,6 @@ export const PlayerTopBar = forwardRef<HTMLElement, PlayerTopBarProps>(function 
             <HardDrive size={17} />
             本地缓存
           </button>
-        ) : null}
-        {!isPrivacyMode && isHomeViewVisible && systemResourceStatus ? (
-          <div
-            className="top-system-resource-status"
-            title={systemResourceStatus.scope === "project"
-              ? `项目私有内存 ${formatFileSize(systemResourceStatus.privateBytes)}`
-              : "当前环境仅统计播放器服务进程"}
-          >
-            <Activity size={16} />
-            <span>
-              <strong>内存 {formatFileSize(systemResourceStatus.workingSetBytes)}</strong>
-              <small>
-                CPU {systemResourceStatus.cpuPercent === null ? "采样中" : `${systemResourceStatus.cpuPercent.toFixed(1)}%`} · {systemResourceStatus.processCount} 进程
-              </small>
-            </span>
-          </div>
         ) : null}
         {!isPrivacyMode && isHomeViewVisible ? (
           <button

@@ -419,49 +419,6 @@ button {
   padding: 0 11px;
 }
 
-.top-system-resource-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  height: 34px;
-  padding: 0 10px;
-  border: 1px solid #2f3744;
-  border-radius: 6px;
-  background: #20252d;
-  color: #dce2ec;
-  white-space: nowrap;
-}
-
-.top-system-resource-status > span {
-  display: flex;
-  align-items: flex-start;
-  flex-direction: column;
-  line-height: 1.1;
-}
-
-.top-system-resource-status strong {
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.top-system-resource-status small {
-  margin-top: 2px;
-  color: #929dad;
-  font-size: 10px;
-}
-
-.app-shell.theme-light .top-system-resource-status,
-:root[data-theme="light"] .top-system-resource-status {
-  border-color: #d5dae1;
-  background: #f5f7fa;
-  color: #273142;
-}
-
-.app-shell.theme-light .top-system-resource-status small,
-:root[data-theme="light"] .top-system-resource-status small {
-  color: #697386;
-}
-
 .icon-button.privacy-toggle.active {
   border-color: #00a1d6;
   background: #07394a;
@@ -9501,10 +9458,6 @@ button {
   }
 
   .top-cache-status-button {
-    flex: 0 0 auto;
-  }
-
-  .top-system-resource-status {
     flex: 0 0 auto;
   }
 
