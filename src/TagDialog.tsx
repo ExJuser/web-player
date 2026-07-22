@@ -143,7 +143,6 @@ export function TagDialog({
     ? actors.filter((actor) => [actor.name, ...actor.aliases.map((alias) => alias.label)].some((name) => name.normalize("NFKC").toLocaleLowerCase().includes(normalizedActorQuery)))
     : actors;
   const filteredOtherActors = matchingActors.filter((actor) => !selectedActorIds.has(actor.id));
-  const otherActorCount = actors.length - selectedActors.length;
   const matchingSelectedActorCount = matchingActors.length - filteredOtherActors.length;
   const newActorNameToSave = normalizedActorQuery && !matchingActors.length ? actorQuery.trim() : undefined;
   const visibleCommonTags = areCommonTagsExpanded ? commonTags : commonTags.slice(0, COMMON_TAG_LIMIT);
@@ -214,7 +213,6 @@ export function TagDialog({
           <label className="actor-new-field tag-actor-search">
             <input value={actorQuery} maxLength={120} placeholder="筛选现有演员，或输入新姓名" onChange={(event) => setActorQuery(event.target.value)} disabled={!hasCurrentVideo} />
           </label>
-          <strong className="actor-edit-section-title">{normalizedActorQuery ? `筛选结果（${filteredOtherActors.length} / ${otherActorCount}）` : `其他演员（${otherActorCount}）`}</strong>
           <div className="actor-checkbox-list tag-actor-checkbox-list custom-scrollbar">
             {filteredOtherActors.map((actor) => (
               <label key={actor.id}>
