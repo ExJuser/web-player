@@ -8987,6 +8987,11 @@ button {
 
 .tag-actor-search { margin-top: 10px; }
 
+.tag-actor-editor .actor-edit-section-title {
+  display: block;
+  margin: 10px 0;
+}
+
 .tag-actor-checkbox-list {
   height: 240px;
   max-height: 240px;
