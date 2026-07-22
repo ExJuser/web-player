@@ -9956,6 +9956,7 @@ button {
 .mosaic-stage-empty.has-target h3 { margin-top: 18px; }
 .mosaic-stage-empty p { max-width: 560px; margin: 0 0 20px; color: rgba(240,235,255,.57); line-height: 1.7; }
 .mosaic-stage-actions { display: flex; justify-content: center; gap: 10px; }
+.mosaic-stage-actions > .primary-button, .mosaic-stage-actions > .secondary-button { flex: 0 1 auto; width: auto; height: 38px; box-sizing: border-box; }
 .mosaic-target-preview { display: grid; justify-items: center; gap: 10px; min-width: 0; }
 .mosaic-target-preview-image { position: relative; display: grid; place-items: center; width: min(520px, 70vw); height: clamp(210px, 32vh, 320px); overflow: hidden; border: 1px solid rgba(151,128,231,.28); border-radius: 20px; color: rgba(220,212,243,.5); background: rgba(5,5,11,.72); box-shadow: 0 24px 60px rgba(0,0,0,.35); }
 .mosaic-target-preview-image img { width: 100%; height: 100%; object-fit: contain; }
