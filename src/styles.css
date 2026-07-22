@@ -3715,6 +3715,11 @@ button {
   background: #ffc23d;
 }
 
+.edit-segment-mark-button.active {
+  color: #10251f;
+  background: #5de7c0;
+}
+
 .icon-button {
   display: inline-flex;
   align-items: center;
