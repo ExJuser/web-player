@@ -191,11 +191,11 @@ export function TagDialog({
           )}
         </div>
 
-        <section className="tag-actor-editor" aria-labelledby="tag-actor-editor-title">
-          <div className="tag-actor-editor-heading">
+        <details className="tag-actor-editor">
+          <summary className="tag-actor-editor-heading">
             <strong id="tag-actor-editor-title">影片演员（{selectedActors.length}）</strong>
             <span>当前来源：{actorSourceLabel}</span>
-          </div>
+          </summary>
           <div className="actor-selected-list custom-scrollbar">
             {selectedActors.length ? selectedActors.map((actor) => (
               <label key={actor.id}>
@@ -228,7 +228,7 @@ export function TagDialog({
               </button>
             ) : null}
           </div>
-        </section>
+        </details>
 
         {commonTags.length ? (
           <section className="common-tag-picker" aria-labelledby="common-tag-picker-title">
