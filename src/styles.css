@@ -6644,6 +6644,12 @@ button {
   opacity: 0.58;
 }
 
+.common-tag-toggle svg {
+  transition: transform 160ms ease;
+}
+
+.common-tag-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
+
 .tag-editor-form {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

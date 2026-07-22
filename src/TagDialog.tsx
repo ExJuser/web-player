@@ -19,6 +19,8 @@ type AutoTagSource = {
   url: string;
 };
 
+const COMMON_TAG_LIMIT = 30;
+
 type TagDialogProps = {
   isOpen: boolean;
   dialogRef: Ref<HTMLElement>;
@@ -122,11 +124,15 @@ export function TagDialog({
 }: TagDialogProps) {
   const [selectedActorIds, setSelectedActorIds] = useState<Set<string>>(() => new Set(currentActorIds));
   const [actorQuery, setActorQuery] = useState("");
+  const [areCommonTagsExpanded, setAreCommonTagsExpanded] = useState(false);
   const currentActorIdsKey = currentActorIds.join("\u0000");
   useEffect(() => {
     setSelectedActorIds(new Set(currentActorIdsKey ? currentActorIdsKey.split("\u0000") : []));
     setActorQuery("");
   }, [currentActorIdsKey, currentVideoId]);
+  useEffect(() => {
+    if (isOpen) setAreCommonTagsExpanded(false);
+  }, [currentVideoId, isOpen]);
   const actors = useMemo(
     () => Object.values(actorProfiles).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" })),
     [actorProfiles],
@@ -140,6 +146,7 @@ export function TagDialog({
   const otherActorCount = actors.length - selectedActors.length;
   const matchingSelectedActorCount = matchingActors.length - filteredOtherActors.length;
   const newActorNameToSave = normalizedActorQuery && !matchingActors.length ? actorQuery.trim() : undefined;
+  const visibleCommonTags = areCommonTagsExpanded ? commonTags : commonTags.slice(0, COMMON_TAG_LIMIT);
   const toggleActor = (actorId: string) => setSelectedActorIds((current) => {
     const next = new Set(current);
     if (next.has(actorId)) next.delete(actorId); else next.add(actorId);
@@ -233,7 +240,7 @@ export function TagDialog({
           <section className="common-tag-picker" aria-labelledby="common-tag-picker-title">
             <strong id="common-tag-picker-title">常用标签</strong>
             <div className="common-tag-list">
-              {commonTags.map((tag) => (
+              {visibleCommonTags.map((tag) => (
                 <button
                   className="tag-editor-chip"
                   key={tag}
@@ -244,6 +251,17 @@ export function TagDialog({
                   <span>{tag}</span>
                 </button>
               ))}
+              {commonTags.length > COMMON_TAG_LIMIT ? (
+                <button
+                  aria-expanded={areCommonTagsExpanded}
+                  className="tag-editor-chip common-tag-toggle"
+                  type="button"
+                  onClick={() => setAreCommonTagsExpanded((current) => !current)}
+                >
+                  <span>{areCommonTagsExpanded ? "收起" : `展开更多（${commonTags.length - COMMON_TAG_LIMIT}）`}</span>
+                  <ChevronDown aria-hidden="true" size={15} />
+                </button>
+              ) : null}
             </div>
           </section>
         ) : null}
