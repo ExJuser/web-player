@@ -166,6 +166,7 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
   const [message, setMessage] = useState("");
   const [selectedSource, setSelectedSource] = useState<MosaicRuntimeSource | null>(null);
   const [isPickerOpen, setIsPickerOpen] = useState(false);
+  const [isReplacingTarget, setIsReplacingTarget] = useState(false);
   const [resolvingTargetId, setResolvingTargetId] = useState("");
   const [pickerKind, setPickerKind] = useState<"video" | "photo">("video");
   const [pickerAlbumId, setPickerAlbumId] = useState<string | null>(null);
@@ -240,6 +241,7 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
 
   const closeTargetPicker = () => {
     cancelTargetResolution();
+    setIsReplacingTarget(false);
     setIsPickerOpen(false);
   };
 
@@ -269,18 +271,20 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
   };
 
   const selectSourceTarget = async (source: MosaicRuntimeSource) => {
+    const replacingCurrentProject = isReplacingTarget;
     const targetRef = { kind: "source", label: source.label, sourceId: source.id } as const;
     if (source.kind !== "video" || !source.videoId) {
       cancelTargetResolution();
       releaseRuntimeTargetUrl();
       setTarget({ ref: targetRef, file: source.file, url: source.url });
-      setActiveProject(null);
+      if (!replacingCurrentProject) setActiveProject(null);
       setPreviewUrl("");
       setIsPickerOpen(false);
+      setIsReplacingTarget(false);
       setPickerAlbumId(null);
       setPickerSearch("");
       setPickerPage(1);
-      setMessage("已选择项目资源作为目标，将在生成时保留套娃单元。" );
+      setMessage(replacingCurrentProject ? "目标图已更换，请重新生成并保存作品。" : "已选择项目资源作为目标，将在生成时保留套娃单元。" );
       return;
     }
 
@@ -323,13 +327,16 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
       const url = URL.createObjectURL(targetBlob);
       runtimeTargetUrlRef.current = url;
       setTarget({ ref: targetRef, file: targetBlob, url, persistFile: true });
-      setActiveProject(null);
+      if (!replacingCurrentProject) setActiveProject(null);
       setPreviewUrl("");
       setIsPickerOpen(false);
+      setIsReplacingTarget(false);
       setPickerAlbumId(null);
       setPickerSearch("");
       setPickerPage(1);
-      setMessage(targetOrigin === "fallback"
+      setMessage(replacingCurrentProject
+        ? "目标图已更换，请重新生成并保存作品。"
+        : targetOrigin === "fallback"
         ? "原视频帧不可用，已回退到现有缩略图并将在作品中独立保存。"
         : "已从原视频提取最佳质量目标图，并将在作品中独立保存。" );
     } catch (error) {
@@ -340,6 +347,17 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
       if (targetResolveAbortRef.current === controller) targetResolveAbortRef.current = null;
       setResolvingTargetId("");
     }
+  };
+
+  const selectUploadedTarget = (file: File, replaceCurrentProject: boolean) => {
+    releaseRuntimeTargetUrl();
+    const url = URL.createObjectURL(file);
+    runtimeTargetUrlRef.current = url;
+    setTarget({ ref: { kind: "upload", label: file.name, assetUrl: "" }, file, url, persistFile: true });
+    if (!replaceCurrentProject) setActiveProject(null);
+    setPreviewUrl("");
+    setSelectedSource(null);
+    setMessage(replaceCurrentProject ? "目标图已更换，请重新生成并保存作品。" : "目标图已就绪。" );
   };
 
   const generate = async () => {
@@ -416,7 +434,7 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
       });
       const projectId = activeProject?.id ?? createProjectId();
       let targetRef = target.ref;
-      let targetUrl = activeProject?.targetUrl;
+      let targetUrl = target.ref.kind === "upload" ? activeProject?.targetUrl : undefined;
       if (target.persistFile && target.file) {
         targetUrl = await writeMosaicTarget(projectId, target.file);
         if (target.ref.kind === "upload") targetRef = { ...target.ref, assetUrl: targetUrl };
@@ -597,6 +615,16 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
                   }}
                 />
                 <span>{backend || "已保存预览"}</span>
+                <label className="secondary-button mosaic-upload-button">
+                  <Upload size={16} /> 上传新目标图
+                  <input accept="image/*" type="file" onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (!file) return;
+                    selectUploadedTarget(file, true);
+                    event.currentTarget.value = "";
+                  }} />
+                </label>
+                <button className="secondary-button" type="button" onClick={() => { setIsReplacingTarget(true); setIsPickerOpen(true); }}><FolderOpen size={16} /> 从项目更换</button>
                 <button className="secondary-button" disabled={isExporting} type="button" onClick={() => void exportProject(3840)}><Download size={16} /> 4K PNG</button>
                 <button className="secondary-button" disabled={isExporting} type="button" onClick={() => void exportProject(7680)}><Download size={16} /> 8K PNG</button>
               </div>
@@ -634,17 +662,12 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
                     onChange={(event) => {
                       const file = event.target.files?.[0];
                       if (!file) return;
-                      releaseRuntimeTargetUrl();
-                      const url = URL.createObjectURL(file);
-                      runtimeTargetUrlRef.current = url;
-                      setTarget({ ref: { kind: "upload", label: file.name, assetUrl: "" }, file, url, persistFile: true });
-                      setActiveProject(null);
-                      setPreviewUrl("");
+                      selectUploadedTarget(file, Boolean(activeProject));
                       event.currentTarget.value = "";
                     }}
                   />
                 </label>
-                <button className="secondary-button" type="button" onClick={() => setIsPickerOpen(true)}><FolderOpen size={18} /> 从项目选择</button>
+                <button className="secondary-button" type="button" onClick={() => { setIsReplacingTarget(Boolean(activeProject)); setIsPickerOpen(true); }}><FolderOpen size={18} /> 从项目选择</button>
               </div>
             </div>
           )}
