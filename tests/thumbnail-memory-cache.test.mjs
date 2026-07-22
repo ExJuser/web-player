@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import test from "node:test";
 
 import { createThumbnailMemoryCache } from "../server/thumbnailMemoryCache.mjs";
@@ -20,6 +23,26 @@ test("thumbnail memory cache loads once and serves subsequent reads from memory"
   assert.equal(second.buffer.toString(), "thumbnail");
   assert.equal(readCount, 1);
   assert.deepEqual(cache.stats(), { entries: 1, bytes: 9 });
+});
+
+test("thumbnail memory cache warms every persisted thumbnail before requests", async () => {
+  const cacheRoot = await mkdtemp(path.join(tmpdir(), "web-player-thumbnail-memory-"));
+  try {
+    await Promise.all([
+      writeFile(path.join(cacheRoot, "one.blob"), "one"),
+      writeFile(path.join(cacheRoot, "two.blob"), "two"),
+      writeFile(path.join(cacheRoot, "ignored.txt"), "ignored"),
+    ]);
+
+    const cache = createThumbnailMemoryCache();
+    const result = await cache.warmDirectory({ cacheRoot, concurrency: 2 });
+
+    assert.deepEqual(result, { loaded: 2, failed: 0, entries: 2, bytes: 6 });
+    assert.equal((await cache.getOrLoad({ thumbnailId: "one", filePath: path.join(cacheRoot, "one.blob") })).cacheStatus, "HIT");
+    assert.equal((await cache.getOrLoad({ thumbnailId: "two", filePath: path.join(cacheRoot, "two.blob") })).cacheStatus, "HIT");
+  } finally {
+    await rm(cacheRoot, { recursive: true, force: true });
+  }
 });
 
 test("thumbnail memory cache coalesces concurrent disk reads and obeys byte limits", async () => {

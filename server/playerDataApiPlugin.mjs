@@ -1550,10 +1550,12 @@ export function playerDataApiPlugin({ projectRoot, env }) {
 
   return {
     name: "local-web-player-data-api",
-    configureServer(server) {
+    async configureServer(server) {
+      await thumbnailMemoryCache.warmDirectory({ cacheRoot: thumbnailsRoot });
       server.middlewares.use(middleware);
     },
-    configurePreviewServer(server) {
+    async configurePreviewServer(server) {
+      await thumbnailMemoryCache.warmDirectory({ cacheRoot: thumbnailsRoot });
       server.middlewares.use(middleware);
     },
   };
