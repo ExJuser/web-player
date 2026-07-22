@@ -10037,6 +10037,30 @@ button {
 :root[data-theme="light"] .mosaic-controls input[type="number"] { border-color: rgba(91,67,142,.2); color: #302642; color-scheme: light; background: rgba(74,50,120,.05); }
 .app-shell.theme-light .mosaic-project-card,
 :root[data-theme="light"] .mosaic-project-card { color: #302642; background: rgba(74,50,120,.045); }
+.app-shell.theme-light .mosaic-main-stage,
+:root[data-theme="light"] .mosaic-main-stage { border-color: rgba(91,67,142,.16); background: #f8f7fc; box-shadow: 0 22px 58px rgba(48,38,70,.12); }
+.app-shell.theme-light .mosaic-stage-empty,
+:root[data-theme="light"] .mosaic-stage-empty { color: #302642; background: radial-gradient(circle at center, rgba(126,91,224,.13), transparent 48%), #f8f7fc; }
+.app-shell.theme-light .mosaic-stage-empty p,
+:root[data-theme="light"] .mosaic-stage-empty p { color: rgba(48,38,70,.62); }
+.app-shell.theme-light .mosaic-orbit,
+:root[data-theme="light"] .mosaic-orbit { color: #496f8f; filter: drop-shadow(0 0 15px rgba(86,139,190,.28)); }
+.app-shell.theme-light .mosaic-orbit::before,
+:root[data-theme="light"] .mosaic-orbit::before { border-color: rgba(108,78,184,.28); }
+.app-shell.theme-light .mosaic-target-preview-image,
+:root[data-theme="light"] .mosaic-target-preview-image { border-color: rgba(91,67,142,.2); color: rgba(48,38,70,.48); background: #efedf6; box-shadow: 0 20px 48px rgba(48,38,70,.16); }
+.app-shell.theme-light .mosaic-target-preview > strong,
+:root[data-theme="light"] .mosaic-target-preview > strong { color: rgba(48,38,70,.72); }
+.app-shell.theme-light .mosaic-stage-header,
+:root[data-theme="light"] .mosaic-stage-header { border-color: rgba(91,67,142,.14); background: rgba(255,255,255,.94); }
+.app-shell.theme-light .mosaic-stage-header input,
+:root[data-theme="light"] .mosaic-stage-header input { color: #302642; }
+.app-shell.theme-light .mosaic-progress-overlay,
+:root[data-theme="light"] .mosaic-progress-overlay { color: #302642; background: rgba(248,247,252,.84); }
+.app-shell.theme-light .mosaic-progress-overlay > span,
+:root[data-theme="light"] .mosaic-progress-overlay > span { color: rgba(48,38,70,.62); }
+.app-shell.theme-light .mosaic-status-message,
+:root[data-theme="light"] .mosaic-status-message { border-color: rgba(91,67,142,.16); color: rgba(48,38,70,.82); background: rgba(255,255,255,.86); }
 
 @media (max-width: 900px) {
   .mosaic-studio-hero { align-items: flex-start; padding: 25px; }
