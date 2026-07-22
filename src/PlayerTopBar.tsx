@@ -74,7 +74,11 @@ export const PlayerTopBar = forwardRef<HTMLElement, PlayerTopBarProps>(function 
             type="button"
             aria-expanded={isMetadataPinnedOpen}
             aria-label={isMetadataPinnedOpen ? "收起影片信息详情" : "展开影片信息详情"}
-            onClick={() => setIsMetadataPinnedOpen((isOpen) => !isOpen)}
+            onClick={() => {
+              const selection = window.getSelection();
+              if (selection && !selection.isCollapsed && metadataCardRef.current?.contains(selection.anchorNode)) return;
+              setIsMetadataPinnedOpen((isOpen) => !isOpen);
+            }}
             onKeyDown={(event) => {
               if (event.key !== "Escape") return;
               setIsMetadataPinnedOpen(false);
