@@ -1,4 +1,5 @@
 import {
+  ChevronLeft,
   Download,
   Film,
   FolderOpen,
@@ -120,6 +121,7 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
   const [selectedSource, setSelectedSource] = useState<MosaicRuntimeSource | null>(null);
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [pickerKind, setPickerKind] = useState<"video" | "photo">("video");
+  const [pickerAlbumId, setPickerAlbumId] = useState<string | null>(null);
   const [pickerSearch, setPickerSearch] = useState("");
   const [pickerPage, setPickerPage] = useState(1);
   const [deleteCandidate, setDeleteCandidate] = useState<MosaicProject | null>(null);
@@ -148,12 +150,23 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
     if (targetSource && !sampled.some((source) => source.id === targetSource.id)) sampled[sampled.length - 1] = targetSource;
     return sampled;
   }, [seed, sourceFilter, sourceLimit, sources, target]);
-  const pickerResults = useMemo(() => sources.filter((source) => {
-    if (source.kind !== pickerKind) return false;
-    return !pickerSearch.trim() || source.label.toLocaleLowerCase().includes(pickerSearch.trim().toLocaleLowerCase());
-  }), [pickerKind, pickerSearch, sources]);
-  const pickerPageCount = Math.max(1, Math.ceil(pickerResults.length / pickerPageSize));
-  const pagedPickerResults = pickerResults.slice((pickerPage - 1) * pickerPageSize, pickerPage * pickerPageSize);
+  const normalizedPickerSearch = pickerSearch.trim().toLocaleLowerCase();
+  const selectedPickerAlbum = pickerAlbumId ? albumById.get(pickerAlbumId) : undefined;
+  const pickerVideoResults = useMemo(() => sources.filter((source) => source.kind === "video"
+    && (!normalizedPickerSearch || source.label.toLocaleLowerCase().includes(normalizedPickerSearch))), [normalizedPickerSearch, sources]);
+  const pickerAlbumResults = useMemo(() => albums.filter((album) => !normalizedPickerSearch
+    || `${album.title} ${album.relativePath} ${album.mediaRootLabel}`.toLocaleLowerCase().includes(normalizedPickerSearch)), [albums, normalizedPickerSearch]);
+  const pickerPhotoResults = useMemo(() => sources.filter((source) => source.kind === "photo"
+    && source.albumId === selectedPickerAlbum?.id
+    && (!normalizedPickerSearch || source.label.toLocaleLowerCase().includes(normalizedPickerSearch))), [normalizedPickerSearch, selectedPickerAlbum?.id, sources]);
+  const pickerResultCount = pickerKind === "video"
+    ? pickerVideoResults.length
+    : selectedPickerAlbum ? pickerPhotoResults.length : pickerAlbumResults.length;
+  const pickerPageCount = Math.max(1, Math.ceil(pickerResultCount / pickerPageSize));
+  const pickerPageStart = (pickerPage - 1) * pickerPageSize;
+  const pagedPickerVideoResults = pickerVideoResults.slice(pickerPageStart, pickerPageStart + pickerPageSize);
+  const pagedPickerAlbums = pickerAlbumResults.slice(pickerPageStart, pickerPageStart + pickerPageSize);
+  const pagedPickerPhotoResults = pickerPhotoResults.slice(pickerPageStart, pickerPageStart + pickerPageSize);
 
   const resolveTargetForProject = (project: MosaicProject) => {
     if (project.recipe.target.kind === "upload") {
@@ -182,6 +195,9 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
   const selectSourceTarget = (source: MosaicRuntimeSource) => {
     setTarget({ ref: { kind: "source", label: source.label, sourceId: source.id }, file: source.file, url: source.url });
     setIsPickerOpen(false);
+    setPickerAlbumId(null);
+    setPickerSearch("");
+    setPickerPage(1);
     setMessage("已选择项目资源作为目标，将在生成时保留套娃单元。" );
   };
 
@@ -476,14 +492,26 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
           <section className="mosaic-picker" role="dialog" aria-modal="true" aria-labelledby="mosaic-picker-title">
             <header><div><Sparkles size={24} /><span><h2 id="mosaic-picker-title">选择项目内目标图</h2><p>目标本身仍可出现在小图中，形成套娃效果。</p></span></div><button type="button" onClick={() => setIsPickerOpen(false)}><X size={20} /></button></header>
             <div className="mosaic-picker-toolbar">
-              <div className="special-view-switch"><button className={pickerKind === "video" ? "active" : ""} type="button" onClick={() => { setPickerKind("video"); setPickerPage(1); }}>影片缩略图</button><button className={pickerKind === "photo" ? "active" : ""} type="button" onClick={() => { setPickerKind("photo"); setPickerPage(1); }}>图集图片</button></div>
-              <input type="search" value={pickerSearch} placeholder="搜索名称" onChange={(event) => { setPickerSearch(event.target.value); setPickerPage(1); }} />
+              <div className="special-view-switch"><button className={pickerKind === "video" ? "active" : ""} type="button" onClick={() => { setPickerKind("video"); setPickerAlbumId(null); setPickerSearch(""); setPickerPage(1); }}>影片缩略图</button><button className={pickerKind === "photo" ? "active" : ""} type="button" onClick={() => { setPickerKind("photo"); setPickerAlbumId(null); setPickerSearch(""); setPickerPage(1); }}>图集图片</button></div>
+              <input type="search" value={pickerSearch} placeholder={selectedPickerAlbum ? "搜索照片名称" : pickerKind === "photo" ? "搜索图集名称" : "搜索影片名称"} onChange={(event) => { setPickerSearch(event.target.value); setPickerPage(1); }} />
             </div>
-            <div className="mosaic-picker-grid">
-              {pagedPickerResults.map((source) => <button key={source.id} type="button" onClick={() => selectSourceTarget(source)}><ResourceThumbnail source={source} /><span>{source.label}</span></button>)}
-            </div>
-            {!pagedPickerResults.length ? <div className="mosaic-picker-empty">当前没有可选择的{pickerKind === "video" ? "已有影片缩略图" : "图集图片"}。</div> : null}
-            <footer><span>第 {pickerPage} / {pickerPageCount} 页 · {pickerResults.length} 项</span><div><button className="secondary-button" disabled={pickerPage <= 1} type="button" onClick={() => setPickerPage((page) => page - 1)}>上一页</button><button className="secondary-button" disabled={pickerPage >= pickerPageCount} type="button" onClick={() => setPickerPage((page) => page + 1)}>下一页</button></div></footer>
+            {pickerKind === "photo" && selectedPickerAlbum ? (
+              <div className="mosaic-picker-album-nav">
+                <button className="secondary-button" type="button" onClick={() => { setPickerAlbumId(null); setPickerSearch(""); setPickerPage(1); }}><ChevronLeft size={17} /> 返回图集</button>
+                <span><strong>{selectedPickerAlbum.title}</strong><small>{selectedPickerAlbum.imageCount} 张照片</small></span>
+              </div>
+            ) : null}
+            {pickerResultCount ? (
+              <div className="mosaic-picker-grid">
+                {pickerKind === "video" ? pagedPickerVideoResults.map((source) => <button key={source.id} type="button" onClick={() => selectSourceTarget(source)}><ResourceThumbnail source={source} /><span>{source.label}</span></button>) : null}
+                {pickerKind === "photo" && !selectedPickerAlbum ? pagedPickerAlbums.map((album) => {
+                  const coverSource = album.images[0] ? sourceById.get(`photo:${album.id}:${album.images[0].id}`) : undefined;
+                  return <button className="mosaic-picker-album-card" key={album.id} type="button" onClick={() => { setPickerAlbumId(album.id); setPickerSearch(""); setPickerPage(1); }}>{coverSource ? <ResourceThumbnail source={coverSource} /> : <ImageIcon size={25} />}<span><strong>{album.title}</strong><small>{album.imageCount} 张照片</small></span></button>;
+                }) : null}
+                {pickerKind === "photo" && selectedPickerAlbum ? pagedPickerPhotoResults.map((source) => <button key={source.id} type="button" onClick={() => selectSourceTarget(source)}><ResourceThumbnail source={source} /><span>{source.label.replace(`${selectedPickerAlbum.title} · `, "")}</span></button>) : null}
+              </div>
+            ) : <div className="mosaic-picker-empty">{pickerKind === "video" ? "当前没有可选择的影片缩略图。" : selectedPickerAlbum ? "当前图集中没有可选择的照片。" : "当前没有可选择的图集。"}</div>}
+            <footer><span>第 {pickerPage} / {pickerPageCount} 页 · {pickerResultCount} {pickerKind === "video" ? "项" : selectedPickerAlbum ? "张照片" : "个图集"}</span><div><button className="secondary-button" disabled={pickerPage <= 1} type="button" onClick={() => setPickerPage((page) => page - 1)}>上一页</button><button className="secondary-button" disabled={pickerPage >= pickerPageCount} type="button" onClick={() => setPickerPage((page) => page + 1)}>下一页</button></div></footer>
           </section>
         </div>
       ) : null}
