@@ -14,6 +14,7 @@ test("parses generated edit and restored video names", () => {
   assert.deepEqual(versions.parseVideoVersion("Movie-edit-2.mp4"), { baseName: "Movie", kind: "edit" });
   assert.deepEqual(versions.parseVideoVersion("Movie.restored.mp4"), { baseName: "Movie", kind: "restored" });
   assert.deepEqual(versions.parseVideoVersion("Movie.restored-2.mp4"), { baseName: "Movie", kind: "restored" });
+  assert.deepEqual(versions.parseVideoVersion("Movie-edit.highlights.restored.mp4"), { baseName: "Movie", kind: "restored" });
   assert.equal(versions.parseVideoVersion("Movie.mkv"), null);
 });
 

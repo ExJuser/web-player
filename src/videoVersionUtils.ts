@@ -38,7 +38,11 @@ function getParentPath(relativePath: string) {
 export function parseVideoVersion(fileName: string): { baseName: string; kind: VideoVersionKind } | null {
   const { stem } = splitFileName(fileName);
   const restoredMatch = stem.match(/^(.*?)\.restored(?:-\d+)?$/i);
-  if (restoredMatch?.[1]) return { baseName: restoredMatch[1], kind: "restored" };
+  if (restoredMatch?.[1]) {
+    const restorationSource = restoredMatch[1].replace(/\.highlights$/i, "");
+    const sourceEditMatch = restorationSource.match(/^(.*?)-edit(?:-\d+)?$/i);
+    return { baseName: sourceEditMatch?.[1] || restorationSource, kind: "restored" };
+  }
 
   const editMatch = stem.match(/^(.*?)-edit(?:-\d+)?$/i);
   if (editMatch?.[1]) return { baseName: editMatch[1], kind: "edit" };
