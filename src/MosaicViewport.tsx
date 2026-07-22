@@ -1,9 +1,9 @@
-import { Maximize2, RotateCcw, RotateCw, ZoomIn, ZoomOut } from "lucide-react";
+import { Maximize2, RotateCcw, ZoomIn, ZoomOut } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode, type WheelEvent } from "react";
 
 import { acquireMosaicBitmap, type MosaicBitmapLease } from "./mosaicImagePipeline";
 import type { MosaicRuntimeSource, MosaicTileFit } from "./mosaicTypes";
-import { calculateMosaicCellRect, calculateMosaicGeometry, calculateMosaicPopoverAnchor, locateMosaicCell, unrotateMosaicPoint, type MosaicViewRotation, type MosaicViewTransform } from "./mosaicViewportGeometry";
+import { calculateMosaicGeometry, calculateMosaicPopoverAnchor, locateMosaicCell, type MosaicViewTransform } from "./mosaicViewportGeometry";
 
 type MosaicViewportProps = {
   assignments: string[];
@@ -21,7 +21,6 @@ type WebGlState = {
   program: WebGLProgram;
   texture: WebGLTexture;
   transformLocation: WebGLUniformLocation | null;
-  rotationLocation: WebGLUniformLocation | null;
   uploadedBitmap: ImageBitmap | null;
 };
 
@@ -35,14 +34,9 @@ function createWebGlState(canvas: HTMLCanvasElement): WebGlState | null {
     in vec2 a_position;
     out vec2 v_uv;
     uniform vec4 u_transform;
-    uniform float u_rotation;
     void main() {
       v_uv = a_position * 0.5 + 0.5;
-      vec2 scaled = vec2(a_position.x * u_transform.x, a_position.y * u_transform.y);
-      float cosine = cos(u_rotation);
-      float sine = sin(u_rotation);
-      vec2 rotated = vec2(scaled.x * cosine - scaled.y * sine, scaled.x * sine + scaled.y * cosine);
-      gl_Position = vec4(rotated + u_transform.zw, 0.0, 1.0);
+      gl_Position = vec4(a_position.x * u_transform.x + u_transform.z, a_position.y * u_transform.y + u_transform.w, 0.0, 1.0);
     }`);
   gl.shaderSource(fragment, `#version 300 es
     precision highp float;
@@ -75,14 +69,15 @@ function createWebGlState(canvas: HTMLCanvasElement): WebGlState | null {
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
   gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
   gl.uniform1i(gl.getUniformLocation(program, "u_texture"), 0);
-  return {
-    gl,
-    program,
-    texture,
-    transformLocation: gl.getUniformLocation(program, "u_transform"),
-    rotationLocation: gl.getUniformLocation(program, "u_rotation"),
-    uploadedBitmap: null,
-  };
+  return { gl, program, texture, transformLocation: gl.getUniformLocation(program, "u_transform"), uploadedBitmap: null };
+}
+
+function fitScale(canvas: HTMLCanvasElement, bitmap: ImageBitmap) {
+  const canvasAspect = canvas.width / Math.max(canvas.height, 1);
+  const imageAspect = bitmap.width / Math.max(bitmap.height, 1);
+  return canvasAspect > imageAspect
+    ? { x: imageAspect / canvasAspect, y: 1 }
+    : { x: 1, y: canvasAspect / imageAspect };
 }
 
 function drawDetailCover(context: CanvasRenderingContext2D, bitmap: ImageBitmap, x: number, y: number, width: number, height: number) {
@@ -112,7 +107,7 @@ export function MosaicViewport({ assignments, columns, rows, previewUrl, sources
   const detailFailedRef = useRef(new Set<string>());
   const detailGenerationRef = useRef(0);
   const dragRef = useRef<{ pointerId: number; startX: number; startY: number; originX: number; originY: number; moved: boolean } | null>(null);
-  const [transform, setTransform] = useState<MosaicViewTransform>({ scale: 1, x: 0, y: 0, rotation: 0 });
+  const [transform, setTransform] = useState<MosaicViewTransform>({ scale: 1, x: 0, y: 0 });
   const [sourceAnchor, setSourceAnchor] = useState<ReturnType<typeof calculateMosaicPopoverAnchor> & { width: number; height: number } | null>(null);
   const [backend, setBackend] = useState<"WebGL2" | "Canvas 2D">("WebGL2");
   const sourceById = useRef(new Map(sources.map((source) => [source.id, source])));
@@ -133,13 +128,7 @@ export function MosaicViewport({ assignments, columns, rows, previewUrl, sources
       webGlRef.current = createWebGlState(canvas);
       if (!webGlRef.current) setBackend("Canvas 2D");
     }
-    const geometry = calculateMosaicGeometry({
-      viewportWidth: canvas.clientWidth,
-      viewportHeight: canvas.clientHeight,
-      imageWidth: bitmap.width,
-      imageHeight: bitmap.height,
-      transform,
-    });
+    const fit = fitScale(canvas, bitmap);
     const webGl = webGlRef.current;
     if (webGl) {
       const { gl } = webGl;
@@ -154,24 +143,21 @@ export function MosaicViewport({ assignments, columns, rows, previewUrl, sources
       }
       gl.uniform4f(
         webGl.transformLocation,
-        geometry.width / Math.max(canvas.clientWidth, 1),
-        geometry.height / Math.max(canvas.clientHeight, 1),
+        fit.x * transform.scale,
+        fit.y * transform.scale,
         transform.x * ratio * 2 / width,
         -transform.y * ratio * 2 / height,
       );
-      gl.uniform1f(webGl.rotationLocation, -transform.rotation * Math.PI / 180);
       gl.drawArrays(gl.TRIANGLES, 0, 6);
       return;
     }
     const context = canvas.getContext("2d");
     if (!context) return;
+    const drawWidth = width * fit.x * transform.scale;
+    const drawHeight = height * fit.y * transform.scale;
     context.fillStyle = "#07070d";
     context.fillRect(0, 0, width, height);
-    context.save();
-    context.translate(geometry.centerX * ratio, geometry.centerY * ratio);
-    context.rotate(transform.rotation * Math.PI / 180);
-    context.drawImage(bitmap, -geometry.width * ratio / 2, -geometry.height * ratio / 2, geometry.width * ratio, geometry.height * ratio);
-    context.restore();
+    context.drawImage(bitmap, (width - drawWidth) / 2 + transform.x * ratio, (height - drawHeight) / 2 + transform.y * ratio, drawWidth, drawHeight);
   }, [transform]);
   drawRef.current = draw;
 
@@ -204,20 +190,10 @@ export function MosaicViewport({ assignments, columns, rows, previewUrl, sources
     });
     const cellWidth = geometry.width / columns;
     const cellHeight = geometry.height / rows;
-    const viewportCorners = [
-      { pointX: 0, pointY: 0 },
-      { pointX: viewportWidth, pointY: 0 },
-      { pointX: 0, pointY: viewportHeight },
-      { pointX: viewportWidth, pointY: viewportHeight },
-    ].map((point) => unrotateMosaicPoint({ ...point, geometry }));
-    const visibleLeft = Math.min(...viewportCorners.map((point) => point.x));
-    const visibleRight = Math.max(...viewportCorners.map((point) => point.x));
-    const visibleTop = Math.min(...viewportCorners.map((point) => point.y));
-    const visibleBottom = Math.max(...viewportCorners.map((point) => point.y));
-    const startColumn = Math.max(0, Math.floor((visibleLeft - geometry.left) / cellWidth));
-    const endColumn = Math.min(columns - 1, Math.ceil((visibleRight - geometry.left) / cellWidth) - 1);
-    const startRow = Math.max(0, Math.floor((visibleTop - geometry.top) / cellHeight));
-    const endRow = Math.min(rows - 1, Math.ceil((visibleBottom - geometry.top) / cellHeight) - 1);
+    const startColumn = Math.max(0, Math.floor(-geometry.left / cellWidth));
+    const endColumn = Math.min(columns - 1, Math.ceil((viewportWidth - geometry.left) / cellWidth) - 1);
+    const startRow = Math.max(0, Math.floor(-geometry.top / cellHeight));
+    const endRow = Math.min(rows - 1, Math.ceil((viewportHeight - geometry.top) / cellHeight) - 1);
     if (startColumn > endColumn || startRow > endRow) return;
 
     const centerColumn = (startColumn + endColumn) / 2;
@@ -238,10 +214,6 @@ export function MosaicViewport({ assignments, columns, rows, previewUrl, sources
     const generation = detailGenerationRef.current;
     let availableLoads = Math.max(0, 6 - detailPendingRef.current.size);
     context.setTransform(ratio, 0, 0, ratio, 0, 0);
-    context.save();
-    context.translate(geometry.centerX, geometry.centerY);
-    context.rotate(transform.rotation * Math.PI / 180);
-    context.translate(-geometry.centerX, -geometry.centerY);
     context.globalAlpha = 0.9;
     detailCells.forEach((cell) => {
       const sourceId = assignments[cell.index];
@@ -280,7 +252,6 @@ export function MosaicViewport({ assignments, columns, rows, previewUrl, sources
       });
     });
     context.globalAlpha = 1;
-    context.restore();
   }, [assignments, columns, rows, tileFit, transform]);
   detailDrawRef.current = drawDetails;
 
@@ -340,12 +311,6 @@ export function MosaicViewport({ assignments, columns, rows, previewUrl, sources
   useEffect(() => () => bitmapRef.current?.close(), []);
 
   const updateScale = (factor: number) => setTransform((current) => ({ ...current, scale: Math.max(0.5, Math.min(16, current.scale * factor)) }));
-  const rotateView = () => setTransform((current) => ({
-    scale: 1,
-    x: 0,
-    y: 0,
-    rotation: ((current.rotation + 90) % 360) as MosaicViewRotation,
-  }));
 
   const locatePointerCell = (clientX: number, clientY: number) => {
     const canvas = canvasRef.current;
@@ -371,11 +336,12 @@ export function MosaicViewport({ assignments, columns, rows, previewUrl, sources
       highlight.style.opacity = "0";
       return;
     }
-    const cellRect = calculateMosaicCellRect({ column: hit.column, row: hit.row, columns, rows, geometry: hit.geometry });
-    highlight.style.left = `${cellRect.left}px`;
-    highlight.style.top = `${cellRect.top}px`;
-    highlight.style.width = `${cellRect.width}px`;
-    highlight.style.height = `${cellRect.height}px`;
+    const cellWidth = hit.geometry.width / columns;
+    const cellHeight = hit.geometry.height / rows;
+    highlight.style.left = `${hit.geometry.left + hit.column * cellWidth}px`;
+    highlight.style.top = `${hit.geometry.top + hit.row * cellHeight}px`;
+    highlight.style.width = `${cellWidth}px`;
+    highlight.style.height = `${cellHeight}px`;
     highlight.style.opacity = "1";
   };
 
@@ -405,17 +371,18 @@ export function MosaicViewport({ assignments, columns, rows, previewUrl, sources
     const source = sourceById.current.get(assignments[hit.index]);
     if (source && canvasRef.current) {
       const rect = canvasRef.current.getBoundingClientRect();
-      const cellRect = calculateMosaicCellRect({ column: hit.column, row: hit.row, columns, rows, geometry: hit.geometry });
+      const cellWidth = hit.geometry.width / columns;
+      const cellHeight = hit.geometry.height / rows;
       const popoverWidth = Math.min(520, Math.max(1, rect.width - 24), Math.max(420, rect.width * 0.46));
       const popoverHeight = Math.min(510, Math.max(1, rect.height - 24));
       setSourceAnchor({
         ...calculateMosaicPopoverAnchor({
           viewportWidth: rect.width,
           viewportHeight: rect.height,
-          cellLeft: cellRect.left,
-          cellTop: cellRect.top,
-          cellWidth: cellRect.width,
-          cellHeight: cellRect.height,
+          cellLeft: hit.geometry.left + hit.column * cellWidth,
+          cellTop: hit.geometry.top + hit.row * cellHeight,
+          cellWidth,
+          cellHeight,
           popoverWidth,
           popoverHeight,
         }),
@@ -462,9 +429,8 @@ export function MosaicViewport({ assignments, columns, rows, previewUrl, sources
         <span>{backend}{transform.scale >= 3 ? " · 高清细节" : ""}</span>
         <button type="button" onClick={() => updateScale(1.25)} title="放大"><ZoomIn size={17} /></button>
         <button type="button" onClick={() => updateScale(0.8)} title="缩小"><ZoomOut size={17} /></button>
-        <button type="button" onClick={() => setTransform((current) => ({ ...current, scale: 1, x: 0, y: 0 }))} title="适应窗口"><Maximize2 size={17} /></button>
-        <button type="button" onClick={rotateView} title="顺时针旋转作品"><RotateCw size={17} /></button>
-        <button type="button" onClick={() => setTransform({ scale: 1, x: 0, y: 0, rotation: 0 })} title="重置视角"><RotateCcw size={17} /></button>
+        <button type="button" onClick={() => setTransform({ scale: 1, x: 0, y: 0 })} title="适应窗口"><Maximize2 size={17} /></button>
+        <button type="button" onClick={() => setTransform({ scale: 1, x: 0, y: 0 })} title="重置视角"><RotateCcw size={17} /></button>
       </div>
     </section>
   );

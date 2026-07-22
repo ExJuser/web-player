@@ -18,12 +18,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { analyzeMosaicSources, matchMosaic, readMosaicTargetGrid, renderMosaic } from "./mosaicImagePipeline";
 import { deleteMosaicProject, loadMosaicProjects, saveMosaicProject, writeMosaicPreview, writeMosaicTarget } from "./mosaicStorage";
+import { normalizeMosaicTargetRotation } from "./mosaicRotation";
 import { generateServerMosaicTarget } from "./playerStorage";
 import type {
   MosaicProject,
   MosaicRuntimeSource,
   MosaicSourceFilter,
   MosaicTargetRef,
+  MosaicTargetRotation,
   MosaicTileFit,
 } from "./mosaicTypes";
 import type { PhotoAlbum, VideoItem } from "./playerTypes";
@@ -106,7 +108,7 @@ function ResourceThumbnail({ source, preferOriginal = false }: { source: MosaicR
   return url ? <img src={url} alt="" loading="lazy" decoding="async" draggable={false} /> : <ImageIcon size={25} />;
 }
 
-function TargetPreview({ target }: { target: RuntimeTarget }) {
+function TargetPreview({ target, rotation }: { target: RuntimeTarget; rotation: MosaicTargetRotation }) {
   const [url, setUrl] = useState(target.url);
   const [aspectRatio, setAspectRatio] = useState(16 / 10);
   useEffect(() => {
@@ -119,11 +121,16 @@ function TargetPreview({ target }: { target: RuntimeTarget }) {
     setUrl(nextUrl);
     return () => URL.revokeObjectURL(nextUrl);
   }, [target.file, target.url]);
-  const previewWidth = Math.min(560, 360 * aspectRatio);
+  const quarterTurn = rotation === 90 || rotation === 270;
+  const displayAspectRatio = quarterTurn ? 1 / aspectRatio : aspectRatio;
+  const previewWidth = Math.min(560, 360 * displayAspectRatio);
+  const imageStyle = quarterTurn
+    ? { width: `${100 / displayAspectRatio}%`, height: `${displayAspectRatio * 100}%`, transform: `translate(-50%, -50%) rotate(${rotation}deg)` }
+    : { transform: `translate(-50%, -50%) rotate(${rotation}deg)` };
   return (
     <div className="mosaic-target-preview">
-      <div className="mosaic-target-preview-image" style={{ width: `${previewWidth}px`, aspectRatio }}>
-        {url ? <img src={url} alt={target.ref.label} decoding="async" draggable={false} onLoad={(event) => {
+      <div className="mosaic-target-preview-image" style={{ width: `${previewWidth}px`, aspectRatio: displayAspectRatio }}>
+        {url ? <img src={url} alt={target.ref.label} decoding="async" draggable={false} style={imageStyle} onLoad={(event) => {
           const { naturalWidth, naturalHeight } = event.currentTarget;
           if (naturalWidth && naturalHeight) setAspectRatio(naturalWidth / naturalHeight);
         }} /> : <ImageIcon size={32} />}
@@ -165,6 +172,7 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
   const [columns, setColumns] = useState(160);
   const [targetClarity, setTargetClarity] = useState(0.6);
   const [colorPreservation, setColorPreservation] = useState(0.55);
+  const [targetRotation, setTargetRotation] = useState<MosaicTargetRotation>(0);
   const [tileFit, setTileFit] = useState<MosaicTileFit>("cover");
   const [previewLongestEdge, setPreviewLongestEdge] = useState<MosaicPreviewLongestEdge>(3200);
   const [maxReuse, setMaxReuse] = useState(3);
@@ -270,6 +278,7 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
     setColumns(project.recipe.columns);
     setTargetClarity(project.recipe.targetClarity);
     setColorPreservation(project.recipe.colorPreservation);
+    setTargetRotation(normalizeMosaicTargetRotation(project.recipe.targetRotation));
     setTileFit(project.recipe.tileFit === "contain" ? "contain" : "cover");
     setPreviewLongestEdge(normalizePreviewLongestEdge(project.recipe.previewLongestEdge));
     setMaxReuse(project.recipe.maxReuse);
@@ -287,6 +296,7 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
       cancelTargetResolution();
       releaseRuntimeTargetUrl();
       setTarget({ ref: targetRef, file: source.file, url: source.url });
+      setTargetRotation(0);
       if (!replacingCurrentProject) setActiveProject(null);
       setPreviewUrl("");
       setIsPickerOpen(false);
@@ -337,6 +347,7 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
       const url = URL.createObjectURL(targetBlob);
       runtimeTargetUrlRef.current = url;
       setTarget({ ref: targetRef, file: targetBlob, url, persistFile: true });
+      setTargetRotation(0);
       if (!replacingCurrentProject) setActiveProject(null);
       setPreviewUrl("");
       setIsPickerOpen(false);
@@ -364,6 +375,7 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
     const url = URL.createObjectURL(file);
     runtimeTargetUrlRef.current = url;
     setTarget({ ref: { kind: "upload", label: file.name, assetUrl: "" }, file, url, persistFile: true });
+    setTargetRotation(0);
     if (!replaceCurrentProject) setActiveProject(null);
     setPreviewUrl("");
     setSelectedSource(null);
@@ -398,7 +410,7 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
       });
       if (!analyzed.features.length) throw new Error("没有能够成功解码的素材图片。");
       setGeneration({ message: "正在分析目标并匹配小图", completed: 0, total: 1 });
-      const grid = await readMosaicTargetGrid({ file: target.file, url: target.url, columns });
+      const grid = await readMosaicTargetGrid({ file: target.file, url: target.url, columns, targetRotation });
       const minimumReuse = Math.ceil(grid.descriptors.length / analyzed.features.length);
       if (maxReuse < minimumReuse) throw new Error(`当前素材数量至少需要将单图复用上限设为 ${minimumReuse}。`);
       const targetSourceId = target.ref.kind === "source" ? target.ref.sourceId : undefined;
@@ -429,6 +441,7 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
         longestEdge: previewLongestEdge,
         colorPreservation,
         targetClarity,
+        targetRotation,
         tileFit,
         type: "image/webp",
         signal: controller.signal,
@@ -468,6 +481,7 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
           rows: grid.rows,
           targetClarity,
           colorPreservation,
+          targetRotation,
           tileFit,
           previewLongestEdge,
           maxReuse,
@@ -500,7 +514,8 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
     setIsExporting(true);
     setMessage(`正在导出 ${longestEdge === 7680 ? "8K" : "4K"} PNG…`);
     try {
-      const grid = await readMosaicTargetGrid({ file: target.file, url: target.url, columns: activeProject.recipe.columns });
+      const savedTargetRotation = normalizeMosaicTargetRotation(activeProject.recipe.targetRotation);
+      const grid = await readMosaicTargetGrid({ file: target.file, url: target.url, columns: activeProject.recipe.columns, targetRotation: savedTargetRotation });
       const blob = await renderMosaic({
         sources,
         assignments: activeProject.recipe.assignments,
@@ -511,6 +526,7 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
         longestEdge,
         colorPreservation: activeProject.recipe.colorPreservation,
         targetClarity: activeProject.recipe.targetClarity,
+        targetRotation: savedTargetRotation,
         tileFit: activeProject.recipe.tileFit ?? "cover",
         type: "image/png",
         onProgress: (completed, total) => setGeneration({ message: `正在导出 ${longestEdge === 7680 ? "8K" : "4K"}`, completed, total }),
@@ -576,6 +592,7 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
             <label>素材池<select value={sourceFilter} onChange={(event) => setSourceFilter(event.target.value as MosaicSourceFilter)}><option value="mixed">影片 + 图集</option><option value="videos">仅影片缩略图</option><option value="photos">仅图集图片</option></select></label>
             <label>参与素材上限<input type="number" min="8" max="10000" step="8" value={sourceLimit} onChange={(event) => setSourceLimit(Math.max(8, Math.min(10000, Number(event.target.value) || 8)))} /></label>
             <label>小图填充<select value={tileFit} onChange={(event) => setTileFit(event.target.value as MosaicTileFit)}><option value="cover">裁切铺满</option><option value="contain">完整显示</option></select></label>
+            <label>目标方向<select value={targetRotation} onChange={(event) => setTargetRotation(Number(event.target.value) as MosaicTargetRotation)}><option value={0}>原始方向</option><option value={90}>顺时针 90°</option><option value={180}>旋转 180°</option><option value={270}>顺时针 270°</option></select></label>
             <label>预览质量<select value={previewLongestEdge} onChange={(event) => setPreviewLongestEdge(Number(event.target.value) as MosaicPreviewLongestEdge)}><option value="1400">快速 · 1400px</option><option value="2200">平衡 · 2200px</option><option value="3200">精细 · 3200px</option></select></label>
             <label>网格密度 <strong>{columns} 列</strong><input type="range" min="40" max="160" step="10" value={columns} onChange={(event) => setColumns(Number(event.target.value))} /></label>
             <label>目标清晰度 <strong>{Math.round(targetClarity * 100)}%</strong><input type="range" min="0" max="1" step="0.05" value={targetClarity} onChange={(event) => setTargetClarity(Number(event.target.value))} /></label>
@@ -661,7 +678,7 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
           ) : (
             <div className={`mosaic-stage-empty ${target ? "has-target" : ""}`}>
               {target ? (
-                <TargetPreview target={target} />
+                <TargetPreview target={target} rotation={targetRotation} />
               ) : <div className="mosaic-orbit"><Film size={32} /><Images size={28} /><Sparkles size={34} /></div>}
               <h3>{target ? "目标图已就绪" : "选择一张目标图，开始构建媒体宇宙"}</h3>
               <p>{target ? "可在左侧调整素材与生成参数，确认后生成千图作品；也可以在下方更换目标图。" : "已有影片缩略图和图集图片会被分析成颜色星图；支持上传，也支持从项目中选图实现套娃。"}</p>

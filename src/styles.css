@@ -9961,7 +9961,7 @@ button {
 .mosaic-stage-actions > .primary-button, .mosaic-stage-actions > .secondary-button { flex: 0 1 auto; width: auto; height: 38px; box-sizing: border-box; }
 .mosaic-target-preview { display: grid; justify-items: center; gap: 10px; min-width: 0; }
 .mosaic-target-preview-image { position: relative; display: grid; place-items: center; max-width: min(560px, 70vw); max-height: 360px; overflow: hidden; border: 1px solid rgba(151,128,231,.28); border-radius: 20px; color: rgba(220,212,243,.5); background: rgba(5,5,11,.72); box-shadow: 0 24px 60px rgba(0,0,0,.35); }
-.mosaic-target-preview-image img { width: 100%; height: 100%; object-fit: contain; object-position: center; }
+.mosaic-target-preview-image img { position: absolute; top: 50%; left: 50%; width: 100%; height: 100%; object-fit: contain; object-position: center; }
 .mosaic-target-preview-image span { position: absolute; top: 12px; left: 12px; padding: 5px 9px; border: 1px solid rgba(255,255,255,.12); border-radius: 999px; color: #dff8ff; font-size: 11px; backdrop-filter: blur(12px); background: rgba(10,9,18,.72); }
 .mosaic-target-preview > strong { max-width: min(560px, 70vw); overflow: hidden; color: rgba(244,240,255,.76); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .mosaic-orbit { position: relative; display: flex; align-items: center; gap: 22px; color: #c7edff; filter: drop-shadow(0 0 18px rgba(100,174,255,.65)); }
