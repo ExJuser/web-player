@@ -87,7 +87,7 @@ export function useVideoTagController({
     });
     return Array.from(usageByKey.values())
       .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, "zh-Hans-CN", { numeric: true }))
-      .slice(0, 8)
+      .slice(0, 15)
       .map(({ label }) => label);
   }, [currentVideo, currentVideoTags, isTagDialogOpen, videoTags]);
   const resolvedActiveTagSuggestionIndex = tagInputSuggestions.length
@@ -102,11 +102,9 @@ export function useVideoTagController({
     videoTagsRef.current = nextVideoTags;
     setVideoTags(nextVideoTags);
 
-    Promise.all(
-      Array.from(new Set([...Object.keys(previousVideoTags), ...Object.keys(nextVideoTags)])).map((videoId) =>
-        savePlayerVideoTags(videoId, nextVideoTags[videoId] ?? []),
-      ),
-    )
+    const changedVideoIds = Array.from(new Set([...Object.keys(previousVideoTags), ...Object.keys(nextVideoTags)]))
+      .filter((videoId) => previousVideoTags[videoId] !== nextVideoTags[videoId]);
+    Promise.all(changedVideoIds.map((videoId) => savePlayerVideoTags(videoId, nextVideoTags[videoId] ?? [])))
       .then(() => {
         if (successMessage) setTagMessage(successMessage);
       })
