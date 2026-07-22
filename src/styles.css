@@ -9933,7 +9933,10 @@ button {
 .mosaic-controls label { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px; color: rgba(240,236,255,.72); font-size: 13px; }
 .mosaic-controls label strong { color: #fff; font-size: 12px; }
 .mosaic-controls input[type="range"], .mosaic-controls select { grid-column: 1 / -1; width: 100%; }
-.mosaic-controls input[type="number"] { width: 74px; }
+.mosaic-controls select, .mosaic-controls input[type="number"] { height: 34px; border: 1px solid rgba(177, 160, 224, .2); border-radius: 8px; outline: 0; color: #f4f0ff; color-scheme: dark; background: rgba(255,255,255,.06); }
+.mosaic-controls select { padding: 0 10px; }
+.mosaic-controls input[type="number"] { width: 74px; padding: 0 8px; text-align: center; }
+.mosaic-controls select:focus, .mosaic-controls input[type="number"]:focus { border-color: rgba(63, 211, 245, .72); box-shadow: 0 0 0 2px rgba(43, 217, 247, .14); }
 .mosaic-generate-button { justify-content: center; min-height: 45px; background: linear-gradient(110deg, #7c4dff, #2bd9f7); box-shadow: 0 10px 26px rgba(93, 84, 255, .28); }
 .mosaic-projects { min-height: 100px; max-height: 330px; overflow: auto; scrollbar-color: rgba(170,141,255,.45) transparent; scrollbar-width: thin; }
 .mosaic-project-card { display: grid; grid-template-columns: 62px minmax(0,1fr) 28px; align-items: center; gap: 9px; width: 100%; margin-top: 8px; padding: 7px; border: 1px solid transparent; border-radius: 13px; color: inherit; text-align: left; background: rgba(255,255,255,.035); }
@@ -10009,6 +10012,10 @@ button {
 :root[data-theme="light"] .mosaic-empty-mini { color: rgba(48,38,70,.58); }
 .app-shell.theme-light .mosaic-controls label strong,
 :root[data-theme="light"] .mosaic-controls label strong { color: #302642; }
+.app-shell.theme-light .mosaic-controls select,
+.app-shell.theme-light .mosaic-controls input[type="number"],
+:root[data-theme="light"] .mosaic-controls select,
+:root[data-theme="light"] .mosaic-controls input[type="number"] { border-color: rgba(91,67,142,.2); color: #302642; color-scheme: light; background: rgba(74,50,120,.05); }
 .app-shell.theme-light .mosaic-project-card,
 :root[data-theme="light"] .mosaic-project-card { color: #302642; background: rgba(74,50,120,.045); }
 
