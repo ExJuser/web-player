@@ -8958,9 +8958,16 @@ button {
 }
 
 .tag-actor-editor-heading span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   color: var(--muted-text);
   font-size: 12px;
 }
+
+.tag-actor-editor-chevron { transition: transform 160ms ease; }
+
+.tag-actor-editor[open] .tag-actor-editor-chevron { transform: rotate(180deg); }
 
 .tag-actor-editor .actor-selected-list {
   min-height: 38px;

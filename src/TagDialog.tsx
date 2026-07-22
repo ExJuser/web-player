@@ -1,4 +1,4 @@
-import { CheckCircle2, ExternalLink, RefreshCw, RotateCcw, Sparkles, Tags, UserPlus, X } from "lucide-react";
+import { CheckCircle2, ChevronDown, ExternalLink, RefreshCw, RotateCcw, Sparkles, Tags, UserPlus, X } from "lucide-react";
 import { useEffect, useMemo, useState, type PointerEvent as ReactPointerEvent, type Ref } from "react";
 
 import type { ActorProfileStore, ActorSource } from "./playerTypes";
@@ -194,7 +194,7 @@ export function TagDialog({
         <details className="tag-actor-editor">
           <summary className="tag-actor-editor-heading">
             <strong id="tag-actor-editor-title">影片演员（{selectedActors.length}）</strong>
-            <span>当前来源：{actorSourceLabel} · 点击标题行可展开/收起</span>
+            <span>当前来源：{actorSourceLabel}<ChevronDown className="tag-actor-editor-chevron" size={16} /></span>
           </summary>
           <div className="actor-selected-list custom-scrollbar">
             {selectedActors.length ? selectedActors.map((actor) => (
