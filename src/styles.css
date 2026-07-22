@@ -6660,6 +6660,8 @@ button {
   transition: transform 160ms ease;
 }
 
+.common-tag-toggle { justify-self: start; }
+
 .common-tag-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
 
 .tag-editor-form {
