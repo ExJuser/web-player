@@ -9947,11 +9947,11 @@ button {
 .mosaic-project-delete:hover { background: rgba(255,78,115,.16); }
 .mosaic-empty-mini { color: rgba(235,230,255,.48); font-size: 12px; line-height: 1.6; }
 
-.mosaic-main-stage { position: relative; min-width: 0; min-height: 720px; overflow: hidden; border: 1px solid rgba(160,139,212,.2); border-radius: 24px; background: #07070d; box-shadow: 0 26px 70px rgba(3,2,11,.42); }
+.mosaic-main-stage { position: relative; display: flex; min-width: 0; min-height: 720px; overflow: hidden; flex-direction: column; border: 1px solid rgba(160,139,212,.2); border-radius: 24px; background: #07070d; box-shadow: 0 26px 70px rgba(3,2,11,.42); }
 .mosaic-stage-header { display: flex; align-items: center; gap: 9px; min-height: 58px; padding: 10px 14px; border-bottom: 1px solid rgba(255,255,255,.08); background: rgba(15,14,25,.95); }
 .mosaic-stage-header input { min-width: 120px; flex: 1; border-color: transparent; font-size: 15px; font-weight: 800; background: transparent; }
 .mosaic-stage-header > span { padding: 5px 9px; border-radius: 999px; color: #9cecff; font-size: 11px; background: rgba(46,199,232,.1); }
-.mosaic-stage-empty { display: grid; place-items: center; align-content: center; min-height: 650px; padding: 40px; text-align: center; background: radial-gradient(circle at center, rgba(100,64,220,.15), transparent 45%); }
+.mosaic-stage-empty { display: grid; place-items: center; align-content: center; min-height: 650px; flex: 1; padding: 40px; text-align: center; background: radial-gradient(circle at center, rgba(100,64,220,.15), transparent 45%); }
 .mosaic-stage-empty h3 { margin: 44px 0 8px; font-size: 25px; }
 .mosaic-stage-empty.has-target h3 { margin-top: 18px; }
 .mosaic-stage-empty p { max-width: 560px; margin: 0 0 20px; color: rgba(240,235,255,.57); line-height: 1.7; }
@@ -9973,7 +9973,7 @@ button {
 .mosaic-progress-overlay.has-preview > svg { grid-row: 1; }
 .mosaic-progress-overlay.has-preview > strong { min-width: 0; }
 .mosaic-progress-overlay.has-preview > div { grid-column: 1 / -1; width: 100%; }
-.mosaic-progressive-preview { display: grid; place-items: center; min-height: 720px; padding: 24px; background: radial-gradient(circle at center, rgba(91,61,180,.13), transparent 55%), #07070d; }
+.mosaic-progressive-preview { display: grid; place-items: center; min-height: 720px; flex: 1; padding: 24px; background: radial-gradient(circle at center, rgba(91,61,180,.13), transparent 55%), #07070d; }
 .mosaic-progressive-preview img { max-width: 100%; max-height: 672px; border-radius: 14px; object-fit: contain; box-shadow: 0 18px 55px rgba(0,0,0,.3); }
 
 .mosaic-viewport-shell { position: relative; height: 660px; overflow: hidden; }
@@ -10077,6 +10077,11 @@ button {
 :root[data-theme="light"] .mosaic-status-message { border-color: rgba(91,67,142,.16); color: rgba(48,38,70,.82); background: rgba(255,255,255,.86); }
 .app-shell.theme-light .mosaic-progressive-preview,
 :root[data-theme="light"] .mosaic-progressive-preview { background: radial-gradient(circle at center, rgba(126,91,224,.12), transparent 55%), #f8f7fc; }
+
+@media (min-width: 901px) {
+  .mosaic-studio-layout { min-height: max(720px, calc(100dvh - 68px)); }
+  .mosaic-viewport-shell { height: auto; min-height: 660px; flex: 1; }
+}
 
 @media (max-width: 900px) {
   .mosaic-studio-hero { align-items: flex-start; padding: 25px; }
