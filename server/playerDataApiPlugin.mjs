@@ -66,6 +66,7 @@ import { BoundedLruCache } from "./boundedLruCache.mjs";
 import { createPlayerDeferredData, createPlayerStartupData } from "./playerDataViews.mjs";
 import { createSystemResourceStatus } from "./systemResources.mjs";
 import { createVideoThumbnailService } from "./videoThumbnailService.mjs";
+import { createThumbnailMemoryCache } from "./thumbnailMemoryCache.mjs";
 
 let dataRoot;
 let librariesRoot;
@@ -746,6 +747,7 @@ async function updateIndex(libraryId, metadata) {
 export function playerDataApiPlugin({ projectRoot, env }) {
   initializeApiServices(projectRoot);
   const videoThumbnailService = createVideoThumbnailService({ cacheRoot: thumbnailsRoot, runProcess, maxConcurrency: 1 });
+  const thumbnailMemoryCache = createThumbnailMemoryCache();
   const mediaRootScanCache = new BoundedLruCache({ maxEntries: 2, maxBytes: 8 * 1024 * 1024 });
   let toolsPromise = null;
   let ladaAvailablePromise = null;
@@ -925,7 +927,9 @@ export function playerDataApiPlugin({ projectRoot, env }) {
 
       if (url.pathname === "/api/cache-status/clear" && request.method === "POST") {
         const payload = await parseJsonBody(request);
-        sendJson(response, 200, await clearCacheItems(payload));
+        const result = await clearCacheItems(payload);
+        if (result.cleared.includes("thumbnails")) thumbnailMemoryCache.clear();
+        sendJson(response, 200, result);
         return;
       }
 
@@ -1429,6 +1433,7 @@ export function playerDataApiPlugin({ projectRoot, env }) {
         await ensureFileExists(sourcePath);
         const generated = await videoThumbnailService.generate({ thumbnailId, sourcePath });
         store.recordCacheEntry("thumbnail", thumbnailId, generated.filePath, "image/jpeg", generated.size);
+        await thumbnailMemoryCache.getOrLoad({ thumbnailId, filePath: generated.filePath, contentType: "image/jpeg" });
         sendJson(response, 200, {
           thumbnailUrl: `/api/player-data/thumbnails/${encodeURIComponent(thumbnailId)}`,
           cached: generated.cached,
@@ -1453,7 +1458,12 @@ export function playerDataApiPlugin({ projectRoot, env }) {
               cacheControl: "public, max-age=31536000, immutable",
               etag,
             };
-            const fileStat = await stat(filePath);
+            const thumbnail = await thumbnailMemoryCache.getOrLoad({
+              thumbnailId,
+              filePath,
+              contentType: headers.contentType,
+            });
+            response.setHeader("X-Thumbnail-Memory-Cache", thumbnail.cacheStatus);
             if (request.headers["if-none-match"] === etag) {
               response.statusCode = 304;
               response.setHeader("Cache-Control", headers.cacheControl);
@@ -1464,13 +1474,13 @@ export function playerDataApiPlugin({ projectRoot, env }) {
             if (request.method === "HEAD") {
               response.statusCode = 200;
               response.setHeader("Content-Type", headers.contentType);
-              response.setHeader("Content-Length", fileStat.size);
+              response.setHeader("Content-Length", thumbnail.buffer.length);
               response.setHeader("Cache-Control", headers.cacheControl);
               response.setHeader("ETag", etag);
               response.end();
               return;
             }
-            sendBlob(response, 200, await readFile(filePath), headers);
+            sendBlob(response, 200, thumbnail.buffer, headers);
           } catch {
             response.statusCode = 404;
             response.end();
@@ -1483,6 +1493,7 @@ export function playerDataApiPlugin({ projectRoot, env }) {
           await mkdir(thumbnailsRoot, { recursive: true });
           await writeFile(filePath, rawBody);
           store.recordCacheEntry("thumbnail", thumbnailId, filePath, request.headers["content-type"] ?? null, rawBody.length);
+          thumbnailMemoryCache.set(thumbnailId, rawBody, request.headers["content-type"] ?? "image/jpeg");
           sendJson(response, 200, { ok: true });
           return;
         }
