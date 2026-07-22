@@ -214,22 +214,25 @@ test("restores only high energy segments after concatenating them", async () => 
     { id: "h2", startTime: 30, endTime: 34, tag: "爆发", updatedAt: 2 },
   ];
   const persisted = [];
+  const progressEvents = [];
   await writeFile(sourcePath, "source");
 
   try {
     const result = await restoreVideoWithLada({
-      runProcess: async (command, args) => {
+      runProcess: async (command, args, processOptions) => {
         if (command === "ffprobe") return JSON.stringify({
           format: { duration: "60" },
           streams: [{ codec_type: "video" }, { codec_type: "audio" }],
         });
         if (command === "ffmpeg" && args.includes("-filter_complex")) {
+          processOptions.onStdout(Buffer.from("out_time_us=4500000\n"));
           await writeFile(args.at(-1), "highlight-montage");
           return "";
         }
         if (command === "ffmpeg") throw new Error("encoder unavailable");
         assert.equal(command, "D:\\lada\\lada-cli.exe");
         assert.match(args[args.indexOf("--input") + 1], /highlights\.mp4$/);
+        processOptions.onStderr(Buffer.from("Processing video:  50%|####\r"));
         await writeFile(args[args.indexOf("--output") + 1], "restored-highlights");
         return "";
       },
@@ -242,6 +245,7 @@ test("restores only high energy segments after concatenating them", async () => 
       persistHighlights: (videoId, highlights) => persisted.push({ videoId, highlights }),
       options: capabilities.defaults,
       capabilities,
+      onProgress: (event) => progressEvents.push(event),
     });
 
     assert.equal(result.fileName, "Movie.highlights.restored.mp4");
@@ -249,6 +253,8 @@ test("restores only high energy segments after concatenating them", async () => 
       { startTime: 0, endTime: 5 },
       { startTime: 5, endTime: 9 },
     ]);
+    assert.equal(progressEvents.some((event) => event.percent === 5 && event.message === "正在拼接高能片段 50%"), true);
+    assert.equal(progressEvents.some((event) => event.percent === 55 && event.message === "正在修复影片 50%"), true);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

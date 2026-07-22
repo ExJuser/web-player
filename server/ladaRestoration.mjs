@@ -9,6 +9,7 @@ import {
   createLosslessHighlightMontageScript,
   mapHighlightsToMontage,
   normalizeMontageSegments,
+  parseProgressChunk,
   selectHighlightMontageVideoEncoder,
 } from "./highlightMontage.mjs";
 
@@ -196,6 +197,7 @@ export async function restoreVideoWithLada({
       const streams = Array.isArray(rawProbe?.streams) ? rawProbe.streams : [];
       if (!streams.some((stream) => stream?.codec_type === "video")) throw new Error("原片没有可用的视频流。");
       const segments = normalizeMontageSegments(sourceHighlights, durationSeconds);
+      const montageDuration = segments.reduce((total, segment) => total + segment.endTime - segment.startTime, 0);
       outputHighlights = mapHighlightsToMontage(sourceHighlights, segments);
       const useLosslessMontage = highlightMontageMode !== "precise";
       restorationSourcePath = path.join(taskDirectory, `highlights${useLosslessMontage ? path.extname(sourcePath) || ".mkv" : ".mp4"}`);
@@ -212,17 +214,27 @@ export async function restoreVideoWithLada({
           videoEncoder: await selectHighlightMontageVideoEncoder(runProcess, { signal }),
         });
       }
+      const montageProgressState = { buffer: "", lastPercent: 0 };
       await runProcess("ffmpeg", montageArgs, {
         timeoutMs: 2 * 60 * 60 * 1000,
         timeoutMessage: "拼接高能片段超时。",
         signal,
         abortMessage: "已取消马赛克修复。",
+        onStdout: (chunk) => parseProgressChunk(chunk, montageProgressState, montageDuration, (event) => {
+          onProgress?.({
+            percent: Math.max(1, Math.round(event.percent / 10)),
+            message: `正在拼接高能片段 ${event.percent}%`,
+          });
+        }),
       });
       const montageStat = await stat(restorationSourcePath);
       if (!montageStat.isFile() || montageStat.size <= 0) throw new Error("拼接高能片段失败。");
     }
-    const parseStdoutProgress = createLadaProgressParser(onProgress);
-    const parseStderrProgress = createLadaProgressParser(onProgress);
+    const reportRestorationProgress = highlightsOnly
+      ? (event) => onProgress?.({ ...event, percent: Math.min(99, 10 + Math.round(event.percent * 0.9)) })
+      : onProgress;
+    const parseStdoutProgress = createLadaProgressParser(reportRestorationProgress);
+    const parseStderrProgress = createLadaProgressParser(reportRestorationProgress);
     await runProcess(
       ladaExecutablePath,
       createLadaArgs(restorationSourcePath, temporaryOutputPath, temporaryDirectory, normalizedOptions),

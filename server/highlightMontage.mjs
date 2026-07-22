@@ -206,7 +206,7 @@ export function createHighlightMontageArgs(sourcePath, outputPath, segments, { h
   ];
 }
 
-function parseProgressChunk(chunk, state, durationSeconds, onProgress) {
+export function parseProgressChunk(chunk, state, durationSeconds, onProgress) {
   state.buffer += chunk.toString("utf8");
   const lines = state.buffer.split(/\r?\n/);
   state.buffer = lines.pop() ?? "";
