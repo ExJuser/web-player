@@ -9949,7 +9949,7 @@ button {
 
 .mosaic-main-stage { position: relative; display: flex; min-width: 0; min-height: 720px; overflow: hidden; flex-direction: column; border: 1px solid rgba(160,139,212,.2); border-radius: 24px; background: #07070d; box-shadow: 0 26px 70px rgba(3,2,11,.42); }
 .mosaic-stage-header { display: flex; align-items: center; gap: 9px; min-height: 58px; padding: 10px 14px; border-bottom: 1px solid rgba(255,255,255,.08); background: rgba(15,14,25,.95); }
-.mosaic-stage-header input { min-width: 120px; flex: 1; border-color: transparent; font-size: 15px; font-weight: 800; background: transparent; }
+.mosaic-stage-header input { min-width: 120px; flex: 1; border-color: transparent; color: #f4f0ff; caret-color: #8be7ff; font-size: 15px; font-weight: 800; background: transparent; }
 .mosaic-stage-header > span { padding: 5px 9px; border-radius: 999px; color: #9cecff; font-size: 11px; background: rgba(46,199,232,.1); }
 .mosaic-stage-empty { display: grid; place-items: center; align-content: center; min-height: 650px; flex: 1; padding: 40px; text-align: center; background: radial-gradient(circle at center, rgba(100,64,220,.15), transparent 45%); }
 .mosaic-stage-empty h3 { margin: 44px 0 8px; font-size: 25px; }
