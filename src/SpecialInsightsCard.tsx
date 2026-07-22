@@ -3,6 +3,7 @@ import type { CSSProperties, ReactNode } from "react";
 
 import { HomeCardThumbnail } from "./HomeVideoCards";
 import { RatingChip, TagChips } from "./MetadataChips";
+import type { ActorInsight } from "./actorUtils";
 import type { HomeVideoCard, VideoCommentStore, VideoItem, VideoRatingStore } from "./playerTypes";
 import type { SpecialInsightTab, SpecialModeInsights, SpecialModeTagInsight, SpecialModeVideoInsight } from "./specialInsights";
 
@@ -13,11 +14,13 @@ type SpecialInsightTabOption = {
 };
 
 type SpecialTagMetric = "videoCount" | "played" | "emission";
+type SpecialActorMetric = "played" | "count" | "emission";
 
 type SpecialInsightsCardProps = {
   insights: SpecialModeInsights;
   isExpanded: boolean;
   activeTab: SpecialInsightTab;
+  actors: ActorInsight[];
   createCard: (video: VideoItem) => HomeVideoCard;
   tabOptions: SpecialInsightTabOption[];
   tagGroupIcons: Record<SpecialTagMetric, ReactNode>;
@@ -32,6 +35,62 @@ type SpecialInsightsCardProps = {
   onThumbnailError: (videoId: string) => void;
   onToggle: () => void;
 };
+
+function getSpecialActorMetricValue(insight: ActorInsight, metric: SpecialActorMetric) {
+  if (metric === "played") return insight.stats.totalPlayedSeconds;
+  if (metric === "count") return insight.stats.playCount;
+  return insight.stats.emissionCount;
+}
+
+function SpecialActorChartGroup({
+  label,
+  icon,
+  actors,
+  metric,
+  formatDuration,
+}: {
+  label: string;
+  icon: ReactNode;
+  actors: ActorInsight[];
+  metric: SpecialActorMetric;
+  formatDuration: (seconds: number) => string;
+}) {
+  const rankedActors = [...actors]
+    .filter((insight) => getSpecialActorMetricValue(insight, metric) > 0)
+    .sort((a, b) => getSpecialActorMetricValue(b, metric) - getSpecialActorMetricValue(a, metric)
+      || a.actor.name.localeCompare(b.actor.name, "zh-Hans-CN", { numeric: true }))
+    .slice(0, 10);
+  const maxValue = rankedActors.length ? getSpecialActorMetricValue(rankedActors[0], metric) : 0;
+
+  return (
+    <div className={`special-tag-group special-tag-chart-${metric === "count" ? "videoCount" : metric}`}>
+      <span>{icon}{label}</span>
+      <div className="special-tag-chart" role="list" aria-label={label}>
+        {rankedActors.length ? rankedActors.map((insight, index) => {
+          const metricValue = getSpecialActorMetricValue(insight, metric);
+          const valueLabel = metric === "played" ? formatDuration(metricValue) : `${metricValue} 次`;
+          const share = maxValue > 0 ? Math.max(8, Math.round((metricValue / maxValue) * 100)) : 0;
+          return (
+            <div
+              className="special-tag-insight"
+              key={`${metric}-${insight.actor.id}`}
+              style={{ "--tag-share": `${share}%` } as CSSProperties}
+              title={insight.actor.name}
+            >
+              <span className="special-tag-insight-meter" aria-hidden="true"><span /></span>
+              <span className="special-tag-insight-rank">{index + 1}</span>
+              <span className="special-tag-insight-copy">
+                <span>{insight.actor.name}</span>
+                <small>{insight.videos.length} 部影片</small>
+              </span>
+              <strong>{valueLabel}</strong>
+            </div>
+          );
+        }) : <small>暂无演员统计</small>}
+      </div>
+    </div>
+  );
+}
 
 function SpecialInsightVideoRow({
   insight,
@@ -167,6 +226,7 @@ export function SpecialInsightsCard({
   insights,
   isExpanded,
   activeTab,
+  actors,
   createCard,
   tabOptions,
   tagGroupIcons,
@@ -252,6 +312,11 @@ export function SpecialInsightsCard({
       ) : (
         <div className="empty-list compact">当前榜单暂无统计记录。</div>
       )}
+      <div className="special-tag-groups">
+        <SpecialActorChartGroup actors={actors} formatDuration={formatDuration} icon={tagGroupIcons.played} label="播放最久的演员" metric="played" />
+        <SpecialActorChartGroup actors={actors} formatDuration={formatDuration} icon={tagGroupIcons.videoCount} label="次数最多的演员" metric="count" />
+        <SpecialActorChartGroup actors={actors} formatDuration={formatDuration} icon={tagGroupIcons.emission} label="发射最多的演员" metric="emission" />
+      </div>
       <div className="special-tag-groups">
         <SpecialTagChartGroup
           emptyText="暂无标签"

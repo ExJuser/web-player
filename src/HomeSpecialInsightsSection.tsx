@@ -2,6 +2,7 @@ import { Activity, BarChart3, Clock3, Rocket, Tags } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { SpecialInsightsCard } from "./SpecialInsightsCard";
+import type { ActorInsight } from "./actorUtils";
 import type { HomeVideoCard, VideoCommentStore, VideoItem, VideoRatingStore } from "./playerTypes";
 import type { SpecialInsightTab, SpecialModeInsights, SpecialModeVideoInsight } from "./specialInsights";
 
@@ -14,6 +15,7 @@ const specialInsightTabOptions: Array<{ value: SpecialInsightTab; label: string;
 
 type HomeSpecialInsightsSectionProps = {
   activeTab: SpecialInsightTab;
+  actors: ActorInsight[];
   createCard: (video: VideoItem) => HomeVideoCard;
   insights: SpecialModeInsights | null;
   isExpanded: boolean;
@@ -31,6 +33,7 @@ type HomeSpecialInsightsSectionProps = {
 
 export function HomeSpecialInsightsSection({
   activeTab,
+  actors,
   createCard,
   insights,
   isExpanded,
@@ -50,6 +53,7 @@ export function HomeSpecialInsightsSection({
   return (
     <SpecialInsightsCard
       activeTab={activeTab}
+      actors={actors}
       createCard={createCard}
       formatDuration={formatDuration}
       formatRelativeTime={formatRelativeTime}

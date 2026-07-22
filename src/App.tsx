@@ -5633,6 +5633,7 @@ export default function App() {
               ) : (
                 <HomeSpecialInsightsSection
                   activeTab={specialInsightTab}
+                  actors={actorInsights.actors}
                   createCard={createHomeVideoCard}
                   formatDuration={formatCumulativeDuration}
                   formatRelativeTime={formatRelativeTime}
