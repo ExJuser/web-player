@@ -1,7 +1,9 @@
 import { Maximize2, RotateCcw, ZoomIn, ZoomOut } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type WheelEvent } from "react";
 
-import type { MosaicRuntimeSource } from "./mosaicTypes";
+import { loadMosaicBitmap } from "./mosaicImagePipeline";
+import type { MosaicRuntimeSource, MosaicTileFit } from "./mosaicTypes";
+import { calculateMosaicGeometry, locateMosaicCell, type MosaicViewTransform } from "./mosaicViewportGeometry";
 
 type MosaicViewportProps = {
   assignments: string[];
@@ -9,10 +11,10 @@ type MosaicViewportProps = {
   rows: number;
   previewUrl: string;
   sources: MosaicRuntimeSource[];
+  tileFit: MosaicTileFit;
   onSelectSource: (source: MosaicRuntimeSource) => void;
 };
 
-type ViewTransform = { scale: number; x: number; y: number };
 type WebGlState = {
   gl: WebGL2RenderingContext;
   program: WebGLProgram;
@@ -77,13 +79,47 @@ function fitScale(canvas: HTMLCanvasElement, bitmap: ImageBitmap) {
     : { x: 1, y: canvasAspect / imageAspect };
 }
 
-export function MosaicViewport({ assignments, columns, rows, previewUrl, sources, onSelectSource }: MosaicViewportProps) {
+function drawDetailCover(context: CanvasRenderingContext2D, bitmap: ImageBitmap, x: number, y: number, width: number, height: number) {
+  const scale = Math.max(width / bitmap.width, height / bitmap.height);
+  const sourceWidth = width / scale;
+  const sourceHeight = height / scale;
+  context.drawImage(bitmap, (bitmap.width - sourceWidth) / 2, (bitmap.height - sourceHeight) / 2, sourceWidth, sourceHeight, x, y, width, height);
+}
+
+function drawDetailContain(context: CanvasRenderingContext2D, bitmap: ImageBitmap, x: number, y: number, width: number, height: number) {
+  const scale = Math.min(width / bitmap.width, height / bitmap.height);
+  const drawWidth = bitmap.width * scale;
+  const drawHeight = bitmap.height * scale;
+  context.drawImage(bitmap, x + (width - drawWidth) / 2, y + (height - drawHeight) / 2, drawWidth, drawHeight);
+}
+
+async function loadDetailBitmap(source: MosaicRuntimeSource) {
+  const bitmap = await loadMosaicBitmap({ file: source.file, url: source.url });
+  const scale = Math.min(1, 256 / Math.max(bitmap.width, bitmap.height));
+  if (scale >= 1) return bitmap;
+  const resized = await createImageBitmap(bitmap, {
+    resizeWidth: Math.max(1, Math.round(bitmap.width * scale)),
+    resizeHeight: Math.max(1, Math.round(bitmap.height * scale)),
+    resizeQuality: "high",
+  });
+  bitmap.close();
+  return resized;
+}
+
+export function MosaicViewport({ assignments, columns, rows, previewUrl, sources, tileFit, onSelectSource }: MosaicViewportProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const detailCanvasRef = useRef<HTMLCanvasElement>(null);
+  const cellHighlightRef = useRef<HTMLDivElement>(null);
   const bitmapRef = useRef<ImageBitmap | null>(null);
   const drawRef = useRef<() => void>(() => undefined);
+  const detailDrawRef = useRef<() => void>(() => undefined);
   const webGlRef = useRef<WebGlState | null | undefined>(undefined);
+  const detailBitmapsRef = useRef(new Map<string, ImageBitmap>());
+  const detailPendingRef = useRef(new Set<string>());
+  const detailFailedRef = useRef(new Set<string>());
+  const detailGenerationRef = useRef(0);
   const dragRef = useRef<{ pointerId: number; startX: number; startY: number; originX: number; originY: number; moved: boolean } | null>(null);
-  const [transform, setTransform] = useState<ViewTransform>({ scale: 1, x: 0, y: 0 });
+  const [transform, setTransform] = useState<MosaicViewTransform>({ scale: 1, x: 0, y: 0 });
   const [backend, setBackend] = useState<"WebGL2" | "Canvas 2D">("WebGL2");
   const sourceById = useRef(new Map(sources.map((source) => [source.id, source])));
   sourceById.current = new Map(sources.map((source) => [source.id, source]));
@@ -136,6 +172,100 @@ export function MosaicViewport({ assignments, columns, rows, previewUrl, sources
   }, [transform]);
   drawRef.current = draw;
 
+  const drawDetails = useCallback(() => {
+    const detailCanvas = detailCanvasRef.current;
+    const baseCanvas = canvasRef.current;
+    const previewBitmap = bitmapRef.current;
+    if (!detailCanvas || !baseCanvas || !previewBitmap) return;
+    const ratio = window.devicePixelRatio || 1;
+    const viewportWidth = baseCanvas.clientWidth;
+    const viewportHeight = baseCanvas.clientHeight;
+    const width = Math.max(1, Math.round(viewportWidth * ratio));
+    const height = Math.max(1, Math.round(viewportHeight * ratio));
+    if (detailCanvas.width !== width || detailCanvas.height !== height) {
+      detailCanvas.width = width;
+      detailCanvas.height = height;
+    }
+    const context = detailCanvas.getContext("2d");
+    if (!context) return;
+    context.setTransform(1, 0, 0, 1, 0, 0);
+    context.clearRect(0, 0, width, height);
+    if (transform.scale < 3) return;
+
+    const geometry = calculateMosaicGeometry({
+      viewportWidth,
+      viewportHeight,
+      imageWidth: previewBitmap.width,
+      imageHeight: previewBitmap.height,
+      transform,
+    });
+    const cellWidth = geometry.width / columns;
+    const cellHeight = geometry.height / rows;
+    const startColumn = Math.max(0, Math.floor(-geometry.left / cellWidth));
+    const endColumn = Math.min(columns - 1, Math.ceil((viewportWidth - geometry.left) / cellWidth) - 1);
+    const startRow = Math.max(0, Math.floor(-geometry.top / cellHeight));
+    const endRow = Math.min(rows - 1, Math.ceil((viewportHeight - geometry.top) / cellHeight) - 1);
+    if (startColumn > endColumn || startRow > endRow) return;
+
+    const centerColumn = (startColumn + endColumn) / 2;
+    const centerRow = (startRow + endRow) / 2;
+    const visibleCells: Array<{ column: number; row: number; index: number; distance: number }> = [];
+    for (let row = startRow; row <= endRow; row++) {
+      for (let column = startColumn; column <= endColumn; column++) {
+        visibleCells.push({
+          column,
+          row,
+          index: row * columns + column,
+          distance: (column - centerColumn) ** 2 + (row - centerRow) ** 2,
+        });
+      }
+    }
+    visibleCells.sort((left, right) => left.distance - right.distance);
+    const detailCells = visibleCells.slice(0, 240);
+    const generation = detailGenerationRef.current;
+    let scheduled = 0;
+    context.setTransform(ratio, 0, 0, ratio, 0, 0);
+    context.globalAlpha = 0.9;
+    detailCells.forEach((cell) => {
+      const sourceId = assignments[cell.index];
+      const source = sourceById.current.get(sourceId);
+      if (!source) return;
+      const cached = detailBitmapsRef.current.get(sourceId);
+      if (cached) {
+        detailBitmapsRef.current.delete(sourceId);
+        detailBitmapsRef.current.set(sourceId, cached);
+        const drawTile = tileFit === "contain" ? drawDetailContain : drawDetailCover;
+        drawTile(context, cached, geometry.left + cell.column * cellWidth, geometry.top + cell.row * cellHeight, cellWidth, cellHeight);
+        return;
+      }
+      if (scheduled >= 12 || detailPendingRef.current.has(sourceId) || detailFailedRef.current.has(sourceId)) return;
+      scheduled += 1;
+      detailPendingRef.current.add(sourceId);
+      void loadDetailBitmap(source).then((bitmap) => {
+        if (detailGenerationRef.current !== generation) {
+          bitmap.close();
+          return;
+        }
+        detailPendingRef.current.delete(sourceId);
+        detailBitmapsRef.current.set(sourceId, bitmap);
+        while (detailBitmapsRef.current.size > 256) {
+          const oldestId = detailBitmapsRef.current.keys().next().value as string | undefined;
+          if (!oldestId) break;
+          detailBitmapsRef.current.get(oldestId)?.close();
+          detailBitmapsRef.current.delete(oldestId);
+        }
+        detailDrawRef.current();
+      }).catch(() => {
+        if (detailGenerationRef.current !== generation) return;
+        detailPendingRef.current.delete(sourceId);
+        detailFailedRef.current.add(sourceId);
+        detailDrawRef.current();
+      });
+    });
+    context.globalAlpha = 1;
+  }, [assignments, columns, rows, tileFit, transform]);
+  detailDrawRef.current = drawDetails;
+
   useEffect(() => {
     let cancelled = false;
     fetch(previewUrl)
@@ -146,6 +276,7 @@ export function MosaicViewport({ assignments, columns, rows, previewUrl, sources
         bitmapRef.current?.close();
         bitmapRef.current = bitmap;
         drawRef.current();
+        detailDrawRef.current();
       })
       .catch(() => undefined);
     return () => { cancelled = true; };
@@ -160,9 +291,68 @@ export function MosaicViewport({ assignments, columns, rows, previewUrl, sources
     return () => observer.disconnect();
   }, [draw]);
 
+  useEffect(() => {
+    drawDetails();
+    const canvas = canvasRef.current;
+    if (!canvas) return undefined;
+    const observer = new ResizeObserver(drawDetails);
+    observer.observe(canvas);
+    return () => observer.disconnect();
+  }, [drawDetails]);
+
+  useEffect(() => {
+    detailGenerationRef.current += 1;
+    detailBitmapsRef.current.forEach((bitmap) => bitmap.close());
+    detailBitmapsRef.current.clear();
+    detailPendingRef.current.clear();
+    detailFailedRef.current.clear();
+    return () => {
+      detailGenerationRef.current += 1;
+      detailBitmapsRef.current.forEach((bitmap) => bitmap.close());
+      detailBitmapsRef.current.clear();
+    };
+  }, [previewUrl]);
+
+  useEffect(() => {
+    if (cellHighlightRef.current) cellHighlightRef.current.style.opacity = "0";
+  }, [transform]);
+
   useEffect(() => () => bitmapRef.current?.close(), []);
 
   const updateScale = (factor: number) => setTransform((current) => ({ ...current, scale: Math.max(0.5, Math.min(16, current.scale * factor)) }));
+
+  const locatePointerCell = (clientX: number, clientY: number) => {
+    const canvas = canvasRef.current;
+    const bitmap = bitmapRef.current;
+    if (!canvas || !bitmap) return null;
+    const rect = canvas.getBoundingClientRect();
+    const geometry = calculateMosaicGeometry({
+      viewportWidth: rect.width,
+      viewportHeight: rect.height,
+      imageWidth: bitmap.width,
+      imageHeight: bitmap.height,
+      transform,
+    });
+    const cell = locateMosaicCell({ pointX: clientX - rect.left, pointY: clientY - rect.top, columns, rows, geometry });
+    return cell ? { ...cell, geometry } : null;
+  };
+
+  const updateCellHighlight = (clientX: number, clientY: number) => {
+    const highlight = cellHighlightRef.current;
+    if (!highlight) return;
+    const hit = locatePointerCell(clientX, clientY);
+    if (!hit) {
+      highlight.style.opacity = "0";
+      return;
+    }
+    const cellWidth = hit.geometry.width / columns;
+    const cellHeight = hit.geometry.height / rows;
+    highlight.style.left = `${hit.geometry.left + hit.column * cellWidth}px`;
+    highlight.style.top = `${hit.geometry.top + hit.row * cellHeight}px`;
+    highlight.style.width = `${cellWidth}px`;
+    highlight.style.height = `${cellHeight}px`;
+    highlight.style.opacity = "1";
+  };
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLCanvasElement>) => {
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -170,7 +360,11 @@ export function MosaicViewport({ assignments, columns, rows, previewUrl, sources
   };
   const handlePointerMove = (event: ReactPointerEvent<HTMLCanvasElement>) => {
     const drag = dragRef.current;
-    if (!drag || drag.pointerId !== event.pointerId) return;
+    if (!drag || drag.pointerId !== event.pointerId) {
+      updateCellHighlight(event.clientX, event.clientY);
+      return;
+    }
+    if (cellHighlightRef.current) cellHighlightRef.current.style.opacity = "0";
     const deltaX = event.clientX - drag.startX;
     const deltaY = event.clientY - drag.startY;
     drag.moved ||= Math.abs(deltaX) + Math.abs(deltaY) > 5;
@@ -179,17 +373,11 @@ export function MosaicViewport({ assignments, columns, rows, previewUrl, sources
   const handlePointerUp = (event: ReactPointerEvent<HTMLCanvasElement>) => {
     const drag = dragRef.current;
     dragRef.current = null;
-    if (!drag || drag.moved || !bitmapRef.current || !canvasRef.current) return;
-    const canvas = canvasRef.current;
-    const bitmap = bitmapRef.current;
-    const fit = fitScale(canvas, bitmap);
-    const displayWidth = canvas.clientWidth * fit.x * transform.scale;
-    const displayHeight = canvas.clientHeight * fit.y * transform.scale;
-    const normalizedX = (event.nativeEvent.offsetX - canvas.clientWidth / 2 - transform.x) / displayWidth + 0.5;
-    const normalizedY = (event.nativeEvent.offsetY - canvas.clientHeight / 2 - transform.y) / displayHeight + 0.5;
-    if (normalizedX < 0 || normalizedX >= 1 || normalizedY < 0 || normalizedY >= 1) return;
-    const cellIndex = Math.min(assignments.length - 1, Math.floor(normalizedY * rows) * columns + Math.floor(normalizedX * columns));
-    const source = sourceById.current.get(assignments[cellIndex]);
+    if (!drag || drag.moved) return;
+    const hit = locatePointerCell(event.clientX, event.clientY);
+    if (!hit || hit.index >= assignments.length) return;
+    updateCellHighlight(event.clientX, event.clientY);
+    const source = sourceById.current.get(assignments[hit.index]);
     if (source) onSelectSource(source);
   };
 
@@ -201,14 +389,18 @@ export function MosaicViewport({ assignments, columns, rows, previewUrl, sources
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
+        onPointerLeave={() => { if (cellHighlightRef.current) cellHighlightRef.current.style.opacity = "0"; }}
         onWheel={(event: WheelEvent<HTMLCanvasElement>) => {
           event.preventDefault();
+          if (cellHighlightRef.current) cellHighlightRef.current.style.opacity = "0";
           updateScale(event.deltaY < 0 ? 1.15 : 1 / 1.15);
         }}
         ref={canvasRef}
       />
+      <canvas className="mosaic-detail-layer" aria-hidden="true" ref={detailCanvasRef} />
+      <div className="mosaic-cell-highlight" aria-hidden="true" ref={cellHighlightRef} />
       <div className="mosaic-viewport-tools">
-        <span>{backend}</span>
+        <span>{backend}{transform.scale >= 3 ? " · 高清细节" : ""}</span>
         <button type="button" onClick={() => updateScale(1.25)} title="放大"><ZoomIn size={17} /></button>
         <button type="button" onClick={() => updateScale(0.8)} title="缩小"><ZoomOut size={17} /></button>
         <button type="button" onClick={() => setTransform({ scale: 1, x: 0, y: 0 })} title="适应窗口"><Maximize2 size={17} /></button>

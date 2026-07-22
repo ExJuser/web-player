@@ -151,13 +151,13 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
   const [activeProject, setActiveProject] = useState<MosaicProject | null>(null);
   const [target, setTarget] = useState<RuntimeTarget | null>(null);
   const [sourceFilter, setSourceFilter] = useState<MosaicSourceFilter>("mixed");
-  const [sourceLimit, setSourceLimit] = useState(4000);
-  const [columns, setColumns] = useState(100);
-  const [targetClarity, setTargetClarity] = useState(0.55);
-  const [colorPreservation, setColorPreservation] = useState(0.58);
+  const [sourceLimit, setSourceLimit] = useState(10000);
+  const [columns, setColumns] = useState(160);
+  const [targetClarity, setTargetClarity] = useState(0.6);
+  const [colorPreservation, setColorPreservation] = useState(0.55);
   const [tileFit, setTileFit] = useState<MosaicTileFit>("cover");
-  const [previewLongestEdge, setPreviewLongestEdge] = useState<MosaicPreviewLongestEdge>(2200);
-  const [maxReuse, setMaxReuse] = useState(12);
+  const [previewLongestEdge, setPreviewLongestEdge] = useState<MosaicPreviewLongestEdge>(3200);
+  const [maxReuse, setMaxReuse] = useState(3);
   const [seed, setSeed] = useState(() => Date.now() >>> 0);
   const [previewUrl, setPreviewUrl] = useState("");
   const [progressivePreviewUrl, setProgressivePreviewUrl] = useState("");
@@ -606,6 +606,7 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
                 rows={activeProject.recipe.rows}
                 previewUrl={previewUrl}
                 sources={sources}
+                tileFit={activeProject.recipe.tileFit ?? "cover"}
                 onSelectSource={setSelectedSource}
               />
             </>
