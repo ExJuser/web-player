@@ -25,6 +25,34 @@ test("mosaic viewport hit testing follows zoom and pan geometry", () => {
   assert.equal(geometryModule.locateMosaicCell({ pointX: geometry.left - 1, pointY: geometry.top, columns: 160, rows: 90, geometry }), null);
 });
 
+test("mosaic viewport keeps hit testing and highlights aligned after rotation", () => {
+  const geometry = geometryModule.calculateMosaicGeometry({
+    viewportWidth: 1000,
+    viewportHeight: 600,
+    imageWidth: 1600,
+    imageHeight: 900,
+    transform: { scale: 1, x: 0, y: 0, rotation: 90 },
+  });
+  const originalX = geometry.left + geometry.width * 0.75;
+  const originalY = geometry.top + geometry.height * 0.25;
+  const deltaX = originalX - geometry.centerX;
+  const deltaY = originalY - geometry.centerY;
+  const cell = geometryModule.locateMosaicCell({
+    pointX: geometry.centerX - deltaY,
+    pointY: geometry.centerY + deltaX,
+    columns: 160,
+    rows: 90,
+    geometry,
+  });
+
+  assert.deepEqual(cell, { column: 120, row: 22, index: 3640 });
+  assert.equal(geometry.width, 600);
+  assert.equal(geometry.height, 337.5);
+  const cellRect = geometryModule.calculateMosaicCellRect({ column: 120, row: 22, columns: 160, rows: 90, geometry });
+  assert.equal(cellRect.width, geometry.height / 90);
+  assert.equal(cellRect.height, geometry.width / 160);
+});
+
 test("mosaic source popover opens beside the selected cell and stays inside the viewport", () => {
   const right = geometryModule.calculateMosaicPopoverAnchor({
     viewportWidth: 1000,
