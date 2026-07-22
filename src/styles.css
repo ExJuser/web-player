@@ -6618,6 +6618,26 @@ button {
   background: rgba(0, 161, 214, 0.22);
 }
 
+.common-tag-picker {
+  display: grid;
+  gap: 8px;
+}
+
+.common-tag-picker > strong {
+  font-size: 13px;
+}
+
+.common-tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.common-tag-list .tag-editor-chip:disabled {
+  cursor: wait;
+  opacity: 0.58;
+}
+
 .tag-editor-form {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

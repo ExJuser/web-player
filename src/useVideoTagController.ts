@@ -71,6 +71,25 @@ export function useVideoTagController({
       currentTags: currentVideoTags,
     });
   }, [activeTagInputSegment, currentVideo, currentVideoTags, isTagDialogOpen, videoTags]);
+  const commonTags = useMemo(() => {
+    if (!isTagDialogOpen || !currentVideo) return [];
+    const currentTagKeys = new Set(currentVideoTags.map(normalizeTagKey));
+    const usageByKey = new Map<string, { label: string; count: number }>();
+    Object.values(videoTags).forEach((tags) => {
+      const seenVideoTagKeys = new Set<string>();
+      tags.forEach((tag) => {
+        const key = normalizeTagKey(tag);
+        if (!key || currentTagKeys.has(key) || seenVideoTagKeys.has(key)) return;
+        seenVideoTagKeys.add(key);
+        const usage = usageByKey.get(key);
+        usageByKey.set(key, { label: usage?.label ?? tag, count: (usage?.count ?? 0) + 1 });
+      });
+    });
+    return Array.from(usageByKey.values())
+      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, "zh-Hans-CN", { numeric: true }))
+      .slice(0, 8)
+      .map(({ label }) => label);
+  }, [currentVideo, currentVideoTags, isTagDialogOpen, videoTags]);
   const resolvedActiveTagSuggestionIndex = tagInputSuggestions.length
     ? Math.min(activeTagSuggestionIndex, tagInputSuggestions.length - 1)
     : 0;
@@ -261,6 +280,7 @@ export function useVideoTagController({
     activeTagSuggestionId,
     addTagsToCurrentVideo,
     applyTagMergeSuggestion,
+    commonTags,
     getAllLibraryTags,
     keepTagMergeSuggestion,
     removeTagFromCurrentVideo,

@@ -27,6 +27,7 @@ type TagDialogProps = {
   currentVideoId: string;
   currentVideoName: string;
   currentVideoTags: string[];
+  commonTags: string[];
   actorProfiles: ActorProfileStore;
   currentActorIds: string[];
   currentActorSource: ActorSource | null;
@@ -49,6 +50,7 @@ type TagDialogProps = {
   hasCurrentVideo: boolean;
   onClose: () => void;
   onRemoveTag: (tag: string) => void;
+  onQuickAddTag: (tag: string) => void;
   onSaveActors: (actorIds: string[], newActorName?: string) => void;
   onRestoreAutomaticActors: () => void;
   onSubmitTagInput: () => void;
@@ -76,6 +78,7 @@ export function TagDialog({
   currentVideoId,
   currentVideoName,
   currentVideoTags,
+  commonTags,
   actorProfiles,
   currentActorIds,
   currentActorSource,
@@ -98,6 +101,7 @@ export function TagDialog({
   hasCurrentVideo,
   onClose,
   onRemoveTag,
+  onQuickAddTag,
   onSaveActors,
   onRestoreAutomaticActors,
   onSubmitTagInput,
@@ -225,6 +229,25 @@ export function TagDialog({
             ) : null}
           </div>
         </section>
+
+        {commonTags.length ? (
+          <section className="common-tag-picker" aria-labelledby="common-tag-picker-title">
+            <strong id="common-tag-picker-title">常用标签</strong>
+            <div className="common-tag-list">
+              {commonTags.map((tag) => (
+                <button
+                  className="tag-editor-chip"
+                  key={tag}
+                  type="button"
+                  disabled={!hasCurrentVideo || isTagSuggestionLoading}
+                  onClick={() => onQuickAddTag(tag)}
+                >
+                  <span>{tag}</span>
+                </button>
+              ))}
+            </div>
+          </section>
+        ) : null}
 
         <form
           className="tag-editor-form"

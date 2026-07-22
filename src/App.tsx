@@ -1361,6 +1361,7 @@ export default function App() {
     activeTagSuggestionId,
     addTagsToCurrentVideo,
     applyTagMergeSuggestion,
+    commonTags,
     getAllLibraryTags,
     keepTagMergeSuggestion,
     removeTagFromCurrentVideo,
@@ -6334,6 +6335,7 @@ export default function App() {
       currentVideoId={currentVideo?.id ?? ""}
       currentVideoName={currentVideo?.name ?? ""}
       currentVideoTags={currentVideoTags}
+      commonTags={commonTags}
       actorProfiles={actorProfiles}
       currentActorIds={currentVideoResolvedActors.actorIds}
       currentActorSource={currentVideoResolvedActors.source}
@@ -6356,6 +6358,7 @@ export default function App() {
       hasCurrentVideo={Boolean(currentVideo)}
       onClose={() => setIsTagDialogOpen(false)}
       onRemoveTag={removeTagFromCurrentVideo}
+      onQuickAddTag={(tag) => void addTagsToCurrentVideo([tag])}
       onSaveActors={saveCurrentVideoActorOverride}
       onRestoreAutomaticActors={restoreCurrentVideoActors}
       onSubmitTagInput={() => {
