@@ -57,6 +57,7 @@ export type MosaicFeatureDescriptor = {
 
 export type MosaicRuntimeSource = MosaicSourceRef & {
   url: string;
+  originalUrl?: string;
   file?: File;
 };
 

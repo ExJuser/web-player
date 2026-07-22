@@ -51,6 +51,10 @@ function normalizePreviewLongestEdge(value?: number): MosaicPreviewLongestEdge {
   return value === 1400 || value === 3200 ? value : 2200;
 }
 
+function createOriginalPhotoUrl(mediaRootId: string, relativePath: string) {
+  return `/api/media/${encodeURIComponent(mediaRootId)}/${relativePath.split("/").map((segment) => encodeURIComponent(segment)).join("/")}`;
+}
+
 function createRuntimeSources(videos: VideoItem[], albums: PhotoAlbum[]) {
   const videoSources: MosaicRuntimeSource[] = videos.flatMap((video) => {
     const url = video.posterUrl || video.thumbnailUrl || video.thumbUrl || "";
@@ -77,26 +81,28 @@ function createRuntimeSources(videos: VideoItem[], albums: PhotoAlbum[]) {
     size: image.size,
     lastModified: image.lastModified,
     url: image.url,
+    originalUrl: image.file ? undefined : createOriginalPhotoUrl(image.mediaRootId, image.relativePath),
     file: image.file,
   })));
   return [...videoSources, ...photoSources];
 }
 
-function ResourceThumbnail({ source, preferFile = false }: { source: MosaicRuntimeSource; preferFile?: boolean }) {
-  const [url, setUrl] = useState(source.url);
+function ResourceThumbnail({ source, preferOriginal = false }: { source: MosaicRuntimeSource; preferOriginal?: boolean }) {
+  const preferredUrl = preferOriginal ? source.originalUrl || source.url : source.url;
+  const [url, setUrl] = useState(preferredUrl);
   useEffect(() => {
-    if (!preferFile && (source.url || !source.file)) {
+    if (!preferOriginal && (source.url || !source.file)) {
       setUrl(source.url);
       return undefined;
     }
     if (!source.file) {
-      setUrl(source.url);
+      setUrl(source.originalUrl || source.url);
       return undefined;
     }
     const nextUrl = URL.createObjectURL(source.file);
     setUrl(nextUrl);
     return () => URL.revokeObjectURL(nextUrl);
-  }, [preferFile, source.file, source.url]);
+  }, [preferOriginal, source.file, source.originalUrl, source.url]);
   return url ? <img src={url} alt="" loading="lazy" decoding="async" draggable={false} /> : <ImageIcon size={25} />;
 }
 
@@ -641,7 +647,7 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
                 sourceCard={selectedSource ? (
                   <aside className="mosaic-source-card">
                     <button type="button" onClick={() => setSelectedSource(null)} title="关闭"><X size={17} /></button>
-                    <div className="mosaic-source-preview"><ResourceThumbnail source={selectedSource} preferFile /></div>
+                    <div className="mosaic-source-preview"><ResourceThumbnail source={selectedSource} preferOriginal /></div>
                     <div className="mosaic-source-meta"><span>{selectedSource.kind === "video" ? "影片缩略图" : "图集图片"}</span><strong>{selectedSource.label}</strong></div>
                     <button className="primary-button" type="button" onClick={openSelectedSource}>{selectedSource.kind === "video" ? <><Play size={17} /> 播放影片</> : <><FolderOpen size={17} /> 打开图集</>}</button>
                   </aside>

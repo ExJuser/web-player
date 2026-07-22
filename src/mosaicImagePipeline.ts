@@ -73,8 +73,8 @@ function pruneMosaicBitmapCache() {
   }
 }
 
-async function createMosaicTileBitmap(source: MosaicRuntimeSource, maxEdge: number) {
-  const bitmap = await loadMosaicBitmap({ file: source.file, url: source.url });
+async function createMosaicTileBitmap(source: MosaicRuntimeSource, maxEdge: number, preferOriginal: boolean) {
+  const bitmap = await loadMosaicBitmap({ file: source.file, url: preferOriginal ? source.originalUrl || source.url : source.url });
   const scale = Math.min(1, maxEdge / Math.max(bitmap.width, bitmap.height));
   if (scale >= 1) return bitmap;
   try {
@@ -88,15 +88,15 @@ async function createMosaicTileBitmap(source: MosaicRuntimeSource, maxEdge: numb
   }
 }
 
-export async function acquireMosaicBitmap(source: MosaicRuntimeSource, maxEdge = 128): Promise<MosaicBitmapLease> {
+export async function acquireMosaicBitmap(source: MosaicRuntimeSource, maxEdge = 128, preferOriginal = false): Promise<MosaicBitmapLease> {
   const normalizedEdge = Math.max(32, Math.round(maxEdge));
-  const key = `${source.id}:${createMosaicSignature(source)}:${normalizedEdge}`;
+  const key = `${source.id}:${createMosaicSignature(source)}:${normalizedEdge}:${preferOriginal ? "original" : "preview"}`;
   let entry = mosaicBitmapCache.get(key);
   if (entry) {
     entry.users += 1;
     touchMosaicBitmapCache(key, entry);
   } else {
-    const createdEntry: MosaicBitmapCacheEntry = { promise: createMosaicTileBitmap(source, normalizedEdge), users: 1, bytes: 0 };
+    const createdEntry: MosaicBitmapCacheEntry = { promise: createMosaicTileBitmap(source, normalizedEdge, preferOriginal), users: 1, bytes: 0 };
     entry = createdEntry;
     mosaicBitmapCache.set(key, createdEntry);
     void createdEntry.promise.then((bitmap) => {

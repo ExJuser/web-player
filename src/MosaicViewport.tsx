@@ -230,7 +230,7 @@ export function MosaicViewport({ assignments, columns, rows, previewUrl, sources
       if (!availableLoads || detailPendingRef.current.has(sourceId) || detailFailedRef.current.has(sourceId)) return;
       availableLoads -= 1;
       detailPendingRef.current.add(sourceId);
-      void acquireMosaicBitmap(source, 256).then((lease) => {
+      void acquireMosaicBitmap(source, 256, true).then((lease) => {
         if (detailGenerationRef.current !== generation) {
           lease.release();
           return;
