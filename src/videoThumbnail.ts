@@ -383,7 +383,7 @@ async function createVideoThumbnailBlob(video: VideoItem, signal?: AbortSignal) 
   }
 }
 
-export async function loadVideoThumbnail(libraryId: string | null, video: VideoItem, signal?: AbortSignal) {
+export async function loadAvailableVideoThumbnail(libraryId: string | null, video: VideoItem, signal?: AbortSignal) {
   throwIfAborted(signal);
   const artworkUrl = await selectVideoArtworkThumbnail(video, readArtworkSize, signal);
   if (artworkUrl) return { thumbnailUrl: artworkUrl, metadata: undefined };
@@ -403,6 +403,11 @@ export async function loadVideoThumbnail(libraryId: string | null, video: VideoI
     return { thumbnailUrl: cachedThumbnailUrl, metadata: undefined };
   }
 
+  return null;
+}
+
+export async function generateVideoThumbnail(libraryId: string | null, video: VideoItem, signal?: AbortSignal) {
+  throwIfAborted(signal);
   if (video.mediaRootId) {
     const serverController = new AbortController();
     const abortServerRequest = () => serverController.abort();
@@ -445,4 +450,11 @@ export async function loadVideoThumbnail(libraryId: string | null, video: VideoI
   }
   void writeCachedThumbnail(libraryId, video.id, thumbnailBlob).catch(() => undefined);
   return { thumbnailUrl: URL.createObjectURL(thumbnailBlob), metadata };
+}
+
+export async function loadVideoThumbnail(libraryId: string | null, video: VideoItem, signal?: AbortSignal) {
+  return (
+    (await loadAvailableVideoThumbnail(libraryId, video, signal)) ??
+    generateVideoThumbnail(libraryId, video, signal)
+  );
 }
