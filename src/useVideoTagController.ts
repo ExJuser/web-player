@@ -87,7 +87,7 @@ export function useVideoTagController({
     });
     return Array.from(usageByKey.values())
       .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, "zh-Hans-CN", { numeric: true }))
-      .slice(0, 15)
+      .slice(0, 20)
       .map(({ label }) => label);
   }, [currentVideo, currentVideoTags, isTagDialogOpen, videoTags]);
   const resolvedActiveTagSuggestionIndex = tagInputSuggestions.length
