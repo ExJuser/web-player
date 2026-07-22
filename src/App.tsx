@@ -546,6 +546,7 @@ export default function App() {
   const [photoAlbums, setPhotoAlbums] = useState<PhotoAlbum[]>([]);
   const [photoRootStatuses, setPhotoRootStatuses] = useState<PlayerMediaRootStatus[]>([]);
   const [selectedPhotoAlbumId, setSelectedPhotoAlbumId] = useState<string | null>(null);
+  const photoViewerReturnRef = useRef<"photos" | "mosaic">("photos");
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
   const [photoObjectUrls, setPhotoObjectUrls] = useState<Record<string, string>>({});
   const [photoAlbumProgress, setPhotoAlbumProgress] = useState<Record<string, PhotoAlbumProgress>>({});
@@ -1638,6 +1639,7 @@ export default function App() {
     [createHomeVideoCard, currentVideo, homeMediaMode, playlistVideos, primaryResumeCard, recentHomeCards, seriesTitleByVideoId],
   );
   const isHomeViewVisible = activeView === "home" && !isPrivacyMode && !isCinemaMode && !isFullscreen;
+  const shouldKeepMosaicHomeMounted = activeView === "photoViewer" && photoViewerReturnRef.current === "mosaic";
   const shouldLoadWatchActivity = isHomeViewVisible
     && isRatingFilterEnabled
     && specialHomeSection === "overview"
@@ -3394,6 +3396,7 @@ export default function App() {
     cancelAutoNextPrompt();
     resetHoldSpeedState();
     showControls();
+    photoViewerReturnRef.current = "photos";
     setActiveView("photos");
   }, [cancelAutoNextPrompt, persistCurrentProgress, resetHoldSpeedState, showControls]);
 
@@ -3429,6 +3432,23 @@ export default function App() {
     setSelectedPhotoAlbumId,
     visiblePhotoAlbums,
   });
+
+  const openMosaicPhotoAlbum = useCallback((album: PhotoAlbum, imageIndex: number) => {
+    photoViewerReturnRef.current = "mosaic";
+    openPhotoAlbum(album, { imageIndex });
+  }, [openPhotoAlbum]);
+
+  const returnFromPhotoViewer = useCallback(() => {
+    if (photoViewerReturnRef.current === "mosaic") {
+      photoViewerReturnRef.current = "photos";
+      setHomeMediaMode("special");
+      setSpecialHomeSection("mosaic");
+      setActiveView("home");
+      return;
+    }
+    photoViewerReturnRef.current = "photos";
+    showPhotoAlbumList();
+  }, [showPhotoAlbumList]);
 
   const clearPhotoAlbumAccessAfterWritePermissionDenied = useCallback(async () => {
     await clearPhotoAlbumFolderHandle().catch(() => undefined);
@@ -5514,8 +5534,8 @@ export default function App() {
           onToggleTheme={toggleTheme}
         />
 
-        {isHomeViewVisible ? (
-          <section className={`home-dashboard ${homeMediaMode === "special" && specialHomeSection === "mosaic" ? "mosaic-active" : ""}`} aria-label="继续观看首页">
+        {isHomeViewVisible || shouldKeepMosaicHomeMounted ? (
+          <section className={`home-dashboard ${homeMediaMode === "special" && specialHomeSection === "mosaic" ? "mosaic-active" : ""}`} aria-label="继续观看首页" hidden={!isHomeViewVisible}>
             <div className="home-primary-column">
               {specialHomeSection !== "mosaic" ? (
                 <>
@@ -5584,7 +5604,7 @@ export default function App() {
                 <MosaicStudioSection
                   albums={photoAlbums}
                   videos={modeFilteredVideos}
-                  onOpenAlbum={(album, imageIndex) => openPhotoAlbum(album, { imageIndex })}
+                  onOpenAlbum={openMosaicPhotoAlbum}
                   onOpenVideo={openVideoFromHome}
                 />
               ) : homeMediaMode === "special" && specialHomeSection === "actors" ? (
@@ -5753,7 +5773,7 @@ export default function App() {
             isFavorite={favoritePhotoAlbumIds.has(selectedPhotoAlbum.id)}
             thumbnails={visiblePhotoThumbnails}
             getImageUrl={getPhotoImageUrl}
-            onBack={showPhotoAlbumList}
+            onBack={returnFromPhotoViewer}
             onDeleteCurrentPhoto={requestDeleteCurrentPhoto}
             onEditTags={openPhotoAlbumTagEditor}
             onMarkCompleted={markSelectedPhotoAlbumCompleted}
