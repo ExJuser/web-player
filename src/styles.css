@@ -4792,6 +4792,10 @@ button {
 }
 
 .playlist-page-status small {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
   min-width: 0;
   color: #8a93a3;
   font-size: 11px;
@@ -4827,24 +4831,16 @@ button {
   bottom: calc(100% + 6px);
 }
 
-.playlist-page-jump {
+.playlist-page-status-jump {
   display: inline-flex;
-  flex: 0 1 84px;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
-  color: #8a93a3;
-  font-size: 12px;
-  font-weight: 600;
-  white-space: nowrap;
 }
 
 .playlist-page-jump-input {
-  width: 48px;
-  height: 32px;
-  padding: 0 6px;
+  width: 34px;
+  height: 18px;
+  padding: 0 3px;
   border: 1px solid #303743;
-  border-radius: 6px;
+  border-radius: 4px;
   background: #20252d;
   color: #dce2ec;
   font: inherit;
@@ -7123,17 +7119,15 @@ button {
   color: #667085;
 }
 
-.app-shell.theme-light .playlist-page-jump {
-  color: #667085;
-}
-
-.app-shell.theme-light .playlist-page-jump-input {
+.app-shell.theme-light .playlist-page-jump-input,
+:root[data-theme="light"] .playlist-page-jump-input {
   border-color: #cfd8e3;
   background: #ffffff;
   color: #243044;
 }
 
-.app-shell.theme-light .playlist-page-jump-input:focus {
+.app-shell.theme-light .playlist-page-jump-input:focus,
+:root[data-theme="light"] .playlist-page-jump-input:focus {
   border-color: #00a1d6;
   box-shadow: 0 0 0 1px rgba(0, 161, 214, 0.2);
 }

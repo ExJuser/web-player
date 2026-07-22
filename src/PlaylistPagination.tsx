@@ -59,7 +59,30 @@ export function PlaylistPagination({
       </button>
       <span className="playlist-page-status">
         {startLabel}-{endLabel} / {total}
-        <small>第 {page} / {pageCount} 页</small>
+        <small>
+          第
+          <label className="playlist-page-status-jump" aria-label="跳转页数">
+            <input
+              className="playlist-page-jump-input"
+              type="number"
+              min={1}
+              max={pageCount}
+              step={1}
+              inputMode="numeric"
+              value={pageInput}
+              onChange={(event) => onPageInputChange(event.target.value)}
+              onBlur={onCommitPageInput}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  onCommitPageInput();
+                }
+              }}
+              aria-label="输入页码跳转"
+            />
+          </label>
+          / {pageCount} 页
+        </small>
       </span>
       <button
         className="playlist-page-button"
@@ -81,27 +104,6 @@ export function PlaylistPagination({
       >
         <SkipForward className="playlist-page-skip-forward" size={16} />
       </button>
-      <label className="playlist-page-jump" aria-label="跳转页数">
-        <span>跳转</span>
-        <input
-          className="playlist-page-jump-input"
-          type="number"
-          min={1}
-          max={pageCount}
-          step={1}
-          inputMode="numeric"
-          value={pageInput}
-          onChange={(event) => onPageInputChange(event.target.value)}
-          onBlur={onCommitPageInput}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              event.preventDefault();
-              onCommitPageInput();
-            }
-          }}
-          aria-label="输入页码跳转"
-        />
-      </label>
       <ControlSelect
         label="每页"
         ariaLabel="播放列表每页数量"

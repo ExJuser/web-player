@@ -44,7 +44,7 @@ export const playlistSortOptions: Array<{ value: PlaylistSortMode; label: string
   { value: "playCount", label: "播放次数" },
   { value: "emissionCount", label: "发射次数" },
 ];
-export const playlistPageSizeOptions = [30, 50, 100] as const;
+export const playlistPageSizeOptions = [15, 30, 50, 100] as const;
 export const volumeStep = 0.05;
 export const controlsAutoHideDelay = 2500;
 export const autoNextPromptSeconds = 5;
