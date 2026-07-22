@@ -29,7 +29,7 @@ type TagDialogProps = {
   currentVideoId: string;
   currentVideoName: string;
   currentVideoTags: string[];
-  commonTags: string[];
+  commonTags: Array<{ label: string; count: number }>;
   actorProfiles: ActorProfileStore;
   currentActorIds: string[];
   currentActorSource: ActorSource | null;
@@ -237,30 +237,32 @@ export function TagDialog({
         {commonTags.length ? (
           <section className="common-tag-picker" aria-labelledby="common-tag-picker-title">
             <strong id="common-tag-picker-title">常用标签</strong>
-            <div className="common-tag-list">
+            <div className={`common-tag-list custom-scrollbar${areCommonTagsExpanded ? " expanded" : ""}`}>
               {visibleCommonTags.map((tag) => (
                 <button
                   className="tag-editor-chip"
-                  key={tag}
+                  key={tag.label}
                   type="button"
                   disabled={!hasCurrentVideo || isTagSuggestionLoading}
-                  onClick={() => onQuickAddTag(tag)}
+                  title={`${tag.label}：关联 ${tag.count} 部影片`}
+                  onClick={() => onQuickAddTag(tag.label)}
                 >
-                  <span>{tag}</span>
+                  <span>{tag.label}</span>
+                  <small>{tag.count} 部</small>
                 </button>
               ))}
-              {commonTags.length > COMMON_TAG_LIMIT ? (
-                <button
-                  aria-expanded={areCommonTagsExpanded}
-                  className="tag-editor-chip common-tag-toggle"
-                  type="button"
-                  onClick={() => setAreCommonTagsExpanded((current) => !current)}
-                >
-                  <span>{areCommonTagsExpanded ? "收起" : `展开更多（${commonTags.length - COMMON_TAG_LIMIT}）`}</span>
-                  <ChevronDown aria-hidden="true" size={15} />
-                </button>
-              ) : null}
             </div>
+            {commonTags.length > COMMON_TAG_LIMIT ? (
+              <button
+                aria-expanded={areCommonTagsExpanded}
+                className="tag-editor-chip common-tag-toggle"
+                type="button"
+                onClick={() => setAreCommonTagsExpanded((current) => !current)}
+              >
+                <span>{areCommonTagsExpanded ? "收起" : `展开更多（${commonTags.length - COMMON_TAG_LIMIT}）`}</span>
+                <ChevronDown aria-hidden="true" size={15} />
+              </button>
+            ) : null}
           </section>
         ) : null}
 

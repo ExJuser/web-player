@@ -6639,6 +6639,18 @@ button {
   gap: 8px;
 }
 
+.common-tag-list.expanded {
+  max-height: 240px;
+  padding-right: 4px;
+  overflow-y: auto;
+}
+
+.common-tag-list .tag-editor-chip small {
+  flex: none;
+  color: var(--muted-text);
+  font-size: 11px;
+}
+
 .common-tag-list .tag-editor-chip:disabled {
   cursor: wait;
   opacity: 0.58;
