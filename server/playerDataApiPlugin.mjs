@@ -1123,7 +1123,9 @@ export function playerDataApiPlugin({ projectRoot, env }) {
               capabilities,
               signal,
               onProgress,
-              persistHighlights: (videoId, highlights) => store.replaceVideoHighlights("global", videoId, highlights),
+              persistHighlights: (videoId, highlights) => payload?.highlightsOnly === true
+                ? store.copyVideoMetadata("global", sourceVideoId, videoId, { highlights: [] })
+                : store.replaceVideoHighlights("global", videoId, highlights),
             }),
           }));
         } catch (error) {
