@@ -9969,6 +9969,12 @@ button {
 .mosaic-progress-overlay > span { color: rgba(240,235,255,.62); }
 .mosaic-progress-overlay > div { width: min(420px, 72%); height: 7px; overflow: hidden; border-radius: 999px; background: rgba(255,255,255,.1); }
 .mosaic-progress-overlay i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg,#8c57ff,#36e4ff); transition: width .2s ease; }
+.mosaic-progress-overlay.has-preview { inset: auto auto 18px 50%; grid-template-columns: auto minmax(0,1fr) auto; align-items: center; justify-items: start; align-content: normal; width: min(520px, calc(100% - 36px)); padding: 14px 16px; border: 1px solid rgba(174,151,236,.22); border-radius: 16px; backdrop-filter: blur(18px); background: rgba(15,13,27,.88); box-shadow: 0 18px 45px rgba(0,0,0,.38); transform: translateX(-50%); }
+.mosaic-progress-overlay.has-preview > svg { grid-row: 1; }
+.mosaic-progress-overlay.has-preview > strong { min-width: 0; }
+.mosaic-progress-overlay.has-preview > div { grid-column: 1 / -1; width: 100%; }
+.mosaic-progressive-preview { display: grid; place-items: center; min-height: 720px; padding: 24px; background: radial-gradient(circle at center, rgba(91,61,180,.13), transparent 55%), #07070d; }
+.mosaic-progressive-preview img { max-width: 100%; max-height: 672px; border-radius: 14px; object-fit: contain; box-shadow: 0 18px 55px rgba(0,0,0,.3); }
 
 .mosaic-viewport-shell { position: relative; height: 660px; overflow: hidden; }
 .mosaic-viewport { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
@@ -10061,6 +10067,8 @@ button {
 :root[data-theme="light"] .mosaic-progress-overlay > span { color: rgba(48,38,70,.62); }
 .app-shell.theme-light .mosaic-status-message,
 :root[data-theme="light"] .mosaic-status-message { border-color: rgba(91,67,142,.16); color: rgba(48,38,70,.82); background: rgba(255,255,255,.86); }
+.app-shell.theme-light .mosaic-progressive-preview,
+:root[data-theme="light"] .mosaic-progressive-preview { background: radial-gradient(circle at center, rgba(126,91,224,.12), transparent 55%), #f8f7fc; }
 
 @media (max-width: 900px) {
   .mosaic-studio-hero { align-items: flex-start; padding: 25px; }
@@ -10069,6 +10077,7 @@ button {
   .mosaic-sidebar { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); }
   .mosaic-projects { grid-column: 1 / -1; }
   .mosaic-main-stage { min-height: 620px; }
+  .mosaic-progressive-preview { min-height: 620px; }
   .mosaic-viewport-shell { height: 560px; }
   .mosaic-picker-grid { grid-template-columns: repeat(4,minmax(0,1fr)); }
 }

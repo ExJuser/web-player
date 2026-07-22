@@ -135,6 +135,7 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
   const workerRef = useRef<Worker | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const uploadedTargetUrlRef = useRef("");
+  const progressivePreviewUrlRef = useRef("");
   const [projects, setProjects] = useState<MosaicProject[]>([]);
   const [activeProject, setActiveProject] = useState<MosaicProject | null>(null);
   const [target, setTarget] = useState<RuntimeTarget | null>(null);
@@ -148,6 +149,7 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
   const [maxReuse, setMaxReuse] = useState(12);
   const [seed, setSeed] = useState(() => Date.now() >>> 0);
   const [previewUrl, setPreviewUrl] = useState("");
+  const [progressivePreviewUrl, setProgressivePreviewUrl] = useState("");
   const [generation, setGeneration] = useState<GenerationState>(null);
   const [backend, setBackend] = useState("");
   const [message, setMessage] = useState("");
@@ -169,6 +171,7 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
       abortRef.current?.abort();
       workerRef.current?.terminate();
       if (uploadedTargetUrlRef.current) URL.revokeObjectURL(uploadedTargetUrlRef.current);
+      if (progressivePreviewUrlRef.current) URL.revokeObjectURL(progressivePreviewUrlRef.current);
     };
   }, []);
 
@@ -249,6 +252,9 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
+    if (progressivePreviewUrlRef.current) URL.revokeObjectURL(progressivePreviewUrlRef.current);
+    progressivePreviewUrlRef.current = "";
+    setProgressivePreviewUrl("");
     setSelectedSource(null);
     setMessage("");
     try {
@@ -295,6 +301,14 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
         type: "image/webp",
         signal: controller.signal,
         onProgress: (completed, total) => setGeneration({ message: "正在合成渐进预览", completed, total }),
+        onPreview: (progressivePreview) => {
+          if (controller.signal.aborted) return;
+          const nextUrl = URL.createObjectURL(progressivePreview);
+          const previousUrl = progressivePreviewUrlRef.current;
+          progressivePreviewUrlRef.current = nextUrl;
+          setProgressivePreviewUrl(nextUrl);
+          if (previousUrl) URL.revokeObjectURL(previousUrl);
+        },
       });
       const projectId = activeProject?.id ?? createProjectId();
       let targetRef = target.ref;
@@ -343,6 +357,10 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
     } catch (error) {
       setMessage(error instanceof DOMException && error.name === "AbortError" ? "生成已取消。" : error instanceof Error ? error.message : "千图生成失败。" );
     } finally {
+      const progressiveUrl = progressivePreviewUrlRef.current;
+      progressivePreviewUrlRef.current = "";
+      setProgressivePreviewUrl("");
+      if (progressiveUrl) URL.revokeObjectURL(progressiveUrl);
       setGeneration(null);
       if (abortRef.current === controller) abortRef.current = null;
     }
@@ -455,14 +473,16 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
 
         <div className="mosaic-main-stage">
           {generation ? (
-            <div className="mosaic-progress-overlay">
+            <div className={`mosaic-progress-overlay ${progressivePreviewUrl ? "has-preview" : ""}`}>
               <LoaderCircle className="spin" size={34} />
               <strong>{generation.message}</strong>
               <span>{progressPercent}% · {generation.completed} / {generation.total}</span>
               <div><i style={{ width: `${progressPercent}%` }} /></div>
             </div>
           ) : null}
-          {previewUrl && activeProject ? (
+          {progressivePreviewUrl ? (
+            <div className="mosaic-progressive-preview"><img src={progressivePreviewUrl} alt="正在生成的千图作品预览" /></div>
+          ) : previewUrl && activeProject ? (
             <>
               <div className="mosaic-stage-header">
                 <input

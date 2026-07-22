@@ -194,6 +194,7 @@ export async function renderMosaic(input: {
   type: "image/webp" | "image/png";
   signal?: AbortSignal;
   onProgress?: (completed: number, total: number) => void;
+  onPreview?: (preview: Blob, completed: number, total: number) => void;
 }) {
   const aspect = input.columns / input.rows;
   const width = aspect >= 1 ? input.longestEdge : Math.max(1, Math.round(input.longestEdge * aspect));
@@ -214,6 +215,8 @@ export async function renderMosaic(input: {
   const entries = Array.from(cellsBySource.entries());
   const cellWidth = width / input.columns;
   const cellHeight = height / input.rows;
+  const previewStep = Math.max(1, Math.ceil(entries.length / 16));
+  let lastPreviewAt = Number.NEGATIVE_INFINITY;
   for (let sourceIndex = 0; sourceIndex < entries.length; sourceIndex++) {
     if (input.signal?.aborted) throw new DOMException("生成已取消。", "AbortError");
     const [sourceId, cells] = entries[sourceIndex];
@@ -234,7 +237,15 @@ export async function renderMosaic(input: {
     } catch {
       // Keep missing cells dark; the saved preview remains usable when a source disappears.
     }
-    input.onProgress?.(sourceIndex + 1, entries.length);
+    const completed = sourceIndex + 1;
+    input.onProgress?.(completed, entries.length);
+    const now = performance.now();
+    if (input.onPreview && completed < entries.length && completed % previewStep === 0 && now - lastPreviewAt >= 400) {
+      const progressivePreview = await canvasToBlob(canvas, "image/webp", 0.72);
+      if (input.signal?.aborted) throw new DOMException("生成已取消。", "AbortError");
+      input.onPreview(progressivePreview, completed, entries.length);
+      lastPreviewAt = now;
+    }
     if (sourceIndex % 12 === 0) await new Promise((resolve) => setTimeout(resolve, 0));
   }
 
@@ -257,5 +268,7 @@ export async function renderMosaic(input: {
     context.restore();
     target.close();
   }
-  return canvasToBlob(canvas, input.type, input.type === "image/webp" ? 0.88 : undefined);
+  const result = await canvasToBlob(canvas, input.type, input.type === "image/webp" ? 0.88 : undefined);
+  input.onPreview?.(result, entries.length, entries.length);
+  return result;
 }
