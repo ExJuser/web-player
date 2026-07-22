@@ -606,6 +606,14 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
                 rows={activeProject.recipe.rows}
                 previewUrl={previewUrl}
                 sources={sources}
+                sourceCard={selectedSource ? (
+                  <aside className="mosaic-source-card">
+                    <button type="button" onClick={() => setSelectedSource(null)} title="关闭"><X size={17} /></button>
+                    <div className="mosaic-source-preview"><ResourceThumbnail source={selectedSource} /></div>
+                    <div className="mosaic-source-meta"><span>{selectedSource.kind === "video" ? "影片缩略图" : "图集图片"}</span><strong>{selectedSource.label}</strong></div>
+                    <button className="primary-button" type="button" onClick={openSelectedSource}>{selectedSource.kind === "video" ? <><Play size={17} /> 播放影片</> : <><FolderOpen size={17} /> 打开图集</>}</button>
+                  </aside>
+                ) : null}
                 tileFit={activeProject.recipe.tileFit ?? "cover"}
                 onSelectSource={setSelectedSource}
               />
@@ -641,14 +649,6 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
             </div>
           )}
           {message ? <div className="mosaic-status-message">{message}</div> : null}
-          {selectedSource ? (
-            <aside className="mosaic-source-card">
-              <button type="button" onClick={() => setSelectedSource(null)} title="关闭"><X size={17} /></button>
-              <ResourceThumbnail source={selectedSource} />
-              <div><span>{selectedSource.kind === "video" ? "影片缩略图" : "图集图片"}</span><strong>{selectedSource.label}</strong></div>
-              <button className="primary-button" type="button" onClick={openSelectedSource}>{selectedSource.kind === "video" ? <><Play size={17} /> 播放影片</> : <><FolderOpen size={17} /> 打开图集</>}</button>
-            </aside>
-          ) : null}
         </div>
       </div>
 

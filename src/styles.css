@@ -9984,12 +9984,17 @@ button {
 .mosaic-viewport-tools { position: absolute; top: 12px; right: 12px; z-index: 3; display: flex; align-items: center; gap: 5px; padding: 6px; border: 1px solid rgba(255,255,255,.1); border-radius: 13px; backdrop-filter: blur(12px); background: rgba(10,9,18,.78); }
 .mosaic-viewport-tools span { padding: 0 7px; color: #a7edff; font-size: 11px; }
 .mosaic-viewport-tools button { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 9px; color: #eeeaff; background: rgba(255,255,255,.06); }
-.mosaic-source-card { position: absolute; right: 18px; bottom: 52px; z-index: 7; display: grid; grid-template-columns: 108px minmax(0,220px); gap: 13px; width: min(390px, calc(100% - 36px)); padding: 13px; border: 1px solid rgba(139,224,255,.27); border-radius: 18px; backdrop-filter: blur(18px); background: rgba(16,14,29,.92); box-shadow: 0 22px 50px rgba(0,0,0,.42); }
-.mosaic-source-card > img, .mosaic-source-card > svg { grid-row: span 2; width: 108px; height: 73px; border-radius: 12px; object-fit: cover; background: #08080e; }
+.mosaic-source-popover-anchor { position: absolute; z-index: 7; }
+.mosaic-source-popover-anchor::before { position: absolute; top: var(--mosaic-source-arrow-y); width: 13px; height: 13px; border: solid rgba(139,224,255,.27); background: rgba(16,14,29,.96); content: ""; transform: translateY(-50%) rotate(45deg); }
+.mosaic-source-popover-anchor.opens-right::before { left: -6px; border-width: 0 0 1px 1px; }
+.mosaic-source-popover-anchor.opens-left::before { right: -6px; border-width: 1px 1px 0 0; }
+.mosaic-source-card { position: relative; display: grid; gap: 10px; width: 100%; padding: 12px; border: 1px solid rgba(139,224,255,.27); border-radius: 18px; backdrop-filter: blur(18px); background: rgba(16,14,29,.96); box-shadow: 0 22px 50px rgba(0,0,0,.48); }
+.mosaic-source-preview { display: grid; place-items: center; width: 100%; height: 220px; overflow: hidden; border-radius: 13px; background: #08080e; }
+.mosaic-source-preview > img, .mosaic-source-preview > svg { width: 100%; height: 100%; object-fit: contain; }
 .mosaic-source-card > button:first-child { position: absolute; top: 7px; right: 7px; display: grid; place-items: center; width: 27px; height: 27px; border-radius: 8px; color: #ddd7ef; background: rgba(255,255,255,.06); }
-.mosaic-source-card div { display: grid; min-width: 0; padding-right: 24px; }
-.mosaic-source-card div span { color: #9cecff; font-size: 10px; }
-.mosaic-source-card div strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mosaic-source-meta { display: grid; min-width: 0; padding-right: 24px; }
+.mosaic-source-meta span { color: #9cecff; font-size: 10px; }
+.mosaic-source-meta strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mosaic-source-card .primary-button { justify-self: start; }
 
 .mosaic-picker-backdrop { z-index: 120; }
@@ -10095,6 +10100,5 @@ button {
   .mosaic-picker-toolbar { align-items: stretch; flex-direction: column; }
   .mosaic-picker-search { width: 100%; }
   .mosaic-picker-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
-  .mosaic-source-card { grid-template-columns: 82px minmax(0,1fr); }
-  .mosaic-source-card > img, .mosaic-source-card > svg { width: 82px; height: 62px; }
+  .mosaic-source-preview { height: 180px; }
 }

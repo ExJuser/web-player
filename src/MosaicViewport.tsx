@@ -1,9 +1,9 @@
 import { Maximize2, RotateCcw, ZoomIn, ZoomOut } from "lucide-react";
-import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type WheelEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode, type WheelEvent } from "react";
 
 import { acquireMosaicBitmap, type MosaicBitmapLease } from "./mosaicImagePipeline";
 import type { MosaicRuntimeSource, MosaicTileFit } from "./mosaicTypes";
-import { calculateMosaicGeometry, locateMosaicCell, type MosaicViewTransform } from "./mosaicViewportGeometry";
+import { calculateMosaicGeometry, calculateMosaicPopoverAnchor, locateMosaicCell, type MosaicViewTransform } from "./mosaicViewportGeometry";
 
 type MosaicViewportProps = {
   assignments: string[];
@@ -11,8 +11,9 @@ type MosaicViewportProps = {
   rows: number;
   previewUrl: string;
   sources: MosaicRuntimeSource[];
+  sourceCard?: ReactNode;
   tileFit: MosaicTileFit;
-  onSelectSource: (source: MosaicRuntimeSource) => void;
+  onSelectSource: (source: MosaicRuntimeSource | null) => void;
 };
 
 type WebGlState = {
@@ -93,7 +94,7 @@ function drawDetailContain(context: CanvasRenderingContext2D, bitmap: ImageBitma
   context.drawImage(bitmap, x + (width - drawWidth) / 2, y + (height - drawHeight) / 2, drawWidth, drawHeight);
 }
 
-export function MosaicViewport({ assignments, columns, rows, previewUrl, sources, tileFit, onSelectSource }: MosaicViewportProps) {
+export function MosaicViewport({ assignments, columns, rows, previewUrl, sources, sourceCard, tileFit, onSelectSource }: MosaicViewportProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const detailCanvasRef = useRef<HTMLCanvasElement>(null);
   const cellHighlightRef = useRef<HTMLDivElement>(null);
@@ -107,6 +108,7 @@ export function MosaicViewport({ assignments, columns, rows, previewUrl, sources
   const detailGenerationRef = useRef(0);
   const dragRef = useRef<{ pointerId: number; startX: number; startY: number; originX: number; originY: number; moved: boolean } | null>(null);
   const [transform, setTransform] = useState<MosaicViewTransform>({ scale: 1, x: 0, y: 0 });
+  const [sourceAnchor, setSourceAnchor] = useState<ReturnType<typeof calculateMosaicPopoverAnchor> & { width: number } | null>(null);
   const [backend, setBackend] = useState<"WebGL2" | "Canvas 2D">("WebGL2");
   const sourceById = useRef(new Map(sources.map((source) => [source.id, source])));
   sourceById.current = new Map(sources.map((source) => [source.id, source]));
@@ -302,7 +304,9 @@ export function MosaicViewport({ assignments, columns, rows, previewUrl, sources
 
   useEffect(() => {
     if (cellHighlightRef.current) cellHighlightRef.current.style.opacity = "0";
-  }, [transform]);
+    setSourceAnchor(null);
+    onSelectSource(null);
+  }, [onSelectSource, transform]);
 
   useEffect(() => () => bitmapRef.current?.close(), []);
 
@@ -365,7 +369,26 @@ export function MosaicViewport({ assignments, columns, rows, previewUrl, sources
     if (!hit || hit.index >= assignments.length) return;
     updateCellHighlight(event.clientX, event.clientY);
     const source = sourceById.current.get(assignments[hit.index]);
-    if (source) onSelectSource(source);
+    if (source && canvasRef.current) {
+      const rect = canvasRef.current.getBoundingClientRect();
+      const cellWidth = hit.geometry.width / columns;
+      const cellHeight = hit.geometry.height / rows;
+      const popoverWidth = Math.min(360, Math.max(1, rect.width - 24));
+      setSourceAnchor({
+        ...calculateMosaicPopoverAnchor({
+          viewportWidth: rect.width,
+          viewportHeight: rect.height,
+          cellLeft: hit.geometry.left + hit.column * cellWidth,
+          cellTop: hit.geometry.top + hit.row * cellHeight,
+          cellWidth,
+          cellHeight,
+          popoverWidth,
+          popoverHeight: 340,
+        }),
+        width: popoverWidth,
+      });
+      onSelectSource(source);
+    }
   };
 
   return (
@@ -386,6 +409,19 @@ export function MosaicViewport({ assignments, columns, rows, previewUrl, sources
       />
       <canvas className="mosaic-detail-layer" aria-hidden="true" ref={detailCanvasRef} />
       <div className="mosaic-cell-highlight" aria-hidden="true" ref={cellHighlightRef} />
+      {sourceCard && sourceAnchor ? (
+        <div
+          className={`mosaic-source-popover-anchor opens-${sourceAnchor.side}`}
+          style={{
+            left: sourceAnchor.x,
+            top: sourceAnchor.y,
+            width: sourceAnchor.width,
+            "--mosaic-source-arrow-y": `${sourceAnchor.arrowY}px`,
+          } as CSSProperties}
+        >
+          {sourceCard}
+        </div>
+      ) : null}
       <div className="mosaic-viewport-tools">
         <span>{backend}{transform.scale >= 3 ? " · 高清细节" : ""}</span>
         <button type="button" onClick={() => updateScale(1.25)} title="放大"><ZoomIn size={17} /></button>
