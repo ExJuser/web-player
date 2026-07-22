@@ -24,6 +24,17 @@ test("CPU candidates are sorted by the same weighted distance used by GPU matchi
   assert.deepEqual(candidates[0], [1, 2, 0]);
 });
 
+test("CPU candidate selection keeps a stable bounded top set", () => {
+  const sources = Array.from({ length: 20 }, (_, index) => ({
+    version: 1,
+    sourceId: `source-${index}`,
+    signature: "1",
+    values: [100 + Math.abs(10 - index), 100, 100, 0],
+  }));
+  const candidates = engine.findCpuCandidates([[100, 100, 100, 0]], sources, 4);
+  assert.deepEqual(candidates[0], [10, 9, 11, 8]);
+});
+
 test("assignment finalization is deterministic, avoids neighbors, and respects reuse limits", () => {
   const input = {
     candidates: Array.from({ length: 6 }, () => [0, 1, 2]),

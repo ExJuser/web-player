@@ -57,11 +57,18 @@ export function findCpuCandidates(
   sources: readonly MosaicFeatureDescriptor[],
   count = mosaicCandidateCount,
 ) {
-  return targets.map((target) => sources
-    .map((source, index) => ({ index, distance: descriptorDistance(target, source.values) }))
-    .sort((left, right) => left.distance - right.distance || left.index - right.index)
-    .slice(0, count)
-    .map((candidate) => candidate.index));
+  return targets.map((target) => {
+    const best: Array<{ index: number; distance: number }> = [];
+    sources.forEach((source, index) => {
+      const candidate = { index, distance: descriptorDistance(target, source.values) };
+      const insertAt = best.findIndex((current) => candidate.distance < current.distance
+        || (candidate.distance === current.distance && candidate.index < current.index));
+      if (insertAt >= 0) best.splice(insertAt, 0, candidate);
+      else if (best.length < count) best.push(candidate);
+      if (best.length > count) best.pop();
+    });
+    return best.map((candidate) => candidate.index);
+  });
 }
 
 function seededUnit(seed: number, index: number) {

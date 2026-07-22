@@ -43,6 +43,14 @@ type MosaicStudioSectionProps = {
 const pickerPageSize = 48;
 type MosaicPreviewLongestEdge = 1400 | 2200 | 3200;
 
+function createMosaicWorker() {
+  return new Worker(new URL("./mosaicWorker.ts", import.meta.url), { type: "module" });
+}
+
+function normalizePreviewLongestEdge(value?: number): MosaicPreviewLongestEdge {
+  return value === 1400 || value === 3200 ? value : 2200;
+}
+
 function createRuntimeSources(videos: VideoItem[], albums: PhotoAlbum[]) {
   const videoSources: MosaicRuntimeSource[] = videos.flatMap((video) => {
     const url = video.posterUrl || video.thumbnailUrl || video.thumbUrl || "";
@@ -167,7 +175,7 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
   const [isExporting, setIsExporting] = useState(false);
 
   useEffect(() => {
-    workerRef.current = new Worker(new URL("./mosaicWorker.ts", import.meta.url), { type: "module" });
+    workerRef.current = createMosaicWorker();
     void loadMosaicProjects()
       .then((items) => setProjects(items.sort((left, right) => right.updatedAt - left.updatedAt)))
       .catch(() => setMessage("千图作品读取失败，新作品仍可在当前会话生成。"));
@@ -224,6 +232,23 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
     runtimeTargetUrlRef.current = "";
   };
 
+  const cancelTargetResolution = () => {
+    targetResolveAbortRef.current?.abort();
+    targetResolveAbortRef.current = null;
+    setResolvingTargetId("");
+  };
+
+  const closeTargetPicker = () => {
+    cancelTargetResolution();
+    setIsPickerOpen(false);
+  };
+
+  const cancelGeneration = () => {
+    abortRef.current?.abort();
+    workerRef.current?.terminate();
+    workerRef.current = createMosaicWorker();
+  };
+
   const openProject = (project: MosaicProject) => {
     releaseRuntimeTargetUrl();
     setActiveProject(project);
@@ -233,8 +258,8 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
     setColumns(project.recipe.columns);
     setTargetClarity(project.recipe.targetClarity);
     setColorPreservation(project.recipe.colorPreservation);
-    setTileFit(project.recipe.tileFit ?? "cover");
-    setPreviewLongestEdge((project.recipe.previewLongestEdge ?? 2200) as MosaicPreviewLongestEdge);
+    setTileFit(project.recipe.tileFit === "contain" ? "contain" : "cover");
+    setPreviewLongestEdge(normalizePreviewLongestEdge(project.recipe.previewLongestEdge));
     setMaxReuse(project.recipe.maxReuse);
     setSeed(project.recipe.seed);
     setPreviewUrl(project.previewUrl);
@@ -246,6 +271,7 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
   const selectSourceTarget = async (source: MosaicRuntimeSource) => {
     const targetRef = { kind: "source", label: source.label, sourceId: source.id } as const;
     if (source.kind !== "video" || !source.videoId) {
+      cancelTargetResolution();
       releaseRuntimeTargetUrl();
       setTarget({ ref: targetRef, file: source.file, url: source.url });
       setActiveProject(null);
@@ -266,21 +292,31 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
     setResolvingTargetId(source.id);
     try {
       let targetBlob: Blob | null = null;
+      let targetOrigin: "server" | "browser" | "fallback" | null = null;
       if (video.mediaRootId) {
         try {
-          const serverUrl = await generateServerMosaicTarget(video.id, video.mediaRootId, video.relativePath, controller.signal);
+          const serverUrl = await generateServerMosaicTarget(video.id, video.mediaRootId, video.relativePath, video.size, video.lastModified, controller.signal);
           if (serverUrl) {
             const response = await fetch(serverUrl, { signal: controller.signal });
-            if (response.ok) targetBlob = await response.blob();
+            if (response.ok) {
+              targetBlob = await response.blob();
+              targetOrigin = "server";
+            }
           }
         } catch (error) {
           if (controller.signal.aborted) throw error;
         }
       }
-      if (!targetBlob) targetBlob = await createHighQualityVideoTarget(video, controller.signal).catch(() => null);
+      if (!targetBlob) {
+        targetBlob = await createHighQualityVideoTarget(video, controller.signal).catch(() => null);
+        if (targetBlob) targetOrigin = "browser";
+      }
       if (!targetBlob && source.url) {
         const response = await fetch(source.url, { signal: controller.signal });
-        if (response.ok) targetBlob = await response.blob();
+        if (response.ok) {
+          targetBlob = await response.blob();
+          targetOrigin = "fallback";
+        }
       }
       if (!targetBlob) throw new Error("无法读取该影片的高清目标图。");
       releaseRuntimeTargetUrl();
@@ -293,7 +329,9 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
       setPickerAlbumId(null);
       setPickerSearch("");
       setPickerPage(1);
-      setMessage("已从原视频生成高清目标图，并将在作品中独立保存。" );
+      setMessage(targetOrigin === "fallback"
+        ? "原视频帧不可用，已回退到现有缩略图并将在作品中独立保存。"
+        : "已从原视频提取最佳质量目标图，并将在作品中独立保存。" );
     } catch (error) {
       if (!(error instanceof DOMException && error.name === "AbortError") && !(error instanceof Error && error.name === "AbortError")) {
         setMessage(error instanceof Error ? error.message : "高清目标图生成失败。" );
@@ -347,6 +385,7 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
         maxReuse,
         seed,
         guaranteedSourceId,
+        signal: controller.signal,
       });
       setBackend(matched.backend === "webgpu" ? "WebGPU 匹配" : "CPU Worker 匹配");
       setGeneration({ message: "正在合成渐进预览", completed: 0, total: analyzed.features.length });
@@ -518,7 +557,7 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
             <button className="primary-button mosaic-generate-button" type="button" disabled={Boolean(generation)} onClick={() => void generate()}>
               {generation ? <LoaderCircle className="spin" size={18} /> : <Sparkles size={18} />}{activeProject ? "重新生成并保存" : "生成千图作品"}
             </button>
-            {generation ? <button className="secondary-button" type="button" onClick={() => abortRef.current?.abort()}><X size={17} /> 取消生成</button> : null}
+            {generation ? <button className="secondary-button" type="button" onClick={cancelGeneration}><X size={17} /> 取消生成</button> : null}
           </section>
 
           <section className="mosaic-panel mosaic-projects">
@@ -613,11 +652,11 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
       </div>
 
       {isPickerOpen ? (
-        <div className="modal-backdrop mosaic-picker-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setIsPickerOpen(false); }}>
+        <div className="modal-backdrop mosaic-picker-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeTargetPicker(); }}>
           <section className="mosaic-picker" role="dialog" aria-modal="true" aria-labelledby="mosaic-picker-title">
-            <header><div><Sparkles size={24} /><span><h2 id="mosaic-picker-title">选择项目内目标图</h2><p>目标本身仍可出现在小图中，形成套娃效果。</p></span></div><button type="button" onClick={() => setIsPickerOpen(false)}><X size={20} /></button></header>
+            <header><div><Sparkles size={24} /><span><h2 id="mosaic-picker-title">选择项目内目标图</h2><p>目标本身仍可出现在小图中，形成套娃效果。</p></span></div><button type="button" onClick={closeTargetPicker}><X size={20} /></button></header>
             <div className="mosaic-picker-toolbar">
-              <div className="special-view-switch"><button className={pickerKind === "video" ? "active" : ""} type="button" onClick={() => { setPickerKind("video"); setPickerAlbumId(null); setPickerSearch(""); setPickerPage(1); }}>影片缩略图</button><button className={pickerKind === "photo" ? "active" : ""} type="button" onClick={() => { setPickerKind("photo"); setPickerAlbumId(null); setPickerSearch(""); setPickerPage(1); }}>图集图片</button></div>
+              <div className="special-view-switch"><button className={pickerKind === "video" ? "active" : ""} type="button" onClick={() => { cancelTargetResolution(); setPickerKind("video"); setPickerAlbumId(null); setPickerSearch(""); setPickerPage(1); }}>影片缩略图</button><button className={pickerKind === "photo" ? "active" : ""} type="button" onClick={() => { cancelTargetResolution(); setPickerKind("photo"); setPickerAlbumId(null); setPickerSearch(""); setPickerPage(1); }}>图集图片</button></div>
               <label className="mosaic-picker-search">
                 <Search size={17} />
                 <input aria-label="搜索名称" type="search" value={pickerSearch} placeholder={selectedPickerAlbum ? "搜索照片名称" : pickerKind === "photo" ? "搜索图集名称" : "搜索影片名称"} onChange={(event) => { setPickerSearch(event.target.value); setPickerPage(1); }} />
@@ -645,7 +684,7 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
       ) : null}
 
       {deleteCandidate ? (
-        <div className="dialog-backdrop" role="presentation">
+        <div className="modal-backdrop" role="presentation">
           <section className="confirm-dialog mosaic-delete-dialog" role="dialog" aria-modal="true" aria-labelledby="mosaic-delete-title">
             <Trash2 size={28} /><h2 id="mosaic-delete-title">删除千图作品？</h2><p>将删除《{deleteCandidate.name}》的方案、上传目标和预览封面，已导出的 PNG 不受影响。</p>
             <div><button className="secondary-button" type="button" onClick={() => setDeleteCandidate(null)}>取消</button><button className="danger-button" type="button" onClick={() => void confirmDelete()}>确认删除</button></div>

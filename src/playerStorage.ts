@@ -1156,14 +1156,14 @@ function createLegacyVideoIdCandidate(videoId: string) {
   return parts.slice(1).join("|");
 }
 
-function createMosaicTargetThumbnailId(rootId: string, videoId: string) {
+function createMosaicTargetThumbnailId(rootId: string, videoId: string, size: number, lastModified: number) {
   let hash = 2166136261;
-  const value = `mosaic-target|1|${rootId}|${videoId}`;
+  const value = `mosaic-target|2|${rootId}|${videoId}|${size}|${lastModified}`;
   for (let index = 0; index < value.length; index += 1) {
     hash ^= value.charCodeAt(index);
     hash = Math.imul(hash, 16777619);
   }
-  return `mosaic-target.1.${(hash >>> 0).toString(36)}`;
+  return `mosaic-target.2.${(hash >>> 0).toString(36)}`;
 }
 
 function createThumbnailIds(libraryId: string, videoId: string) {
@@ -1213,9 +1213,11 @@ export async function generateServerMosaicTarget(
   videoId: string,
   rootId: string,
   relativePath: string,
+  size: number,
+  lastModified: number,
   signal?: AbortSignal,
 ) {
-  const thumbnailUrl = createThumbnailUrl(createMosaicTargetThumbnailId(rootId, videoId));
+  const thumbnailUrl = createThumbnailUrl(createMosaicTargetThumbnailId(rootId, videoId, size, lastModified));
   const response = await fetch(`${thumbnailUrl}/generate`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
