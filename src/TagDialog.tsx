@@ -317,6 +317,7 @@ export function TagDialog({
         </form>
         <label className="tag-actor-toggle">
           <input type="checkbox" checked={isTagInputActor} onChange={(event) => onTagInputActorChange(event.target.checked)} />
+          <span aria-hidden="true" className="tag-actor-toggle-box" />
           <span>本次添加的标签是演员人名</span>
         </label>
         <button

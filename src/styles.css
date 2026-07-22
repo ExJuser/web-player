@@ -8991,12 +8991,64 @@ button {
   margin-top: 10px;
 }
 
-.tag-actor-toggle { margin-top: -4px; color: var(--muted-text); font-size: 13px; }
+.tag-actor-toggle { position: relative; margin-top: -4px; color: var(--muted-text); font-size: 13px; cursor: pointer; }
+
+.tag-actor-toggle input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.tag-actor-toggle-box {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  border: 1px solid #536174;
+  border-radius: 5px;
+  place-items: center;
+  background: rgba(15, 23, 42, 0.55);
+  transition: border-color 140ms ease, background 140ms ease;
+}
+
+.tag-actor-toggle-box::after {
+  width: 5px;
+  height: 9px;
+  border-right: 2px solid #fff;
+  border-bottom: 2px solid #fff;
+  content: "";
+  transform: translateY(-1px) rotate(45deg) scale(0);
+  transition: transform 140ms ease;
+}
+
+.tag-actor-toggle input:checked + .tag-actor-toggle-box {
+  border-color: #00a1d6;
+  background: #00a1d6;
+}
+
+.tag-actor-toggle input:checked + .tag-actor-toggle-box::after { transform: translateY(-1px) rotate(45deg) scale(1); }
+
+.tag-actor-toggle input:focus-visible + .tag-actor-toggle-box {
+  outline: 2px solid #69c8ff;
+  outline-offset: 2px;
+}
 
 .app-shell.theme-light .tag-actor-editor,
 :root[data-theme="light"] .tag-actor-editor {
   border-color: rgba(124, 58, 237, 0.2);
   background: rgba(248, 250, 252, 0.84);
+}
+
+.app-shell.theme-light .tag-actor-toggle-box,
+:root[data-theme="light"] .tag-actor-toggle-box {
+  border-color: #94a3b8;
+  background: #ffffff;
+}
+
+.app-shell.theme-light .tag-actor-toggle input:checked + .tag-actor-toggle-box,
+:root[data-theme="light"] .tag-actor-toggle input:checked + .tag-actor-toggle-box {
+  border-color: #00a1d6;
+  background: #00a1d6;
 }
 
 .app-shell.theme-light .tag-editor-current .tag-chip-remove,
