@@ -1,9 +1,11 @@
 import { createMosaicSignature, findGpuCandidates, quantizeMosaicDescriptor } from "./mosaicEngine";
+import { getMosaicRotatedDimensions } from "./mosaicRotation";
 import { loadMosaicFeatures, saveMosaicFeatures } from "./mosaicStorage";
 import type {
   MosaicComputeBackend,
   MosaicFeatureDescriptor,
   MosaicRuntimeSource,
+  MosaicTargetRotation,
   MosaicTileFit,
 } from "./mosaicTypes";
 
@@ -186,15 +188,32 @@ export async function analyzeMosaicSources(input: {
   };
 }
 
-export async function readMosaicTargetGrid(input: { file?: Blob; url?: string; columns: number }) {
+function drawRotatedTarget(
+  context: OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D,
+  bitmap: ImageBitmap,
+  width: number,
+  height: number,
+  rotation: MosaicTargetRotation,
+) {
+  context.save();
+  context.translate(width / 2, height / 2);
+  context.rotate(rotation * Math.PI / 180);
+  const quarterTurn = rotation === 90 || rotation === 270;
+  context.drawImage(bitmap, -(quarterTurn ? height : width) / 2, -(quarterTurn ? width : height) / 2, quarterTurn ? height : width, quarterTurn ? width : height);
+  context.restore();
+}
+
+export async function readMosaicTargetGrid(input: { file?: Blob; url?: string; columns: number; targetRotation?: MosaicTargetRotation }) {
   const bitmap = await loadMosaicBitmap(input);
-  const rows = Math.max(1, Math.round(input.columns * bitmap.height / Math.max(bitmap.width, 1)));
+  const rotation = input.targetRotation ?? 0;
+  const dimensions = getMosaicRotatedDimensions(bitmap.width, bitmap.height, rotation);
+  const rows = Math.max(1, Math.round(input.columns * dimensions.height / Math.max(dimensions.width, 1)));
   const canvas = document.createElement("canvas");
   canvas.width = input.columns;
   canvas.height = rows;
   const context = canvas.getContext("2d", { willReadFrequently: true });
   if (!context) throw new Error("浏览器无法读取目标图片。");
-  context.drawImage(bitmap, 0, 0, input.columns, rows);
+  drawRotatedTarget(context, bitmap, input.columns, rows, rotation);
   bitmap.close();
   const pixels = context.getImageData(0, 0, input.columns, rows).data;
   const descriptors: number[][] = [];
@@ -292,6 +311,7 @@ function applyMosaicEffects(input: {
   targetColors: number[][];
   colorPreservation: number;
   targetClarity: number;
+  targetRotation?: MosaicTargetRotation;
   targetBitmap?: ImageBitmap | null;
 }) {
   const cellWidth = input.width / input.columns;
@@ -310,7 +330,7 @@ function applyMosaicEffects(input: {
   if (overlayOpacity > 0 && input.targetBitmap) {
     input.context.save();
     input.context.globalAlpha = overlayOpacity;
-    input.context.drawImage(input.targetBitmap, 0, 0, input.width, input.height);
+    drawRotatedTarget(input.context, input.targetBitmap, input.width, input.height, input.targetRotation ?? 0);
     input.context.restore();
   }
 }
@@ -324,6 +344,7 @@ async function createProgressivePreview(input: {
   targetColors: number[][];
   colorPreservation: number;
   targetClarity: number;
+  targetRotation?: MosaicTargetRotation;
   targetBitmap?: ImageBitmap | null;
 }) {
   const scale = Math.min(1, 960 / Math.max(input.width, input.height));
@@ -347,6 +368,7 @@ export async function renderMosaic(input: {
   longestEdge: number;
   colorPreservation: number;
   targetClarity: number;
+  targetRotation?: MosaicTargetRotation;
   tileFit?: MosaicTileFit;
   type: "image/webp" | "image/png";
   signal?: AbortSignal;

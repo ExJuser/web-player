@@ -19,6 +19,7 @@ export type MosaicTargetRef =
 
 export type MosaicSourceFilter = "mixed" | "videos" | "photos";
 export type MosaicTileFit = "cover" | "contain";
+export type MosaicTargetRotation = 0 | 90 | 180 | 270;
 
 export type MosaicRecipe = {
   version: 1;
@@ -30,6 +31,7 @@ export type MosaicRecipe = {
   rows: number;
   targetClarity: number;
   colorPreservation: number;
+  targetRotation?: MosaicTargetRotation;
   tileFit?: MosaicTileFit;
   previewLongestEdge?: number;
   maxReuse: number;
