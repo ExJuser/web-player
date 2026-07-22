@@ -2,6 +2,7 @@ import {
   FolderOpen,
 } from "lucide-react";
 import {
+  startTransition,
   useCallback,
   useDeferredValue,
   useEffect,
@@ -48,7 +49,7 @@ import { usePhotoObjectUrls } from "./usePhotoObjectUrls";
 import { useProgressFavoritesController } from "./useProgressFavoritesController";
 import { useRatingDialog } from "./useRatingDialog";
 import { useShortcutSettings } from "./useShortcutSettings";
-import { useThumbnailQueueController } from "./useThumbnailQueueController";
+import { useThumbnailQueueController, type ThumbnailQueueUpdate } from "./useThumbnailQueueController";
 import { useTimelinePreviewController } from "./useTimelinePreviewController";
 import { usePlayerToolActions } from "./usePlayerToolActions";
 import { useVideoSelectionController } from "./useVideoSelectionController";
@@ -2663,6 +2664,36 @@ export default function App() {
     });
   }, []);
 
+  const applyVideoThumbnailUpdates = useCallback((updates: ThumbnailQueueUpdate[]) => {
+    if (!updates.length) return;
+    const updatesById = new Map(updates.map((update) => [update.videoId, update]));
+    const previousVideos = videosRef.current;
+    let didChange = false;
+    const nextVideos = previousVideos.map((video) => {
+      const update = updatesById.get(video.id);
+      if (!update) return video;
+      didChange = true;
+      const nextThumbnailUrl = update.url ?? (update.status === "failed" || update.status === "idle" ? undefined : video.thumbnailUrl);
+      if (update.url && video.thumbnailUrl && video.thumbnailUrl !== update.url) {
+        revokeObjectUrl(video.thumbnailUrl);
+      } else if (!update.url && nextThumbnailUrl !== video.thumbnailUrl && video.thumbnailUrl) {
+        revokeObjectUrl(video.thumbnailUrl);
+      }
+      const metadata = update.metadata;
+      return {
+        ...video,
+        duration: metadata?.duration && Number.isFinite(metadata.duration) ? metadata.duration : video.duration,
+        width: metadata?.width && metadata.width > 0 ? metadata.width : video.width,
+        height: metadata?.height && metadata.height > 0 ? metadata.height : video.height,
+        thumbnailStatus: update.status,
+        thumbnailUrl: nextThumbnailUrl,
+      };
+    });
+    if (!didChange) return;
+    videosRef.current = nextVideos;
+    startTransition(() => setVideos(nextVideos));
+  }, []);
+
   const updateVideoMetadata = useCallback(
     (videoId: string, metadata: VideoMetadata) => {
       setVideos((previous) => {
@@ -4299,12 +4330,11 @@ export default function App() {
   });
 
   useThumbnailQueueController({
+    applyVideoThumbnailUpdates,
     isMainVideoLoading,
     isScanning,
     libraryIdRef,
-    setVideoThumbnailState,
     thumbnailQueueVideoIdsKey,
-    updateVideoMetadata,
     videosRef,
   });
 

@@ -5,23 +5,28 @@ import { thumbnailGenerationConcurrency, thumbnailLookupConcurrency } from "./pl
 import type { VideoItem, VideoMetadata } from "./playerTypes";
 import { generateVideoThumbnail, loadAvailableVideoThumbnail } from "./videoThumbnail";
 
+export type ThumbnailQueueUpdate = {
+  videoId: string;
+  status: VideoItem["thumbnailStatus"];
+  url?: string;
+  metadata?: VideoMetadata;
+};
+
 type UseThumbnailQueueControllerOptions = {
+  applyVideoThumbnailUpdates: (updates: ThumbnailQueueUpdate[]) => void;
   isMainVideoLoading: boolean;
   isScanning: boolean;
   libraryIdRef: MutableRefObject<string | null>;
-  setVideoThumbnailState: (videoId: string, status: VideoItem["thumbnailStatus"], url?: string) => void;
   thumbnailQueueVideoIdsKey: string;
-  updateVideoMetadata: (videoId: string, metadata: VideoMetadata) => void;
   videosRef: MutableRefObject<VideoItem[]>;
 };
 
 export function useThumbnailQueueController({
+  applyVideoThumbnailUpdates,
   isMainVideoLoading,
   isScanning,
   libraryIdRef,
-  setVideoThumbnailState,
   thumbnailQueueVideoIdsKey,
-  updateVideoMetadata,
   videosRef,
 }: UseThumbnailQueueControllerOptions) {
   const thumbnailLoadRunIdRef = useRef(0);
@@ -42,20 +47,20 @@ export function useThumbnailQueueController({
     }
 
     const isCurrentRun = () => !isCancelled && thumbnailLoadRunIdRef.current === runId;
-    const commitThumbnail = (video: VideoItem, thumbnailUrl: string, metadata?: VideoMetadata) => {
+    const commitUpdates = (updates: ThumbnailQueueUpdate[]) => {
+      if (!updates.length) return;
       if (!isCurrentRun()) {
-        revokeObjectUrl(thumbnailUrl);
+        updates.forEach((update) => revokeObjectUrl(update.url));
         return;
       }
-      if (metadata) updateVideoMetadata(video.id, metadata);
-      setVideoThumbnailState(video.id, "ready", thumbnailUrl);
+      applyVideoThumbnailUpdates(updates);
     };
-    const handleFailure = (video: VideoItem, error: unknown) => {
-      if (isCurrentRun() && !(error instanceof Error && error.name === "AbortError")) {
-        setVideoThumbnailState(video.id, "failed");
-      }
+    const createFailureUpdate = (video: VideoItem, error: unknown): ThumbnailQueueUpdate | null => {
+      if (error instanceof Error && error.name === "AbortError") return null;
+      return { videoId: video.id, status: "failed" };
     };
     const pendingGeneration: Array<VideoItem | undefined> = new Array(orderedVideoIds.length);
+    const lookupUpdates: Array<ThumbnailQueueUpdate | undefined> = new Array(orderedVideoIds.length);
 
     const lookupWorker = async (workerIndex: number) => {
       for (let index = workerIndex; index < orderedVideoIds.length; index += thumbnailLookupConcurrency) {
@@ -64,34 +69,34 @@ export function useThumbnailQueueController({
         if (!video || video.thumbnailStatus === "ready") continue;
         try {
           const loaded = await loadAvailableVideoThumbnail(libraryIdRef.current, video, abortController.signal);
-          if (loaded) commitThumbnail(video, loaded.thumbnailUrl, loaded.metadata);
+          if (loaded) lookupUpdates[index] = { videoId: video.id, status: "ready", url: loaded.thumbnailUrl, metadata: loaded.metadata };
           else pendingGeneration[index] = video;
         } catch (error) {
-          handleFailure(video, error);
+          lookupUpdates[index] = createFailureUpdate(video, error) ?? undefined;
         }
       }
     };
 
-    const videosToGenerate = () => pendingGeneration.filter((video): video is VideoItem => Boolean(video));
-
-    const generationWorker = async (workerIndex: number, videos: VideoItem[]) => {
-      for (let index = workerIndex; index < videos.length; index += thumbnailGenerationConcurrency) {
-        if (!isCurrentRun()) return;
-        const video = videos[index];
+    const generateBatch = async (videos: VideoItem[]) => {
+      const updates = await Promise.all(videos.map(async (video): Promise<ThumbnailQueueUpdate | null> => {
         try {
           const loaded = await generateVideoThumbnail(libraryIdRef.current, video, abortController.signal);
-          commitThumbnail(video, loaded.thumbnailUrl, loaded.metadata);
+          return { videoId: video.id, status: "ready", url: loaded.thumbnailUrl, metadata: loaded.metadata };
         } catch (error) {
-          handleFailure(video, error);
+          return createFailureUpdate(video, error);
         }
-      }
+      }));
+      commitUpdates(updates.filter((update): update is ThumbnailQueueUpdate => Boolean(update)));
     };
 
     const loadQueuedThumbnails = async () => {
       await Promise.all(Array.from({ length: Math.min(thumbnailLookupConcurrency, orderedVideoIds.length) }, (_, index) => lookupWorker(index)));
+      commitUpdates(lookupUpdates.filter((update): update is ThumbnailQueueUpdate => Boolean(update)));
       if (!isCurrentRun()) return;
-      const videos = videosToGenerate();
-      await Promise.all(Array.from({ length: Math.min(thumbnailGenerationConcurrency, videos.length) }, (_, index) => generationWorker(index, videos)));
+      const videos = pendingGeneration.filter((video): video is VideoItem => Boolean(video));
+      for (let index = 0; index < videos.length && isCurrentRun(); index += thumbnailGenerationConcurrency) {
+        await generateBatch(videos.slice(index, index + thumbnailGenerationConcurrency));
+      }
     };
 
     void loadQueuedThumbnails();
@@ -100,5 +105,5 @@ export function useThumbnailQueueController({
       isCancelled = true;
       abortController.abort();
     };
-  }, [isMainVideoLoading, isScanning, libraryIdRef, setVideoThumbnailState, thumbnailQueueVideoIdsKey, updateVideoMetadata, videosRef]);
+  }, [applyVideoThumbnailUpdates, isMainVideoLoading, isScanning, libraryIdRef, thumbnailQueueVideoIdsKey, videosRef]);
 }
