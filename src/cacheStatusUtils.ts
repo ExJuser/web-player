@@ -7,6 +7,8 @@ export type CacheStatusItem = {
   bytes: number;
   files: number;
   updatedAt: number | null;
+  memoryBytes?: number;
+  memoryEntries?: number;
   error?: string;
   clearable?: boolean;
 };

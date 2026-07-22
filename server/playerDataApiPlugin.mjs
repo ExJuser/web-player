@@ -142,12 +142,18 @@ function createDanmakuSourcePath(sourceId, options = {}) {
   return path.join(danmakuSourcesRoot, options.legacy ? `${sourceId}.json` : encodedName);
 }
 
-function createCacheStatusDefinitions() {
+function createCacheStatusDefinitions(thumbnailMemoryStats = { entries: 0, bytes: 0 }) {
   return [
     { id: "bangumi-matches", label: "Bangumi 匹配", path: bangumiMatchesRoot },
     { id: "global", label: "全局播放数据", path: globalDataPath },
     { id: "libraries", label: "播放数据", path: librariesRoot },
-    { id: "thumbnails", label: "视频缩略图", path: thumbnailsRoot },
+    {
+      id: "thumbnails",
+      label: "视频缩略图",
+      path: thumbnailsRoot,
+      memoryBytes: thumbnailMemoryStats.bytes,
+      memoryEntries: thumbnailMemoryStats.entries,
+    },
     { id: "actor-covers", label: "演员封面", path: actorCoversRoot },
     { id: "photo-albums", label: "看图数据", path: photoAlbumsRoot },
     { id: "subtitles", label: "内封字幕", path: embeddedSubtitlesRoot },
@@ -160,18 +166,18 @@ function createCacheStatusDefinitions() {
   ];
 }
 
-async function createCacheStatus() {
+async function createCacheStatus(thumbnailMemoryStats) {
   return createLocalCacheStatus({
     dataRoot,
-    definitions: createCacheStatusDefinitions(),
+    definitions: createCacheStatusDefinitions(thumbnailMemoryStats),
     createDatabaseStatusItem: () => localDataStore.createDatabaseStatusItem(),
   });
 }
 
-async function clearCacheItems(payload) {
+async function clearCacheItems(payload, thumbnailMemoryStats) {
   return clearLocalCacheItems(payload, {
     dataRoot,
-    createStatus: createCacheStatus,
+    createStatus: () => createCacheStatus(thumbnailMemoryStats),
     clearCacheEntriesByKinds: (kinds) => localDataStore.clearCacheEntriesByKinds(kinds),
   });
 }
@@ -915,14 +921,17 @@ export function playerDataApiPlugin({ projectRoot, env }) {
       }
 
       if (url.pathname === "/api/cache-status" && request.method === "GET") {
-        sendJson(response, 200, await createCacheStatus());
+        sendJson(response, 200, await createCacheStatus(thumbnailMemoryCache.stats()));
         return;
       }
 
       if (url.pathname === "/api/cache-status/clear" && request.method === "POST") {
         const payload = await parseJsonBody(request);
-        const result = await clearCacheItems(payload);
-        if (result.cleared.includes("thumbnails")) thumbnailMemoryCache.clear();
+        const result = await clearCacheItems(payload, thumbnailMemoryCache.stats());
+        if (result.cleared.includes("thumbnails")) {
+          thumbnailMemoryCache.clear();
+          result.status = await createCacheStatus(thumbnailMemoryCache.stats());
+        }
         sendJson(response, 200, result);
         return;
       }

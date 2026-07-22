@@ -142,12 +142,12 @@ export function CacheStatusDialog({
                     </span>
                     <dl>
                       <div>
-                        <dt>大小</dt>
-                        <dd>{formatFileSize(item.bytes)}</dd>
+                        <dt>{item.memoryBytes === undefined ? "大小" : "磁盘 / 内存"}</dt>
+                        <dd>{formatFileSize(item.bytes)}{item.memoryBytes === undefined ? "" : ` / ${formatFileSize(item.memoryBytes)}`}</dd>
                       </div>
                       <div>
-                        <dt>数量</dt>
-                        <dd>{item.files}</dd>
+                        <dt>{item.memoryEntries === undefined ? "数量" : "文件 / 内存"}</dt>
+                        <dd>{item.files}{item.memoryEntries === undefined ? "" : ` / ${item.memoryEntries} 张`}</dd>
                       </div>
                       <div>
                         <dt>更新</dt>

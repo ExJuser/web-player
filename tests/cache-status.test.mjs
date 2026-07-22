@@ -61,7 +61,7 @@ test("createCacheStatus adds database and unclassified local data items", async 
 
     const status = await createCacheStatus({
       dataRoot: tempDir,
-      definitions: [{ id: "known", label: "Known cache", path: knownPath }],
+      definitions: [{ id: "known", label: "Known cache", path: knownPath, memoryBytes: 4, memoryEntries: 1 }],
       createDatabaseStatusItem: async () => ({
         id: "sqlite-database",
         label: "SQLite 数据库",
@@ -81,6 +81,8 @@ test("createCacheStatus adds database and unclassified local data items", async 
     );
     assert.equal(status.items.find((item) => item.id === "other-local-data").clearable, false);
     assert.equal(status.items.find((item) => item.id === "other-local-data").bytes, 6);
+    assert.equal(status.items.find((item) => item.id === "known").memoryBytes, 4);
+    assert.equal(status.items.find((item) => item.id === "known").memoryEntries, 1);
   } finally {
     await rm(tempDir, { recursive: true, force: true });
   }
