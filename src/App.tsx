@@ -364,6 +364,7 @@ import { HomeSideColumn } from "./HomeSideColumn";
 import { HomeSpecialInsightsSection } from "./HomeSpecialInsightsSection";
 import { HomeListCard } from "./HomeVideoCards";
 import { MediaRootDialogsGroup } from "./MediaRootDialogsGroup";
+import { MosaicStudioSection } from "./MosaicStudioSection";
 import { PhotoAlbumCard } from "./PhotoAlbumCard";
 import { PhotoAlbumTagDialog } from "./PhotoAlbumTagDialog";
 import type { PhotoAlbumViewFilter } from "./PhotoAlbumToolbar";
@@ -598,7 +599,7 @@ export default function App() {
   const [actorProfiles, setActorProfiles] = useState<ActorProfileStore>({});
   const [actorTagDefinitions, setActorTagDefinitions] = useState<ActorTagDefinitionStore>({});
   const [videoActorOverrides, setVideoActorOverrides] = useState<VideoActorOverrideStore>({});
-  const [specialHomeSection, setSpecialHomeSection] = useState<"overview" | "actors">("overview");
+  const [specialHomeSection, setSpecialHomeSection] = useState<"overview" | "actors" | "mosaic">("overview");
   const [selectedActorId, setSelectedActorId] = useState<string | null>(null);
   const [actorCoverVersions, setActorCoverVersions] = useState<Record<string, number>>({});
   const [actorCoverPendingAction, setActorCoverPendingAction] = useState<string | null>(null);
@@ -1104,7 +1105,9 @@ export default function App() {
   }, [applyServerPhotoAlbumScan, isPhotoAlbumsLoading, loadPhotoAlbumDirectory]);
 
   useEffect(() => {
-    if (activeView !== "photos" || hasLoadedPhotoAlbums || isPhotoAlbumsLoading || photoAlbumAutoLoadAttemptedRef.current) return;
+    const shouldLoadForPhotoView = activeView === "photos";
+    const shouldLoadForMosaic = activeView === "home" && homeMediaMode === "special" && specialHomeSection === "mosaic";
+    if ((!shouldLoadForPhotoView && !shouldLoadForMosaic) || hasLoadedPhotoAlbums || isPhotoAlbumsLoading || photoAlbumAutoLoadAttemptedRef.current) return;
     photoAlbumAutoLoadAttemptedRef.current = true;
     setIsPhotoAlbumsLoading(true);
     setPhotoAlbumMessage("正在恢复看图文件夹...");
@@ -1194,8 +1197,10 @@ export default function App() {
     applyPhotoAlbumStore,
     applyServerPhotoAlbumScan,
     hasLoadedPhotoAlbums,
+    homeMediaMode,
     isPhotoAlbumsLoading,
     loadPhotoAlbumDirectory,
+    specialHomeSection,
   ]);
 
   const homeModeMediaRoots = useMemo(
@@ -5607,8 +5612,10 @@ export default function App() {
         />
 
         {isHomeViewVisible ? (
-          <section className="home-dashboard" aria-label="继续观看首页">
+          <section className={`home-dashboard ${homeMediaMode === "special" && specialHomeSection === "mosaic" ? "mosaic-active" : ""}`} aria-label="继续观看首页">
             <div className="home-primary-column">
+              {specialHomeSection !== "mosaic" ? (
+                <>
               <HomeResumeSection
                 actionLabel={primaryHomeAction}
                 card={primaryHomeCard}
@@ -5632,11 +5639,14 @@ export default function App() {
               ) : null}
 
               <HomeRecentSection cards={recentHomeCards} renderCard={renderHomeListCard} />
+                </>
+              ) : null}
 
               {homeMediaMode === "special" ? (
                 <section className="special-view-switch" aria-label="特殊模式视图">
                   <button className={specialHomeSection === "overview" ? "active" : ""} type="button" onClick={() => setSpecialHomeSection("overview")}>概览</button>
                   <button className={specialHomeSection === "actors" ? "active" : ""} type="button" onClick={() => setSpecialHomeSection("actors")}>演员</button>
+                  <button className={specialHomeSection === "mosaic" ? "active" : ""} type="button" onClick={() => setSpecialHomeSection("mosaic")}>千图</button>
                 </section>
               ) : null}
 
@@ -5667,7 +5677,14 @@ export default function App() {
                 />
               ) : null}
 
-              {homeMediaMode === "special" && specialHomeSection === "actors" ? (
+              {homeMediaMode === "special" && specialHomeSection === "mosaic" ? (
+                <MosaicStudioSection
+                  albums={photoAlbums}
+                  videos={modeFilteredVideos}
+                  onOpenAlbum={(album, imageIndex) => openPhotoAlbum(album, { imageIndex })}
+                  onOpenVideo={openVideoFromHome}
+                />
+              ) : homeMediaMode === "special" && specialHomeSection === "actors" ? (
                 <ActorDashboardSection
                   actors={actorInsights.actors}
                   unresolvedVideos={actorInsights.unresolvedVideos}
@@ -5710,7 +5727,7 @@ export default function App() {
               )}
             </div>
 
-            <HomeSideColumn
+            {specialHomeSection !== "mosaic" ? <HomeSideColumn
               mode={{
                 homeMediaMode,
                 homeMediaModeLabel,
@@ -5789,7 +5806,7 @@ export default function App() {
                 cards: favoriteHomeCards,
                 renderCard: renderHomeListCard,
               }}
-            />
+            /> : null}
           </section>
         ) : null}
 

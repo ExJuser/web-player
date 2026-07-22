@@ -66,11 +66,13 @@ import { BoundedLruCache } from "./boundedLruCache.mjs";
 import { createPlayerDeferredData, createPlayerStartupData } from "./playerDataViews.mjs";
 import { createVideoThumbnailService } from "./videoThumbnailService.mjs";
 import { createThumbnailMemoryCache } from "./thumbnailMemoryCache.mjs";
+import { createMosaicStore } from "./mosaicStore.mjs";
 
 let dataRoot;
 let librariesRoot;
 let thumbnailsRoot;
 let actorCoversRoot;
+let mosaicsRoot;
 let photoAlbumsRoot;
 let embeddedSubtitlesRoot;
 let compatibleMediaRoot;
@@ -84,6 +86,7 @@ let localDataStore;
 let bilibiliDanmaku;
 let bahamutDanmaku;
 let embeddedSubtitles;
+let mosaicStore;
 
 const serverPhotoAlbumCacheRootId = "server-photo-albums";
 const serverPhotoAlbumCacheRootName = "媒体库看图";
@@ -93,6 +96,7 @@ function initializeApiServices(projectRoot) {
   librariesRoot = path.join(dataRoot, "libraries");
   thumbnailsRoot = path.join(dataRoot, "thumbnails");
   actorCoversRoot = path.join(dataRoot, "actor-covers");
+  mosaicsRoot = path.join(dataRoot, "mosaics");
   photoAlbumsRoot = path.join(dataRoot, "photo-albums");
   embeddedSubtitlesRoot = path.join(dataRoot, "subtitles");
   compatibleMediaRoot = path.join(dataRoot, "compatible-media");
@@ -105,6 +109,7 @@ function initializeApiServices(projectRoot) {
   globalDataPath = path.join(dataRoot, "global.json");
   appConfigPath = path.resolve(projectRoot, "config", "app.json");
   localDataStore = new LocalDataSqliteStore({ dataRoot, librariesRoot, photoAlbumsRoot, indexPath, globalDataPath });
+  mosaicStore = createMosaicStore(mosaicsRoot);
   bilibiliDanmaku = createBilibiliDanmakuService({
     createDanmakuComment,
     dedupeDanmakuComments,
@@ -155,6 +160,7 @@ function createCacheStatusDefinitions(thumbnailMemoryStats = { entries: 0, bytes
       memoryEntries: thumbnailMemoryStats.entries,
     },
     { id: "actor-covers", label: "演员封面", path: actorCoversRoot },
+    { id: "mosaics", label: "千图作品", path: mosaicsRoot },
     { id: "photo-albums", label: "看图数据", path: photoAlbumsRoot },
     { id: "subtitles", label: "内封字幕", path: embeddedSubtitlesRoot },
     { id: "compatible-media", label: "兼容播放缓存", path: compatibleMediaRoot },
@@ -813,6 +819,8 @@ export function playerDataApiPlugin({ projectRoot, env }) {
     const thumbnailGenerateMatch = url.pathname.match(/^\/api\/player-data\/thumbnails\/([^/]+)\/generate$/);
     const thumbnailMatch = url.pathname.match(/^\/api\/player-data\/thumbnails\/([^/]+)$/);
     const actorCoverMatch = url.pathname.match(/^\/api\/player-data\/actor-covers\/([^/]+)$/);
+    const mosaicAssetMatch = url.pathname.match(/^\/api\/mosaics\/([^/]+)\/(target|preview)$/);
+    const mosaicProjectMatch = url.pathname.match(/^\/api\/mosaics\/([^/]+)$/);
     const mediaMatch = url.pathname.match(/^\/api\/media\/([^/]+)\/(.+)$/);
     const compatibleMediaMatch = url.pathname.match(/^\/api\/media-compatible\/([a-f0-9]{64})\.mp4$/);
     const progressMatch = url.pathname.match(/^\/api\/player-data\/progress\/(.+)$/);
@@ -833,6 +841,76 @@ export function playerDataApiPlugin({ projectRoot, env }) {
 
     try {
       const store = await getLocalDataStore();
+
+      if (url.pathname === "/api/mosaics") {
+        if (request.method === "GET") {
+          sendJson(response, 200, await mosaicStore.listProjects());
+          return;
+        }
+      }
+
+      if (url.pathname === "/api/mosaics/features") {
+        if (request.method === "POST") {
+          const payload = await parseJsonBody(request);
+          const sourceIds = Array.isArray(payload?.sourceIds) ? payload.sourceIds.filter((value) => typeof value === "string") : [];
+          sendJson(response, 200, await mosaicStore.readFeatures(sourceIds));
+          return;
+        }
+        if (request.method === "PUT") {
+          const payload = await parseJsonBody(request);
+          await mosaicStore.writeFeatures(Array.isArray(payload?.features) ? payload.features : []);
+          sendJson(response, 200, { ok: true });
+          return;
+        }
+      }
+
+      if (mosaicAssetMatch) {
+        const projectId = sanitizeStorageId(decodeURIComponent(mosaicAssetMatch[1]));
+        const kind = mosaicAssetMatch[2];
+        if (!projectId) {
+          sendJson(response, 400, { error: "Invalid mosaic project id." });
+          return;
+        }
+        if (request.method === "GET") {
+          try {
+            const asset = await mosaicStore.readAsset(projectId, kind);
+            sendBlob(response, 200, asset.buffer, { contentType: asset.contentType, cacheControl: "no-cache" });
+          } catch {
+            response.statusCode = 404;
+            response.end();
+          }
+          return;
+        }
+        if (request.method === "PUT") {
+          const rawBody = await readBody(request);
+          await mosaicStore.writeAsset(projectId, kind, rawBody, request.headers["content-type"]);
+          sendJson(response, 200, { ok: true });
+          return;
+        }
+      }
+
+      if (mosaicProjectMatch) {
+        const projectId = sanitizeStorageId(decodeURIComponent(mosaicProjectMatch[1]));
+        if (!projectId) {
+          sendJson(response, 400, { error: "Invalid mosaic project id." });
+          return;
+        }
+        if (request.method === "GET") {
+          const project = await mosaicStore.readProject(projectId);
+          sendJson(response, project ? 200 : 404, project ?? { error: "Mosaic project not found." });
+          return;
+        }
+        if (request.method === "PUT") {
+          await mosaicStore.writeProject(projectId, await parseJsonBody(request));
+          sendJson(response, 200, { ok: true });
+          return;
+        }
+        if (request.method === "DELETE") {
+          await mosaicStore.deleteProject(projectId);
+          sendJson(response, 200, { ok: true });
+          return;
+        }
+      }
 
       if (url.pathname === "/api/local-config" && request.method === "GET") {
         sendJson(response, 200, createPublicLocalConfig(await loadAppConfig(), await getTools(), env, await getLadaAvailable()));

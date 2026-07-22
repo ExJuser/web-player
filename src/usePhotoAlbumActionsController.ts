@@ -79,9 +79,10 @@ export function usePhotoAlbumActionsController({
   );
 
   const openPhotoAlbum = useCallback(
-    (album: PhotoAlbum, options?: { fromBeginning?: boolean }) => {
+    (album: PhotoAlbum, options?: { fromBeginning?: boolean; imageIndex?: number }) => {
       const storedIndex = photoAlbumProgressRef.current[album.id]?.imageIndex ?? 0;
-      const nextIndex = options?.fromBeginning ? 0 : Math.min(storedIndex, Math.max(album.images.length - 1, 0));
+      const requestedIndex = options?.imageIndex ?? (options?.fromBeginning ? 0 : storedIndex);
+      const nextIndex = Math.min(Math.max(requestedIndex, 0), Math.max(album.images.length - 1, 0));
       setSelectedPhotoAlbumId(album.id);
       setCurrentPhotoIndex(nextIndex);
       setActiveView("photoViewer");
