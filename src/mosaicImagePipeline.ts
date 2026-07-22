@@ -4,6 +4,7 @@ import type {
   MosaicComputeBackend,
   MosaicFeatureDescriptor,
   MosaicRuntimeSource,
+  MosaicTileFit,
 } from "./mosaicTypes";
 
 type WorkerReply<T> = { id: number; result?: T; error?: string };
@@ -160,6 +161,20 @@ function drawCover(
   context.drawImage(bitmap, (bitmap.width - sourceWidth) / 2, (bitmap.height - sourceHeight) / 2, sourceWidth, sourceHeight, x, y, width, height);
 }
 
+function drawContain(
+  context: OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D,
+  bitmap: ImageBitmap,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+) {
+  const scale = Math.min(width / bitmap.width, height / bitmap.height);
+  const drawWidth = bitmap.width * scale;
+  const drawHeight = bitmap.height * scale;
+  context.drawImage(bitmap, x + (width - drawWidth) / 2, y + (height - drawHeight) / 2, drawWidth, drawHeight);
+}
+
 async function canvasToBlob(canvas: OffscreenCanvas | HTMLCanvasElement, type: string, quality?: number) {
   if (canvas instanceof OffscreenCanvas) return canvas.convertToBlob({ type, quality });
   return new Promise<Blob>((resolve, reject) => canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("图片编码失败。")), type, quality));
@@ -175,6 +190,7 @@ export async function renderMosaic(input: {
   longestEdge: number;
   colorPreservation: number;
   targetClarity: number;
+  tileFit?: MosaicTileFit;
   type: "image/webp" | "image/png";
   signal?: AbortSignal;
   onProgress?: (completed: number, total: number) => void;
@@ -205,7 +221,8 @@ export async function renderMosaic(input: {
     if (!source) continue;
     try {
       const bitmap = await loadMosaicBitmap({ file: source.file, url: source.url });
-      cells.forEach((cellIndex) => drawCover(
+      const drawTile = input.tileFit === "contain" ? drawContain : drawCover;
+      cells.forEach((cellIndex) => drawTile(
         context,
         bitmap,
         (cellIndex % input.columns) * cellWidth,

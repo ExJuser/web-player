@@ -23,6 +23,7 @@ import type {
   MosaicRuntimeSource,
   MosaicSourceFilter,
   MosaicTargetRef,
+  MosaicTileFit,
 } from "./mosaicTypes";
 import type { PhotoAlbum, VideoItem } from "./playerTypes";
 import { MosaicViewport } from "./MosaicViewport";
@@ -38,6 +39,7 @@ type MosaicStudioSectionProps = {
 };
 
 const pickerPageSize = 48;
+type MosaicPreviewLongestEdge = 1400 | 2200 | 3200;
 
 function createRuntimeSources(videos: VideoItem[], albums: PhotoAlbum[]) {
   const videoSources: MosaicRuntimeSource[] = videos.flatMap((video) => {
@@ -127,6 +129,8 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
   const [columns, setColumns] = useState(100);
   const [targetClarity, setTargetClarity] = useState(0.55);
   const [colorPreservation, setColorPreservation] = useState(0.58);
+  const [tileFit, setTileFit] = useState<MosaicTileFit>("cover");
+  const [previewLongestEdge, setPreviewLongestEdge] = useState<MosaicPreviewLongestEdge>(2200);
   const [maxReuse, setMaxReuse] = useState(12);
   const [seed, setSeed] = useState(() => Date.now() >>> 0);
   const [previewUrl, setPreviewUrl] = useState("");
@@ -199,6 +203,8 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
     setColumns(project.recipe.columns);
     setTargetClarity(project.recipe.targetClarity);
     setColorPreservation(project.recipe.colorPreservation);
+    setTileFit(project.recipe.tileFit ?? "cover");
+    setPreviewLongestEdge((project.recipe.previewLongestEdge ?? 2200) as MosaicPreviewLongestEdge);
     setMaxReuse(project.recipe.maxReuse);
     setSeed(project.recipe.seed);
     setPreviewUrl(project.previewUrl);
@@ -268,9 +274,10 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
         targetColors: grid.colors,
         columns,
         rows: grid.rows,
-        longestEdge: 2200,
+        longestEdge: previewLongestEdge,
         colorPreservation,
         targetClarity,
+        tileFit,
         type: "image/webp",
         signal: controller.signal,
         onProgress: (completed, total) => setGeneration({ message: "正在合成渐进预览", completed, total }),
@@ -301,6 +308,8 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
           rows: grid.rows,
           targetClarity,
           colorPreservation,
+          tileFit,
+          previewLongestEdge,
           maxReuse,
           seed,
           sourceIds: availableSources.map((source) => source.id),
@@ -341,6 +350,7 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
         longestEdge,
         colorPreservation: activeProject.recipe.colorPreservation,
         targetClarity: activeProject.recipe.targetClarity,
+        tileFit: activeProject.recipe.tileFit ?? "cover",
         type: "image/png",
         onProgress: (completed, total) => setGeneration({ message: `正在导出 ${longestEdge === 7680 ? "8K" : "4K"}`, completed, total }),
       });
@@ -404,6 +414,8 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
           <section className="mosaic-panel mosaic-controls">
             <label>素材池<select value={sourceFilter} onChange={(event) => setSourceFilter(event.target.value as MosaicSourceFilter)}><option value="mixed">影片 + 图集</option><option value="videos">仅影片缩略图</option><option value="photos">仅图集图片</option></select></label>
             <label>参与素材上限<input type="number" min="8" max="10000" step="8" value={sourceLimit} onChange={(event) => setSourceLimit(Math.max(8, Math.min(10000, Number(event.target.value) || 8)))} /></label>
+            <label>小图填充<select value={tileFit} onChange={(event) => setTileFit(event.target.value as MosaicTileFit)}><option value="cover">裁切铺满</option><option value="contain">完整显示</option></select></label>
+            <label>预览质量<select value={previewLongestEdge} onChange={(event) => setPreviewLongestEdge(Number(event.target.value) as MosaicPreviewLongestEdge)}><option value="1400">快速 · 1400px</option><option value="2200">平衡 · 2200px</option><option value="3200">精细 · 3200px</option></select></label>
             <label>网格密度 <strong>{columns} 列</strong><input type="range" min="40" max="160" step="10" value={columns} onChange={(event) => setColumns(Number(event.target.value))} /></label>
             <label>目标清晰度 <strong>{Math.round(targetClarity * 100)}%</strong><input type="range" min="0" max="1" step="0.05" value={targetClarity} onChange={(event) => setTargetClarity(Number(event.target.value))} /></label>
             <label>素材原色 <strong>{Math.round(colorPreservation * 100)}%</strong><input type="range" min="0" max="1" step="0.05" value={colorPreservation} onChange={(event) => setColorPreservation(Number(event.target.value))} /></label>

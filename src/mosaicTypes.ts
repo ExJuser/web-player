@@ -18,6 +18,7 @@ export type MosaicTargetRef =
   | { kind: "source"; label: string; sourceId: string };
 
 export type MosaicSourceFilter = "mixed" | "videos" | "photos";
+export type MosaicTileFit = "cover" | "contain";
 
 export type MosaicRecipe = {
   version: 1;
@@ -29,6 +30,8 @@ export type MosaicRecipe = {
   rows: number;
   targetClarity: number;
   colorPreservation: number;
+  tileFit?: MosaicTileFit;
+  previewLongestEdge?: number;
   maxReuse: number;
   seed: number;
   sourceIds: string[];
