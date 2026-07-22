@@ -108,7 +108,8 @@ export function MosaicViewport({ assignments, columns, rows, previewUrl, sources
   const detailGenerationRef = useRef(0);
   const dragRef = useRef<{ pointerId: number; startX: number; startY: number; originX: number; originY: number; moved: boolean } | null>(null);
   const [transform, setTransform] = useState<MosaicViewTransform>({ scale: 1, x: 0, y: 0 });
-  const [sourceAnchor, setSourceAnchor] = useState<ReturnType<typeof calculateMosaicPopoverAnchor> & { width: number; height: number } | null>(null);
+  const [sourceAnchor, setSourceAnchor] = useState<ReturnType<typeof calculateMosaicPopoverAnchor> & { width: number; height: number; previewHeight: number } | null>(null);
+  const sourceSelectionRef = useRef(0);
   const [backend, setBackend] = useState<"WebGL2" | "Canvas 2D">("WebGL2");
   const sourceById = useRef(new Map(sources.map((source) => [source.id, source])));
   sourceById.current = new Map(sources.map((source) => [source.id, source]));
@@ -373,23 +374,37 @@ export function MosaicViewport({ assignments, columns, rows, previewUrl, sources
       const rect = canvasRef.current.getBoundingClientRect();
       const cellWidth = hit.geometry.width / columns;
       const cellHeight = hit.geometry.height / rows;
-      const popoverWidth = Math.min(520, Math.max(1, rect.width - 24), Math.max(420, rect.width * 0.46));
-      const popoverHeight = Math.min(510, Math.max(1, rect.height - 24));
-      setSourceAnchor({
-        ...calculateMosaicPopoverAnchor({
-          viewportWidth: rect.width,
-          viewportHeight: rect.height,
-          cellLeft: hit.geometry.left + hit.column * cellWidth,
-          cellTop: hit.geometry.top + hit.row * cellHeight,
-          cellWidth,
-          cellHeight,
-          popoverWidth,
-          popoverHeight,
-        }),
-        width: popoverWidth,
-        height: popoverHeight,
-      });
+      const selection = ++sourceSelectionRef.current;
+      setSourceAnchor(null);
       onSelectSource(source);
+      void acquireMosaicBitmap(source, 520, true).then((lease) => {
+        const maxWidth = Math.min(520, Math.max(1, rect.width - 24));
+        const maxHeight = Math.min(510, Math.max(1, rect.height - 24));
+        const scale = Math.min(1, Math.max(1, maxWidth - 24) / lease.bitmap.width, Math.max(1, maxHeight - 140) / lease.bitmap.height);
+        const previewWidth = Math.max(1, Math.round(lease.bitmap.width * scale));
+        const previewHeight = Math.max(1, Math.round(lease.bitmap.height * scale));
+        const popoverWidth = previewWidth + 24;
+        const popoverHeight = previewHeight + 140;
+        lease.release();
+        if (sourceSelectionRef.current !== selection) return;
+        setSourceAnchor({
+          ...calculateMosaicPopoverAnchor({
+            viewportWidth: rect.width,
+            viewportHeight: rect.height,
+            cellLeft: hit.geometry.left + hit.column * cellWidth,
+            cellTop: hit.geometry.top + hit.row * cellHeight,
+            cellWidth,
+            cellHeight,
+            popoverWidth,
+            popoverHeight,
+          }),
+          width: popoverWidth,
+          height: popoverHeight,
+          previewHeight,
+        });
+      }).catch(() => {
+        if (sourceSelectionRef.current === selection) onSelectSource(null);
+      });
     }
   };
 
@@ -419,7 +434,7 @@ export function MosaicViewport({ assignments, columns, rows, previewUrl, sources
             top: sourceAnchor.y,
             width: sourceAnchor.width,
             "--mosaic-source-arrow-y": `${sourceAnchor.arrowY}px`,
-            "--mosaic-source-preview-height": `${Math.max(160, sourceAnchor.height - 140)}px`,
+            "--mosaic-source-preview-height": `${sourceAnchor.previewHeight}px`,
           } as CSSProperties}
         >
           {sourceCard}
