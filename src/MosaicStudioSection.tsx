@@ -370,31 +370,6 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
 
       <div className="mosaic-studio-layout">
         <aside className="mosaic-sidebar">
-          <section className="mosaic-panel">
-            <div className="mosaic-panel-title"><span>目标图</span><small>{target?.ref.label || "尚未选择"}</small></div>
-            <div className="mosaic-target-actions">
-              <label className="primary-button mosaic-upload-button">
-                <Upload size={17} /> 上传图片
-                <input
-                  accept="image/*"
-                  type="file"
-                  onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    if (!file) return;
-                    if (uploadedTargetUrlRef.current) URL.revokeObjectURL(uploadedTargetUrlRef.current);
-                    const url = URL.createObjectURL(file);
-                    uploadedTargetUrlRef.current = url;
-                    setTarget({ ref: { kind: "upload", label: file.name, assetUrl: "" }, file, url });
-                    setActiveProject(null);
-                    setPreviewUrl("");
-                    event.currentTarget.value = "";
-                  }}
-                />
-              </label>
-              <button className="secondary-button" type="button" onClick={() => setIsPickerOpen(true)}><Images size={17} /> 从项目选择</button>
-            </div>
-          </section>
-
           <section className="mosaic-panel mosaic-controls">
             <label>素材池<select value={sourceFilter} onChange={(event) => setSourceFilter(event.target.value as MosaicSourceFilter)}><option value="mixed">影片 + 图集</option><option value="videos">仅影片缩略图</option><option value="photos">仅图集图片</option></select></label>
             <label>参与素材上限<input type="number" min="8" max="10000" step="8" value={sourceLimit} onChange={(event) => setSourceLimit(Math.max(8, Math.min(10000, Number(event.target.value) || 8)))} /></label>
@@ -461,7 +436,27 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
               <div className="mosaic-orbit"><Film size={32} /><Images size={28} /><Sparkles size={34} /></div>
               <h3>选择一张目标图，开始构建媒体宇宙</h3>
               <p>已有影片缩略图和图集图片会被分析成颜色星图；支持上传，也支持从项目中选图实现套娃。</p>
-              <button className="primary-button" type="button" onClick={() => setIsPickerOpen(true)}><FolderOpen size={18} /> 从项目资源开始</button>
+              <div className="mosaic-stage-actions">
+                <label className="primary-button mosaic-upload-button">
+                  <Upload size={18} /> 上传图片
+                  <input
+                    accept="image/*"
+                    type="file"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      if (!file) return;
+                      if (uploadedTargetUrlRef.current) URL.revokeObjectURL(uploadedTargetUrlRef.current);
+                      const url = URL.createObjectURL(file);
+                      uploadedTargetUrlRef.current = url;
+                      setTarget({ ref: { kind: "upload", label: file.name, assetUrl: "" }, file, url });
+                      setActiveProject(null);
+                      setPreviewUrl("");
+                      event.currentTarget.value = "";
+                    }}
+                  />
+                </label>
+                <button className="secondary-button" type="button" onClick={() => setIsPickerOpen(true)}><FolderOpen size={18} /> 从项目选择</button>
+              </div>
             </div>
           )}
           {message ? <div className="mosaic-status-message">{message}</div> : null}
