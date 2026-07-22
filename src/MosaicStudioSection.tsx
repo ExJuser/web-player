@@ -84,6 +84,20 @@ function ResourceThumbnail({ source }: { source: MosaicRuntimeSource }) {
   return url ? <img src={url} alt="" loading="lazy" decoding="async" draggable={false} /> : <ImageIcon size={25} />;
 }
 
+function TargetPreview({ target }: { target: RuntimeTarget }) {
+  const [url, setUrl] = useState(target.url);
+  useEffect(() => {
+    if (target.url || !target.file) {
+      setUrl(target.url);
+      return undefined;
+    }
+    const nextUrl = URL.createObjectURL(target.file);
+    setUrl(nextUrl);
+    return () => URL.revokeObjectURL(nextUrl);
+  }, [target.file, target.url]);
+  return url ? <img src={url} alt={target.ref.label} decoding="async" draggable={false} /> : <ImageIcon size={32} />;
+}
+
 function createProjectId() {
   return `mosaic-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -449,10 +463,15 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
               />
             </>
           ) : (
-            <div className="mosaic-stage-empty">
-              <div className="mosaic-orbit"><Film size={32} /><Images size={28} /><Sparkles size={34} /></div>
-              <h3>选择一张目标图，开始构建媒体宇宙</h3>
-              <p>已有影片缩略图和图集图片会被分析成颜色星图；支持上传，也支持从项目中选图实现套娃。</p>
+            <div className={`mosaic-stage-empty ${target ? "has-target" : ""}`}>
+              {target ? (
+                <div className="mosaic-target-preview">
+                  <div className="mosaic-target-preview-image"><TargetPreview target={target} /><span>{target.ref.kind === "upload" ? "上传图片" : "项目资源"}</span></div>
+                  <strong title={target.ref.label}>{target.ref.label}</strong>
+                </div>
+              ) : <div className="mosaic-orbit"><Film size={32} /><Images size={28} /><Sparkles size={34} /></div>}
+              <h3>{target ? "目标图已就绪" : "选择一张目标图，开始构建媒体宇宙"}</h3>
+              <p>{target ? "可在左侧调整素材与生成参数，确认后生成千图作品；也可以在下方更换目标图。" : "已有影片缩略图和图集图片会被分析成颜色星图；支持上传，也支持从项目中选图实现套娃。"}</p>
               <div className="mosaic-stage-actions">
                 <label className="primary-button mosaic-upload-button">
                   <Upload size={18} /> 上传图片

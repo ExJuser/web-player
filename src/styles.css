@@ -9953,8 +9953,14 @@ button {
 .mosaic-stage-header > span { padding: 5px 9px; border-radius: 999px; color: #9cecff; font-size: 11px; background: rgba(46,199,232,.1); }
 .mosaic-stage-empty { display: grid; place-items: center; align-content: center; min-height: 650px; padding: 40px; text-align: center; background: radial-gradient(circle at center, rgba(100,64,220,.15), transparent 45%); }
 .mosaic-stage-empty h3 { margin: 44px 0 8px; font-size: 25px; }
+.mosaic-stage-empty.has-target h3 { margin-top: 18px; }
 .mosaic-stage-empty p { max-width: 560px; margin: 0 0 20px; color: rgba(240,235,255,.57); line-height: 1.7; }
 .mosaic-stage-actions { display: flex; justify-content: center; gap: 10px; }
+.mosaic-target-preview { display: grid; justify-items: center; gap: 10px; min-width: 0; }
+.mosaic-target-preview-image { position: relative; display: grid; place-items: center; width: min(520px, 70vw); height: clamp(210px, 32vh, 320px); overflow: hidden; border: 1px solid rgba(151,128,231,.28); border-radius: 20px; color: rgba(220,212,243,.5); background: rgba(5,5,11,.72); box-shadow: 0 24px 60px rgba(0,0,0,.35); }
+.mosaic-target-preview-image img { width: 100%; height: 100%; object-fit: contain; }
+.mosaic-target-preview-image span { position: absolute; top: 12px; left: 12px; padding: 5px 9px; border: 1px solid rgba(255,255,255,.12); border-radius: 999px; color: #dff8ff; font-size: 11px; backdrop-filter: blur(12px); background: rgba(10,9,18,.72); }
+.mosaic-target-preview > strong { max-width: min(520px, 70vw); overflow: hidden; color: rgba(244,240,255,.76); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .mosaic-orbit { position: relative; display: flex; align-items: center; gap: 22px; color: #c7edff; filter: drop-shadow(0 0 18px rgba(100,174,255,.65)); }
 .mosaic-orbit::before { position: absolute; inset: -32px -55px; border: 1px solid rgba(166,139,255,.32); border-radius: 50%; content: ""; transform: rotate(-12deg); }
 .mosaic-status-message { position: absolute; right: 14px; bottom: 14px; left: 14px; z-index: 5; padding: 10px 14px; border: 1px solid rgba(255,255,255,.1); border-radius: 12px; color: rgba(247,244,255,.8); font-size: 12px; backdrop-filter: blur(12px); background: rgba(18,16,31,.8); }
