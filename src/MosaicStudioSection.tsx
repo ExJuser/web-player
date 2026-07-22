@@ -477,7 +477,7 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
       </div>
 
       {isPickerOpen ? (
-        <div className="dialog-backdrop mosaic-picker-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setIsPickerOpen(false); }}>
+        <div className="modal-backdrop mosaic-picker-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setIsPickerOpen(false); }}>
           <section className="mosaic-picker" role="dialog" aria-modal="true" aria-labelledby="mosaic-picker-title">
             <header><div><Sparkles size={24} /><span><h2 id="mosaic-picker-title">选择项目内目标图</h2><p>目标本身仍可出现在小图中，形成套娃效果。</p></span></div><button type="button" onClick={() => setIsPickerOpen(false)}><X size={20} /></button></header>
             <div className="mosaic-picker-toolbar">
