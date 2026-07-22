@@ -8984,8 +8984,9 @@ button {
   max-height: 156px;
 }
 
-.tag-actor-actions {
+.dialog-actions.tag-actor-actions {
   flex-wrap: wrap;
+  margin-top: 10px;
 }
 
 .tag-actor-toggle { margin-top: -4px; color: var(--muted-text); font-size: 13px; }
