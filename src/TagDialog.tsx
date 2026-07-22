@@ -205,7 +205,6 @@ export function TagDialog({
             )) : <div className="actor-selected-empty">暂未选择演员</div>}
           </div>
           <label className="actor-new-field tag-actor-search">
-            <span>搜索或新增演员</span>
             <input value={actorQuery} maxLength={120} placeholder="筛选现有演员，或输入新姓名" onChange={(event) => setActorQuery(event.target.value)} disabled={!hasCurrentVideo} />
           </label>
           <strong className="actor-edit-section-title">{normalizedActorQuery ? `筛选结果（${filteredOtherActors.length} / ${otherActorCount}）` : `其他演员（${otherActorCount}）`}</strong>
