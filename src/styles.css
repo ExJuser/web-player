@@ -5490,6 +5490,10 @@ button {
   gap: 8px 20px;
 }
 
+.lada-options-grid .highlight-montage-mode-picker {
+  grid-column: 1 / -1;
+}
+
 @media (max-width: 640px) {
   .lada-options-grid {
     grid-template-columns: minmax(0, 1fr);

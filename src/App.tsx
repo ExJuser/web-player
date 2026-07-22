@@ -58,7 +58,7 @@ import { useVideoTagController } from "./useVideoTagController";
 import { normalizeClientLocalConfig, shouldAutoScanGlobalMediaLibrary, supportsServerFileAccess } from "./localConfigClient";
 import { summarizeVideoEditSegments } from "./videoEditUtils";
 import type { HighlightMontageConfirmState, HighlightMontageResultState } from "./HighlightMontageDialogs";
-import type { LadaRestorationConfirmState, LadaRestorationResultState } from "./LadaRestorationDialogs";
+import type { LadaHighlightMontageMode, LadaRestorationConfirmState, LadaRestorationResultState } from "./LadaRestorationDialogs";
 import { readStoredLadaOptions, resolveLadaOptions, type LadaCapabilities, type LadaRestoreOptions } from "./ladaPreferences";
 import type { MediaProcessingTaskState } from "./MediaProcessingTaskDialog";
 import {
@@ -4696,6 +4696,7 @@ export default function App() {
       videoName: currentVideo.name,
       highlights: currentVideoHighlights,
       highlightsOnly: false,
+      highlightMontageMode: "lossless",
       canCreateHighlightsOnly: Boolean(localConfig?.ffmpeg.ffmpeg && localConfig.ffmpeg.ffprobe),
       capabilities: null,
       options: null,
@@ -4722,6 +4723,10 @@ export default function App() {
 
   const updateLadaRestorationHighlightsOnly = useCallback((highlightsOnly: boolean) => {
     setLadaRestorationConfirm((current) => current ? { ...current, highlightsOnly } : current);
+  }, []);
+
+  const updateLadaHighlightMontageMode = useCallback((highlightMontageMode: LadaHighlightMontageMode) => {
+    setLadaRestorationConfirm((current) => current ? { ...current, highlightMontageMode } : current);
   }, []);
 
   const {
@@ -6261,6 +6266,7 @@ export default function App() {
         formatFileSize,
         onChangeOptions: updateLadaRestorationOptions,
         onChangeHighlightsOnly: updateLadaRestorationHighlightsOnly,
+        onChangeHighlightMontageMode: updateLadaHighlightMontageMode,
         onCloseConfirm: () => setLadaRestorationConfirm(null),
         onCreate: () => void createLadaRestoration(),
         onCloseResult: () => setLadaRestorationResult(null),

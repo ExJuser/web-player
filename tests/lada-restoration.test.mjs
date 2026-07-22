@@ -238,6 +238,7 @@ test("restores only high energy segments after concatenating them", async () => 
       relativePath: "Movie.mkv",
       sourceHighlights,
       highlightsOnly: true,
+      highlightMontageMode: "precise",
       persistHighlights: (videoId, highlights) => persisted.push({ videoId, highlights }),
       options: capabilities.defaults,
       capabilities,
@@ -248,6 +249,45 @@ test("restores only high energy segments after concatenating them", async () => 
       { startTime: 0, endTime: 5 },
       { startTime: 5, endTime: 9 },
     ]);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("uses lossless concatenation by default for high energy segments", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "web-player-lada-lossless-highlights-"));
+  const sourcePath = path.join(directory, "Movie.mkv");
+  await writeFile(sourcePath, "source");
+  let concatScript = "";
+
+  try {
+    await restoreVideoWithLada({
+      runProcess: async (command, args) => {
+        if (command === "ffprobe") return JSON.stringify({
+          format: { duration: "60" },
+          streams: [{ codec_type: "video" }, { codec_type: "audio" }],
+        });
+        if (command === "ffmpeg") {
+          assert.equal(args.includes("-c") && args.includes("copy"), true);
+          assert.equal(args.includes("-filter_complex"), false);
+          concatScript = await readFile(args[args.indexOf("-i") + 1], "utf8");
+          await writeFile(args.at(-1), "lossless-montage");
+          return "";
+        }
+        assert.match(args[args.indexOf("--input") + 1], /highlights\.mkv$/);
+        await writeFile(args[args.indexOf("--output") + 1], "restored-highlights");
+        return "";
+      },
+      sourcePath,
+      rootId: "movies",
+      relativePath: "Movie.mkv",
+      sourceHighlights: [{ id: "h1", startTime: 10, endTime: 15, updatedAt: 1 }],
+      highlightsOnly: true,
+      options: capabilities.defaults,
+      capabilities,
+    });
+
+    assert.match(concatScript, /inpoint 10\noutpoint 15/);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

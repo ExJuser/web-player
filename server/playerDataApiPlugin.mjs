@@ -1040,6 +1040,7 @@ export function playerDataApiPlugin({ projectRoot, env }) {
               relativePath: payload?.relativePath,
               sourceHighlights,
               highlightsOnly: payload?.highlightsOnly === true,
+              highlightMontageMode: payload?.highlightMontageMode === "precise" ? "precise" : "lossless",
               options: payload?.options,
               capabilities,
               signal,

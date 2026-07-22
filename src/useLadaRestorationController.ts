@@ -40,6 +40,7 @@ export function useLadaRestorationController({
           sourceVideoId: request.sourceVideoId,
           highlights: request.highlights,
           highlightsOnly: request.highlightsOnly,
+          highlightMontageMode: request.highlightMontageMode,
           options: requestOptions,
         }),
       });

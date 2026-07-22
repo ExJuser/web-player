@@ -11,12 +11,15 @@ export type LadaRestorationConfirmState = {
   videoName: string;
   highlights: VideoHighlightSegment[];
   highlightsOnly: boolean;
+  highlightMontageMode: LadaHighlightMontageMode;
   canCreateHighlightsOnly: boolean;
   capabilities: LadaCapabilities | null;
   options: LadaRestoreOptions | null;
   isLoading: boolean;
   error: string;
 };
+
+export type LadaHighlightMontageMode = "lossless" | "precise";
 
 export type LadaRestorationResultState = {
   fileName: string;
@@ -30,6 +33,7 @@ type LadaRestorationDialogsProps = {
   formatFileSize: (bytes: number) => string;
   onChangeOptions: (options: LadaRestoreOptions) => void;
   onChangeHighlightsOnly: (value: boolean) => void;
+  onChangeHighlightMontageMode: (mode: LadaHighlightMontageMode) => void;
   onCloseConfirm: () => void;
   onCreate: () => void;
   onCloseResult: () => void;
@@ -41,6 +45,7 @@ export function LadaRestorationDialogs({
   formatFileSize,
   onChangeOptions,
   onChangeHighlightsOnly,
+  onChangeHighlightMontageMode,
   onCloseConfirm,
   onCreate,
   onCloseResult,
@@ -100,6 +105,19 @@ export function LadaRestorationDialogs({
                   <label className="toggle-row"><input type="checkbox" checked={confirm.options.fp16} onChange={(event) => updateOption("fp16", event.target.checked)} />启用 FP16</label>
                   <label className="toggle-row"><input type="checkbox" checked={confirm.options.detectFaceMosaics} onChange={(event) => updateOption("detectFaceMosaics", event.target.checked)} />检测并跳过人脸马赛克</label>
                 </div>
+                {confirm.highlightsOnly ? (
+                  <fieldset className="highlight-montage-mode-picker">
+                    <legend>高能片段拼接方式</legend>
+                    <label className={confirm.highlightMontageMode === "lossless" ? "selected" : ""}>
+                      <input type="radio" name="lada-highlight-montage-mode" checked={confirm.highlightMontageMode === "lossless"} onChange={() => onChangeHighlightMontageMode("lossless")} />
+                      <span><strong>快速无损（默认）</strong><small>直接复制原片码流，速度最快且不损失画质；切点受关键帧影响，可能多出少量画面。</small></span>
+                    </label>
+                    <label className={confirm.highlightMontageMode === "precise" ? "selected" : ""}>
+                      <input type="radio" name="lada-highlight-montage-mode" checked={confirm.highlightMontageMode === "precise"} onChange={() => onChangeHighlightMontageMode("precise")} />
+                      <span><strong>精准转码</strong><small>严格按高能标记裁切，切点准确，但拼接前会额外转码一次。</small></span>
+                    </label>
+                  </fieldset>
+                ) : null}
               </div>
             ) : null}
             {!confirm.highlights.length ? <div className="lada-options-error">当前影片没有高能片段，无法使用片段修复。</div> : null}

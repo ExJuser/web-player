@@ -1,10 +1,12 @@
-import { access, link, mkdir, mkdtemp, rm, stat } from "node:fs/promises";
+import { access, link, mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { createGlobalVideoId } from "./mediaRoots.mjs";
 import { probeMediaFile } from "./mediaCompatibility.mjs";
 import {
   createHighlightMontageArgs,
+  createLosslessHighlightMontageArgs,
+  createLosslessHighlightMontageScript,
   mapHighlightsToMontage,
   normalizeMontageSegments,
   selectHighlightMontageVideoEncoder,
@@ -163,6 +165,7 @@ export async function restoreVideoWithLada({
   relativePath,
   sourceHighlights = [],
   highlightsOnly = false,
+  highlightMontageMode = "lossless",
   options,
   capabilities,
   signal,
@@ -194,12 +197,22 @@ export async function restoreVideoWithLada({
       if (!streams.some((stream) => stream?.codec_type === "video")) throw new Error("原片没有可用的视频流。");
       const segments = normalizeMontageSegments(sourceHighlights, durationSeconds);
       outputHighlights = mapHighlightsToMontage(sourceHighlights, segments);
-      restorationSourcePath = path.join(taskDirectory, "highlights.mp4");
+      const useLosslessMontage = highlightMontageMode !== "precise";
+      restorationSourcePath = path.join(taskDirectory, `highlights${useLosslessMontage ? path.extname(sourcePath) || ".mkv" : ".mp4"}`);
       onProgress?.({ percent: 0, message: "正在拼接高能片段..." });
-      await runProcess("ffmpeg", createHighlightMontageArgs(sourcePath, restorationSourcePath, segments, {
-        hasAudio: streams.some((stream) => stream?.codec_type === "audio"),
-        videoEncoder: await selectHighlightMontageVideoEncoder(runProcess, { signal }),
-      }), {
+      const hasAudio = streams.some((stream) => stream?.codec_type === "audio");
+      let montageArgs;
+      if (useLosslessMontage) {
+        const concatPath = path.join(taskDirectory, "highlights.ffconcat");
+        await writeFile(concatPath, createLosslessHighlightMontageScript(sourcePath, segments), "utf8");
+        montageArgs = createLosslessHighlightMontageArgs(concatPath, restorationSourcePath, { hasAudio });
+      } else {
+        montageArgs = createHighlightMontageArgs(sourcePath, restorationSourcePath, segments, {
+          hasAudio,
+          videoEncoder: await selectHighlightMontageVideoEncoder(runProcess, { signal }),
+        });
+      }
+      await runProcess("ffmpeg", montageArgs, {
         timeoutMs: 2 * 60 * 60 * 1000,
         timeoutMessage: "拼接高能片段超时。",
         signal,
