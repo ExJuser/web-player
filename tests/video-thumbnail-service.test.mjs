@@ -16,6 +16,13 @@ test("video thumbnail ffmpeg args produce a bounded jpeg frame", () => {
   assert.ok(args.includes("thumbnail=60,scale=480:270:force_original_aspect_ratio=decrease,pad=480:270:(ow-iw)/2:(oh-ih)/2:color=0x050607"));
 });
 
+test("mosaic target ffmpeg args preserve a high resolution frame", () => {
+  const args = createVideoThumbnailFfmpegArgs("source.mp4", "target.jpg", { highQuality: true });
+
+  assert.ok(args.includes("thumbnail=60,scale='min(3840,iw)':'min(2160,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2"));
+  assert.equal(args[args.indexOf("-q:v") + 1], "2");
+});
+
 test("video thumbnail service dedupes cache ids and serializes ffmpeg jobs", async () => {
   const cacheRoot = await mkdtemp(path.join(tmpdir(), "web-player-thumbnails-"));
   let activeProcesses = 0;

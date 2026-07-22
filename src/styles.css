@@ -10013,6 +10013,7 @@ button {
 .mosaic-picker-grid { display: grid; grid-template-columns: repeat(6, minmax(0,1fr)); gap: 10px; min-height: 390px; max-height: 570px; padding: 0 20px 16px; overflow: auto; scrollbar-color: rgba(170,141,255,.45) transparent; scrollbar-width: thin; }
 .mosaic-picker-grid button { min-width: 0; overflow: hidden; border: 1px solid rgba(255,255,255,.07); border-radius: 13px; color: inherit; text-align: left; background: rgba(255,255,255,.035); }
 .mosaic-picker-grid button:hover { border-color: rgba(75,218,255,.55); transform: translateY(-2px); }
+.mosaic-picker-grid button:disabled { cursor: wait; opacity: .72; transform: none; }
 .mosaic-picker-grid img, .mosaic-picker-grid button > svg { display: grid; place-items: center; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; background: #08080e; }
 .mosaic-picker-grid span { display: block; padding: 8px; overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .mosaic-picker-album-card span { display: grid; gap: 3px; }

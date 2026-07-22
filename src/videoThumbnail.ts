@@ -286,7 +286,7 @@ function isCanvasNearlyBlack(canvas: HTMLCanvasElement, sampleContext: CanvasRen
   return brightPixels / (sampleContext.canvas.width * sampleContext.canvas.height) < 0.01;
 }
 
-function encodeCanvasAsJpeg(canvas: HTMLCanvasElement, signal?: AbortSignal) {
+function encodeCanvasAsJpeg(canvas: HTMLCanvasElement, signal?: AbortSignal, quality = 0.82) {
   return withTimeout(
     withAbort(new Promise<Blob>((resolve, reject) => {
       canvas.toBlob(
@@ -298,7 +298,7 @@ function encodeCanvasAsJpeg(canvas: HTMLCanvasElement, signal?: AbortSignal) {
           resolve(blob);
         },
         "image/jpeg",
-        0.82,
+        quality,
       );
     }), signal),
     thumbnailEncodeTimeout,
@@ -306,7 +306,7 @@ function encodeCanvasAsJpeg(canvas: HTMLCanvasElement, signal?: AbortSignal) {
   );
 }
 
-async function createVideoThumbnailBlob(video: VideoItem, signal?: AbortSignal) {
+async function createVideoThumbnailBlob(video: VideoItem, signal?: AbortSignal, highQuality = false) {
   const element = document.createElement("video");
   const canvas = document.createElement("canvas");
   const sampleCanvas = document.createElement("canvas");
@@ -335,8 +335,9 @@ async function createVideoThumbnailBlob(video: VideoItem, signal?: AbortSignal) 
       throw new Error("Unable to create thumbnail.");
     }
 
-    canvas.width = thumbnailWidth;
-    canvas.height = thumbnailHeight;
+    const targetScale = highQuality ? Math.min(1, 3840 / width, 2160 / height) : 1;
+    canvas.width = highQuality ? Math.max(1, Math.round(width * targetScale)) : thumbnailWidth;
+    canvas.height = highQuality ? Math.max(1, Math.round(height * targetScale)) : thumbnailHeight;
     sampleCanvas.width = 32;
     sampleCanvas.height = 18;
     const context = canvas.getContext("2d");
@@ -376,11 +377,15 @@ async function createVideoThumbnailBlob(video: VideoItem, signal?: AbortSignal) 
       if (!isCanvasNearlyBlack(canvas, sampleContext)) break;
     }
 
-    const thumbnailBlob = await encodeCanvasAsJpeg(canvas, signal);
+    const thumbnailBlob = await encodeCanvasAsJpeg(canvas, signal, highQuality ? 0.95 : 0.82);
     return { thumbnailBlob, metadata };
   } finally {
     cleanup();
   }
+}
+
+export async function createHighQualityVideoTarget(video: VideoItem, signal?: AbortSignal) {
+  return (await createVideoThumbnailBlob(video, signal, true)).thumbnailBlob;
 }
 
 export async function loadAvailableVideoThumbnail(libraryId: string | null, video: VideoItem, signal?: AbortSignal) {

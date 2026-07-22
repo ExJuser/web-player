@@ -18,6 +18,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { analyzeMosaicSources, matchMosaic, readMosaicTargetGrid, renderMosaic } from "./mosaicImagePipeline";
 import { deleteMosaicProject, loadMosaicProjects, saveMosaicProject, writeMosaicPreview, writeMosaicTarget } from "./mosaicStorage";
+import { generateServerMosaicTarget } from "./playerStorage";
 import type {
   MosaicProject,
   MosaicRuntimeSource,
@@ -26,9 +27,10 @@ import type {
   MosaicTileFit,
 } from "./mosaicTypes";
 import type { PhotoAlbum, VideoItem } from "./playerTypes";
+import { createHighQualityVideoTarget } from "./videoThumbnail";
 import { MosaicViewport } from "./MosaicViewport";
 
-type RuntimeTarget = { ref: MosaicTargetRef; file?: Blob; url: string };
+type RuntimeTarget = { ref: MosaicTargetRef; file?: Blob; url: string; persistFile?: boolean };
 type GenerationState = { message: string; completed: number; total: number } | null;
 
 type MosaicStudioSectionProps = {
@@ -134,7 +136,8 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
   const albumById = useMemo(() => new Map(albums.map((album) => [album.id, album])), [albums]);
   const workerRef = useRef<Worker | null>(null);
   const abortRef = useRef<AbortController | null>(null);
-  const uploadedTargetUrlRef = useRef("");
+  const targetResolveAbortRef = useRef<AbortController | null>(null);
+  const runtimeTargetUrlRef = useRef("");
   const progressivePreviewUrlRef = useRef("");
   const [projects, setProjects] = useState<MosaicProject[]>([]);
   const [activeProject, setActiveProject] = useState<MosaicProject | null>(null);
@@ -155,6 +158,7 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
   const [message, setMessage] = useState("");
   const [selectedSource, setSelectedSource] = useState<MosaicRuntimeSource | null>(null);
   const [isPickerOpen, setIsPickerOpen] = useState(false);
+  const [resolvingTargetId, setResolvingTargetId] = useState("");
   const [pickerKind, setPickerKind] = useState<"video" | "photo">("video");
   const [pickerAlbumId, setPickerAlbumId] = useState<string | null>(null);
   const [pickerSearch, setPickerSearch] = useState("");
@@ -169,8 +173,9 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
       .catch(() => setMessage("千图作品读取失败，新作品仍可在当前会话生成。"));
     return () => {
       abortRef.current?.abort();
+      targetResolveAbortRef.current?.abort();
       workerRef.current?.terminate();
-      if (uploadedTargetUrlRef.current) URL.revokeObjectURL(uploadedTargetUrlRef.current);
+      if (runtimeTargetUrlRef.current) URL.revokeObjectURL(runtimeTargetUrlRef.current);
       if (progressivePreviewUrlRef.current) URL.revokeObjectURL(progressivePreviewUrlRef.current);
     };
   }, []);
@@ -209,10 +214,18 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
       return { ref: project.recipe.target, url: project.targetUrl || project.recipe.target.assetUrl } satisfies RuntimeTarget;
     }
     const source = sourceById.get(project.recipe.target.sourceId);
+    if (project.targetUrl) return { ref: project.recipe.target, url: project.targetUrl } satisfies RuntimeTarget;
     return source ? { ref: project.recipe.target, file: source.file, url: source.url } satisfies RuntimeTarget : null;
   };
 
+  const releaseRuntimeTargetUrl = () => {
+    if (!runtimeTargetUrlRef.current) return;
+    URL.revokeObjectURL(runtimeTargetUrlRef.current);
+    runtimeTargetUrlRef.current = "";
+  };
+
   const openProject = (project: MosaicProject) => {
+    releaseRuntimeTargetUrl();
     setActiveProject(project);
     setTarget(resolveTargetForProject(project));
     setSourceFilter(project.recipe.sourceFilter);
@@ -230,13 +243,65 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
     setMessage(missing ? `作品中有 ${missing} 项素材已不可用，预览仍可查看，重新生成会自动跳过。` : "作品已恢复。");
   };
 
-  const selectSourceTarget = (source: MosaicRuntimeSource) => {
-    setTarget({ ref: { kind: "source", label: source.label, sourceId: source.id }, file: source.file, url: source.url });
-    setIsPickerOpen(false);
-    setPickerAlbumId(null);
-    setPickerSearch("");
-    setPickerPage(1);
-    setMessage("已选择项目资源作为目标，将在生成时保留套娃单元。" );
+  const selectSourceTarget = async (source: MosaicRuntimeSource) => {
+    const targetRef = { kind: "source", label: source.label, sourceId: source.id } as const;
+    if (source.kind !== "video" || !source.videoId) {
+      releaseRuntimeTargetUrl();
+      setTarget({ ref: targetRef, file: source.file, url: source.url });
+      setActiveProject(null);
+      setPreviewUrl("");
+      setIsPickerOpen(false);
+      setPickerAlbumId(null);
+      setPickerSearch("");
+      setPickerPage(1);
+      setMessage("已选择项目资源作为目标，将在生成时保留套娃单元。" );
+      return;
+    }
+
+    const video = videoById.get(source.videoId);
+    if (!video) return;
+    targetResolveAbortRef.current?.abort();
+    const controller = new AbortController();
+    targetResolveAbortRef.current = controller;
+    setResolvingTargetId(source.id);
+    try {
+      let targetBlob: Blob | null = null;
+      if (video.mediaRootId) {
+        try {
+          const serverUrl = await generateServerMosaicTarget(video.id, video.mediaRootId, video.relativePath, controller.signal);
+          if (serverUrl) {
+            const response = await fetch(serverUrl, { signal: controller.signal });
+            if (response.ok) targetBlob = await response.blob();
+          }
+        } catch (error) {
+          if (controller.signal.aborted) throw error;
+        }
+      }
+      if (!targetBlob) targetBlob = await createHighQualityVideoTarget(video, controller.signal).catch(() => null);
+      if (!targetBlob && source.url) {
+        const response = await fetch(source.url, { signal: controller.signal });
+        if (response.ok) targetBlob = await response.blob();
+      }
+      if (!targetBlob) throw new Error("无法读取该影片的高清目标图。");
+      releaseRuntimeTargetUrl();
+      const url = URL.createObjectURL(targetBlob);
+      runtimeTargetUrlRef.current = url;
+      setTarget({ ref: targetRef, file: targetBlob, url, persistFile: true });
+      setActiveProject(null);
+      setPreviewUrl("");
+      setIsPickerOpen(false);
+      setPickerAlbumId(null);
+      setPickerSearch("");
+      setPickerPage(1);
+      setMessage("已从原视频生成高清目标图，并将在作品中独立保存。" );
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === "AbortError") && !(error instanceof Error && error.name === "AbortError")) {
+        setMessage(error instanceof Error ? error.message : "高清目标图生成失败。" );
+      }
+    } finally {
+      if (targetResolveAbortRef.current === controller) targetResolveAbortRef.current = null;
+      setResolvingTargetId("");
+    }
   };
 
   const generate = async () => {
@@ -313,9 +378,9 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
       const projectId = activeProject?.id ?? createProjectId();
       let targetRef = target.ref;
       let targetUrl = activeProject?.targetUrl;
-      if (target.ref.kind === "upload" && target.file) {
+      if (target.persistFile && target.file) {
         targetUrl = await writeMosaicTarget(projectId, target.file);
-        targetRef = { ...target.ref, assetUrl: targetUrl };
+        if (target.ref.kind === "upload") targetRef = { ...target.ref, assetUrl: targetUrl };
       }
       const storedPreviewUrl = await writeMosaicPreview(projectId, preview);
       const now = Date.now();
@@ -348,11 +413,8 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
       setProjects((items) => [project, ...items.filter((item) => item.id !== project.id)]);
       setActiveProject(project);
       setPreviewUrl(storedPreviewUrl);
-      setTarget(targetRef.kind === "upload" ? { ref: targetRef, url: targetUrl || targetRef.assetUrl } : target);
-      if (targetRef.kind === "upload" && uploadedTargetUrlRef.current) {
-        URL.revokeObjectURL(uploadedTargetUrlRef.current);
-        uploadedTargetUrlRef.current = "";
-      }
+      setTarget(target.persistFile && targetUrl ? { ref: targetRef, url: targetUrl } : target);
+      if (target.persistFile) releaseRuntimeTargetUrl();
       setMessage(`作品已保存；使用 ${availableSources.length} 项素材，跳过 ${analyzed.skipped} 项不可解码素材。`);
     } catch (error) {
       setMessage(error instanceof DOMException && error.name === "AbortError" ? "生成已取消。" : error instanceof Error ? error.message : "千图生成失败。" );
@@ -524,10 +586,10 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
                     onChange={(event) => {
                       const file = event.target.files?.[0];
                       if (!file) return;
-                      if (uploadedTargetUrlRef.current) URL.revokeObjectURL(uploadedTargetUrlRef.current);
+                      releaseRuntimeTargetUrl();
                       const url = URL.createObjectURL(file);
-                      uploadedTargetUrlRef.current = url;
-                      setTarget({ ref: { kind: "upload", label: file.name, assetUrl: "" }, file, url });
+                      runtimeTargetUrlRef.current = url;
+                      setTarget({ ref: { kind: "upload", label: file.name, assetUrl: "" }, file, url, persistFile: true });
                       setActiveProject(null);
                       setPreviewUrl("");
                       event.currentTarget.value = "";
@@ -569,12 +631,12 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
             ) : null}
             {pickerResultCount ? (
               <div className="mosaic-picker-grid">
-                {pickerKind === "video" ? pagedPickerVideoResults.map((source) => <button key={source.id} type="button" onClick={() => selectSourceTarget(source)}><ResourceThumbnail source={source} /><span>{source.label}</span></button>) : null}
+                {pickerKind === "video" ? pagedPickerVideoResults.map((source) => <button disabled={Boolean(resolvingTargetId)} key={source.id} type="button" onClick={() => void selectSourceTarget(source)}><ResourceThumbnail source={source} /><span>{resolvingTargetId === source.id ? "正在生成高清目标图…" : source.label}</span></button>) : null}
                 {pickerKind === "photo" && !selectedPickerAlbum ? pagedPickerAlbums.map((album) => {
                   const coverSource = album.images[0] ? sourceById.get(`photo:${album.id}:${album.images[0].id}`) : undefined;
                   return <button className="mosaic-picker-album-card" key={album.id} type="button" onClick={() => { setPickerAlbumId(album.id); setPickerSearch(""); setPickerPage(1); }}>{coverSource ? <ResourceThumbnail source={coverSource} /> : <ImageIcon size={25} />}<span><strong>{album.title}</strong><small>{album.imageCount} 张照片</small></span></button>;
                 }) : null}
-                {pickerKind === "photo" && selectedPickerAlbum ? pagedPickerPhotoResults.map((source) => <button key={source.id} type="button" onClick={() => selectSourceTarget(source)}><ResourceThumbnail source={source} /><span>{source.label.replace(`${selectedPickerAlbum.title} · `, "")}</span></button>) : null}
+                {pickerKind === "photo" && selectedPickerAlbum ? pagedPickerPhotoResults.map((source) => <button key={source.id} type="button" onClick={() => void selectSourceTarget(source)}><ResourceThumbnail source={source} /><span>{source.label.replace(`${selectedPickerAlbum.title} · `, "")}</span></button>) : null}
               </div>
             ) : <div className="mosaic-picker-empty">{pickerKind === "video" ? "当前没有可选择的影片缩略图。" : selectedPickerAlbum ? "当前图集中没有可选择的照片。" : "当前没有可选择的图集。"}</div>}
             <footer><span>第 {pickerPage} / {pickerPageCount} 页 · {pickerResultCount} {pickerKind === "video" ? "项" : selectedPickerAlbum ? "张照片" : "个图集"}</span><div><button className="secondary-button" disabled={pickerPage <= 1} type="button" onClick={() => setPickerPage((page) => page - 1)}>上一页</button><button className="secondary-button" disabled={pickerPage >= pickerPageCount} type="button" onClick={() => setPickerPage((page) => page + 1)}>下一页</button></div></footer>
