@@ -367,7 +367,6 @@ import { MediaRootDialogsGroup } from "./MediaRootDialogsGroup";
 import { CreativeWorkshopSection, type CreativeFeature } from "./CreativeWorkshopSection";
 import { MosaicStudioSection } from "./MosaicStudioSection";
 import { VideoGrowthRingsSection } from "./VideoGrowthRingsSection";
-import { VisualEchoStudioSection } from "./VisualEchoStudioSection";
 import { PhotoAlbumCard } from "./PhotoAlbumCard";
 import { PhotoAlbumTagDialog } from "./PhotoAlbumTagDialog";
 import type { PhotoAlbumViewFilter } from "./PhotoAlbumToolbar";
@@ -466,7 +465,6 @@ export default function App() {
   const didHoldSpeedStartPlaybackRef = useRef(false);
   const wasHoldSpeedPlaybackPausedRef = useRef(false);
   const startFromBeginningVideoIdRef = useRef<string | null>(null);
-  const visualEchoPlaybackTargetRef = useRef<{ videoId: string; timestamp: number } | null>(null);
   const autoSubtitleSelectionVideoIdRef = useRef<string | null>(null);
   const lastSubtitleSelectionVideoIdRef = useRef<string | null>(null);
   const selectedSubtitleIdRef = useRef("off");
@@ -606,7 +604,6 @@ export default function App() {
   const [videoActorOverrides, setVideoActorOverrides] = useState<VideoActorOverrideStore>({});
   const [specialHomeSection, setSpecialHomeSection] = useState<"overview" | "actors" | "creative">("overview");
   const [creativeFeature, setCreativeFeature] = useState<CreativeFeature | null>(null);
-  const [visualEchoEntry, setVisualEchoEntry] = useState<{ videoId: string; timestamp: number; nonce: number } | null>(null);
   const [selectedActorId, setSelectedActorId] = useState<string | null>(null);
   const [actorCoverVersions, setActorCoverVersions] = useState<Record<string, number>>({});
   const [actorCoverPendingAction, setActorCoverPendingAction] = useState<string | null>(null);
@@ -3430,26 +3427,6 @@ export default function App() {
     setActiveView("home");
   }, [cancelAutoNextPrompt, persistCurrentProgress, resetHoldSpeedState, showControls]);
 
-  const openVisualEchoFromPlayer = useCallback(() => {
-    if (!currentVideo || homeMediaMode !== "special" || !modeFilteredVideoById.has(currentVideo.id)) return;
-    setVisualEchoEntry({
-      videoId: currentVideo.id,
-      timestamp: videoRef.current?.currentTime ?? currentTime,
-      nonce: Date.now(),
-    });
-    setSpecialHomeSection("creative");
-    setCreativeFeature("echo");
-    showHomeView();
-  }, [currentTime, currentVideo, homeMediaMode, modeFilteredVideoById, showHomeView]);
-
-  const openVideoAtVisualEchoTime = useCallback((video: VideoItem, timestamp: number) => {
-    visualEchoPlaybackTargetRef.current = {
-      videoId: video.id,
-      timestamp: Math.max(0, timestamp),
-    };
-    selectVideo(video.id);
-  }, [selectVideo]);
-
   const showPhotoAlbumsView = useCallback(() => {
     persistCurrentProgress();
     videoRef.current?.pause();
@@ -4435,25 +4412,17 @@ export default function App() {
     if (shouldStartFromBeginning) {
       startFromBeginningVideoIdRef.current = null;
     }
-    const visualEchoTarget = visualEchoPlaybackTargetRef.current?.videoId === currentVideo.id
-      ? visualEchoPlaybackTargetRef.current
-      : null;
-    if (visualEchoTarget) {
-      visualEchoPlaybackTargetRef.current = null;
-    }
     const progress = progressStoreRef.current[currentVideo.id];
-    const resumeAt = visualEchoTarget
-      ? Math.max(0, visualEchoTarget.timestamp)
-      : resolveInitialPlaybackTime({
-          progressTime: progress?.currentTime,
-          progressCompleted: progress?.completed,
-          progressDuration: progress?.duration,
-          highlights: videoHighlightsRef.current[currentVideo.id],
-          startFromHighEnergy:
-            playerPreferencesRef.current.homeMediaMode === "special"
-            && playerPreferencesRef.current.startFromHighEnergy,
-          forceBeginning: shouldStartFromBeginning,
-        });
+    const resumeAt = resolveInitialPlaybackTime({
+      progressTime: progress?.currentTime,
+      progressCompleted: progress?.completed,
+      progressDuration: progress?.duration,
+      highlights: videoHighlightsRef.current[currentVideo.id],
+      startFromHighEnergy:
+        playerPreferencesRef.current.homeMediaMode === "special"
+        && playerPreferencesRef.current.startFromHighEnergy,
+      forceBeginning: shouldStartFromBeginning,
+    });
 
     const handleLoadedMetadata = () => {
       const currentVideoId = currentVideo.id;
@@ -5608,8 +5577,6 @@ export default function App() {
           onAddMediaLibrary={requestAddMediaLibrary}
           onOpenCacheStatus={openCacheStatusDialog}
           onOpenMediaProcessingTask={reopenMediaProcessingTask}
-          canOpenVisualEcho={homeMediaMode === "special" && Boolean(currentVideo && modeFilteredVideoById.has(currentVideo.id))}
-          onOpenVisualEcho={openVisualEchoFromPlayer}
           onShowHome={showHomeView}
           onShowPhotoAlbums={showPhotoAlbumsView}
           onToggleTheme={toggleTheme}
@@ -5721,13 +5688,6 @@ export default function App() {
                       videos={modeFilteredVideos}
                       onOpenAlbum={openMosaicPhotoAlbum}
                       onOpenVideo={openVideoFromHome}
-                    />
-                  ) : creativeFeature === "echo" ? (
-                    <VisualEchoStudioSection
-                      initialEntry={visualEchoEntry}
-                      videos={modeFilteredVideos}
-                      formatTime={formatTime}
-                      onOpenVideoAt={openVideoAtVisualEchoTime}
                     />
                   ) : (
                     <CreativeWorkshopSection onOpenFeature={setCreativeFeature} />

@@ -1,6 +1,6 @@
-import { Images, ScanSearch, TreePine } from "lucide-react";
+import { Images, TreePine } from "lucide-react";
 
-export type CreativeFeature = "mosaic" | "rings" | "echo";
+export type CreativeFeature = "mosaic" | "rings";
 
 type CreativeWorkshopSectionProps = {
   onOpenFeature: (feature: CreativeFeature) => void;
@@ -26,13 +26,6 @@ const features: Array<{
     title: "影像年轮",
     description: "把每一次观看沉积成年轮，让时长、重看、完成和发射变成只属于你的影像森林。",
     icon: TreePine,
-  },
-  {
-    id: "echo",
-    eyebrow: "跨越影片 · 寻找押韵",
-    title: "画面回声",
-    description: "从当前画面出发，在媒体库里寻找构图、色彩与光影意外相似的另一个瞬间。",
-    icon: ScanSearch,
   },
 ];
 
