@@ -281,7 +281,7 @@ export function MosaicViewport({ assignments, columns, rows, previewUrl, sources
         detailDrawRef.current();
       });
     });
-    const overlayOpacity = Math.max(0, Math.min(0.28, targetClarity * 0.28));
+    const overlayOpacity = Math.max(0, Math.min(0.65, targetClarity * 0.65));
     const targetBitmap = targetBitmapRef.current;
     if (overlayOpacity > 0 && targetBitmap && drawnCells.length) {
       const clip = new Path2D();

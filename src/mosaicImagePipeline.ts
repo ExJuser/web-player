@@ -326,7 +326,7 @@ function applyMosaicEffects(input: {
     });
     input.context.restore();
   }
-  const overlayOpacity = Math.max(0, Math.min(0.28, input.targetClarity * 0.28));
+  const overlayOpacity = Math.max(0, Math.min(0.65, input.targetClarity * 0.65));
   if (overlayOpacity > 0 && input.targetBitmap) {
     input.context.save();
     input.context.globalAlpha = overlayOpacity;
@@ -396,7 +396,7 @@ export async function renderMosaic(input: {
   const cellHeight = height / input.rows;
   const previewStep = Math.max(1, Math.ceil(entries.length / 8));
   let lastPreviewAt = Number.NEGATIVE_INFINITY;
-  const overlayOpacity = Math.max(0, Math.min(0.28, input.targetClarity * 0.28));
+  const overlayOpacity = Math.max(0, Math.min(0.65, input.targetClarity * 0.65));
   const targetBitmap = overlayOpacity > 0 ? await loadMosaicBitmap(input.target) : null;
   try {
     const renderConcurrency = 6;
