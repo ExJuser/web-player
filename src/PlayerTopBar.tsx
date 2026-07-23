@@ -1,4 +1,4 @@
-import { FolderOpen, HardDrive, Images, Info, Moon, Scissors, Sparkles, Sun } from "lucide-react";
+import { FolderOpen, HardDrive, Images, Info, Moon, ScanSearch, Scissors, Sparkles, Sun } from "lucide-react";
 import { forwardRef, useEffect, useRef, useState } from "react";
 
 import type { MediaProcessingTaskState } from "./MediaProcessingTaskDialog";
@@ -17,9 +17,11 @@ type PlayerTopBarProps = {
   theme: "dark" | "light";
   videoCount: number;
   playabilityMessage: string;
+  canOpenVisualEcho: boolean;
   onAddMediaLibrary: () => void;
   onOpenCacheStatus: () => void;
   onOpenMediaProcessingTask: () => void;
+  onOpenVisualEcho: () => void;
   onShowHome: () => void;
   onShowPhotoAlbums: () => void;
   onToggleTheme: () => void;
@@ -38,9 +40,11 @@ export const PlayerTopBar = forwardRef<HTMLElement, PlayerTopBarProps>(function 
     theme,
     videoCount,
     playabilityMessage,
+    canOpenVisualEcho,
     onAddMediaLibrary,
     onOpenCacheStatus,
     onOpenMediaProcessingTask,
+    onOpenVisualEcho,
     onShowHome,
     onShowPhotoAlbums,
     onToggleTheme,
@@ -137,6 +141,12 @@ export const PlayerTopBar = forwardRef<HTMLElement, PlayerTopBarProps>(function 
         {!isPrivacyMode && videoCount && !isHomeViewVisible ? (
           <button className="secondary-button top-home-button" type="button" onClick={onShowHome}>
             首页
+          </button>
+        ) : null}
+        {!isPrivacyMode && !isNonPlayerViewVisible && canOpenVisualEcho ? (
+          <button className="secondary-button top-visual-echo-button" type="button" onClick={onOpenVisualEcho}>
+            <ScanSearch size={17} />
+            画面回声
           </button>
         ) : null}
         {!isPrivacyMode && isHomeViewVisible ? (

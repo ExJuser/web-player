@@ -364,8 +364,10 @@ import { HomeSideColumn } from "./HomeSideColumn";
 import { HomeSpecialInsightsSection } from "./HomeSpecialInsightsSection";
 import { HomeListCard } from "./HomeVideoCards";
 import { MediaRootDialogsGroup } from "./MediaRootDialogsGroup";
+import { CreativeWorkshopSection, type CreativeFeature } from "./CreativeWorkshopSection";
 import { MosaicStudioSection } from "./MosaicStudioSection";
 import { VideoGrowthRingsSection } from "./VideoGrowthRingsSection";
+import { VisualEchoStudioSection } from "./VisualEchoStudioSection";
 import { PhotoAlbumCard } from "./PhotoAlbumCard";
 import { PhotoAlbumTagDialog } from "./PhotoAlbumTagDialog";
 import type { PhotoAlbumViewFilter } from "./PhotoAlbumToolbar";
@@ -464,6 +466,7 @@ export default function App() {
   const didHoldSpeedStartPlaybackRef = useRef(false);
   const wasHoldSpeedPlaybackPausedRef = useRef(false);
   const startFromBeginningVideoIdRef = useRef<string | null>(null);
+  const visualEchoPlaybackTargetRef = useRef<{ videoId: string; timestamp: number } | null>(null);
   const autoSubtitleSelectionVideoIdRef = useRef<string | null>(null);
   const lastSubtitleSelectionVideoIdRef = useRef<string | null>(null);
   const selectedSubtitleIdRef = useRef("off");
@@ -601,7 +604,9 @@ export default function App() {
   const [actorProfiles, setActorProfiles] = useState<ActorProfileStore>({});
   const [actorTagDefinitions, setActorTagDefinitions] = useState<ActorTagDefinitionStore>({});
   const [videoActorOverrides, setVideoActorOverrides] = useState<VideoActorOverrideStore>({});
-  const [specialHomeSection, setSpecialHomeSection] = useState<"overview" | "actors" | "mosaic" | "rings">("overview");
+  const [specialHomeSection, setSpecialHomeSection] = useState<"overview" | "actors" | "creative">("overview");
+  const [creativeFeature, setCreativeFeature] = useState<CreativeFeature | null>(null);
+  const [visualEchoEntry, setVisualEchoEntry] = useState<{ videoId: string; timestamp: number; nonce: number } | null>(null);
   const [selectedActorId, setSelectedActorId] = useState<string | null>(null);
   const [actorCoverVersions, setActorCoverVersions] = useState<Record<string, number>>({});
   const [actorCoverPendingAction, setActorCoverPendingAction] = useState<string | null>(null);
@@ -1108,7 +1113,10 @@ export default function App() {
 
   useEffect(() => {
     const shouldLoadForPhotoView = activeView === "photos";
-    const shouldLoadForMosaic = activeView === "home" && homeMediaMode === "special" && specialHomeSection === "mosaic";
+    const shouldLoadForMosaic = activeView === "home"
+      && homeMediaMode === "special"
+      && specialHomeSection === "creative"
+      && creativeFeature === "mosaic";
     if ((!shouldLoadForPhotoView && !shouldLoadForMosaic) || hasLoadedPhotoAlbums || isPhotoAlbumsLoading || photoAlbumAutoLoadAttemptedRef.current) return;
     photoAlbumAutoLoadAttemptedRef.current = true;
     setIsPhotoAlbumsLoading(true);
@@ -1202,6 +1210,7 @@ export default function App() {
     homeMediaMode,
     isPhotoAlbumsLoading,
     loadPhotoAlbumDirectory,
+    creativeFeature,
     specialHomeSection,
   ]);
 
@@ -1661,7 +1670,8 @@ export default function App() {
     && isSpecialInsightsExpanded;
   const shouldLoadGrowthRings = isHomeViewVisible
     && homeMediaMode === "special"
-    && specialHomeSection === "rings";
+    && specialHomeSection === "creative"
+    && creativeFeature === "rings";
   const isPhotoAlbumViewVisible =
     (activeView === "photos" || activeView === "photoViewer") && !isPrivacyMode && !isCinemaMode && !isFullscreen;
   const isNonPlayerViewVisible = isHomeViewVisible || isPhotoAlbumViewVisible;
@@ -1831,12 +1841,12 @@ export default function App() {
     });
   }, [actorThumbnailVideoIds, homeMediaMode, modeFilteredVideoById, specialHomeSection]);
   const growthRingThumbnailVideos = useMemo(() => {
-    if (homeMediaMode !== "special" || specialHomeSection !== "rings") return [];
+    if (homeMediaMode !== "special" || specialHomeSection !== "creative" || creativeFeature !== "rings") return [];
     return growthRingThumbnailVideoIds.flatMap((videoId) => {
       const video = modeFilteredVideoById.get(videoId);
       return video ? [video] : [];
     });
-  }, [growthRingThumbnailVideoIds, homeMediaMode, modeFilteredVideoById, specialHomeSection]);
+  }, [creativeFeature, growthRingThumbnailVideoIds, homeMediaMode, modeFilteredVideoById, specialHomeSection]);
   const thumbnailQueueVideoIds = useMemo(
     () =>
       createThumbnailQueueVideoIds({
@@ -3420,6 +3430,26 @@ export default function App() {
     setActiveView("home");
   }, [cancelAutoNextPrompt, persistCurrentProgress, resetHoldSpeedState, showControls]);
 
+  const openVisualEchoFromPlayer = useCallback(() => {
+    if (!currentVideo || homeMediaMode !== "special" || !modeFilteredVideoById.has(currentVideo.id)) return;
+    setVisualEchoEntry({
+      videoId: currentVideo.id,
+      timestamp: videoRef.current?.currentTime ?? currentTime,
+      nonce: Date.now(),
+    });
+    setSpecialHomeSection("creative");
+    setCreativeFeature("echo");
+    showHomeView();
+  }, [currentTime, currentVideo, homeMediaMode, modeFilteredVideoById, showHomeView]);
+
+  const openVideoAtVisualEchoTime = useCallback((video: VideoItem, timestamp: number) => {
+    visualEchoPlaybackTargetRef.current = {
+      videoId: video.id,
+      timestamp: Math.max(0, timestamp),
+    };
+    selectVideo(video.id);
+  }, [selectVideo]);
+
   const showPhotoAlbumsView = useCallback(() => {
     persistCurrentProgress();
     videoRef.current?.pause();
@@ -3472,7 +3502,8 @@ export default function App() {
     if (photoViewerReturnRef.current === "mosaic") {
       photoViewerReturnRef.current = "photos";
       setHomeMediaMode("special");
-      setSpecialHomeSection("mosaic");
+      setSpecialHomeSection("creative");
+      setCreativeFeature("mosaic");
       setActiveView("home");
       return;
     }
@@ -4404,17 +4435,25 @@ export default function App() {
     if (shouldStartFromBeginning) {
       startFromBeginningVideoIdRef.current = null;
     }
+    const visualEchoTarget = visualEchoPlaybackTargetRef.current?.videoId === currentVideo.id
+      ? visualEchoPlaybackTargetRef.current
+      : null;
+    if (visualEchoTarget) {
+      visualEchoPlaybackTargetRef.current = null;
+    }
     const progress = progressStoreRef.current[currentVideo.id];
-    const resumeAt = resolveInitialPlaybackTime({
-      progressTime: progress?.currentTime,
-      progressCompleted: progress?.completed,
-      progressDuration: progress?.duration,
-      highlights: videoHighlightsRef.current[currentVideo.id],
-      startFromHighEnergy:
-        playerPreferencesRef.current.homeMediaMode === "special"
-        && playerPreferencesRef.current.startFromHighEnergy,
-      forceBeginning: shouldStartFromBeginning,
-    });
+    const resumeAt = visualEchoTarget
+      ? Math.max(0, visualEchoTarget.timestamp)
+      : resolveInitialPlaybackTime({
+          progressTime: progress?.currentTime,
+          progressCompleted: progress?.completed,
+          progressDuration: progress?.duration,
+          highlights: videoHighlightsRef.current[currentVideo.id],
+          startFromHighEnergy:
+            playerPreferencesRef.current.homeMediaMode === "special"
+            && playerPreferencesRef.current.startFromHighEnergy,
+          forceBeginning: shouldStartFromBeginning,
+        });
 
     const handleLoadedMetadata = () => {
       const currentVideoId = currentVideo.id;
@@ -5425,9 +5464,10 @@ export default function App() {
   });
   const primaryHomeTitle = primaryHomeLabels.title;
   const primaryHomeAction = primaryHomeLabels.action;
-  const isSpecialImmersiveHomeSection = homeMediaMode === "special"
-    && (specialHomeSection === "mosaic" || specialHomeSection === "rings");
-  const isGrowthRingsHomeSection = homeMediaMode === "special" && specialHomeSection === "rings";
+  const isSpecialImmersiveHomeSection = homeMediaMode === "special" && specialHomeSection === "creative";
+  const isGrowthRingsHomeSection = homeMediaMode === "special"
+    && specialHomeSection === "creative"
+    && creativeFeature === "rings";
   const markVideoThumbnailFailed = useCallback((videoId: string) => setVideoThumbnailState(videoId, "failed"), []);
   const updateActorThumbnailVideos = useCallback((videoIds: string[]) => {
     setActorThumbnailVideoIds((currentVideoIds) => currentVideoIds.length === videoIds.length
@@ -5568,6 +5608,8 @@ export default function App() {
           onAddMediaLibrary={requestAddMediaLibrary}
           onOpenCacheStatus={openCacheStatusDialog}
           onOpenMediaProcessingTask={reopenMediaProcessingTask}
+          canOpenVisualEcho={homeMediaMode === "special" && Boolean(currentVideo && modeFilteredVideoById.has(currentVideo.id))}
+          onOpenVisualEcho={openVisualEchoFromPlayer}
           onShowHome={showHomeView}
           onShowPhotoAlbums={showPhotoAlbumsView}
           onToggleTheme={toggleTheme}
@@ -5608,8 +5650,16 @@ export default function App() {
                 <section className="special-view-switch" aria-label="特殊模式视图">
                   <button className={specialHomeSection === "overview" ? "active" : ""} type="button" onClick={() => setSpecialHomeSection("overview")}>概览</button>
                   <button className={specialHomeSection === "actors" ? "active" : ""} type="button" onClick={() => setSpecialHomeSection("actors")}>演员</button>
-                  <button className={specialHomeSection === "mosaic" ? "active" : ""} type="button" onClick={() => setSpecialHomeSection("mosaic")}>千图</button>
-                  <button className={specialHomeSection === "rings" ? "active" : ""} type="button" onClick={() => setSpecialHomeSection("rings")}>年轮</button>
+                  <button
+                    className={specialHomeSection === "creative" ? "active" : ""}
+                    type="button"
+                    onClick={() => {
+                      setSpecialHomeSection("creative");
+                      setCreativeFeature(null);
+                    }}
+                  >
+                    创意工坊
+                  </button>
                 </section>
               ) : null}
 
@@ -5640,31 +5690,49 @@ export default function App() {
                 />
               ) : null}
 
-              {homeMediaMode === "special" && specialHomeSection === "rings" ? (
-                <VideoGrowthRingsSection
-                  forest={growthRingForest}
-                  query={growthRingQuery}
-                  selectedLayerKey={selectedGrowthRingLayerKey}
-                  selectedVideoId={selectedGrowthRingVideoId}
-                  sort={growthRingSort}
-                  visibleLimit={growthRingVisibleLimit}
-                  formatDuration={formatCumulativeDuration}
-                  onOpenVideo={openVideoFromHome}
-                  onQueryChange={setGrowthRingQuery}
-                  onSelectLayer={setSelectedGrowthRingLayerKey}
-                  onSelectVideo={setSelectedGrowthRingVideoId}
-                  onSortChange={setGrowthRingSort}
-                  onThumbnailError={markVideoThumbnailFailed}
-                  onVisibleLimitChange={setGrowthRingVisibleLimit}
-                  onVisibleVideoIdsChange={updateGrowthRingThumbnailVideos}
-                />
-              ) : homeMediaMode === "special" && specialHomeSection === "mosaic" ? (
-                <MosaicStudioSection
-                  albums={photoAlbums}
-                  videos={modeFilteredVideos}
-                  onOpenAlbum={openMosaicPhotoAlbum}
-                  onOpenVideo={openVideoFromHome}
-                />
+              {homeMediaMode === "special" && specialHomeSection === "creative" ? (
+                <section className={`creative-feature-shell${creativeFeature ? " has-feature" : ""}`}>
+                  {creativeFeature ? (
+                    <button className="creative-feature-back" type="button" onClick={() => setCreativeFeature(null)}>
+                      ← 返回创意工坊
+                    </button>
+                  ) : null}
+                  {creativeFeature === "rings" ? (
+                    <VideoGrowthRingsSection
+                      forest={growthRingForest}
+                      query={growthRingQuery}
+                      selectedLayerKey={selectedGrowthRingLayerKey}
+                      selectedVideoId={selectedGrowthRingVideoId}
+                      sort={growthRingSort}
+                      visibleLimit={growthRingVisibleLimit}
+                      formatDuration={formatCumulativeDuration}
+                      onOpenVideo={openVideoFromHome}
+                      onQueryChange={setGrowthRingQuery}
+                      onSelectLayer={setSelectedGrowthRingLayerKey}
+                      onSelectVideo={setSelectedGrowthRingVideoId}
+                      onSortChange={setGrowthRingSort}
+                      onThumbnailError={markVideoThumbnailFailed}
+                      onVisibleLimitChange={setGrowthRingVisibleLimit}
+                      onVisibleVideoIdsChange={updateGrowthRingThumbnailVideos}
+                    />
+                  ) : creativeFeature === "mosaic" ? (
+                    <MosaicStudioSection
+                      albums={photoAlbums}
+                      videos={modeFilteredVideos}
+                      onOpenAlbum={openMosaicPhotoAlbum}
+                      onOpenVideo={openVideoFromHome}
+                    />
+                  ) : creativeFeature === "echo" ? (
+                    <VisualEchoStudioSection
+                      initialEntry={visualEchoEntry}
+                      videos={modeFilteredVideos}
+                      formatTime={formatTime}
+                      onOpenVideoAt={openVideoAtVisualEchoTime}
+                    />
+                  ) : (
+                    <CreativeWorkshopSection onOpenFeature={setCreativeFeature} />
+                  )}
+                </section>
               ) : homeMediaMode === "special" && specialHomeSection === "actors" ? (
                 <ActorDashboardSection
                   actors={actorInsights.actors}

@@ -5,6 +5,7 @@ const cacheKindsByStatusId = {
   thumbnails: ["thumbnail"],
   "actor-covers": ["actor-cover"],
   mosaics: [],
+  "visual-echo": [],
   "danmaku-sources": ["danmaku-source"],
   "ai-summaries": ["ai-summary"],
   "ai-qa": ["ai-qa"],

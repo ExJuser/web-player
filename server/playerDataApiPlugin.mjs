@@ -67,12 +67,14 @@ import { createPlayerDeferredData, createPlayerStartupData } from "./playerDataV
 import { createVideoThumbnailService } from "./videoThumbnailService.mjs";
 import { createThumbnailMemoryCache } from "./thumbnailMemoryCache.mjs";
 import { createMosaicStore } from "./mosaicStore.mjs";
+import { createVisualEchoStore } from "./visualEchoStore.mjs";
 
 let dataRoot;
 let librariesRoot;
 let thumbnailsRoot;
 let actorCoversRoot;
 let mosaicsRoot;
+let visualEchoRoot;
 let photoAlbumsRoot;
 let embeddedSubtitlesRoot;
 let compatibleMediaRoot;
@@ -87,6 +89,7 @@ let bilibiliDanmaku;
 let bahamutDanmaku;
 let embeddedSubtitles;
 let mosaicStore;
+let visualEchoStore;
 
 const serverPhotoAlbumCacheRootId = "server-photo-albums";
 const serverPhotoAlbumCacheRootName = "媒体库看图";
@@ -97,6 +100,7 @@ function initializeApiServices(projectRoot) {
   thumbnailsRoot = path.join(dataRoot, "thumbnails");
   actorCoversRoot = path.join(dataRoot, "actor-covers");
   mosaicsRoot = path.join(dataRoot, "mosaics");
+  visualEchoRoot = path.join(dataRoot, "visual-echo");
   photoAlbumsRoot = path.join(dataRoot, "photo-albums");
   embeddedSubtitlesRoot = path.join(dataRoot, "subtitles");
   compatibleMediaRoot = path.join(dataRoot, "compatible-media");
@@ -110,6 +114,7 @@ function initializeApiServices(projectRoot) {
   appConfigPath = path.resolve(projectRoot, "config", "app.json");
   localDataStore = new LocalDataSqliteStore({ dataRoot, librariesRoot, photoAlbumsRoot, indexPath, globalDataPath });
   mosaicStore = createMosaicStore(mosaicsRoot);
+  visualEchoStore = createVisualEchoStore(visualEchoRoot);
   bilibiliDanmaku = createBilibiliDanmakuService({
     createDanmakuComment,
     dedupeDanmakuComments,
@@ -161,6 +166,7 @@ function createCacheStatusDefinitions(thumbnailMemoryStats = { entries: 0, bytes
     },
     { id: "actor-covers", label: "演员封面", path: actorCoversRoot },
     { id: "mosaics", label: "千图作品", path: mosaicsRoot },
+    { id: "visual-echo", label: "画面回声索引", path: visualEchoRoot },
     { id: "photo-albums", label: "看图数据", path: photoAlbumsRoot },
     { id: "subtitles", label: "内封字幕", path: embeddedSubtitlesRoot },
     { id: "compatible-media", label: "兼容播放缓存", path: compatibleMediaRoot },
@@ -821,6 +827,7 @@ export function playerDataApiPlugin({ projectRoot, env }) {
     const actorCoverMatch = url.pathname.match(/^\/api\/player-data\/actor-covers\/([^/]+)$/);
     const mosaicAssetMatch = url.pathname.match(/^\/api\/mosaics\/([^/]+)\/(target|preview)$/);
     const mosaicProjectMatch = url.pathname.match(/^\/api\/mosaics\/([^/]+)$/);
+    const visualEchoFrameMatch = url.pathname.match(/^\/api\/visual-echo\/frames\/([^/]+)$/);
     const mediaMatch = url.pathname.match(/^\/api\/media\/([^/]+)\/(.+)$/);
     const compatibleMediaMatch = url.pathname.match(/^\/api\/media-compatible\/([a-f0-9]{64})\.mp4$/);
     const progressMatch = url.pathname.match(/^\/api\/player-data\/progress\/(.+)$/);
@@ -841,6 +848,56 @@ export function playerDataApiPlugin({ projectRoot, env }) {
 
     try {
       const store = await getLocalDataStore();
+
+      if (url.pathname === "/api/visual-echo/index") {
+        if (request.method === "GET") {
+          sendJson(response, 200, await visualEchoStore.readIndex());
+          return;
+        }
+        if (request.method === "PUT") {
+          sendJson(response, 200, await visualEchoStore.writeIndex(await parseJsonBody(request)));
+          return;
+        }
+        if (request.method === "DELETE") {
+          await visualEchoStore.deleteIndex();
+          sendJson(response, 200, { ok: true });
+          return;
+        }
+      }
+
+      if (visualEchoFrameMatch) {
+        const frameId = sanitizeStorageId(decodeURIComponent(visualEchoFrameMatch[1]));
+        if (!frameId) {
+          sendJson(response, 400, { error: "Invalid visual echo frame id." });
+          return;
+        }
+        if (request.method === "GET" || request.method === "HEAD") {
+          try {
+            const buffer = await visualEchoStore.readFrame(frameId);
+            if (request.method === "HEAD") {
+              response.statusCode = 200;
+              response.setHeader("Content-Type", "image/webp");
+              response.setHeader("Content-Length", buffer.length);
+              response.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+              response.end();
+            } else {
+              sendBlob(response, 200, buffer, {
+                contentType: "image/webp",
+                cacheControl: "public, max-age=31536000, immutable",
+              });
+            }
+          } catch {
+            response.statusCode = 404;
+            response.end();
+          }
+          return;
+        }
+        if (request.method === "PUT") {
+          await visualEchoStore.writeFrame(frameId, await readBody(request));
+          sendJson(response, 200, { ok: true });
+          return;
+        }
+      }
 
       if (url.pathname === "/api/mosaics") {
         if (request.method === "GET") {
