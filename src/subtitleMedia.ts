@@ -16,7 +16,6 @@ export type FetchEmbeddedSubtitle = <T>(path: string, init?: RequestInit) => Pro
 
 export async function createSubtitleUrl(subtitle: SubtitleItem) {
   if (subtitle.url && !isObjectUrl(subtitle.url)) {
-    if (subtitle.format === "vtt" || subtitle.relativePath.toLowerCase().endsWith(".vtt")) return subtitle.url;
     const response = await fetch(subtitle.url, { headers: { Accept: "text/plain,text/vtt,*/*" } });
     if (!response.ok) throw new Error("Subtitle file is unavailable.");
     const normalizedText = normalizeSubtitleText(await response.text());

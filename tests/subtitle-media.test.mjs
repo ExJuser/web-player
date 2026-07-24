@@ -49,6 +49,36 @@ test("reads normalized remote subtitle text", async () => {
   }
 });
 
+test("strips style blocks from remote VTT subtitles", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalCreateObjectUrl = URL.createObjectURL;
+  let createdBlob;
+  globalThis.fetch = async () => new Response(
+    "WEBVTT\n\nSTYLE\n::cue { font-family: serif; font-size: 48px; }\n\n00:00:01.000 --> 00:00:02.000\nHello",
+    { status: 200 },
+  );
+  URL.createObjectURL = (blob) => {
+    createdBlob = blob;
+    return "blob:subtitle";
+  };
+
+  try {
+    const url = await subtitleMedia.createSubtitleUrl({
+      id: "s1",
+      name: "episode.vtt",
+      relativePath: "episode.vtt",
+      url: "/subtitle.vtt",
+      format: "vtt",
+    });
+
+    assert.equal(url, "blob:subtitle");
+    assert.doesNotMatch(await createdBlob.text(), /font-family|font-size/);
+  } finally {
+    globalThis.fetch = originalFetch;
+    URL.createObjectURL = originalCreateObjectUrl;
+  }
+});
+
 test("restores cached embedded subtitles with injected fetcher", async () => {
   const originalCreateObjectUrl = URL.createObjectURL;
   URL.createObjectURL = () => "blob:embedded";
