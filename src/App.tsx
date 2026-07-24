@@ -3286,11 +3286,11 @@ export default function App() {
     }
     const root = video.mediaRootId ? localConfigRef.current?.mediaRoots.find((item) => item.id === video.mediaRootId) : null;
     const shouldUseBrowserDelete = video.playbackSource === "browser" || (root?.source === "browser" && !root.localPath);
-    const currentVisibleIndex = playlistScopeVideos.findIndex((item) => item.id === video.id);
+    const currentVisibleIndex = playbackQueueVideos.findIndex((item) => item.id === video.id);
     const nextVideo =
       currentVisibleIndex >= 0
-        ? playlistScopeVideos[currentVisibleIndex + 1] ?? playlistScopeVideos[currentVisibleIndex - 1] ?? null
-        : playlistScopeVideos.find((item) => item.id !== video.id) ?? null;
+        ? playbackQueueVideos[currentVisibleIndex + 1] ?? playbackQueueVideos[currentVisibleIndex - 1] ?? null
+        : playbackQueueVideos.find((item) => item.id !== video.id) ?? null;
     const isDeletingCurrentVideo = video.id === currentVideoIdRef.current;
 
     setVideoDeleteError("");
@@ -3360,7 +3360,7 @@ export default function App() {
     removeDeletedVideoFromState,
     resetTimelinePreview,
     videoDeleteCandidate,
-    playlistScopeVideos,
+    playbackQueueVideos,
     updateSelectedSubtitleId,
   ]);
 
@@ -3387,6 +3387,7 @@ export default function App() {
     const firstVideo = duplicatePlaylistVideos[0];
     if (!firstVideo) return;
     setPlaylistPage(1);
+    setPlaylistSearchQuery("");
     setIsDuplicatePlaylistActive(true);
     setRatingPlaylistMode(null);
     setPlaylistFilter("all");
@@ -3398,6 +3399,7 @@ export default function App() {
     const firstVideo = versionPlaylistVideos[0];
     if (!firstVideo) return;
     setPlaylistPage(1);
+    setPlaylistSearchQuery("");
     setIsDuplicatePlaylistActive(false);
     setIsVersionPlaylistActive(true);
     setRatingPlaylistMode(null);
@@ -3425,6 +3427,7 @@ export default function App() {
     const firstVideo = nextVideos[0];
     if (!firstVideo) return;
     setPlaylistPage(1);
+    setPlaylistSearchQuery("");
     setRatingPlaylistMode(mode);
     setIsDuplicatePlaylistActive(false);
     setPlaylistFilter("all");
@@ -3436,6 +3439,7 @@ export default function App() {
     const firstVideo = favoriteHomeCards[0]?.video;
     if (!firstVideo) return;
     setPlaylistPage(1);
+    setPlaylistSearchQuery("");
     setIsDuplicatePlaylistActive(false);
     setIsVersionPlaylistActive(false);
     setRatingPlaylistMode(null);
