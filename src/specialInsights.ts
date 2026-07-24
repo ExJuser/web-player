@@ -89,7 +89,7 @@ export function buildSpecialModeInsights(
   videoStats: VideoStatsStore,
   videoTags: VideoTagStore,
   progressStore: ProgressStore,
-  options?: { videoLimit?: number; tagLimit?: number; excludedTagKeys?: ReadonlySet<string> },
+  options?: { videoLimit?: number; tagLimit?: number },
 ): SpecialModeInsights {
   const videoLimit = options?.videoLimit ?? defaultInsightLimit;
   const tagLimit = options?.tagLimit ?? defaultInsightLimit;
@@ -120,7 +120,7 @@ export function buildSpecialModeInsights(
     const seenTagKeys = new Set<string>();
     tags.forEach((tag) => {
       const key = normalizeTagKey(tag);
-      if (!key || options?.excludedTagKeys?.has(key) || seenTagKeys.has(key)) return;
+      if (!key || seenTagKeys.has(key)) return;
       seenTagKeys.add(key);
       const existing = tagStatsByKey.get(key);
       if (existing) {

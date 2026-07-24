@@ -1,5 +1,5 @@
 import { ChevronDown } from "lucide-react";
-import { useRef, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
 import { HomeCardThumbnail } from "./HomeVideoCards";
 import { RatingChip, TagChips } from "./MetadataChips";
@@ -241,20 +241,6 @@ export function SpecialInsightsCard({
   onThumbnailError,
   onToggle,
 }: SpecialInsightsCardProps) {
-  const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
-  const handleTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
-    let nextIndex: number | null = null;
-    if (event.key === "ArrowRight") nextIndex = (index + 1) % tabOptions.length;
-    if (event.key === "ArrowLeft") nextIndex = (index - 1 + tabOptions.length) % tabOptions.length;
-    if (event.key === "Home") nextIndex = 0;
-    if (event.key === "End") nextIndex = tabOptions.length - 1;
-    if (nextIndex === null) return;
-    event.preventDefault();
-    onTabChange(tabOptions[nextIndex].value);
-    tabRefs.current[nextIndex]?.focus();
-  };
-  const activeTabId = `special-insights-tab-${activeTab}`;
-
   return (
     <section className="home-section special-insights-card">
       <button
@@ -293,49 +279,42 @@ export function SpecialInsightsCard({
         {insights.summary.lastEmissionAt ? formatRelativeTime(insights.summary.lastEmissionAt) : "暂无记录"}
       </div>
       <div className="special-insight-tabs" role="tablist" aria-label="特殊模式视频榜单">
-        {tabOptions.map((option, index) => (
+        {tabOptions.map((option) => (
           <button
             className={activeTab === option.value ? "active" : ""}
             key={option.value}
-            id={`special-insights-tab-${option.value}`}
             type="button"
             role="tab"
-            aria-controls="special-insights-ranking-panel"
             aria-selected={activeTab === option.value}
-            tabIndex={activeTab === option.value ? 0 : -1}
             onClick={() => onTabChange(option.value)}
-            onKeyDown={(event) => handleTabKeyDown(event, index)}
-            ref={(element) => { tabRefs.current[index] = element; }}
           >
             {option.icon}
             {option.label}
           </button>
         ))}
       </div>
-      <div id="special-insights-ranking-panel" role="tabpanel" aria-labelledby={activeTabId}>
-        {rankingVideos.length ? (
-          <div className="special-insight-list">
-            {rankingVideos.map((insight, index) => (
-              <SpecialInsightVideoRow
-                card={createCard(insight.video)}
-                comment={videoComments[insight.video.id]}
-                formatMetric={formatVideoMetric}
-                index={index}
-                insight={insight}
-                key={`${activeTab}-${insight.video.id}`}
-                onOpenVideo={onOpenVideo}
-                onThumbnailError={onThumbnailError}
-                rating={videoRatings[insight.video.id]}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="empty-list compact">当前榜单暂无统计记录。</div>
-        )}
-      </div>
+      {rankingVideos.length ? (
+        <div className="special-insight-list">
+          {rankingVideos.map((insight, index) => (
+            <SpecialInsightVideoRow
+              card={createCard(insight.video)}
+              comment={videoComments[insight.video.id]}
+              formatMetric={formatVideoMetric}
+              index={index}
+              insight={insight}
+              key={`${activeTab}-${insight.video.id}`}
+              onOpenVideo={onOpenVideo}
+              onThumbnailError={onThumbnailError}
+              rating={videoRatings[insight.video.id]}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="empty-list compact">当前榜单暂无统计记录。</div>
+      )}
       <div className="special-tag-groups">
         <SpecialActorChartGroup actors={actors} formatDuration={formatDuration} icon={tagGroupIcons.played} label="播放最久的演员" metric="played" />
-        <SpecialActorChartGroup actors={actors} formatDuration={formatDuration} icon={tagGroupIcons.videoCount} label="播放次数最多的演员" metric="count" />
+        <SpecialActorChartGroup actors={actors} formatDuration={formatDuration} icon={tagGroupIcons.videoCount} label="次数最多的演员" metric="count" />
         <SpecialActorChartGroup actors={actors} formatDuration={formatDuration} icon={tagGroupIcons.emission} label="发射最多的演员" metric="emission" />
       </div>
       <div className="special-tag-groups">

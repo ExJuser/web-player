@@ -273,6 +273,8 @@ import {
   createVideoMetadataRows,
   createVideoMetadataTitle,
   createVideoIndexById,
+  createWatchActivityCarouselCardsByDate,
+  createWatchActivityCarouselVideoIds,
   countRatingFilterMatches,
   filterVideosBySeries,
   filterRatingPlaylistVideos,
@@ -391,7 +393,6 @@ const playlistResizeDefaultWidth = 360;
 const playlistResizeMaxWidth = 560;
 const serverPhotoAlbumCacheRootId = "server-photo-albums";
 const serverPhotoAlbumCacheRootName = "媒体库看图";
-const emptyActorInsights: ReturnType<typeof buildActorInsights> = { actors: [], unresolvedVideos: [] };
 
 function isServerPhotoImage(image: PhotoAlbumImage) {
   return Boolean(image.url && !image.file && !image.parentDirectory);
@@ -672,6 +673,7 @@ export default function App() {
   const [watchActivityMetric, setWatchActivityMetric] = useState<WatchActivityMetric>("watched");
   const [isWatchActivityExpanded, setIsWatchActivityExpanded] = useState(false);
   const [selectedWatchActivityDate, setSelectedWatchActivityDate] = useState<string | null>(null);
+  const [watchActivityCarouselTick, setWatchActivityCarouselTick] = useState(0);
   const [launchEffectKey, setLaunchEffectKey] = useState(0);
   const [isPlaylistSortReversed, setIsPlaylistSortReversed] = useState(
     defaultPlayerPreferences.isPlaylistSortReversed,
@@ -1677,10 +1679,6 @@ export default function App() {
     && homeMediaMode === "special"
     && specialHomeSection === "overview"
     && isSpecialInsightsExpanded;
-  const shouldLoadActorInsights = isHomeViewVisible
-    && homeMediaMode === "special"
-    && (specialHomeSection === "actors" || shouldLoadSpecialInsights);
-  const shouldLoadActorWatchActivity = shouldLoadActorInsights && specialHomeSection === "actors";
   const shouldLoadGrowthRings = isHomeViewVisible
     && homeMediaMode === "special"
     && specialHomeSection === "creative"
@@ -1688,10 +1686,13 @@ export default function App() {
   const isPhotoAlbumViewVisible =
     (activeView === "photos" || activeView === "photoViewer") && !isPrivacyMode && !isCinemaMode && !isFullscreen;
   const isNonPlayerViewVisible = isHomeViewVisible || isPhotoAlbumViewVisible;
-  const excludedInsightTagKeys = useMemo(
-    () => new Set(Object.keys(actorTagDefinitions).map(normalizeTagKey).filter(Boolean)),
-    [actorTagDefinitions],
-  );
+  useEffect(() => {
+    if (!isHomeViewVisible || !shouldLoadWatchActivity) return undefined;
+    const timer = window.setInterval(() => {
+      setWatchActivityCarouselTick((tick) => tick + 1);
+    }, 3200);
+    return () => window.clearInterval(timer);
+  }, [isHomeViewVisible, shouldLoadWatchActivity]);
   const firstPlayableHomeCard = playlistVideos[0] ? createHomeVideoCard(playlistVideos[0]) : null;
   const primaryHomeCard = createPrimaryHomeCard(primaryResumeCard, firstPlayableHomeCard);
   const libraryStats = useMemo(
@@ -1702,9 +1703,7 @@ export default function App() {
     () => {
       if (homeMediaMode !== "special") return null;
       if (shouldLoadSpecialInsights) {
-        return buildSpecialModeInsights(modeFilteredVideos, videoStatsRef.current, videoTags, progressStore, {
-          excludedTagKeys: excludedInsightTagKeys,
-        });
+        return buildSpecialModeInsights(modeFilteredVideos, videoStatsRef.current, videoTags, progressStore);
       }
       return {
         summary: {
@@ -1725,7 +1724,7 @@ export default function App() {
         tagsByEmissionCount: [],
       };
     },
-    [excludedInsightTagKeys, homeMediaMode, modeFilteredVideos, progressStore, shouldLoadSpecialInsights, videoStatsRevision, videoTags],
+    [homeMediaMode, modeFilteredVideos, progressStore, shouldLoadSpecialInsights, videoStatsRevision, videoTags],
   );
   useEffect(() => {
     const nextProfiles = reconcileActorProfiles({
@@ -1738,27 +1737,15 @@ export default function App() {
     persistActorState(nextProfiles, actorTagDefinitionsRef.current, videoActorOverridesRef.current);
   }, [actorProfilesRef, actorTagDefinitionsRef, persistActorState, videoActorOverridesRef, videoTags, videoTagsRef, videos]);
 
-  const actorStatsRevision = shouldLoadActorInsights ? videoStatsRevision : 0;
-  const actorWatchActivityRevision = shouldLoadActorWatchActivity ? watchActivityRevision : 0;
-  const actorInsights = useMemo(() => shouldLoadActorInsights ? buildActorInsights({
+  const actorInsights = useMemo(() => buildActorInsights({
     videos: modeFilteredVideos,
     profiles: actorProfiles,
     videoTags,
     actorTagDefinitions,
     videoActorOverrides,
     videoStats: videoStatsRef.current,
-    watchActivity: shouldLoadActorWatchActivity ? watchActivityRef.current : undefined,
-  }) : emptyActorInsights, [
-    actorProfiles,
-    actorStatsRevision,
-    actorTagDefinitions,
-    actorWatchActivityRevision,
-    modeFilteredVideos,
-    shouldLoadActorInsights,
-    shouldLoadActorWatchActivity,
-    videoActorOverrides,
-    videoTags,
-  ]);
+    watchActivity: watchActivityRef.current,
+  }), [actorProfiles, actorTagDefinitions, modeFilteredVideos, videoActorOverrides, videoStatsRevision, videoTags, watchActivityRevision]);
   const growthRingForest = useMemo(
     () => shouldLoadGrowthRings
       ? buildVideoGrowthRingForest(watchActivityRef.current, modeFilteredVideos)
@@ -1819,18 +1806,30 @@ export default function App() {
         };
       }
       return buildWatchActivityInsights(watchActivityRef.current, watchActivityVideos, videoTags, {
-        excludedTagKeys: excludedInsightTagKeys,
         rangeDays: watchActivityRange,
         metric: watchActivityMetric,
       });
     },
-    [excludedInsightTagKeys, shouldLoadWatchActivity, videoTags, watchActivityMetric, watchActivityRange, watchActivityRevision, watchActivityVideos],
+    [shouldLoadWatchActivity, videoTags, watchActivityMetric, watchActivityRange, watchActivityRevision, watchActivityVideos],
   );
   const watchActivityMonthGroups = useMemo(
     () => groupWatchActivityDaysByMonth(watchActivityInsights.days),
     [watchActivityInsights.days],
   );
   const modeFilteredVideoById = useMemo(() => new Map(modeFilteredVideos.map((video) => [video.id, video])), [modeFilteredVideos]);
+  const watchActivityCarouselCardsByDate = useMemo(
+    () =>
+      createWatchActivityCarouselCardsByDate({
+        days: watchActivityInsights.days,
+        videoById: modeFilteredVideoById,
+        createCard: createHomeVideoCard,
+      }),
+    [createHomeVideoCard, modeFilteredVideoById, watchActivityInsights.days],
+  );
+  const watchActivityCarouselVideoIds = useMemo(
+    () => createWatchActivityCarouselVideoIds(watchActivityCarouselCardsByDate),
+    [watchActivityCarouselCardsByDate],
+  );
   const selectedWatchActivityDay = useMemo(
     () => resolveSelectedWatchActivityDay(watchActivityInsights.days, selectedWatchActivityDate),
     [selectedWatchActivityDate, watchActivityInsights.days],
@@ -1842,9 +1841,8 @@ export default function App() {
         videos: modeFilteredVideos,
         activityStore: watchActivityRef.current,
         createCard: createHomeVideoCard,
-        metric: watchActivityMetric,
       }),
-    [createHomeVideoCard, modeFilteredVideos, selectedWatchActivityDay, watchActivityMetric, watchActivityRevision],
+    [createHomeVideoCard, modeFilteredVideos, selectedWatchActivityDay, watchActivityRevision],
   );
   const actorThumbnailVideos = useMemo(() => {
     if (homeMediaMode !== "special" || specialHomeSection !== "actors") return [];
@@ -1868,6 +1866,8 @@ export default function App() {
         nextEpisodeVideo: nextEpisodeCard?.video,
         recentHomeVideos: recentHomeCards.map((card) => card.video),
         favoriteHomeVideos: favoriteHomeCards.map((card) => card.video),
+        watchActivityCarouselVideoIds,
+        modeFilteredVideoById,
         playlistThumbnailVideos: isHomeViewVisible
           ? [...actorThumbnailVideos, ...growthRingThumbnailVideos]
           : playlistThumbnailVideos,
@@ -1877,10 +1877,12 @@ export default function App() {
       actorThumbnailVideos,
       growthRingThumbnailVideos,
       isHomeViewVisible,
+      modeFilteredVideoById,
       nextEpisodeCard,
       playlistThumbnailVideos,
       primaryHomeCard,
       recentHomeCards,
+      watchActivityCarouselVideoIds,
     ],
   );
   const thumbnailQueueVideoIdsKey = useMemo(() => thumbnailQueueVideoIds.join("\n"), [thumbnailQueueVideoIds]);
@@ -5696,6 +5698,8 @@ export default function App() {
 
               {isRatingFilterEnabled && specialHomeSection === "overview" ? (
                 <WatchActivitySection
+                  carouselCardsByDate={watchActivityCarouselCardsByDate}
+                  carouselTick={watchActivityCarouselTick}
                   cards={selectedWatchActivityCards}
                   insights={watchActivityInsights}
                   isExpanded={isWatchActivityExpanded}

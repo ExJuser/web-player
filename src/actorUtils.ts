@@ -136,19 +136,6 @@ export function resolveVideoActors(input: {
   actorTagDefinitions: ActorTagDefinitionStore;
   videoActorOverrides: VideoActorOverrideStore;
 }): ResolvedVideoActors {
-  return resolveVideoActorsWithAliasIndex(input, createActorAliasIndex(input.profiles));
-}
-
-function resolveVideoActorsWithAliasIndex(
-  input: {
-    video: VideoItem;
-    profiles: ActorProfileStore;
-    videoTags: VideoTagStore;
-    actorTagDefinitions: ActorTagDefinitionStore;
-    videoActorOverrides: VideoActorOverrideStore;
-  },
-  aliasIndex: ReadonlyMap<string, string>,
-): ResolvedVideoActors {
   const override = input.videoActorOverrides[input.video.id];
   if (override) {
     return {
@@ -157,6 +144,7 @@ function resolveVideoActorsWithAliasIndex(
     };
   }
 
+  const aliasIndex = createActorAliasIndex(input.profiles);
   const nfoActorIds = (input.video.actorHints?.names ?? [])
     .map((name) => aliasIndex.get(normalizeActorKey(name)))
     .filter((actorId): actorId is string => Boolean(actorId));
@@ -189,7 +177,7 @@ export function buildActorInsights(input: {
   });
   const actorAliasIndex = createActorAliasIndex(input.profiles);
   input.videos.forEach((video) => {
-    const resolved = resolveVideoActorsWithAliasIndex({ ...input, video }, actorAliasIndex);
+    const resolved = resolveVideoActors({ ...input, video });
     if (!resolved.actorIds.length || !resolved.source) {
       unresolvedVideos.push(video);
       return;
