@@ -4,36 +4,14 @@ export type ClientBangumiConfig = {
 };
 
 export type ClientLadaConfig = { available: boolean };
-export type ClientSubtitleGenerationConfig = {
-  available: boolean;
-  engine: string;
-  modelLabel: string;
-  vadAvailable: boolean;
-  reason: string;
-};
 
-export function normalizeClientLocalConfig<T extends {
-  bangumi?: ClientBangumiConfig;
-  lada?: ClientLadaConfig;
-  subtitleGeneration?: ClientSubtitleGenerationConfig;
-}>(
+export function normalizeClientLocalConfig<T extends { bangumi?: ClientBangumiConfig; lada?: ClientLadaConfig }>(
   config: T,
-): T & {
-  bangumi: ClientBangumiConfig;
-  lada: ClientLadaConfig;
-  subtitleGeneration: ClientSubtitleGenerationConfig;
-} {
+): T & { bangumi: ClientBangumiConfig; lada: ClientLadaConfig } {
   return {
     ...config,
     bangumi: config.bangumi ?? { configured: false, proxyConfigured: false },
     lada: config.lada ?? { available: false },
-    subtitleGeneration: config.subtitleGeneration ?? {
-      available: false,
-      engine: "whisper.cpp",
-      modelLabel: "Kotoba-Whisper v2.0",
-      vadAvailable: false,
-      reason: "未检测到日语字幕生成引擎。",
-    },
   };
 }
 

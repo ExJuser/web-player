@@ -110,15 +110,6 @@ export type LadaRestorationResult = {
   lastModified: number;
 };
 
-export type GeneratedSubtitleResult = {
-  id: string;
-  rootId: string;
-  relativePath: string;
-  sourceVideoId: string;
-  language: "ja";
-  modelLabel: string;
-};
-
 export type MediaProcessingTaskRunState = "running" | "cancelling" | "completed" | "failed" | "cancelled";
 
 type MediaProcessingTaskSnapshotBase = {
@@ -133,7 +124,6 @@ type MediaProcessingTaskSnapshotBase = {
 export type MediaProcessingTaskSnapshot = MediaProcessingTaskSnapshotBase & (
   | { kind: "montage"; result: HighlightMontageResult | null }
   | { kind: "lada"; result: LadaRestorationResult | null }
-  | { kind: "subtitle-generation"; result: GeneratedSubtitleResult | null }
 );
 
 export type MediaProbeResponse = {

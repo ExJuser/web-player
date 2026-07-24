@@ -11,7 +11,6 @@ The app is designed for personal local media libraries. It does not upload video
 - Play common video formats: `.mp4`, `.webm`, `.ogg`, `.mov`, `.m4v`, `.mkv`.
 - Load subtitle files: `.srt`, `.vtt`.
 - Automatically match subtitles by video filename, with support for manually adding subtitles.
-- Generate and cache Japanese WebVTT subtitles locally with whisper.cpp.
 - Save playback progress, completed status, favorites, shortcuts, and preferences.
 - Generate and cache video thumbnails in the browser.
 - Sort playlists by name, path, modified time, or size.
@@ -35,7 +34,6 @@ The app is designed for personal local media libraries. It does not upload video
 - Node.js
 - npm
 - A modern browser with local file APIs.
-- FFmpeg and whisper.cpp with a Japanese Whisper model for local subtitle generation.
 
 For the best experience, use a Chromium-based browser such as Chrome or Edge. Folder selection and persistent local folder access depend on the File System Access API, which is not supported equally across all browsers.
 
@@ -176,24 +174,6 @@ To enable embedded subtitle extraction, install `ffmpeg` and `ffprobe` on your s
 The home view uses a global media library: every configured media root is scanned into one playlist, search index, progress store, favorites list, and tag store. Local roots and browser roots with `localPath` are scanned automatically by the local dev server. Browser roots without `localPath` stay visible in the media library card as needing access/configuration and are not auto-scanned.
 
 When a video's media root has a server-readable path, the player can use `ffprobe` on the selected video to detect codec/container compatibility, extract embedded text subtitles, and offer a manual compatible MP4 generation action for files that can be remuxed without transcoding. Image subtitle formats such as PGS and VobSub are detected but not OCR'd.
-
-To enable local Japanese subtitle generation with the official Kotoba-Whisper v2.2 Transformers model, create the local Python environment and download the model once:
-
-```powershell
-.\scripts\setup-kotoba-whisper-v2.2.ps1 -PythonPath C:\path\to\python.exe
-```
-
-The server automatically prefers `.local-web-player-data/speech-to-text/python/Scripts/python.exe` on Windows. Override the interpreter, model, or cache directory with `KOTOBA_WHISPER_PYTHON_PATH`, `KOTOBA_WHISPER_MODEL_ID`, and `KOTOBA_WHISPER_CACHE_PATH`. The worker uses CUDA when available and falls back to CPU.
-
-The older whisper.cpp backend remains available as a fallback. It requires a GGML model because GGML is the model format consumed by whisper.cpp; it is not required by Kotoba-Whisper itself. Set `KOTOBA_WHISPER_BACKEND=whisper.cpp` to force this backend:
-
-```text
-WHISPER_CPP_PATH=D:\whisper.cpp\build\bin\Release\whisper-cli.exe
-WHISPER_MODEL_PATH=D:\whisper.cpp\models\ggml-kotoba-whisper-v2.0.bin
-WHISPER_VAD_MODEL_PATH=D:\whisper.cpp\models\ggml-silero-v6.2.0.bin
-```
-
-Alternatively, place the CLI and models under `.local-web-player-data/speech-to-text/` using the same filenames. Generated WebVTT files are cached under `.local-web-player-data/generated-subtitles/`; temporary extracted audio is deleted after completion, failure, or cancellation. Browser-added media roots require a configured `localPath` because the server must read the source video.
 
 The compatible MP4 action is intentionally limited to safe remux candidates, such as H.264 video with AAC/MP3 audio in a browser-unfriendly container. HEVC, 10-bit video, DTS/TrueHD audio, and other formats that require transcoding are reported with an explanation and are not processed automatically.
 

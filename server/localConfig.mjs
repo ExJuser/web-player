@@ -2,7 +2,7 @@ import { normalizeMediaRoots } from "./mediaRoots.mjs";
 
 export const defaultAppConfig = { server: { port: 3001 }, media: { roots: [] } };
 
-export function createPublicLocalConfig(config, tools, env = {}, ladaAvailable = false, subtitleGeneration = null) {
+export function createPublicLocalConfig(config, tools, env = {}, ladaAvailable = false) {
   const roots = normalizeMediaRoots(config).map((root) => ({
     id: root.id,
     label: root.label,
@@ -15,13 +15,6 @@ export function createPublicLocalConfig(config, tools, env = {}, ladaAvailable =
     mediaRoots: roots,
     ffmpeg: tools,
     lada: { available: Boolean(ladaAvailable) },
-    subtitleGeneration: subtitleGeneration ?? {
-      available: false,
-      engine: "whisper.cpp",
-      modelLabel: "Kotoba-Whisper v2.0",
-      vadAvailable: false,
-      reason: "未检测到日语字幕生成引擎。",
-    },
     ai: {
       configured: Boolean(env.DEEPSEEK_API_KEY),
       model: env.DEEPSEEK_MODEL || "deepseek-chat",

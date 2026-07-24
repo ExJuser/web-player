@@ -1,4 +1,4 @@
-import type { GeneratedSubtitleResult, HighlightMontageResult, LadaRestorationResult, MediaProcessingTaskSnapshot } from "./appTypes";
+import type { HighlightMontageResult, LadaRestorationResult, MediaProcessingTaskSnapshot } from "./appTypes";
 import type { MediaProcessingTaskState } from "./MediaProcessingTaskDialog";
 
 export type MediaProcessingTaskAction =
@@ -6,7 +6,6 @@ export type MediaProcessingTaskAction =
   | { type: "active"; task: MediaProcessingTaskState }
   | { type: "montage-completed"; result: Pick<HighlightMontageResult, "fileName" | "mode" | "relativePath" | "durationSeconds"> }
   | { type: "lada-completed"; result: Pick<LadaRestorationResult, "fileName" | "relativePath" | "size"> }
-  | { type: "subtitle-generation-completed"; result: GeneratedSubtitleResult }
   | { type: "message"; message: string };
 
 export function isActiveMediaProcessingTask(task: Pick<MediaProcessingTaskSnapshot, "state">) {
@@ -51,9 +50,6 @@ export function resolveMediaProcessingTaskAction(
         durationSeconds: task.result.durationSeconds,
       },
     };
-  }
-  if (task.state === "completed" && task.kind === "subtitle-generation" && task.result) {
-    return { type: "subtitle-generation-completed", result: task.result };
   }
   return {
     type: "message",

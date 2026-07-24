@@ -1,4 +1,4 @@
-import { AudioLines, Scissors, Sparkles } from "lucide-react";
+import { Scissors, Sparkles } from "lucide-react";
 
 import type { MediaProcessingTaskSnapshot } from "./appTypes";
 
@@ -15,10 +15,9 @@ type MediaProcessingTaskDialogProps = {
 export function MediaProcessingTaskDialog({ task, onCancel, onRunInBackground }: MediaProcessingTaskDialogProps) {
   if (!task?.isDialogOpen) return null;
   const isLada = task.kind === "lada";
-  const isSubtitleGeneration = task.kind === "subtitle-generation";
-  const title = isLada ? "正在修复马赛克" : isSubtitleGeneration ? "正在生成日语字幕" : "正在生成剪辑版";
-  const progressLabel = isLada ? "马赛克修复进度" : isSubtitleGeneration ? "字幕生成进度" : "剪辑进度";
-  const Icon = isLada ? Sparkles : isSubtitleGeneration ? AudioLines : Scissors;
+  const title = isLada ? "正在修复马赛克" : "正在生成剪辑版";
+  const progressLabel = isLada ? "马赛克修复进度" : "剪辑进度";
+  const Icon = isLada ? Sparkles : Scissors;
 
   return (
     <div className="modal-backdrop" role="presentation">

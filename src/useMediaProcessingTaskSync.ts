@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, type Dispatch, type SetStateAction } from "react";
 
-import type { GeneratedSubtitleResult, MediaProcessingTaskSnapshot } from "./appTypes";
+import type { MediaProcessingTaskSnapshot } from "./appTypes";
 import type { HighlightMontageResultState } from "./HighlightMontageDialogs";
 import type { LadaRestorationResultState } from "./LadaRestorationDialogs";
 import { fetchLocalJson as fetchJson } from "./localApiClient";
@@ -37,7 +37,6 @@ type UseMediaProcessingTaskSyncOptions = {
   setHighlightMontageResult: Dispatch<SetStateAction<HighlightMontageResultState | null>>;
   setLadaRestorationResult: Dispatch<SetStateAction<LadaRestorationResultState | null>>;
   setMessage: (message: string) => void;
-  onSubtitleGenerationCompleted: (result: GeneratedSubtitleResult) => Promise<void>;
 };
 
 export function useMediaProcessingTaskSync({
@@ -46,7 +45,6 @@ export function useMediaProcessingTaskSync({
   setHighlightMontageResult,
   setLadaRestorationResult,
   setMessage,
-  onSubtitleGenerationCompleted,
 }: UseMediaProcessingTaskSyncOptions) {
   const handledTaskIdRef = useRef<string | null>(readHandledTaskId());
 
@@ -76,8 +74,6 @@ export function useMediaProcessingTaskSync({
         } else if (action.type === "montage-completed") {
           setHighlightMontageResult(action.result);
           setMessage(`已生成剪辑版 ${action.result.fileName}。`);
-        } else if (action.type === "subtitle-generation-completed") {
-          await onSubtitleGenerationCompleted(action.result);
         } else if (action.type === "message") {
           setMessage(action.message);
         }
@@ -91,7 +87,7 @@ export function useMediaProcessingTaskSync({
       disposed = true;
       if (timerId) clearTimeout(timerId);
     };
-  }, [onSubtitleGenerationCompleted, setHighlightMontageResult, setLadaRestorationResult, setMessage, setTask, task?.id]);
+  }, [setHighlightMontageResult, setLadaRestorationResult, setMessage, setTask, task?.id]);
 
   const cancelTask = useCallback(async () => {
     const taskId = task?.id;

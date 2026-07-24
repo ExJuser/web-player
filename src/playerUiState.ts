@@ -136,7 +136,7 @@ type SubtitleForUi = {
   name?: string;
   isManual?: boolean;
   relativePath?: string;
-  source?: "external" | "manual" | "embedded" | "generated";
+  source?: "external" | "manual" | "embedded";
   format?: "srt" | "vtt";
   videoId?: string;
   embeddedTrack?: {
