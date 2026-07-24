@@ -1181,10 +1181,10 @@ export async function findCachedThumbnailUrl(libraryId: string | null, videoId: 
   if (!libraryId) return null;
   for (const thumbnailId of createThumbnailIds(libraryId, videoId)) {
     const thumbnailUrl = createThumbnailUrl(thumbnailId);
-    const response = await fetch(thumbnailUrl, { method: "HEAD", signal });
+    const response = await fetch(thumbnailUrl, { signal });
     if (response.status === 404) continue;
     if (!response.ok) throw new Error(await readApiError(response));
-    return thumbnailUrl;
+    return URL.createObjectURL(await response.blob());
   }
   return null;
 }
