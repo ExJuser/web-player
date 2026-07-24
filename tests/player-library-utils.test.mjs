@@ -27,6 +27,13 @@ test("normalizes object URLs and base paths", () => {
   assert.equal(libraryUtils.basePathOf("Show/E01"), "show/e01");
 });
 
+test("prioritizes same-directory translated subtitles", () => {
+  assert.equal(libraryUtils.getSubtitlePathMatchPriority("Show/E01.mkv", "Show/E01-translated.srt"), 0);
+  assert.equal(libraryUtils.getSubtitlePathMatchPriority("Show/E01.mkv", "Show/E01.vtt"), 1);
+  assert.equal(libraryUtils.getSubtitlePathMatchPriority("Show/E01.mkv", "Other/E01-translated.srt"), null);
+  assert.equal(libraryUtils.getSubtitlePathMatchPriority("Show\\E01.MKV", "show\\e01-TRANSLATED.VTT"), 0);
+});
+
 test("matches a same-basename poster image case-insensitively", () => {
   assert.equal(
     libraryUtils.findVideoPosterName("Movie.Name.mkv", ["other.jpg", "movie.name-POSTER.WEBP"]),

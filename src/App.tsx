@@ -167,9 +167,9 @@ import {
 } from "./danmakuUtils";
 import { fallbackMediaRootLabelForVideo } from "./mediaPathUtils";
 import {
-  basePathOf,
   createLibraryMetadata,
   createLegacyVideoId,
+  getSubtitlePathMatchPriority,
   hasStoredData,
   isObjectUrl,
   migrateMovedVideoData,
@@ -1993,16 +1993,21 @@ export default function App() {
   }, [photoAlbumPageCount]);
   const findMatchedSubtitleForVideo = useCallback(
     (video: VideoItem) => {
-      const videoBasePath = basePathOf(video.relativePath);
-      return (
-        subtitles.find(
-          (subtitle) =>
-            !subtitle.isManual &&
-            (subtitle.videoId === video.id ||
-              ((subtitle.mediaRootId === undefined || subtitle.mediaRootId === video.mediaRootId) &&
-                basePathOf(subtitle.relativePath) === videoBasePath)),
-        ) ?? null
-      );
+      let matchedSubtitle: SubtitleItem | null = null;
+      let matchedPriority = Number.POSITIVE_INFINITY;
+      subtitles.forEach((subtitle) => {
+        if (subtitle.isManual) return;
+        const hasCompatibleRoot = subtitle.mediaRootId === undefined || subtitle.mediaRootId === video.mediaRootId;
+        const pathPriority = hasCompatibleRoot
+          ? getSubtitlePathMatchPriority(video.relativePath, subtitle.relativePath)
+          : null;
+        const priority = pathPriority ?? (subtitle.videoId === video.id ? 2 : null);
+        if (priority !== null && priority < matchedPriority) {
+          matchedSubtitle = subtitle;
+          matchedPriority = priority;
+        }
+      });
+      return matchedSubtitle;
     },
     [subtitles],
   );
@@ -2029,14 +2034,18 @@ export default function App() {
   const canUseHomeRecapSubtitle = Boolean(homeRecapSubtitle || canUseHomeEmbeddedSubtitles);
   const currentVideoSubtitles = useMemo(() => {
     if (!currentVideo) return [];
-    const currentBasePath = basePathOf(currentVideo.relativePath);
-    return subtitles.filter(
-      (subtitle) =>
-        subtitle.isManual ||
-        subtitle.videoId === currentVideo.id ||
-        ((subtitle.mediaRootId === undefined || subtitle.mediaRootId === currentVideo.mediaRootId) &&
-          basePathOf(subtitle.relativePath) === currentBasePath),
-    );
+    return subtitles
+      .map((subtitle) => {
+        if (subtitle.isManual) return { subtitle, priority: 3 };
+        const hasCompatibleRoot = subtitle.mediaRootId === undefined || subtitle.mediaRootId === currentVideo.mediaRootId;
+        const pathPriority = hasCompatibleRoot
+          ? getSubtitlePathMatchPriority(currentVideo.relativePath, subtitle.relativePath)
+          : null;
+        return { subtitle, priority: pathPriority ?? (subtitle.videoId === currentVideo.id ? 2 : null) };
+      })
+      .filter((match): match is { subtitle: SubtitleItem; priority: number } => match.priority !== null)
+      .sort((left, right) => left.priority - right.priority)
+      .map((match) => match.subtitle);
   }, [currentVideo, subtitles]);
   const subtitleControlOptions = useMemo(
     () => createSubtitleControlOptions(currentVideoSubtitles),

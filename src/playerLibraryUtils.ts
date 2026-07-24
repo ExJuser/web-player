@@ -69,6 +69,14 @@ export function basePathOf(path: string) {
   return dotIndex >= 0 ? path.slice(0, dotIndex).toLowerCase() : path.toLowerCase();
 }
 
+export function getSubtitlePathMatchPriority(videoPath: string, subtitlePath: string) {
+  const videoBasePath = basePathOf(videoPath).replace(/\\/g, "/");
+  const subtitleBasePath = basePathOf(subtitlePath).replace(/\\/g, "/");
+  if (subtitleBasePath === `${videoBasePath}-translated`) return 0;
+  if (subtitleBasePath === videoBasePath) return 1;
+  return null;
+}
+
 export function createLegacyVideoId(relativePath: string, file: FileFingerprint) {
   return `${relativePath}|${file.size}|${file.lastModified}`;
 }
