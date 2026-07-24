@@ -361,6 +361,7 @@ import { HomeNextEpisodeSection } from "./HomeNextEpisodeSection";
 import { HomeRecentSection } from "./HomeRecentSection";
 import { HomeResumeSection } from "./HomeResumeSection";
 import { HomeSideColumn } from "./HomeSideColumn";
+import { HomeModeCard } from "./HomeModeCard";
 import { HomeSpecialInsightsSection } from "./HomeSpecialInsightsSection";
 import { HomeListCard } from "./HomeVideoCards";
 import { MediaRootDialogsGroup } from "./MediaRootDialogsGroup";
@@ -3418,6 +3419,19 @@ export default function App() {
     selectVideo(firstVideo.id, { keepRatingPlaylist: true, syncSeriesMode: false });
   }, [isRatingFilterEnabled, playlistVideos, ratingFilterOperator, ratingFilterThreshold, selectVideo, videoRatings]);
 
+  const openFavoritePlaylist = useCallback(() => {
+    const firstVideo = favoriteHomeCards[0]?.video;
+    if (!firstVideo) return;
+    setPlaylistPage(1);
+    setIsDuplicatePlaylistActive(false);
+    setIsVersionPlaylistActive(false);
+    setRatingPlaylistMode(null);
+    setIsSeriesMode(false);
+    setIsSeriesMenuOpen(false);
+    setPlaylistFilter("favorites");
+    selectVideo(firstVideo.id, { syncSeriesMode: false });
+  }, [favoriteHomeCards, selectVideo]);
+
   const showHomeView = useCallback(() => {
     persistCurrentProgress();
     videoRef.current?.pause();
@@ -5584,6 +5598,13 @@ export default function App() {
 
         {isHomeViewVisible || shouldKeepMosaicHomeMounted ? (
           <section className={`home-dashboard ${isSpecialImmersiveHomeSection ? "mosaic-active" : ""} ${isGrowthRingsHomeSection ? "growth-rings-active" : ""}`} aria-label="继续观看首页" hidden={!isHomeViewVisible}>
+            {!isSpecialImmersiveHomeSection ? (
+              <HomeModeCard
+                homeMediaMode={homeMediaMode}
+                homeMediaModeLabel={homeMediaModeLabel}
+                onModeChange={updateHomeMediaMode}
+              />
+            ) : null}
             <div className="home-primary-column">
               {!isSpecialImmersiveHomeSection ? (
                 <>
@@ -5738,11 +5759,6 @@ export default function App() {
             </div>
 
             {!isSpecialImmersiveHomeSection ? <HomeSideColumn
-              mode={{
-                homeMediaMode,
-                homeMediaModeLabel,
-                onModeChange: updateHomeMediaMode,
-              }}
               libraryStats={{ stats: libraryStats }}
               mediaLibrary={{
                 homeMediaMode,
@@ -5814,6 +5830,8 @@ export default function App() {
               } : null}
               favorites={{
                 cards: favoriteHomeCards,
+                totalCount: libraryStats.favorites,
+                onOpenAll: openFavoritePlaylist,
                 renderCard: renderHomeListCard,
               }}
             /> : null}

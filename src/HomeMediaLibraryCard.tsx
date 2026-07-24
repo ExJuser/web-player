@@ -37,7 +37,7 @@ export function HomeMediaLibraryCard({
   });
 
   return (
-    <section className="home-section media-library-card">
+    <section className="home-section media-library-card" aria-busy={isScanning}>
       <button
         className="media-library-toggle"
         type="button"
@@ -54,10 +54,10 @@ export function HomeMediaLibraryCard({
         type="button"
         onClick={onRefresh}
         disabled={isScanning || !mediaRootCount}
-        title={!mediaRootCount ? "还没有可扫描的媒体库" : "重新扫描全局媒体库"}
+        title={!mediaRootCount ? "还没有可扫描的媒体库" : "重新扫描全部媒体库"}
       >
         <RefreshCw size={16} className={isScanning ? "spin-icon" : undefined} />
-        {isScanning ? "扫描中" : "刷新媒体库"}
+        {isScanning ? "扫描中" : "刷新全部媒体库"}
       </button>
       {isOpen ? (
         <div id="home-media-library-panel" className="media-library-panel">

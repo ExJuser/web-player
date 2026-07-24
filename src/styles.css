@@ -964,7 +964,8 @@ button {
 
 .home-dashboard {
   display: grid;
-  grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 14px;
   min-height: 0;
   flex: 1;
@@ -985,12 +986,20 @@ button {
 }
 
 .home-side-column {
-  order: 1;
   padding-right: 0;
 }
 
-.home-primary-column {
-  order: 2;
+.home-dashboard > .home-mode-card {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 14px;
+}
+
+.home-dashboard > .home-mode-card .home-mode-switch {
+  width: min(100%, 440px);
 }
 
 .home-resume-card,
@@ -1291,6 +1300,12 @@ button {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.duplicate-video-list-more {
+  padding: 2px 4px;
+  color: #8e97a5;
+  line-height: 1.45;
 }
 
 .rating-filter-card {
@@ -2081,6 +2096,11 @@ button {
 .home-compact-list {
   display: grid;
   gap: 8px;
+}
+
+.favorite-home-more {
+  width: 100%;
+  justify-content: center;
 }
 
 .home-list-grid {
@@ -2963,15 +2983,10 @@ button {
 .media-library-list {
   display: grid;
   gap: 8px;
-  max-height: min(320px, 36vh);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-color: rgba(142, 151, 165, 0.58) rgba(20, 22, 26, 0.35);
-  scrollbar-width: thin;
 }
 
 .media-library-list-scrollable {
-  width: calc(100% + 10px);
+  width: 100%;
 }
 
 .media-library-list::-webkit-scrollbar {
@@ -3061,11 +3076,6 @@ button {
 
 .home-recap-output {
   min-height: 96px;
-  max-height: 180px;
-  overflow: auto;
-  scrollbar-color: rgba(142, 151, 165, 0.58) rgba(20, 22, 26, 0.35);
-  scrollbar-gutter: stable;
-  scrollbar-width: thin;
   padding: 10px;
   border: 1px solid #2b323d;
   border-radius: 8px;
@@ -9240,6 +9250,7 @@ button {
 
   .home-dashboard {
     grid-template-columns: 1fr;
+    grid-template-rows: auto;
     min-height: auto;
     flex: 0 0 auto;
     overflow: visible;
@@ -9269,9 +9280,13 @@ button {
 
   .home-primary-column,
   .home-side-column {
-    order: initial;
     min-height: auto;
     overflow: visible;
+  }
+
+  .home-dashboard > .home-mode-card {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .home-resume-card,
@@ -9873,6 +9888,7 @@ button {
 /* Special-mode mosaic studio */
 .home-dashboard.mosaic-active {
   grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
 }
 
 .mosaic-studio {

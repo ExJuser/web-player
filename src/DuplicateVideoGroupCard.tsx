@@ -8,7 +8,10 @@ type DuplicateVideoGroupCardProps = {
   onOpenVideo: (video: VideoItem) => void;
 };
 
+const duplicateVideoPreviewLimit = 4;
+
 export function DuplicateVideoGroupCard({ group, formatFileSize, formatTime, onOpenVideo }: DuplicateVideoGroupCardProps) {
+  const previewVideos = group.videos.slice(0, duplicateVideoPreviewLimit);
   return (
     <div className="duplicate-video-group">
       <div className="duplicate-video-group-header">
@@ -16,7 +19,7 @@ export function DuplicateVideoGroupCard({ group, formatFileSize, formatTime, onO
         <span>{group.videos.length} 个 · {group.reasons.join("、")}</span>
       </div>
       <div className="duplicate-video-list">
-        {group.videos.map((video) => (
+        {previewVideos.map((video) => (
           <button key={video.id} type="button" onClick={() => onOpenVideo(video)} title={video.relativePath || video.name}>
             <span>{video.name}</span>
             <small>
@@ -25,6 +28,9 @@ export function DuplicateVideoGroupCard({ group, formatFileSize, formatTime, onO
             </small>
           </button>
         ))}
+        {group.videos.length > previewVideos.length ? (
+          <small className="duplicate-video-list-more">另有 {group.videos.length - previewVideos.length} 个，请进入重复列表查看</small>
+        ) : null}
       </div>
     </div>
   );

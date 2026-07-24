@@ -16,6 +16,8 @@ type DuplicateVideoSummaryCardProps = {
   renderGroup: (group: DuplicateVideoGroup) => ReactNode;
 };
 
+const duplicateGroupPreviewLimit = 2;
+
 export function DuplicateVideoSummaryCard({
   detectionMessage,
   detectionPercent,
@@ -34,12 +36,19 @@ export function DuplicateVideoSummaryCard({
         <h2>重复视频</h2>
         <span>{isRunning ? `${detectionPercent}%` : `${groups.length} 组`}</span>
       </div>
-      <div className="duplicate-video-summary">
+      <div className="duplicate-video-summary" role="status" aria-live="polite">
         <Sparkles size={24} />
         <span>{detectionMessage}</span>
       </div>
       {progress ? (
-        <div className="duplicate-detection-progress" aria-label={`重复视频检测进度 ${detectionPercent}%`}>
+        <div
+          className="duplicate-detection-progress"
+          role="progressbar"
+          aria-label="重复视频检测进度"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={detectionPercent}
+        >
           <span style={{ width: `${detectionPercent}%` }} />
         </div>
       ) : null}
@@ -67,8 +76,8 @@ export function DuplicateVideoSummaryCard({
       </div>
       {groups.length ? (
         <div className="duplicate-video-groups">
-          {groups.slice(0, 6).map(renderGroup)}
-          {groups.length > 6 ? (
+          {groups.slice(0, duplicateGroupPreviewLimit).map(renderGroup)}
+          {groups.length > duplicateGroupPreviewLimit ? (
             <button
               className="secondary-button duplicate-video-more"
               type="button"

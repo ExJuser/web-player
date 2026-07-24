@@ -67,7 +67,7 @@ export function HomeRecapCard({
           </div>
         </div>
       ) : null}
-      <div className="home-recap-output">{output}</div>
+      <div className="home-recap-output" role="status" aria-live="polite">{output}</div>
       {showConfigureLocalPath && homeRecapMediaRoot ? (
         <button
           className="secondary-button home-recap-button"
@@ -85,7 +85,7 @@ export function HomeRecapCard({
         disabled={isLoading || !homeRecapCard || !isAiConfigured || !canUseRecapSubtitle}
         title={!homeRecapCard ? "当前没有可回顾的观看进度" : !isAiConfigured ? "未配置 DEEPSEEK_API_KEY" : undefined}
       >
-        {homeProgressRecap ? "重新生成" : isLoading ? "生成中..." : "生成回顾"}
+        {isLoading ? "生成中..." : homeProgressRecap ? "重新生成" : "生成回顾"}
       </button>
     </section>
   );
