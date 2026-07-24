@@ -97,7 +97,15 @@ export function PlaylistVideoList({
   onThumbnailError,
 }: PlaylistVideoListProps) {
   return (
-    <div className="playlist" id="player-playlist-results" ref={playlistRef} onScroll={onScroll}>
+    <div
+      className="playlist"
+      id="player-playlist-results"
+      ref={playlistRef}
+      role={pagedPlaylistVideos.length ? "list" : undefined}
+      aria-busy={isSearchPending}
+      aria-label="播放列表"
+      onScroll={onScroll}
+    >
       {pagedPlaylistVideos.map((video) => {
         const isActive = video.id === currentVideoId;
         const progress = progressStore[video.id];

@@ -36,7 +36,7 @@ export function PlaylistPagination({
   }
 
   return (
-    <div className="playlist-pagination" aria-label="播放列表分页">
+    <nav className="playlist-pagination" aria-label="播放列表分页">
       <button
         className="playlist-page-button"
         type="button"
@@ -112,6 +112,6 @@ export function PlaylistPagination({
         onChange={onPageSizeChange}
         className="playlist-page-size-control"
       />
-    </div>
+    </nav>
   );
 }

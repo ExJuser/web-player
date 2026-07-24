@@ -1282,18 +1282,6 @@ export default function App() {
     [localConfig, playlistVideos],
   );
   const seriesTitleByVideoId = useMemo(() => createSeriesTitleByVideoId(playlistVideos), [playlistVideos]);
-  const videoActorSearchMetadata = useMemo(() => Object.fromEntries(videos.map((video) => {
-    const resolved = resolveVideoActors({ video, profiles: actorProfiles, videoTags, actorTagDefinitions, videoActorOverrides });
-    const profiles = resolved.actorIds.flatMap((actorId) => actorProfiles[actorId] ? [actorProfiles[actorId]] : []);
-    return [video.id, {
-      names: profiles.map((profile) => profile.name),
-      aliases: profiles.flatMap((profile) => profile.aliases.map((alias) => alias.label)),
-    }];
-  })), [actorProfiles, actorTagDefinitions, videoActorOverrides, videoTags, videos]);
-  const videoActorTags = useMemo(
-    () => Object.fromEntries(Object.entries(videoActorSearchMetadata).map(([videoId, metadata]) => [videoId, metadata.names])),
-    [videoActorSearchMetadata],
-  );
   const seriesFilteredVideos = useMemo(
     () => filterVideosBySeries(playlistVideos, seriesOptions, seriesTitleByVideoId, isSeriesMode, selectedSeriesKey),
     [isSeriesMode, playlistVideos, selectedSeriesKey, seriesOptions, seriesTitleByVideoId],
@@ -1467,8 +1455,20 @@ export default function App() {
       }),
     [duplicatePlaylistVideos, favoritePlaylistVideos, isDuplicatePlaylistActive, isVersionPlaylistActive, playlistFilter, ratingPlaylistMode, ratingPlaylistVideos, seriesFilteredVideos, versionPlaylistVideos],
   );
+  const videoActorSearchMetadata = useMemo(() => Object.fromEntries(playlistScopeVideos.map((video) => {
+    const resolved = resolveVideoActors({ video, profiles: actorProfiles, videoTags, actorTagDefinitions, videoActorOverrides });
+    const profiles = resolved.actorIds.flatMap((actorId) => actorProfiles[actorId] ? [actorProfiles[actorId]] : []);
+    return [video.id, {
+      names: profiles.map((profile) => profile.name),
+      aliases: profiles.flatMap((profile) => profile.aliases.map((alias) => alias.label)),
+    }];
+  })), [actorProfiles, actorTagDefinitions, playlistScopeVideos, videoActorOverrides, videoTags]);
+  const videoActorTags = useMemo(
+    () => Object.fromEntries(Object.entries(videoActorSearchMetadata).map(([videoId, metadata]) => [videoId, metadata.names])),
+    [videoActorSearchMetadata],
+  );
   const playlistSearchDocumentsById = useMemo(
-    () => createPlaylistSearchDocuments(videos.map((video) => {
+    () => createPlaylistSearchDocuments(playlistScopeVideos.map((video) => {
       const actorMetadata = videoActorSearchMetadata[video.id] ?? { names: [], aliases: [] };
       const actorKeys = new Set([...actorMetadata.names, ...actorMetadata.aliases].map(normalizeTagKey));
       return {
@@ -1484,7 +1484,7 @@ export default function App() {
         library: (video.mediaRootId ? mediaRootLabelsById[video.mediaRootId] : "") || fallbackMediaRootLabelForVideo(video),
       };
     })),
-    [mediaRootLabelsById, seriesTitleByVideoId, videoActorSearchMetadata, videoComments, videoRatings, videoTags, videos],
+    [mediaRootLabelsById, playlistScopeVideos, seriesTitleByVideoId, videoActorSearchMetadata, videoComments, videoRatings, videoTags],
   );
   const deferredPlaylistSearchQuery = useDeferredValue(playlistSearchQuery);
   const effectivePlaylistSearchQuery = playlistSearchQuery.trim() ? deferredPlaylistSearchQuery : "";

@@ -64,11 +64,13 @@ export const PlaylistItemCard = memo(function PlaylistItemCard({
     <div
       className={`playlist-item ${isActive ? "active" : ""}`}
       data-video-id={video.id}
+      role="listitem"
       title={title}
     >
       <button
         className="playlist-select"
         type="button"
+        aria-current={isActive ? "true" : undefined}
         onClick={() => onSelect(video, isActive)}
       >
         <span className={`episode-thumbnail ${video.thumbnailUrl ? "has-image" : ""}`} aria-hidden="true">
@@ -143,6 +145,7 @@ export const PlaylistItemCard = memo(function PlaylistItemCard({
           onClick={() => onResetProgress(video)}
           disabled={!hasProgress}
           title="清除进度"
+          aria-label="清除进度"
         >
           <RotateCcw size={15} />
         </button>
