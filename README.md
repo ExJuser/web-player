@@ -177,7 +177,15 @@ The home view uses a global media library: every configured media root is scanne
 
 When a video's media root has a server-readable path, the player can use `ffprobe` on the selected video to detect codec/container compatibility, extract embedded text subtitles, and offer a manual compatible MP4 generation action for files that can be remuxed without transcoding. Image subtitle formats such as PGS and VobSub are detected but not OCR'd.
 
-To enable local Japanese subtitle generation, configure the whisper.cpp CLI and a Japanese GGML model before starting the server. Kotoba-Whisper v2.0 is the default model label; the Silero VAD model is optional but recommended for videos with long silent sections:
+To enable local Japanese subtitle generation with the official Kotoba-Whisper v2.2 Transformers model, create the local Python environment and download the model once:
+
+```powershell
+.\scripts\setup-kotoba-whisper-v2.2.ps1 -PythonPath C:\path\to\python.exe
+```
+
+The server automatically prefers `.local-web-player-data/speech-to-text/python/Scripts/python.exe` on Windows. Override the interpreter, model, or cache directory with `KOTOBA_WHISPER_PYTHON_PATH`, `KOTOBA_WHISPER_MODEL_ID`, and `KOTOBA_WHISPER_CACHE_PATH`. The worker uses CUDA when available and falls back to CPU.
+
+The older whisper.cpp backend remains available as a fallback. It requires a GGML model because GGML is the model format consumed by whisper.cpp; it is not required by Kotoba-Whisper itself. Set `KOTOBA_WHISPER_BACKEND=whisper.cpp` to force this backend:
 
 ```text
 WHISPER_CPP_PATH=D:\whisper.cpp\build\bin\Release\whisper-cli.exe

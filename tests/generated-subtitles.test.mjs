@@ -7,6 +7,7 @@ import test from "node:test";
 import {
   assertSubtitleGenerationMediaRoot,
   createGeneratedSubtitleService,
+  createKotobaWhisperArgs,
   createWhisperCliArgs,
   createWhisperProgressParser,
   detectSubtitleGenerationRuntime,
@@ -55,6 +56,44 @@ test("createWhisperCliArgs fixes Japanese transcription and adds VAD when config
     "--vad-min-speech-duration-ms", "100",
     "--vad-speech-pad-ms", "200",
     "--vad-samples-overlap", "0.20",
+  ]);
+});
+
+test("detectSubtitleGenerationRuntime prefers the local Kotoba-Whisper v2.2 Python environment", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "web-player-kotoba-runtime-"));
+  try {
+    const pythonPath = path.join(directory, "python.exe");
+    await writeFile(pythonPath, "");
+    const runtime = await detectSubtitleGenerationRuntime({
+      dataRoot: directory,
+      env: { KOTOBA_WHISPER_PYTHON_PATH: pythonPath },
+      platform: "win32",
+    });
+
+    assert.equal(runtime.available, true);
+    assert.equal(runtime.engine, "transformers");
+    assert.equal(runtime.modelLabel, "Kotoba-Whisper v2.2");
+    assert.equal(runtime.modelId, "kotoba-tech/kotoba-whisper-v2.2");
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("createKotobaWhisperArgs configures the official v2.2 worker", () => {
+  assert.deepEqual(createKotobaWhisperArgs({
+    audioPath: "audio.wav",
+    generatedVttPath: "subtitle.vtt",
+    runtime: {
+      workerPath: "worker.py",
+      modelId: "kotoba-tech/kotoba-whisper-v2.2",
+      modelCachePath: "models",
+    },
+  }), [
+    "worker.py",
+    "--audio", "audio.wav",
+    "--output", "subtitle.vtt",
+    "--model", "kotoba-tech/kotoba-whisper-v2.2",
+    "--cache-dir", "models",
   ]);
 });
 

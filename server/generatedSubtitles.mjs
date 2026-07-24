@@ -1,9 +1,12 @@
 import { access, mkdir, mkdtemp, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const defaultModelLabel = "Kotoba-Whisper v2.0";
+const defaultModelLabel = "Kotoba-Whisper v2.2";
+const whisperCppModelLabel = "Kotoba-Whisper v2.0";
 const generatedSubtitleCacheVersion = "ja-vtt-v2";
 const maxCueDurationSeconds = 8;
+const kotobaWhisperWorkerPath = fileURLToPath(new URL("../scripts/kotoba-whisper-v2.2.py", import.meta.url));
 
 function isValidWebVtt(text) {
   return text.trimStart().startsWith("WEBVTT");
@@ -22,6 +25,26 @@ async function firstAccessiblePath(candidates) {
 }
 
 export async function detectSubtitleGenerationRuntime({ dataRoot, env = {}, platform = process.platform }) {
+  const pythonExecutableName = platform === "win32" ? "python.exe" : "python";
+  const pythonPath = await firstAccessiblePath([
+    env.KOTOBA_WHISPER_PYTHON_PATH,
+    path.join(dataRoot, "speech-to-text", "python", platform === "win32" ? path.join("Scripts", pythonExecutableName) : path.join("bin", pythonExecutableName)),
+  ]);
+  if (pythonPath && env.KOTOBA_WHISPER_BACKEND !== "whisper.cpp") {
+    return {
+      available: true,
+      engine: "transformers",
+      modelLabel: env.WHISPER_MODEL_LABEL || defaultModelLabel,
+      executablePath: pythonPath,
+      workerPath: kotobaWhisperWorkerPath,
+      modelId: env.KOTOBA_WHISPER_MODEL_ID || "kotoba-tech/kotoba-whisper-v2.2",
+      modelCachePath: env.KOTOBA_WHISPER_CACHE_PATH || path.join(dataRoot, "speech-to-text", "models", "huggingface"),
+      vadModelPath: "",
+      vadAvailable: false,
+      reason: "",
+    };
+  }
+
   const executableName = platform === "win32" ? "whisper-cli.exe" : "whisper-cli";
   const executablePath = await firstAccessiblePath([
     env.WHISPER_CPP_PATH,
@@ -42,14 +65,14 @@ export async function detectSubtitleGenerationRuntime({ dataRoot, env = {}, plat
   ]);
   const available = Boolean(executablePath && modelPath);
   const reason = !executablePath
-    ? "未检测到 whisper-cli，请配置 WHISPER_CPP_PATH。"
+    ? "未检测到 Kotoba-Whisper v2.2 Python 环境或 whisper-cli，请先运行 v2.2 环境安装脚本。"
     : !modelPath
       ? "未检测到日语语音识别模型，请配置 WHISPER_MODEL_PATH。"
       : "";
   return {
     available,
     engine: "whisper.cpp",
-    modelLabel: env.WHISPER_MODEL_LABEL || defaultModelLabel,
+    modelLabel: env.WHISPER_MODEL_LABEL || whisperCppModelLabel,
     executablePath,
     modelPath,
     vadModelPath,
@@ -94,6 +117,16 @@ export function createWhisperCliArgs({ audioPath, outputBasePath, runtime }) {
     );
   }
   return args;
+}
+
+export function createKotobaWhisperArgs({ audioPath, generatedVttPath, runtime }) {
+  return [
+    runtime.workerPath,
+    "--audio", audioPath,
+    "--output", generatedVttPath,
+    "--model", runtime.modelId,
+    "--cache-dir", runtime.modelCachePath,
+  ];
 }
 
 export function normalizeGeneratedWebVtt(text) {
@@ -231,7 +264,10 @@ export function createGeneratedSubtitleService({
       });
       onProgress?.({ percent: 10, message: "正在启动日语语音识别..." });
       const parseProgress = createWhisperProgressParser(onProgress);
-      await runProcess(runtime.executablePath, createWhisperCliArgs({ audioPath, outputBasePath, runtime }), {
+      const recognitionArgs = runtime.engine === "transformers"
+        ? createKotobaWhisperArgs({ audioPath, generatedVttPath, runtime })
+        : createWhisperCliArgs({ audioPath, outputBasePath, runtime });
+      await runProcess(runtime.executablePath, recognitionArgs, {
         timeoutMs: 0,
         signal,
         abortMessage: "已取消字幕生成。",
