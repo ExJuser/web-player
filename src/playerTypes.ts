@@ -112,7 +112,7 @@ export type SubtitleItem = {
   file?: File;
   url: string;
   isManual?: boolean;
-  source?: "external" | "manual" | "embedded";
+  source?: "external" | "manual" | "embedded" | "generated";
   rawText?: string;
   format?: "srt" | "vtt";
   videoId?: string;

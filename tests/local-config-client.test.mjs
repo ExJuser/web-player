@@ -14,6 +14,13 @@ test("normalizeClientLocalConfig adds default optional service configs", () => {
 
   assert.deepEqual(result.bangumi, { configured: false, proxyConfigured: false });
   assert.deepEqual(result.lada, { available: false });
+  assert.deepEqual(result.subtitleGeneration, {
+    available: false,
+    engine: "whisper.cpp",
+    modelLabel: "Kotoba-Whisper v2.0",
+    vadAvailable: false,
+    reason: "未检测到日语字幕生成引擎。",
+  });
 });
 
 test("normalizeClientLocalConfig preserves existing bangumi config", () => {
@@ -23,10 +30,19 @@ test("normalizeClientLocalConfig preserves existing bangumi config", () => {
     ai: { configured: true, model: "deepseek-chat" },
     bangumi: { configured: true, proxyConfigured: true },
     lada: { available: true },
+    subtitleGeneration: {
+      available: true,
+      engine: "whisper.cpp",
+      modelLabel: "Kotoba-Whisper v2.0",
+      vadAvailable: true,
+      reason: "",
+    },
   });
 
   assert.deepEqual(result.bangumi, { configured: true, proxyConfigured: true });
   assert.deepEqual(result.lada, { available: true });
+  assert.equal(result.subtitleGeneration.available, true);
+  assert.equal(result.subtitleGeneration.vadAvailable, true);
 });
 
 test("global media library does not auto-scan configured roots on page load", () => {

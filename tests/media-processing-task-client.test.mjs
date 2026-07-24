@@ -82,6 +82,25 @@ test("resolves active and completed snapshots into ui actions", () => {
       durationSeconds: 20.75,
     },
   });
+
+  const generatedSubtitle = {
+    id: "subtitle-cache",
+    rootId: "special",
+    relativePath: "Movie.mp4",
+    sourceVideoId: "video-id",
+    language: "ja",
+    modelLabel: "Kotoba-Whisper v2.0",
+  };
+  assert.deepEqual(client.resolveMediaProcessingTaskAction({
+    ...active,
+    kind: "subtitle-generation",
+    progress: 100,
+    state: "completed",
+    result: generatedSubtitle,
+  }, null), {
+    type: "subtitle-generation-completed",
+    result: generatedSubtitle,
+  });
 });
 
 test("resolves failed and cancelled snapshots into messages", () => {

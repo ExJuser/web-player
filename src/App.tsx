@@ -25,6 +25,7 @@ import { useDanmakuController } from "./useDanmakuController";
 import { useDraggableDialog } from "./useDraggableDialog";
 import { useDuplicateDetectionController } from "./useDuplicateDetectionController";
 import { useEmbeddedSubtitleController } from "./useEmbeddedSubtitleController";
+import { useGeneratedSubtitleController } from "./useGeneratedSubtitleController";
 import { useHomeProgressRecapController } from "./useHomeProgressRecapController";
 import { useHighEnergySegmentController } from "./useHighEnergySegmentController";
 import { useHighlightMontageController } from "./useHighlightMontageController";
@@ -505,6 +506,7 @@ export default function App() {
   const [mediaRootId, setMediaRootId] = useState<string | null>(null);
   const [embeddedSubtitleTracks, setEmbeddedSubtitleTracks] = useState<EmbeddedSubtitleTrack[]>([]);
   const [isEmbeddedSubtitleDialogOpen, setIsEmbeddedSubtitleDialogOpen] = useState(false);
+  const [isGeneratedSubtitleDialogOpen, setIsGeneratedSubtitleDialogOpen] = useState(false);
   const [embeddedSubtitleMessage, setEmbeddedSubtitleMessage] = useState("");
   const [isEmbeddedSubtitleLoading, setIsEmbeddedSubtitleLoading] = useState(false);
   const [, setMediaProbeVideoId] = useState<string | null>(null);
@@ -2169,6 +2171,11 @@ export default function App() {
       localConfig?.ffmpeg.ffmpeg &&
       localConfig.ffmpeg.ffprobe,
   );
+  const canReadGeneratedSubtitle = Boolean(
+    currentVideo &&
+      currentMediaRootId &&
+      supportsServerFileAccess(currentMediaLibraryRoot),
+  );
   const canUseServerMediaTools = Boolean(
     currentVideo &&
       currentMediaRootId &&
@@ -2191,6 +2198,20 @@ export default function App() {
               ? "需要先安装 ffmpeg 和 ffprobe。"
               : "";
   const canGenerateHighlightMontage = !highlightMontageDisabledReason;
+  const subtitleGenerationDisabledReason = mediaProcessingTask
+    ? "已有影片处理任务正在运行。"
+    : !currentVideo
+      ? "请先选择影片。"
+      : !currentMediaRootId || !currentMediaLibraryRoot
+        ? "当前影片没有可解析的媒体根目录。"
+        : !supportsServerFileAccess(currentMediaLibraryRoot)
+          ? "浏览器添加的媒体库需要先配置本机路径。"
+          : !localConfig?.ffmpeg.ffmpeg
+            ? "需要先安装 ffmpeg。"
+            : !localConfig?.subtitleGeneration.available
+              ? localConfig?.subtitleGeneration.reason || "未检测到日语字幕生成引擎。"
+              : "";
+  const canGenerateSubtitle = !subtitleGenerationDisabledReason;
   const ladaRestorationDisabledReason = mediaProcessingTask
     ? "已有影片处理任务正在运行。"
     : !currentVideo
@@ -2363,6 +2384,13 @@ export default function App() {
           mediaRoots: [],
           ffmpeg: { ffmpeg: false, ffprobe: false },
           lada: { available: false },
+          subtitleGeneration: {
+            available: false,
+            engine: "whisper.cpp",
+            modelLabel: "Kotoba-Whisper v2.0",
+            vadAvailable: false,
+            reason: "未检测到日语字幕生成引擎。",
+          },
           ai: { configured: false, model: "deepseek-chat" },
           bangumi: { configured: false, proxyConfigured: false },
         });
@@ -4635,6 +4663,22 @@ export default function App() {
     updateSelectedSubtitleId,
   });
 
+  const {
+    handleCompletedGeneration,
+    startSubtitleGeneration,
+  } = useGeneratedSubtitleController({
+    canReadGeneratedSubtitle,
+    currentMediaRootId,
+    currentVideo,
+    setMessage,
+    setSubtitles,
+    setTask: setMediaProcessingTask,
+    subtitlesRef,
+    task: mediaProcessingTask,
+    updateSelectedSubtitleId,
+    videosRef,
+  });
+
   const probeEmbeddedSubtitles = useCallback(async () => {
     if (!currentVideo || !currentMediaRootId) {
       setEmbeddedSubtitleMessage("当前视频没有匹配到 config/app.json 中的媒体根路径。");
@@ -4775,6 +4819,7 @@ export default function App() {
     setHighlightMontageResult,
     setLadaRestorationResult,
     setMessage,
+    onSubtitleGenerationCompleted: handleCompletedGeneration,
   });
 
   const reopenMediaProcessingTask = useCallback(() => {
@@ -5986,6 +6031,7 @@ export default function App() {
             canPlayPrevious={canPlayPrevious}
             canRecordEmission={canRecordEmission}
             canUseEmbeddedSubtitles={canUseEmbeddedSubtitles}
+            canGenerateSubtitle={canGenerateSubtitle}
             canRestoreWithLada={canRestoreWithLada}
             canGenerateMontage={canGenerateHighlightMontage}
             controlBarRef={controlBarRef}
@@ -6018,6 +6064,7 @@ export default function App() {
             isPrivacyMode={isPrivacyMode}
             isSeriesMode={isSeriesMode}
             ladaDisabledReason={ladaRestorationDisabledReason}
+            subtitleGenerationDisabledReason={subtitleGenerationDisabledReason}
             normalizedVideoRotation={normalizedVideoRotation}
             montageDisabledReason={highlightMontageDisabledReason}
             playbackMode={playbackMode}
@@ -6065,6 +6112,7 @@ export default function App() {
             }}
             onOpenRatingDialog={() => currentVideo && openVideoRatingDialog(currentVideo)}
             onOpenLadaRestoration={() => void openLadaRestorationConfirm()}
+            onOpenSubtitleGeneration={() => setIsGeneratedSubtitleDialogOpen(true)}
             onOpenTagDialog={() => {
               setIsTagDialogOpen(true);
               setTagMessage("");
@@ -6371,6 +6419,17 @@ export default function App() {
         isLoading: isEmbeddedSubtitleLoading,
         onClose: () => setIsEmbeddedSubtitleDialogOpen(false),
         onExtract: (track) => void extractEmbeddedSubtitle(track),
+      }}
+      generatedSubtitle={{
+        isOpen: isGeneratedSubtitleDialogOpen,
+        modelLabel: localConfig?.subtitleGeneration.modelLabel || "Kotoba-Whisper v2.0",
+        vadAvailable: Boolean(localConfig?.subtitleGeneration.vadAvailable),
+        videoName: currentVideo?.name || "未选择影片",
+        onClose: () => setIsGeneratedSubtitleDialogOpen(false),
+        onGenerate: () => {
+          setIsGeneratedSubtitleDialogOpen(false);
+          void startSubtitleGeneration();
+        },
       }}
       cacheStatus={{
         isOpen: isCacheStatusDialogOpen,
