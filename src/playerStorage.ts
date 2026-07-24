@@ -603,6 +603,21 @@ export function parsePlayerPreferences(source: unknown): PlayerPreferences {
       typeof preferences.startFromHighEnergy === "boolean"
         ? preferences.startFromHighEnergy
         : defaultPlayerPreferences.startFromHighEnergy,
+    subtitleStyle: {
+      fontSize:
+        typeof preferences.subtitleStyle?.fontSize === "number" &&
+        [12, 14, 16, 18, 22, 26, 32].includes(preferences.subtitleStyle.fontSize)
+          ? preferences.subtitleStyle.fontSize
+          : defaultPlayerPreferences.subtitleStyle.fontSize,
+      fontFamily:
+        preferences.subtitleStyle?.fontFamily === "serif" || preferences.subtitleStyle?.fontFamily === "monospace"
+          ? preferences.subtitleStyle.fontFamily
+          : defaultPlayerPreferences.subtitleStyle.fontFamily,
+      fontWeight:
+        preferences.subtitleStyle?.fontWeight === 400 || preferences.subtitleStyle?.fontWeight === 700
+          ? preferences.subtitleStyle.fontWeight
+          : defaultPlayerPreferences.subtitleStyle.fontWeight,
+    },
   };
 }
 

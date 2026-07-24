@@ -604,18 +604,13 @@ button {
 }
 
 .video-element::cue {
-  background: transparent;
-  background-color: transparent;
-  color: #f8fafc;
-  font-family:
-    Inter,
-    "Segoe UI",
-    "PingFang SC",
-    "Microsoft YaHei",
-    sans-serif;
-  font-size: 18px;
-  font-weight: 600;
-  line-height: 1.25;
+  background: transparent !important;
+  background-color: transparent !important;
+  color: #f8fafc !important;
+  font-family: var(--subtitle-font-family, Inter, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif) !important;
+  font-size: var(--subtitle-font-size, 16px) !important;
+  font-weight: var(--subtitle-font-weight, 600) !important;
+  line-height: 1.25 !important;
   text-shadow:
     0 1px 2px rgba(0, 0, 0, 0.95),
     0 0 4px rgba(0, 0, 0, 0.82),
@@ -4017,6 +4012,14 @@ button {
   gap: 9px;
 }
 
+.player-options-section-title {
+  padding-top: 3px;
+  border-top: 1px solid #303945;
+  color: #aab4c2;
+  font-size: 12px;
+  font-weight: 600;
+}
+
 .player-options-grid > .control-group,
 .player-source-setting > .control-group {
   width: 100%;
@@ -4050,6 +4053,12 @@ button {
   background: #ffffff;
   box-shadow: 0 14px 34px rgba(15, 23, 42, 0.14);
   color: #172033;
+}
+
+.app-shell.theme-light .player-options-section-title,
+:root[data-theme="light"] .player-options-section-title {
+  border-color: #dbe2ea;
+  color: #667085;
 }
 
 .app-shell.theme-light .timeline-segment-popover > span,
@@ -9512,10 +9521,6 @@ button {
   .video-element,
   .empty-player {
     min-height: 240px;
-  }
-
-  .video-element::cue {
-    font-size: 16px;
   }
 
   .control-spacer {

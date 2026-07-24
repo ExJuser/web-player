@@ -389,6 +389,12 @@ export type ShortcutAction =
   | "toggleShortcuts";
 export type ShortcutMap = Record<ShortcutAction, string>;
 
+export type SubtitleStylePreferences = {
+  fontSize: number;
+  fontFamily: "sans-serif" | "serif" | "monospace";
+  fontWeight: 400 | 600 | 700;
+};
+
 export type PlayerPreferences = {
   playlistSortMode: PlaylistSortMode;
   isPlaylistSortReversed: boolean;
@@ -402,6 +408,7 @@ export type PlayerPreferences = {
   selectedSeriesKey: string;
   isCinemaMode: boolean;
   startFromHighEnergy: boolean;
+  subtitleStyle: SubtitleStylePreferences;
 };
 
 export type HomeVideoCard = {

@@ -2,7 +2,7 @@ import { Settings2, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { ControlSelect } from "./ControlSelect";
-import type { PlaybackMode } from "./playerTypes";
+import type { PlaybackMode, SubtitleStylePreferences } from "./playerTypes";
 
 type PlaybackSourceChoice = "compatible" | "original";
 
@@ -18,16 +18,33 @@ type PlayerOptionControlsProps = {
   seekStepOptions: Array<{ value: number; label: string }>;
   showPlaybackMode: boolean;
   sourceChoice: PlaybackSourceChoice;
+  subtitleStyle: SubtitleStylePreferences;
   onChangeHoldPlaybackRate: (rate: number) => void;
   onChangePlaybackMode: (mode: PlaybackMode) => void;
   onChangeSeekStep: (step: number) => void;
   onChangeSourceChoice: (choice: PlaybackSourceChoice) => void;
   onDeleteCompatibleMedia: () => void;
+  onChangeSubtitleStyle: (style: SubtitleStylePreferences) => void;
 };
 
 const sourceOptions: Array<{ value: PlaybackSourceChoice; label: string }> = [
   { value: "compatible", label: "修复版" },
   { value: "original", label: "原版" },
+];
+
+const subtitleFontSizeOptions = [12, 14, 16, 18, 22, 26, 32].map((fontSize) => ({
+  value: fontSize,
+  label: `${fontSize}px`,
+}));
+const subtitleFontFamilyOptions: Array<{ value: SubtitleStylePreferences["fontFamily"]; label: string }> = [
+  { value: "sans-serif", label: "无衬线" },
+  { value: "serif", label: "衬线" },
+  { value: "monospace", label: "等宽" },
+];
+const subtitleFontWeightOptions: Array<{ value: SubtitleStylePreferences["fontWeight"]; label: string }> = [
+  { value: 400, label: "常规" },
+  { value: 600, label: "半粗" },
+  { value: 700, label: "粗体" },
 ];
 
 export function PlayerOptionControls({
@@ -42,11 +59,13 @@ export function PlayerOptionControls({
   seekStepOptions,
   showPlaybackMode,
   sourceChoice,
+  subtitleStyle,
   onChangeHoldPlaybackRate,
   onChangePlaybackMode,
   onChangeSeekStep,
   onChangeSourceChoice,
   onDeleteCompatibleMedia,
+  onChangeSubtitleStyle,
 }: PlayerOptionControlsProps) {
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -134,6 +153,29 @@ export function PlayerOptionControls({
               value={holdPlaybackRate}
               options={holdRateOptions}
               onChange={onChangeHoldPlaybackRate}
+            />
+
+            <span className="player-options-section-title">字幕样式</span>
+            <ControlSelect
+              label="字号"
+              ariaLabel="字幕字号"
+              value={subtitleStyle.fontSize}
+              options={subtitleFontSizeOptions}
+              onChange={(fontSize) => onChangeSubtitleStyle({ ...subtitleStyle, fontSize })}
+            />
+            <ControlSelect
+              label="字体"
+              ariaLabel="字幕字体"
+              value={subtitleStyle.fontFamily}
+              options={subtitleFontFamilyOptions}
+              onChange={(fontFamily) => onChangeSubtitleStyle({ ...subtitleStyle, fontFamily })}
+            />
+            <ControlSelect
+              label="粗细"
+              ariaLabel="字幕字体粗细"
+              value={subtitleStyle.fontWeight}
+              options={subtitleFontWeightOptions}
+              onChange={(fontWeight) => onChangeSubtitleStyle({ ...subtitleStyle, fontWeight })}
             />
           </div>
         </div>

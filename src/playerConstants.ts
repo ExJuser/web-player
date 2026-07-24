@@ -99,6 +99,11 @@ export const defaultPlayerPreferences: PlayerPreferences = {
   selectedSeriesKey: "all",
   isCinemaMode: false,
   startFromHighEnergy: false,
+  subtitleStyle: {
+    fontSize: 16,
+    fontFamily: "sans-serif",
+    fontWeight: 600,
+  },
 };
 
 export const defaultPlayerSettings = {

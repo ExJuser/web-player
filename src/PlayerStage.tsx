@@ -7,7 +7,7 @@ import { PlayerStagePlaceholders } from "./PlayerStagePlaceholders";
 import { PlayerVideoElement } from "./PlayerVideoElement";
 import { RocketLaunchEffect } from "./RocketLaunchEffect";
 import { TimelinePreviewTargets } from "./TimelinePreviewTargets";
-import type { AutoNextPrompt, DanmakuComment, DanmakuPreferences, SubtitleItem } from "./playerTypes";
+import type { AutoNextPrompt, DanmakuComment, DanmakuPreferences, SubtitleItem, SubtitleStylePreferences } from "./playerTypes";
 
 type DoubleClickFeedback = {
   side: "left" | "center" | "right";
@@ -36,6 +36,7 @@ type PlayerStageProps = {
   previewCanvasRef: Ref<HTMLCanvasElement>;
   previewVideoRef: Ref<HTMLVideoElement>;
   selectedSubtitle: SubtitleItem | null;
+  subtitleStyle: SubtitleStylePreferences;
   videoRef: Ref<HTMLVideoElement>;
   formatDanmakuLaneTop: (lane: number, laneCount: number, displayArea: DanmakuPreferences["displayArea"]) => string;
   getDanmakuLane: (comment: DanmakuComment, laneCount: number) => number;
@@ -71,6 +72,7 @@ export function PlayerStage({
   previewCanvasRef,
   previewVideoRef,
   selectedSubtitle,
+  subtitleStyle,
   videoRef,
   formatDanmakuLaneTop,
   getDanmakuLane,
@@ -92,6 +94,7 @@ export function PlayerStage({
             isVideoSideways={isVideoSideways}
             normalizedVideoRotation={normalizedVideoRotation}
             selectedSubtitle={selectedSubtitle}
+            subtitleStyle={subtitleStyle}
             videoRef={videoRef}
             onClick={onTogglePlay}
             onPlay={onPlay}

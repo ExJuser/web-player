@@ -27,6 +27,7 @@ type UsePlayerPreferencesControllerOptions = {
   setSelectedSeriesKey: Dispatch<SetStateAction<string>>;
   setShortcuts: Dispatch<SetStateAction<ShortcutMap>>;
   setStartFromHighEnergy: Dispatch<SetStateAction<boolean>>;
+  setSubtitleStyle: Dispatch<SetStateAction<PlayerPreferences["subtitleStyle"]>>;
   setTheme: Dispatch<SetStateAction<AppTheme>>;
   theme: AppTheme;
   videosRef: MutableRefObject<VideoItem[]>;
@@ -55,6 +56,7 @@ export function usePlayerPreferencesController({
   setSelectedSeriesKey,
   setShortcuts,
   setStartFromHighEnergy,
+  setSubtitleStyle,
   setTheme,
   theme,
   videosRef,
@@ -73,6 +75,7 @@ export function usePlayerPreferencesController({
     setSelectedSeriesKey(nextPreferences.selectedSeriesKey);
     setIsCinemaMode(nextPreferences.isCinemaMode);
     setStartFromHighEnergy(nextPreferences.startFromHighEnergy);
+    setSubtitleStyle(nextPreferences.subtitleStyle);
 
     Promise.all(
       (Object.keys(nextPreferences) as Array<keyof PlayerPreferences>).map((key) =>
@@ -96,6 +99,7 @@ export function usePlayerPreferencesController({
     setSelectedSeriesKey,
     setShortcuts,
     setStartFromHighEnergy,
+    setSubtitleStyle,
   ]);
 
   const updatePlaylistSortMode = useCallback((nextMode: PlaylistSortMode) => {

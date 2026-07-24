@@ -106,6 +106,7 @@ import type {
   ProgressStore,
   ShortcutMap,
   SubtitleItem,
+  SubtitleStylePreferences,
   TagMergeDecisionStore,
   VideoHighlightStore,
   VideoEditSegmentStore,
@@ -688,6 +689,7 @@ export default function App() {
   const [selectedSeriesKey, setSelectedSeriesKey] = useState(defaultPlayerPreferences.selectedSeriesKey);
   const [isCinemaMode, setIsCinemaMode] = useState(defaultPlayerPreferences.isCinemaMode);
   const [startFromHighEnergy, setStartFromHighEnergy] = useState(defaultPlayerPreferences.startFromHighEnergy);
+  const [subtitleStyle, setSubtitleStyle] = useState(defaultPlayerPreferences.subtitleStyle);
   const [isScanning, setIsScanning] = useState(false);
   const [isMainVideoLoading, setIsMainVideoLoading] = useState(false);
   const [isSeriesMenuOpen, setIsSeriesMenuOpen] = useState(false);
@@ -936,6 +938,7 @@ export default function App() {
     setShortcuts,
     setSkipFolderAccessPrompt,
     setStartFromHighEnergy,
+    setSubtitleStyle,
     setTagMergeDecisions,
     setTheme,
     setVideoComments,
@@ -2955,10 +2958,18 @@ export default function App() {
     setSeekStep,
     setShortcuts,
     setStartFromHighEnergy,
+    setSubtitleStyle,
     setTheme,
     theme,
     videosRef,
   });
+
+  const updateSubtitleStyle = useCallback((nextStyle: SubtitleStylePreferences) => {
+    replacePlayerPreferences({
+      ...playerPreferencesRef.current,
+      subtitleStyle: nextStyle,
+    });
+  }, [playerPreferencesRef, replacePlayerPreferences]);
 
   const {
     closeShortcutDialog,
@@ -4277,6 +4288,7 @@ export default function App() {
         selectedSeriesKey,
         isCinemaMode,
         startFromHighEnergy,
+        subtitleStyle,
       };
       favoriteVideoIdsRef.current = new Set();
       setProgressStore({});
@@ -4319,6 +4331,7 @@ export default function App() {
       revokeVideoUrls,
       selectedSeriesKey,
       shortcuts,
+      subtitleStyle,
     ],
   );
 
@@ -5976,6 +5989,7 @@ export default function App() {
             previewCanvasRef={previewCanvasRef}
             previewVideoRef={previewVideoRef}
             selectedSubtitle={selectedSubtitle}
+            subtitleStyle={subtitleStyle}
             videoRef={videoRef}
             formatDanmakuLaneTop={formatDanmakuLaneTop}
             getDanmakuLane={getDanmakuLane}
@@ -6047,6 +6061,7 @@ export default function App() {
             showPlaybackMode={!isSeriesMode}
             startFromHighEnergy={startFromHighEnergy}
             subtitleControlOptions={subtitleControlOptions}
+            subtitleStyle={subtitleStyle}
             timelinePreview={timelinePreview}
             timelineRef={timelineRef}
             volume={volume}
@@ -6067,6 +6082,7 @@ export default function App() {
               }
               updateSelectedSubtitleId(value);
             }}
+            onChangeSubtitleStyle={updateSubtitleStyle}
             onChangeVolume={changeVolume}
             onDeleteCompatibleMedia={openCompatibleMediaDeleteConfirm}
             onEditHighlight={editCurrentHighEnergySegment}

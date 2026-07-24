@@ -167,6 +167,7 @@ type UseApplyPlayerDataStoreOptions = {
   setShortcuts: Dispatch<SetStateAction<ShortcutMap>>;
   setSkipFolderAccessPrompt: Dispatch<SetStateAction<boolean>>;
   setStartFromHighEnergy: Dispatch<SetStateAction<boolean>>;
+  setSubtitleStyle: Dispatch<SetStateAction<PlayerPreferences["subtitleStyle"]>>;
   setTagMergeDecisions: Dispatch<SetStateAction<TagMergeDecisionStore>>;
   setTheme: Dispatch<SetStateAction<AppTheme>>;
   setVideoComments: Dispatch<SetStateAction<VideoCommentStore>>;
@@ -222,6 +223,7 @@ export function useApplyPlayerDataStore({
   setShortcuts,
   setSkipFolderAccessPrompt,
   setStartFromHighEnergy,
+  setSubtitleStyle,
   setTagMergeDecisions,
   setTheme,
   setVideoComments,
@@ -278,6 +280,7 @@ export function useApplyPlayerDataStore({
     setSelectedSeriesKey(nextDataStore.preferences.selectedSeriesKey);
     setIsCinemaMode(nextDataStore.preferences.isCinemaMode);
     setStartFromHighEnergy(nextDataStore.preferences.startFromHighEnergy);
+    setSubtitleStyle(nextDataStore.preferences.subtitleStyle);
     setVolume(nextDataStore.settings.volume);
     if (nextDataStore.settings.theme === "dark" || nextDataStore.settings.theme === "light") {
       setTheme(nextDataStore.settings.theme);
@@ -330,6 +333,7 @@ export function useApplyPlayerDataStore({
     setShortcuts,
     setSkipFolderAccessPrompt,
     setStartFromHighEnergy,
+    setSubtitleStyle,
     setTagMergeDecisions,
     setTheme,
     setVideoComments,

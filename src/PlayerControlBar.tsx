@@ -7,7 +7,7 @@ import { PlayerTimelineControls } from "./PlayerTimelineControls";
 import { PlayerViewControls } from "./PlayerViewControls";
 import { SpecialStatsControl } from "./SpecialStatsControl";
 import type { HomeMediaMode } from "./playerUiState";
-import type { PlaybackMode, VideoEditSegment, VideoHighlightSegment } from "./playerTypes";
+import type { PlaybackMode, SubtitleStylePreferences, VideoEditSegment, VideoHighlightSegment } from "./playerTypes";
 
 type PlaybackSourceChoice = "compatible" | "original";
 
@@ -76,6 +76,7 @@ type PlayerControlBarProps = {
   showPlaybackMode: boolean;
   startFromHighEnergy: boolean;
   subtitleControlOptions: Array<{ value: string; label: string }>;
+  subtitleStyle: SubtitleStylePreferences;
   timelinePreview: TimelinePreviewState;
   timelineRef: Ref<HTMLInputElement>;
   volume: number;
@@ -86,6 +87,7 @@ type PlayerControlBarProps = {
   onChangeSeekStep: (step: number) => void;
   onChangeSourceChoice: (choice: PlaybackSourceChoice) => void;
   onChangeSubtitle: (subtitleId: string) => void;
+  onChangeSubtitleStyle: (style: SubtitleStylePreferences) => void;
   onChangeVolume: (volume: number) => void;
   onDeleteCompatibleMedia: () => void;
   onEditHighlight: (highlight: VideoHighlightSegment) => void;
@@ -171,6 +173,7 @@ export function PlayerControlBar({
   showPlaybackMode,
   startFromHighEnergy,
   subtitleControlOptions,
+  subtitleStyle,
   timelinePreview,
   timelineRef,
   volume,
@@ -181,6 +184,7 @@ export function PlayerControlBar({
   onChangeSeekStep,
   onChangeSourceChoice,
   onChangeSubtitle,
+  onChangeSubtitleStyle,
   onChangeVolume,
   onDeleteCompatibleMedia,
   onEditHighlight,
@@ -287,10 +291,12 @@ export function PlayerControlBar({
           seekStepOptions={seekStepOptions}
           showPlaybackMode={showPlaybackMode}
           sourceChoice={currentVideoSourceChoice}
+          subtitleStyle={subtitleStyle}
           onChangeHoldPlaybackRate={onChangeHoldPlaybackRate}
           onChangePlaybackMode={onChangePlaybackMode}
           onChangeSeekStep={onChangeSeekStep}
           onChangeSourceChoice={onChangeSourceChoice}
+          onChangeSubtitleStyle={onChangeSubtitleStyle}
           onDeleteCompatibleMedia={onDeleteCompatibleMedia}
         />
 
