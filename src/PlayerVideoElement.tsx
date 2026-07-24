@@ -52,7 +52,13 @@ export function PlayerVideoElement({
       playsInline
     >
       {selectedSubtitle ? (
-        <track key={selectedSubtitle.id} src={selectedSubtitle.url} kind="subtitles" label={selectedSubtitle.name} default />
+        <track
+          key={`${selectedSubtitle.id}-${subtitleStyle.fontSize}-${subtitleStyle.fontFamily}-${subtitleStyle.fontWeight}`}
+          src={selectedSubtitle.url}
+          kind="subtitles"
+          label={selectedSubtitle.name}
+          default
+        />
       ) : null}
     </video>
   );
