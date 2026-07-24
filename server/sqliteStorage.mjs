@@ -86,11 +86,16 @@ export class LocalDataSqliteStore {
     this.db = new DatabaseSync(this.databasePath);
     this.db.exec(`
       PRAGMA journal_mode = WAL;
+      PRAGMA synchronous = NORMAL;
       PRAGMA foreign_keys = ON;
       PRAGMA busy_timeout = 5000;
+      PRAGMA temp_store = MEMORY;
+      PRAGMA cache_size = -32768;
+      PRAGMA mmap_size = 134217728;
     `);
     this.createSchema();
     await this.importLegacyJsonOnce();
+    this.db.exec("PRAGMA optimize;");
   }
 
   close() {

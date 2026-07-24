@@ -23,6 +23,23 @@ async function createTempStore() {
   return { root, dataRoot, librariesRoot, photoAlbumsRoot, store };
 }
 
+test("sqlite store applies the tuned WAL connection settings", async () => {
+  const context = await createTempStore();
+  try {
+    await context.store.initialize();
+    assert.equal(context.store.db.prepare("PRAGMA journal_mode").get().journal_mode, "wal");
+    assert.equal(context.store.db.prepare("PRAGMA synchronous").get().synchronous, 1);
+    assert.equal(context.store.db.prepare("PRAGMA foreign_keys").get().foreign_keys, 1);
+    assert.equal(context.store.db.prepare("PRAGMA busy_timeout").get().timeout, 5000);
+    assert.equal(context.store.db.prepare("PRAGMA temp_store").get().temp_store, 2);
+    assert.equal(context.store.db.prepare("PRAGMA cache_size").get().cache_size, -32768);
+    assert.equal(context.store.db.prepare("PRAGMA mmap_size").get().mmap_size, 134217728);
+  } finally {
+    context.store.close();
+    await rm(context.root, { recursive: true, force: true });
+  }
+});
+
 test("sqlite store preserves actor aliases, actor tags, and an empty manual actor override", async () => {
   const context = await createTempStore();
   try {
