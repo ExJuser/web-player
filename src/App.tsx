@@ -4371,6 +4371,7 @@ export default function App() {
     isScanning,
     libraryIdRef,
     thumbnailQueueVideoIdsKey,
+    thumbnailVariant: isHomeViewVisible ? "standard" : "playlist",
     videosRef,
   });
 

@@ -1517,7 +1517,7 @@ export function playerDataApiPlugin({ projectRoot, env }) {
         }
         const sourcePath = resolveVideoPathFromConfig(config, root.id, payload?.relativePath);
         await ensureFileExists(sourcePath);
-        const variant = payload?.variant === "mosaic-target" ? "mosaic-target" : "standard";
+        const variant = payload?.variant === "mosaic-target" || payload?.variant === "playlist" ? payload.variant : "standard";
         const generated = await videoThumbnailService.generate({ thumbnailId, sourcePath, variant });
         store.recordCacheEntry("thumbnail", thumbnailId, generated.filePath, "image/jpeg", generated.size);
         await thumbnailMemoryCache.getOrLoad({ thumbnailId, filePath: generated.filePath, contentType: "image/jpeg" });

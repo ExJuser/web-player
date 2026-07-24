@@ -1130,14 +1130,17 @@ async function runObjectStoreRequest<T>(
   });
 }
 
-function createThumbnailId(libraryId: string, videoId: string) {
+export type ThumbnailVariant = "standard" | "playlist";
+
+function createThumbnailId(libraryId: string, videoId: string, variant: ThumbnailVariant = "standard") {
   let hash = 2166136261;
-  const value = `${thumbnailCacheVersion}|${libraryId}|${videoId}`;
+  const version = variant === "playlist" ? `${thumbnailCacheVersion}-list1` : thumbnailCacheVersion;
+  const value = `${version}|${libraryId}|${videoId}`;
   for (let index = 0; index < value.length; index += 1) {
     hash ^= value.charCodeAt(index);
     hash = Math.imul(hash, 16777619);
   }
-  return `${libraryId}.${thumbnailCacheVersion}.${(hash >>> 0).toString(36)}`;
+  return `${libraryId}.${version}.${(hash >>> 0).toString(36)}`;
 }
 
 function createActorCoverId(libraryId: string, actorId: string) {
@@ -1166,8 +1169,9 @@ function createMosaicTargetThumbnailId(rootId: string, videoId: string, size: nu
   return `mosaic-target.2.${(hash >>> 0).toString(36)}`;
 }
 
-function createThumbnailIds(libraryId: string, videoId: string) {
-  const thumbnailIds = [createThumbnailId(libraryId, videoId)];
+function createThumbnailIds(libraryId: string, videoId: string, variant: ThumbnailVariant) {
+  const thumbnailIds = [createThumbnailId(libraryId, videoId, variant)];
+  if (variant === "playlist") return thumbnailIds;
   const legacyVideoId = libraryId === "global" ? createLegacyVideoIdCandidate(videoId) : null;
   if (legacyVideoId) thumbnailIds.push(createThumbnailId(libraryId, legacyVideoId));
   return thumbnailIds;
@@ -1177,9 +1181,9 @@ function createThumbnailUrl(thumbnailId: string) {
   return createApiUrl(`thumbnails/${encodeURIComponent(thumbnailId)}`);
 }
 
-export async function findCachedThumbnailUrl(libraryId: string | null, videoId: string, signal?: AbortSignal) {
+export async function findCachedThumbnailUrl(libraryId: string | null, videoId: string, signal?: AbortSignal, variant: ThumbnailVariant = "standard") {
   if (!libraryId) return null;
-  for (const thumbnailId of createThumbnailIds(libraryId, videoId)) {
+  for (const thumbnailId of createThumbnailIds(libraryId, videoId, variant)) {
     const thumbnailUrl = createThumbnailUrl(thumbnailId);
     const response = await fetch(thumbnailUrl, { signal });
     if (response.status === 404) continue;
@@ -1195,14 +1199,15 @@ export async function generateServerThumbnail(
   rootId: string,
   relativePath: string,
   signal?: AbortSignal,
+  variant: ThumbnailVariant = "standard",
 ) {
   if (!libraryId) return null;
-  const thumbnailId = createThumbnailId(libraryId, videoId);
+  const thumbnailId = createThumbnailId(libraryId, videoId, variant);
   const thumbnailUrl = createThumbnailUrl(thumbnailId);
   const response = await fetch(`${thumbnailUrl}/generate`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ rootId, relativePath }),
+    body: JSON.stringify({ rootId, relativePath, ...(variant === "playlist" ? { variant } : {}) }),
     signal,
   });
   if (!response.ok) return null;
@@ -1228,9 +1233,9 @@ export async function generateServerMosaicTarget(
   return thumbnailUrl;
 }
 
-export async function writeCachedThumbnail(libraryId: string | null, videoId: string, thumbnail: Blob) {
+export async function writeCachedThumbnail(libraryId: string | null, videoId: string, thumbnail: Blob, variant: ThumbnailVariant = "standard") {
   if (!libraryId) return;
-  const response = await fetch(createApiUrl(`thumbnails/${encodeURIComponent(createThumbnailId(libraryId, videoId))}`), {
+  const response = await fetch(createApiUrl(`thumbnails/${encodeURIComponent(createThumbnailId(libraryId, videoId, variant))}`), {
     method: "PUT",
     headers: { "Content-Type": thumbnail.type || "application/octet-stream" },
     body: thumbnail,

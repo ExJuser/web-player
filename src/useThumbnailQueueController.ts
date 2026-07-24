@@ -3,6 +3,7 @@ import { useEffect, useRef, type MutableRefObject } from "react";
 import { revokeObjectUrl } from "./appResourceCleanup";
 import { thumbnailCommitBatchSize, thumbnailGenerationConcurrency, thumbnailLookupConcurrency } from "./playerConstants";
 import type { VideoItem, VideoMetadata } from "./playerTypes";
+import type { ThumbnailVariant } from "./playerStorage";
 import { generateVideoThumbnail, loadAvailableVideoThumbnail } from "./videoThumbnail";
 
 export type ThumbnailQueueUpdate = {
@@ -20,6 +21,7 @@ type UseThumbnailQueueControllerOptions = {
   isScanning: boolean;
   libraryIdRef: MutableRefObject<string | null>;
   thumbnailQueueVideoIdsKey: string;
+  thumbnailVariant?: ThumbnailVariant;
   videosRef: MutableRefObject<VideoItem[]>;
 };
 
@@ -31,6 +33,7 @@ export function useThumbnailQueueController({
   isScanning,
   libraryIdRef,
   thumbnailQueueVideoIdsKey,
+  thumbnailVariant = "standard",
   videosRef,
 }: UseThumbnailQueueControllerOptions) {
   const thumbnailLoadRunIdRef = useRef(0);
@@ -72,7 +75,7 @@ export function useThumbnailQueueController({
         const video = videoById.get(orderedVideoIds[index]);
         if (!video || getThumbnailStatus(video) === "ready") continue;
         try {
-          const loaded = await loadAvailableVideoThumbnail(libraryIdRef.current, video, abortController.signal);
+          const loaded = await loadAvailableVideoThumbnail(libraryIdRef.current, video, abortController.signal, thumbnailVariant);
           if (loaded) lookupUpdates[index] = { videoId: video.id, status: "ready", url: loaded.thumbnailUrl, metadata: loaded.metadata };
           else pendingGeneration[index] = video;
         } catch (error) {
@@ -84,7 +87,7 @@ export function useThumbnailQueueController({
     const generateBatch = async (videos: VideoItem[]) => {
       const updates = await Promise.all(videos.map(async (video): Promise<ThumbnailQueueUpdate | null> => {
         try {
-          const loaded = await generateVideoThumbnail(libraryIdRef.current, video, abortController.signal);
+          const loaded = await generateVideoThumbnail(libraryIdRef.current, video, abortController.signal, thumbnailVariant);
           return { videoId: video.id, status: "ready", url: loaded.thumbnailUrl, metadata: loaded.metadata };
         } catch (error) {
           return createFailureUpdate(video, error);
@@ -122,5 +125,5 @@ export function useThumbnailQueueController({
       isCancelled = true;
       abortController.abort();
     };
-  }, [applyVideoThumbnailUpdates, getThumbnailStatus, isMainVideoLoading, isPlaylistScrolling, isScanning, libraryIdRef, thumbnailQueueVideoIdsKey, videosRef]);
+  }, [applyVideoThumbnailUpdates, getThumbnailStatus, isMainVideoLoading, isPlaylistScrolling, isScanning, libraryIdRef, thumbnailQueueVideoIdsKey, thumbnailVariant, videosRef]);
 }

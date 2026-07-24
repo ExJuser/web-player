@@ -4,11 +4,15 @@ import { randomUUID } from "node:crypto";
 
 const thumbnailWidth = 480;
 const thumbnailHeight = 270;
+const playlistThumbnailWidth = 240;
+const playlistThumbnailHeight = 135;
 
-export function createVideoThumbnailFfmpegArgs(sourcePath, outputPath, { highQuality = false } = {}) {
+export function createVideoThumbnailFfmpegArgs(sourcePath, outputPath, { highQuality = false, variant = "standard" } = {}) {
+  const targetWidth = variant === "playlist" ? playlistThumbnailWidth : thumbnailWidth;
+  const targetHeight = variant === "playlist" ? playlistThumbnailHeight : thumbnailHeight;
   const filter = highQuality
     ? "thumbnail=60,scale='min(3840,iw)':'min(2160,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2"
-    : `thumbnail=60,scale=${thumbnailWidth}:${thumbnailHeight}:force_original_aspect_ratio=decrease,pad=${thumbnailWidth}:${thumbnailHeight}:(ow-iw)/2:(oh-ih)/2:color=0x050607`;
+    : `thumbnail=60,scale=${targetWidth}:${targetHeight}:force_original_aspect_ratio=decrease,pad=${targetWidth}:${targetHeight}:(ow-iw)/2:(oh-ih)/2:color=0x050607`;
   return [
     "-v", "error",
     "-ss", "2",
@@ -72,7 +76,7 @@ export function createVideoThumbnailService({ cacheRoot, runProcess, maxConcurre
           const temporaryPath = path.join(cacheRoot, `.${thumbnailId}.${randomUUID()}.jpg`);
           try {
             const highQuality = variant === "mosaic-target";
-            await runProcess("ffmpeg", createVideoThumbnailFfmpegArgs(sourcePath, temporaryPath, { highQuality }), {
+            await runProcess("ffmpeg", createVideoThumbnailFfmpegArgs(sourcePath, temporaryPath, { highQuality, variant }), {
               timeoutMs: highQuality ? 60_000 : 30_000,
               timeoutMessage: highQuality ? "生成高清目标图超时。" : "生成视频缩略图超时。",
               killTree: true,

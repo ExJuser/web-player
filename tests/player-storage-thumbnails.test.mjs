@@ -47,6 +47,30 @@ test("cached thumbnails retry the legacy id with GET after a current id miss", a
   }
 });
 
+test("playlist thumbnails use an isolated cache id without legacy fallback", async () => {
+  const originalFetch = globalThis.fetch;
+  const requests = [];
+  try {
+    globalThis.fetch = async (url, init) => {
+      requests.push({ url, init });
+      return new Response(null, { status: 404 });
+    };
+
+    const thumbnailUrl = await storage.findCachedThumbnailUrl(
+      "global",
+      "root|video.mp4|100|200",
+      undefined,
+      "playlist",
+    );
+
+    assert.equal(thumbnailUrl, null);
+    assert.equal(requests.length, 1);
+    assert.match(requests[0].url, /\.v3-list1\./u);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("server thumbnail generation posts media identity and returns the stable cache url", async () => {
   const originalFetch = globalThis.fetch;
   try {
@@ -66,6 +90,26 @@ test("server thumbnail generation posts media identity and returns the stable ca
     assert.equal(request.init.method, "POST");
     assert.deepEqual(JSON.parse(request.init.body), { rootId: "root", relativePath: "folder/video.mp4" });
     assert.equal(request.url, `${thumbnailUrl}/generate`);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("playlist thumbnail generation uses a separate cache id and variant", async () => {
+  const originalFetch = globalThis.fetch;
+  try {
+    const requests = [];
+    globalThis.fetch = async (url, init) => {
+      requests.push({ url, init });
+      return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { "Content-Type": "application/json" } });
+    };
+
+    const standardUrl = await storage.generateServerThumbnail("global", "video", "root", "video.mp4");
+    const playlistUrl = await storage.generateServerThumbnail("global", "video", "root", "video.mp4", undefined, "playlist");
+
+    assert.notEqual(playlistUrl, standardUrl);
+    assert.deepEqual(JSON.parse(requests[1].init.body), { rootId: "root", relativePath: "video.mp4", variant: "playlist" });
+    assert.match(playlistUrl, /\.v3-list1\./u);
   } finally {
     globalThis.fetch = originalFetch;
   }

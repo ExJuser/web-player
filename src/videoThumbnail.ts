@@ -3,10 +3,12 @@ import {
   thumbnailEncodeTimeout,
   thumbnailGenerationTimeout,
   thumbnailHeight,
+  playlistThumbnailHeight,
+  playlistThumbnailWidth,
   thumbnailServerGenerationTimeout,
   thumbnailWidth,
 } from "./playerConstants";
-import { findCachedThumbnailUrl, generateServerThumbnail, writeCachedThumbnail } from "./playerStorage";
+import { findCachedThumbnailUrl, generateServerThumbnail, writeCachedThumbnail, type ThumbnailVariant } from "./playerStorage";
 import { revokeObjectUrl } from "./appResourceCleanup";
 import type { VideoItem, VideoMetadata } from "./playerTypes";
 import { getPlayableVideoUrl } from "./playerUiState";
@@ -306,7 +308,7 @@ function encodeCanvasAsJpeg(canvas: HTMLCanvasElement, signal?: AbortSignal, qua
   );
 }
 
-async function createVideoThumbnailBlob(video: VideoItem, signal?: AbortSignal, highQuality = false) {
+async function createVideoThumbnailBlob(video: VideoItem, signal?: AbortSignal, highQuality = false, variant: ThumbnailVariant = "standard") {
   const element = document.createElement("video");
   const canvas = document.createElement("canvas");
   const sampleCanvas = document.createElement("canvas");
@@ -336,8 +338,8 @@ async function createVideoThumbnailBlob(video: VideoItem, signal?: AbortSignal, 
     }
 
     const targetScale = highQuality ? Math.min(1, 3840 / width, 2160 / height) : 1;
-    canvas.width = highQuality ? Math.max(1, Math.round(width * targetScale)) : thumbnailWidth;
-    canvas.height = highQuality ? Math.max(1, Math.round(height * targetScale)) : thumbnailHeight;
+    canvas.width = highQuality ? Math.max(1, Math.round(width * targetScale)) : variant === "playlist" ? playlistThumbnailWidth : thumbnailWidth;
+    canvas.height = highQuality ? Math.max(1, Math.round(height * targetScale)) : variant === "playlist" ? playlistThumbnailHeight : thumbnailHeight;
     sampleCanvas.width = 32;
     sampleCanvas.height = 18;
     const context = canvas.getContext("2d");
@@ -388,7 +390,7 @@ export async function createHighQualityVideoTarget(video: VideoItem, signal?: Ab
   return (await createVideoThumbnailBlob(video, signal, true)).thumbnailBlob;
 }
 
-export async function loadAvailableVideoThumbnail(libraryId: string | null, video: VideoItem, signal?: AbortSignal) {
+export async function loadAvailableVideoThumbnail(libraryId: string | null, video: VideoItem, signal?: AbortSignal, variant: ThumbnailVariant = "standard") {
   throwIfAborted(signal);
   const artworkUrl = await selectVideoArtworkThumbnail(video, readArtworkSize, signal);
   if (artworkUrl) return { thumbnailUrl: artworkUrl, metadata: undefined };
@@ -396,7 +398,7 @@ export async function loadAvailableVideoThumbnail(libraryId: string | null, vide
   let cachedThumbnailUrl: string | null;
   try {
     cachedThumbnailUrl = await withTimeout(
-      findCachedThumbnailUrl(libraryId, video.id, signal),
+      findCachedThumbnailUrl(libraryId, video.id, signal, variant),
       thumbnailCacheTimeout,
       "Timed out reading cached thumbnail.",
     );
@@ -411,7 +413,7 @@ export async function loadAvailableVideoThumbnail(libraryId: string | null, vide
   return null;
 }
 
-export async function generateVideoThumbnail(libraryId: string | null, video: VideoItem, signal?: AbortSignal) {
+export async function generateVideoThumbnail(libraryId: string | null, video: VideoItem, signal?: AbortSignal, variant: ThumbnailVariant = "standard") {
   throwIfAborted(signal);
   if (video.mediaRootId) {
     const serverController = new AbortController();
@@ -425,6 +427,7 @@ export async function generateVideoThumbnail(libraryId: string | null, video: Vi
           video.mediaRootId,
           video.relativePath,
           serverController.signal,
+          variant,
         ),
         thumbnailServerGenerationTimeout,
         "Timed out generating server thumbnail.",
@@ -445,7 +448,7 @@ export async function generateVideoThumbnail(libraryId: string | null, video: Vi
   let metadata: VideoMetadata;
   try {
     ({ thumbnailBlob, metadata } = await withTimeout(
-      createVideoThumbnailBlob(video, generationController.signal),
+      createVideoThumbnailBlob(video, generationController.signal, false, variant),
       thumbnailGenerationTimeout,
       "Timed out creating thumbnail.",
       abortGeneration,
@@ -453,7 +456,7 @@ export async function generateVideoThumbnail(libraryId: string | null, video: Vi
   } finally {
     signal?.removeEventListener("abort", abortGeneration);
   }
-  void writeCachedThumbnail(libraryId, video.id, thumbnailBlob).catch(() => undefined);
+  void writeCachedThumbnail(libraryId, video.id, thumbnailBlob, variant).catch(() => undefined);
   return { thumbnailUrl: URL.createObjectURL(thumbnailBlob), metadata };
 }
 
