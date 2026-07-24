@@ -607,15 +607,39 @@ button {
   background: transparent !important;
   background-color: transparent !important;
   color: #f8fafc !important;
-  font-family: var(--subtitle-font-family, Inter, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif) !important;
-  font-size: var(--subtitle-font-size, 16px) !important;
-  font-weight: var(--subtitle-font-weight, 600) !important;
+  font-family: Inter, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif !important;
+  font-size: 16px !important;
+  font-weight: 600 !important;
   line-height: 1.25 !important;
   text-shadow:
     0 1px 2px rgba(0, 0, 0, 0.95),
     0 0 4px rgba(0, 0, 0, 0.82),
     0 0 10px rgba(0, 0, 0, 0.58);
 }
+
+.video-element.subtitle-size-12::cue { font-size: 12px !important; }
+.video-element.subtitle-size-14::cue { font-size: 14px !important; }
+.video-element.subtitle-size-16::cue { font-size: 16px !important; }
+.video-element.subtitle-size-18::cue { font-size: 18px !important; }
+.video-element.subtitle-size-22::cue { font-size: 22px !important; }
+.video-element.subtitle-size-26::cue { font-size: 26px !important; }
+.video-element.subtitle-size-32::cue { font-size: 32px !important; }
+
+.video-element.subtitle-font-sans-serif::cue {
+  font-family: Inter, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif !important;
+}
+
+.video-element.subtitle-font-serif::cue {
+  font-family: Georgia, "Songti SC", SimSun, serif !important;
+}
+
+.video-element.subtitle-font-monospace::cue {
+  font-family: "Cascadia Mono", Consolas, "Microsoft YaHei", monospace !important;
+}
+
+.video-element.subtitle-weight-400::cue { font-weight: 400 !important; }
+.video-element.subtitle-weight-600::cue { font-weight: 600 !important; }
+.video-element.subtitle-weight-700::cue { font-weight: 700 !important; }
 
 .video-element.manual-rotated {
   transform: rotate(var(--video-rotation, 0deg));

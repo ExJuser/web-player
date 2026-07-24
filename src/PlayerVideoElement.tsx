@@ -2,12 +2,6 @@ import type { CSSProperties, Ref, SyntheticEvent } from "react";
 
 import type { SubtitleItem, SubtitleStylePreferences } from "./playerTypes";
 
-const subtitleFontFamilies: Record<SubtitleStylePreferences["fontFamily"], string> = {
-  "sans-serif": 'Inter, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif',
-  serif: 'Georgia, "Songti SC", SimSun, serif',
-  monospace: '"Cascadia Mono", Consolas, "Microsoft YaHei", monospace',
-};
-
 type PlayerVideoElementProps = {
   currentVideoSourceAspectRatio: number;
   isVideoSideways: boolean;
@@ -40,19 +34,14 @@ export function PlayerVideoElement({
   return (
     <video
       ref={videoRef}
-      className={`video-element ${normalizedVideoRotation ? "manual-rotated" : ""} ${isVideoSideways ? "sideways" : ""}`}
+      className={`video-element subtitle-size-${subtitleStyle.fontSize} subtitle-font-${subtitleStyle.fontFamily} subtitle-weight-${subtitleStyle.fontWeight} ${normalizedVideoRotation ? "manual-rotated" : ""} ${isVideoSideways ? "sideways" : ""}`}
       style={
-        {
-          "--subtitle-font-size": `${subtitleStyle.fontSize}px`,
-          "--subtitle-font-family": subtitleFontFamilies[subtitleStyle.fontFamily],
-          "--subtitle-font-weight": subtitleStyle.fontWeight,
-          ...(normalizedVideoRotation
-            ? {
-                "--landscape-source-aspect-ratio": currentVideoSourceAspectRatio,
-                "--video-rotation": `${normalizedVideoRotation}deg`,
-              }
-            : {}),
-        } as CSSProperties
+        normalizedVideoRotation
+          ? ({
+              "--landscape-source-aspect-ratio": currentVideoSourceAspectRatio,
+              "--video-rotation": `${normalizedVideoRotation}deg`,
+            } as CSSProperties)
+          : undefined
       }
       onClick={onClick}
       onPlay={onPlay}
