@@ -158,6 +158,10 @@ function createCacheStatusDefinitions(thumbnailMemoryStats = { entries: 0, bytes
       path: thumbnailsRoot,
       memoryBytes: thumbnailMemoryStats.bytes,
       memoryEntries: thumbnailMemoryStats.entries,
+      memoryHits: thumbnailMemoryStats.hits ?? 0,
+      memoryMisses: thumbnailMemoryStats.misses ?? 0,
+      memoryCoalesced: thumbnailMemoryStats.coalesced ?? 0,
+      memoryDiskReads: thumbnailMemoryStats.diskReads ?? 0,
     },
     { id: "actor-covers", label: "演员封面", path: actorCoversRoot },
     { id: "mosaics", label: "千图作品", path: mosaicsRoot },
@@ -1535,17 +1539,16 @@ export function playerDataApiPlugin({ projectRoot, env }) {
         if (request.method === "GET" || request.method === "HEAD") {
           try {
             const etag = `"${thumbnailId}"`;
-            const cacheEntry = store.getCacheEntry("thumbnail", thumbnailId);
-            const headers = {
-              contentType: cacheEntry?.content_type || "image/jpeg",
-              cacheControl: "public, max-age=31536000, immutable",
-              etag,
-            };
             const thumbnail = await thumbnailMemoryCache.getOrLoad({
               thumbnailId,
               filePath,
-              contentType: headers.contentType,
+              contentType: "image/jpeg",
             });
+            const headers = {
+              contentType: thumbnail.contentType,
+              cacheControl: "public, max-age=31536000, immutable",
+              etag,
+            };
             response.setHeader("X-Thumbnail-Memory-Cache", thumbnail.cacheStatus);
             if (request.headers["if-none-match"] === etag) {
               response.statusCode = 304;

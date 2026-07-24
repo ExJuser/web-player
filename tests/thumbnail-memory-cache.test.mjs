@@ -22,7 +22,7 @@ test("thumbnail memory cache loads once and serves subsequent reads from memory"
   assert.equal(second.cacheStatus, "HIT");
   assert.equal(second.buffer.toString(), "thumbnail");
   assert.equal(readCount, 1);
-  assert.deepEqual(cache.stats(), { entries: 1, bytes: 9 });
+  assert.deepEqual(cache.stats(), { entries: 1, bytes: 9, hits: 1, misses: 1, coalesced: 0, diskReads: 1 });
 });
 
 test("thumbnail memory cache warms every persisted thumbnail before requests", async () => {
@@ -64,7 +64,7 @@ test("thumbnail memory cache coalesces concurrent disk reads and obeys byte limi
   await Promise.all([first, second]);
 
   assert.equal(readCount, 1);
-  assert.deepEqual(cache.stats(), { entries: 0, bytes: 0 });
+  assert.deepEqual(cache.stats(), { entries: 0, bytes: 0, hits: 0, misses: 1, coalesced: 1, diskReads: 1 });
 });
 
 test("thumbnail memory cache set, invalidate and clear keep entries coherent", async () => {
@@ -74,7 +74,7 @@ test("thumbnail memory cache set, invalidate and clear keep entries coherent", a
 
   assert.equal((await cache.getOrLoad({ thumbnailId: "one", filePath: "unused" })).contentType, "image/webp");
   assert.equal(cache.invalidate("one"), true);
-  assert.deepEqual(cache.stats(), { entries: 1, bytes: 3 });
+  assert.deepEqual(cache.stats(), { entries: 1, bytes: 3, hits: 1, misses: 0, coalesced: 0, diskReads: 0 });
   cache.clear();
-  assert.deepEqual(cache.stats(), { entries: 0, bytes: 0 });
+  assert.deepEqual(cache.stats(), { entries: 0, bytes: 0, hits: 0, misses: 0, coalesced: 0, diskReads: 0 });
 });

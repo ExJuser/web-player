@@ -3,8 +3,8 @@ import path from "node:path";
 
 import { BoundedLruCache } from "./boundedLruCache.mjs";
 
-export const defaultThumbnailMemoryCacheMaxEntries = Number.POSITIVE_INFINITY;
-export const defaultThumbnailMemoryCacheMaxBytes = Number.POSITIVE_INFINITY;
+export const defaultThumbnailMemoryCacheMaxEntries = 4096;
+export const defaultThumbnailMemoryCacheMaxBytes = 64 * 1024 * 1024;
 export const defaultThumbnailMemoryCacheWarmupConcurrency = 16;
 
 export function createThumbnailMemoryCache({
@@ -16,6 +16,7 @@ export function createThumbnailMemoryCache({
   const cache = new BoundedLruCache({ maxEntries, maxBytes });
   const inFlightLoads = new Map();
   const revisions = new Map();
+  const counters = { hits: 0, misses: 0, coalesced: 0, diskReads: 0 };
   let epoch = 0;
 
   const getRevision = (thumbnailId) => revisions.get(thumbnailId) ?? 0;
@@ -38,18 +39,29 @@ export function createThumbnailMemoryCache({
     revisions.clear();
     inFlightLoads.clear();
     cache.clear();
+    Object.keys(counters).forEach((key) => {
+      counters[key] = 0;
+    });
   };
 
-  const getOrLoad = async ({ thumbnailId, filePath, contentType = "image/jpeg" }) => {
+  const getOrLoad = async ({ thumbnailId, filePath, contentType = "image/jpeg", recordStats = true }) => {
     const cached = cache.get(thumbnailId);
-    if (cached) return { ...cached, cacheStatus: "HIT" };
+    if (cached) {
+      if (recordStats) counters.hits += 1;
+      return { ...cached, cacheStatus: "HIT" };
+    }
 
     const existingLoad = inFlightLoads.get(thumbnailId);
-    if (existingLoad) return { ...await existingLoad, cacheStatus: "HIT" };
+    if (existingLoad) {
+      if (recordStats) counters.coalesced += 1;
+      return { ...await existingLoad, cacheStatus: "HIT" };
+    }
 
+    if (recordStats) counters.misses += 1;
     const loadEpoch = epoch;
     const loadRevision = getRevision(thumbnailId);
     const loadPromise = (async () => {
+      if (recordStats) counters.diskReads += 1;
       const buffer = await readFileImpl(filePath);
       if (!buffer.length) throw new Error("Thumbnail cache file is empty.");
       const entry = { buffer, contentType };
@@ -89,7 +101,7 @@ export function createThumbnailMemoryCache({
         nextIndex += 1;
         const thumbnailId = file.name.slice(0, -".blob".length);
         try {
-          await getOrLoad({ thumbnailId, filePath: path.join(cacheRoot, file.name), contentType });
+          await getOrLoad({ thumbnailId, filePath: path.join(cacheRoot, file.name), contentType, recordStats: false });
           loaded += 1;
         } catch {
           failed += 1;
@@ -105,7 +117,7 @@ export function createThumbnailMemoryCache({
     getOrLoad,
     invalidate,
     set,
-    stats: () => cache.stats(),
+    stats: () => ({ ...cache.stats(), ...counters }),
     warmDirectory,
   };
 }
