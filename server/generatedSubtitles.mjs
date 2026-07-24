@@ -1,7 +1,9 @@
-import { access, mkdir, mkdtemp, readFile, rename, rm, stat } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 const defaultModelLabel = "Kotoba-Whisper v2.0";
+const generatedSubtitleCacheVersion = "ja-vtt-v2";
+const maxCueDurationSeconds = 8;
 
 function isValidWebVtt(text) {
   return text.trimStart().startsWith("WEBVTT");
@@ -81,8 +83,46 @@ export function createWhisperCliArgs({ audioPath, outputBasePath, runtime }) {
     "-ovtt",
     "-of", outputBasePath,
   ];
-  if (runtime.vadModelPath) args.push("--vad", "--vad-model", runtime.vadModelPath);
+  if (runtime.vadModelPath) {
+    args.push(
+      "--vad",
+      "--vad-model", runtime.vadModelPath,
+      "--vad-threshold", "0.35",
+      "--vad-min-speech-duration-ms", "100",
+      "--vad-speech-pad-ms", "200",
+      "--vad-samples-overlap", "0.20",
+    );
+  }
   return args;
+}
+
+export function normalizeGeneratedWebVtt(text) {
+  return text.replace(
+    /((?:\d{2}:)?\d{2}:\d{2}\.\d{3})\s*-->\s*((?:\d{2}:)?\d{2}:\d{2}\.\d{3})/g,
+    (line, start, end) => {
+      const startSeconds = parseVttTimestamp(start);
+      const endSeconds = parseVttTimestamp(end);
+      if (endSeconds - startSeconds <= maxCueDurationSeconds) return line;
+      return `${start} --> ${formatVttTimestamp(startSeconds + maxCueDurationSeconds, start.split(":").length === 3)}`;
+    },
+  );
+}
+
+function parseVttTimestamp(timestamp) {
+  const parts = timestamp.split(":").map(Number);
+  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  return parts[0] * 60 + parts[1];
+}
+
+function formatVttTimestamp(totalSeconds, includeHours) {
+  const totalMilliseconds = Math.round(totalSeconds * 1000);
+  const hours = Math.floor(totalMilliseconds / 3_600_000);
+  const minutes = Math.floor((totalMilliseconds % 3_600_000) / 60_000);
+  const seconds = Math.floor((totalMilliseconds % 60_000) / 1000);
+  const milliseconds = totalMilliseconds % 1000;
+  const minuteText = String(includeHours ? minutes : minutes + hours * 60).padStart(2, "0");
+  const time = `${minuteText}:${String(seconds).padStart(2, "0")}.${String(milliseconds).padStart(3, "0")}`;
+  return includeHours ? `${String(hours).padStart(2, "0")}:${time}` : time;
 }
 
 export function createWhisperProgressParser(onProgress) {
@@ -124,7 +164,7 @@ export function createGeneratedSubtitleService({
       sourceStat.size,
       sourceStat.mtimeMs,
       runtime.modelLabel,
-      "ja-vtt-v1",
+      generatedSubtitleCacheVersion,
     ].join("|"));
     return {
       cacheId,
@@ -201,10 +241,11 @@ export function createGeneratedSubtitleService({
         onStdout: parseProgress,
         onStderr: parseProgress,
       });
-      const text = await readFile(generatedVttPath, "utf8");
+      const text = normalizeGeneratedWebVtt(await readFile(generatedVttPath, "utf8"));
       if (!isValidWebVtt(text)) {
         throw new Error("语音识别没有生成有效的 WebVTT 字幕。");
       }
+      await writeFile(generatedVttPath, text, "utf8");
       await rename(generatedVttPath, cachePath);
       onProgress?.({ percent: 100, message: "日语字幕生成完成。" });
       return createTaskResult(payload, cacheId, runtime);

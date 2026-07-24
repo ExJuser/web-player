@@ -10,6 +10,7 @@ import {
   createWhisperCliArgs,
   createWhisperProgressParser,
   detectSubtitleGenerationRuntime,
+  normalizeGeneratedWebVtt,
 } from "../server/generatedSubtitles.mjs";
 
 test("detectSubtitleGenerationRuntime reports configured engine, model, and optional VAD", async () => {
@@ -50,7 +51,19 @@ test("createWhisperCliArgs fixes Japanese transcription and adds VAD when config
     "-ovtt",
     "-of", "subtitle",
     "--vad", "--vad-model", "vad.bin",
+    "--vad-threshold", "0.35",
+    "--vad-min-speech-duration-ms", "100",
+    "--vad-speech-pad-ms", "200",
+    "--vad-samples-overlap", "0.20",
   ]);
+});
+
+test("normalizeGeneratedWebVtt caps abnormally long cues", () => {
+  const source = "WEBVTT\n\n00:01.000 --> 00:24.000\n長すぎる字幕\n\n00:25.000 --> 00:28.000\n通常の字幕\n";
+  assert.equal(
+    normalizeGeneratedWebVtt(source),
+    "WEBVTT\n\n00:01.000 --> 00:09.000\n長すぎる字幕\n\n00:25.000 --> 00:28.000\n通常の字幕\n",
+  );
 });
 
 test("createWhisperProgressParser maps CLI progress into the transcription phase", () => {
