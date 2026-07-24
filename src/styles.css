@@ -3979,6 +3979,18 @@ button {
   width: 142px;
 }
 
+.subtitle-control .control-select-list {
+  width: max-content;
+  min-width: 100%;
+  max-width: min(360px, calc(100vw - 24px));
+}
+
+.subtitle-control .control-select-list button {
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+  white-space: normal;
+}
+
 .source-control .control-select {
   width: 88px;
 }
