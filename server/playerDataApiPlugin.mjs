@@ -17,6 +17,7 @@ import {
 } from "./ladaRestoration.mjs";
 import {
   ensureFileExists,
+  findTranslatedSubtitle,
   normalizeMediaRoots as normalizeMediaRootsFromConfig,
   resolveMediaPath as resolveMediaPathFromConfig,
   resolvePhotoPath as resolvePhotoPathFromConfig,
@@ -1161,6 +1162,17 @@ export function playerDataApiPlugin({ projectRoot, env }) {
       if (url.pathname === "/api/subtitles/embedded/probe" && request.method === "POST") {
         const payload = await parseJsonBody(request);
         sendJson(response, 200, await embeddedSubtitles.probeEmbeddedSubtitles(await loadAppConfig(), payload));
+        return;
+      }
+
+      if (url.pathname === "/api/subtitles/translated" && request.method === "POST") {
+        const payload = await parseJsonBody(request);
+        const subtitle = await findTranslatedSubtitle(
+          await loadAppConfig(),
+          payload?.rootId,
+          payload?.relativePath,
+        );
+        sendJson(response, 200, { subtitle });
         return;
       }
 

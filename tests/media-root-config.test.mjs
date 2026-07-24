@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 
 import {
   createGlobalVideoId,
+  findTranslatedSubtitle,
   normalizeMediaRoots,
   resolveMediaPath,
   resolvePhotoPath,
@@ -161,6 +162,22 @@ test("media path resolver supports subtitles but rejects escaping root", async (
     );
 
     assert.throws(() => resolveMediaPath(config, "anime", "../E01.srt"), /Invalid relative path/);
+  });
+});
+
+test("finds a translated subtitle beside the current video without rescanning", async () => {
+  await withTempConfig(async ({ directory }) => {
+    const showDirectory = path.join(directory, "Show");
+    await mkdir(showDirectory, { recursive: true });
+    await writeFile(path.join(showDirectory, "E01.mkv"), "video");
+    await writeFile(path.join(showDirectory, "E01-translated.srt"), "subtitle");
+    const config = { media: { roots: [{ id: "anime", label: "Anime", path: directory }] } };
+
+    const subtitle = await findTranslatedSubtitle(config, "anime", "Show/E01.mkv");
+
+    assert.equal(subtitle?.relativePath, "Show/E01-translated.srt");
+    assert.equal(subtitle?.url, "/api/media/anime/Show/E01-translated.srt");
+    assert.equal(subtitle?.format, "srt");
   });
 });
 

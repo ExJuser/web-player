@@ -566,6 +566,40 @@ export function resolveVideoPath(config, rootId, relativePath) {
   }
 }
 
+export async function findTranslatedSubtitle(config, rootId, relativePath) {
+  const videoPath = resolveVideoPath(config, rootId, relativePath);
+  await ensureFileExists(videoPath);
+  const directory = path.dirname(videoPath);
+  const expectedBaseName = `${path.basename(videoPath, path.extname(videoPath))}-translated`.toLowerCase();
+  const entries = await readdir(directory, { withFileTypes: true });
+  const candidates = entries.filter((entry) => {
+    if (!entry.isFile()) return false;
+    const extension = path.extname(entry.name).toLowerCase();
+    return subtitleExtensions.has(extension) && path.basename(entry.name, extension).toLowerCase() === expectedBaseName;
+  });
+  const entry = [".srt", ".vtt"]
+    .map((extension) => candidates.find((candidate) => path.extname(candidate.name).toLowerCase() === extension))
+    .find(Boolean);
+  if (!entry) return null;
+
+  const normalizedVideoPath = relativePath.replace(/\\/g, "/");
+  const relativeDirectory = path.posix.dirname(normalizedVideoPath);
+  const subtitleRelativePath = relativeDirectory === "." ? entry.name : `${relativeDirectory}/${entry.name}`;
+  const fileStat = await stat(path.join(directory, entry.name));
+  const lastModified = Math.round(fileStat.mtimeMs);
+  return {
+    id: createGlobalMediaId(rootId, subtitleRelativePath, fileStat.size, lastModified),
+    name: entry.name,
+    relativePath: subtitleRelativePath,
+    url: encodeMediaUrl(rootId, subtitleRelativePath),
+    size: fileStat.size,
+    lastModified,
+    mediaRootId: rootId,
+    source: "external",
+    format: path.extname(entry.name).toLowerCase() === ".vtt" ? "vtt" : "srt",
+  };
+}
+
 export function resolvePhotoPath(config, rootId, relativePath) {
   try {
     return resolveMediaPath(config, rootId, relativePath, photoExtensions);

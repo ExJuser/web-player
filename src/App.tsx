@@ -2183,6 +2183,37 @@ export default function App() {
     const matches = roots.filter((root) => root.basename === currentDirectoryName);
     return matches.length === 1 ? matches[0] : null;
   }, [currentMediaRootId, localConfig]);
+  useEffect(() => {
+    if (!currentVideo || !currentMediaRootId || !supportsServerFileAccess(currentMediaLibraryRoot)) return;
+
+    let isCancelled = false;
+    void fetchJson<{ subtitle: SubtitleItem | null }>("/api/subtitles/translated", {
+      method: "POST",
+      body: JSON.stringify({ rootId: currentMediaRootId, relativePath: currentVideo.relativePath }),
+    })
+      .then(({ subtitle }) => {
+        if (isCancelled || !subtitle) return;
+        if (subtitlesRef.current.some((item) => item.id === subtitle.id)) return;
+        const isSameSubtitlePath = (item: SubtitleItem) =>
+          item.mediaRootId === subtitle.mediaRootId &&
+          item.relativePath.toLowerCase() === subtitle.relativePath.toLowerCase();
+        subtitlesRef.current
+          .filter(isSameSubtitlePath)
+          .forEach((item) => revokeObjectUrl(item.url));
+        const nextSubtitles = [
+          ...subtitlesRef.current.filter((item) => !isSameSubtitlePath(item)),
+          { ...subtitle, videoId: currentVideo.id },
+        ];
+        subtitlesRef.current = nextSubtitles;
+        autoSubtitleSelectionVideoIdRef.current = currentVideo.id;
+        setSubtitles(nextSubtitles);
+      })
+      .catch(() => undefined);
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [currentMediaLibraryRoot, currentMediaRootId, currentVideo, subtitlesRef]);
   const canUseEmbeddedSubtitles = Boolean(
     currentVideo &&
       currentMediaRootId &&
