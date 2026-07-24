@@ -1,11 +1,12 @@
 import { CheckCircle2, Heart, RotateCcw, Star, Trash2 } from "lucide-react";
-import { memo } from "react";
+import { memo, useCallback, useSyncExternalStore } from "react";
 
 import { RatingChip, TagChips } from "./MetadataChips";
 import type { VideoItem } from "./playerTypes";
 import type { PlaylistSearchMatch } from "./playerPlaylistSearch";
 import type { DuplicatePlaylistVideoMeta } from "./playerUiState";
 import type { VideoVersionPlaylistMeta } from "./videoVersionUtils";
+import type { PlaylistThumbnailStore } from "./playlistThumbnailStore";
 
 type PlaylistItemCardProps = {
   duplicateMeta?: DuplicatePlaylistVideoMeta | null;
@@ -16,6 +17,7 @@ type PlaylistItemCardProps = {
   isDeletePending: boolean;
   isFavorite: boolean;
   playlistIndex: number;
+  playlistThumbnailStore: PlaylistThumbnailStore;
   rating?: number;
   ratingComment?: string;
   searchMatch?: PlaylistSearchMatch;
@@ -43,6 +45,7 @@ export const PlaylistItemCard = memo(function PlaylistItemCard({
   isDeletePending,
   isFavorite,
   playlistIndex,
+  playlistThumbnailStore,
   rating,
   ratingComment,
   searchMatch,
@@ -60,6 +63,17 @@ export const PlaylistItemCard = memo(function PlaylistItemCard({
   onSelect,
   onThumbnailError,
 }: PlaylistItemCardProps) {
+  const subscribeToThumbnail = useCallback(
+    (listener: () => void) => playlistThumbnailStore.subscribe(video.id, listener),
+    [playlistThumbnailStore, video.id],
+  );
+  const getThumbnailSnapshot = useCallback(
+    () => playlistThumbnailStore.get(video.id),
+    [playlistThumbnailStore, video.id],
+  );
+  const playlistThumbnail = useSyncExternalStore(subscribeToThumbnail, getThumbnailSnapshot, getThumbnailSnapshot);
+  const thumbnailUrl = playlistThumbnail ? playlistThumbnail.url : video.thumbnailUrl;
+
   return (
     <div
       className={`playlist-item ${isActive ? "active" : ""}`}
@@ -73,10 +87,10 @@ export const PlaylistItemCard = memo(function PlaylistItemCard({
         aria-current={isActive ? "true" : undefined}
         onClick={() => onSelect(video, isActive)}
       >
-        <span className={`episode-thumbnail ${video.thumbnailUrl ? "has-image" : ""}`} aria-hidden="true">
-          {video.thumbnailUrl ? (
+        <span className={`episode-thumbnail ${thumbnailUrl ? "has-image" : ""}`} aria-hidden="true">
+          {thumbnailUrl ? (
             <img
-              src={video.thumbnailUrl}
+              src={thumbnailUrl}
               alt=""
               decoding="async"
               loading="lazy"

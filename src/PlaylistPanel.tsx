@@ -7,6 +7,7 @@ import { PlaylistVideoList } from "./PlaylistVideoList";
 import type { HomeMediaMode, SeriesOption, DuplicatePlaylistVideoMeta } from "./playerUiState";
 import type { VideoVersionPlaylistMeta } from "./videoVersionUtils";
 import type { PlaylistSearchMatch } from "./playerPlaylistSearch";
+import type { PlaylistThumbnailStore } from "./playlistThumbnailStore";
 import type {
   PlaylistFilter,
   PlaylistSortMode,
@@ -52,6 +53,7 @@ type PlaylistPanelProps = {
   playlistPageSizeOptions: Array<{ value: number; label: string }>;
   playlistPageStartLabel: number;
   playlistRef: RefObject<HTMLDivElement | null>;
+  playlistThumbnailStore: PlaylistThumbnailStore;
   playlistScopeVideoCount: number;
   playlistSearchMatchesByVideoId: ReadonlyMap<string, PlaylistSearchMatch>;
   playlistSearchQuery: string;
@@ -133,6 +135,7 @@ export function PlaylistPanel({
   playlistPageSizeOptions,
   playlistPageStartLabel,
   playlistRef,
+  playlistThumbnailStore,
   playlistScopeVideoCount,
   playlistSearchMatchesByVideoId,
   playlistSearchQuery,
@@ -262,6 +265,7 @@ export function PlaylistPanel({
         pagedPlaylistVideos={pagedPlaylistVideos}
         playlistIndexById={playlistIndexById}
         playlistRef={playlistRef}
+        playlistThumbnailStore={playlistThumbnailStore}
         playlistScopeVideoCount={playlistScopeVideoCount}
         progressStore={progressStore}
         seriesTitleByVideoId={seriesTitleByVideoId}

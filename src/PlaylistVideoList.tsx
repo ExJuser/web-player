@@ -12,6 +12,7 @@ import type {
 import type { DuplicatePlaylistVideoMeta } from "./playerUiState";
 import type { PlaylistSearchMatch } from "./playerPlaylistSearch";
 import type { VideoVersionPlaylistMeta } from "./videoVersionUtils";
+import type { PlaylistThumbnailStore } from "./playlistThumbnailStore";
 
 const emptyVideoTags: string[] = [];
 
@@ -31,6 +32,7 @@ type PlaylistVideoListProps = {
   modeFilteredVideoCount: number;
   pagedPlaylistVideos: VideoItem[];
   playlistIndexById: Map<string, number>;
+  playlistThumbnailStore: PlaylistThumbnailStore;
   playlistRef: Ref<HTMLDivElement>;
   playlistScopeVideoCount: number;
   progressStore: ProgressStore;
@@ -72,6 +74,7 @@ export function PlaylistVideoList({
   modeFilteredVideoCount,
   pagedPlaylistVideos,
   playlistIndexById,
+  playlistThumbnailStore,
   playlistRef,
   playlistScopeVideoCount,
   progressStore,
@@ -130,6 +133,7 @@ export function PlaylistVideoList({
             isDeletePending={isVideoDeletePending}
             isFavorite={isFavorite}
             playlistIndex={playlistIndex}
+            playlistThumbnailStore={playlistThumbnailStore}
             rating={rating}
             ratingComment={ratingComment}
             searchMatch={searchMatchesByVideoId.get(video.id)}

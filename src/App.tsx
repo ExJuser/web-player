@@ -374,6 +374,7 @@ import type { PhotoAlbumViewFilter } from "./PhotoAlbumToolbar";
 import { PhotoDashboardSection } from "./PhotoDashboardSection";
 import { PhotoViewerSection } from "./PhotoViewerSection";
 import { PlaylistPanel } from "./PlaylistPanel";
+import { createPlaylistThumbnailStore } from "./playlistThumbnailStore";
 import { PlayerControlBar } from "./PlayerControlBar";
 import { PlayerStage } from "./PlayerStage";
 import { PlayerTopBar } from "./PlayerTopBar";
@@ -396,6 +397,9 @@ function isServerPhotoImage(image: PhotoAlbumImage) {
 }
 
 export default function App() {
+  const playlistThumbnailStoreRef = useRef<ReturnType<typeof createPlaylistThumbnailStore> | null>(null);
+  playlistThumbnailStoreRef.current ??= createPlaylistThumbnailStore();
+  const playlistThumbnailStore = playlistThumbnailStoreRef.current;
   const initialVolumeRef = useRef(readStoredVolume());
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const previewVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -2713,6 +2717,10 @@ export default function App() {
 
   const applyVideoThumbnailUpdates = useCallback((updates: ThumbnailQueueUpdate[]) => {
     if (!updates.length) return;
+    if (!isHomeViewVisible) {
+      playlistThumbnailStore.setMany(updates);
+      return;
+    }
     const updatesById = new Map(updates.map((update) => [update.videoId, update]));
     const previousVideos = videosRef.current;
     let didChange = false;
@@ -2739,7 +2747,7 @@ export default function App() {
     if (!didChange) return;
     videosRef.current = nextVideos;
     startTransition(() => setVideos(nextVideos));
-  }, []);
+  }, [isHomeViewVisible, playlistThumbnailStore]);
 
   const updateVideoMetadata = useCallback(
     (videoId: string, metadata: VideoMetadata) => {
@@ -4344,8 +4352,20 @@ export default function App() {
     skipFolderAccessPrompt,
   });
 
+  const getQueuedThumbnailStatus = useCallback(
+    (video: VideoItem) => isHomeViewVisible
+      ? video.thumbnailStatus
+      : playlistThumbnailStore.get(video.id)?.status ?? video.thumbnailStatus,
+    [isHomeViewVisible, playlistThumbnailStore],
+  );
+  const markPlaylistThumbnailFailed = useCallback(
+    (videoId: string) => playlistThumbnailStore.setFailed(videoId),
+    [playlistThumbnailStore],
+  );
+
   useThumbnailQueueController({
     applyVideoThumbnailUpdates,
+    getThumbnailStatus: getQueuedThumbnailStatus,
     isMainVideoLoading,
     isPlaylistScrolling,
     isScanning,
@@ -4353,6 +4373,8 @@ export default function App() {
     thumbnailQueueVideoIdsKey,
     videosRef,
   });
+
+  useEffect(() => () => playlistThumbnailStore.clear(), [libraryId, playlistThumbnailStore]);
 
   useEffect(() => {
     if (!localConfig?.mediaRoots.length) {
@@ -5489,6 +5511,7 @@ export default function App() {
       ? currentVideoIds
       : videoIds);
   }, []);
+
   const updateGrowthRingThumbnailVideos = useCallback((videoIds: string[]) => {
     setGrowthRingThumbnailVideoIds((currentVideoIds) => currentVideoIds.length === videoIds.length
       && currentVideoIds.every((videoId, index) => videoId === videoIds[index])
@@ -6142,6 +6165,7 @@ export default function App() {
           playlistPageSizeOptions={playlistPageSizeSelectOptions}
           playlistPageStartLabel={playlistPageStartLabel}
           playlistRef={playlistRef}
+          playlistThumbnailStore={playlistThumbnailStore}
           playlistScopeVideoCount={playlistScopeVideos.length}
           playlistSearchMatchesByVideoId={playlistSearchResult.matchesByVideoId}
           playlistSearchQuery={playlistSearchQuery}
@@ -6224,7 +6248,7 @@ export default function App() {
             }
             selectVideo(selectedVideo.id);
           }}
-          onThumbnailError={(videoId) => setVideoThumbnailState(videoId, "failed")}
+          onThumbnailError={markPlaylistThumbnailFailed}
           onTogglePlaylistSortDirection={togglePlaylistSortDirection}
           onToggleSeriesMenu={() => setIsSeriesMenuOpen((isOpen) => !isOpen)}
         />

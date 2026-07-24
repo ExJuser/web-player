@@ -7,13 +7,14 @@ import { generateVideoThumbnail, loadAvailableVideoThumbnail } from "./videoThum
 
 export type ThumbnailQueueUpdate = {
   videoId: string;
-  status: VideoItem["thumbnailStatus"];
+  status: NonNullable<VideoItem["thumbnailStatus"]>;
   url?: string;
   metadata?: VideoMetadata;
 };
 
 type UseThumbnailQueueControllerOptions = {
   applyVideoThumbnailUpdates: (updates: ThumbnailQueueUpdate[]) => void;
+  getThumbnailStatus?: (video: VideoItem) => VideoItem["thumbnailStatus"];
   isMainVideoLoading: boolean;
   isPlaylistScrolling: boolean;
   isScanning: boolean;
@@ -24,6 +25,7 @@ type UseThumbnailQueueControllerOptions = {
 
 export function useThumbnailQueueController({
   applyVideoThumbnailUpdates,
+  getThumbnailStatus = (video) => video.thumbnailStatus,
   isMainVideoLoading,
   isPlaylistScrolling,
   isScanning,
@@ -68,7 +70,7 @@ export function useThumbnailQueueController({
       for (let index = workerIndex; index < orderedVideoIds.length; index += thumbnailLookupConcurrency) {
         if (!isCurrentRun()) return;
         const video = videoById.get(orderedVideoIds[index]);
-        if (!video || video.thumbnailStatus === "ready") continue;
+        if (!video || getThumbnailStatus(video) === "ready") continue;
         try {
           const loaded = await loadAvailableVideoThumbnail(libraryIdRef.current, video, abortController.signal);
           if (loaded) lookupUpdates[index] = { videoId: video.id, status: "ready", url: loaded.thumbnailUrl, metadata: loaded.metadata };
@@ -120,5 +122,5 @@ export function useThumbnailQueueController({
       isCancelled = true;
       abortController.abort();
     };
-  }, [applyVideoThumbnailUpdates, isMainVideoLoading, isPlaylistScrolling, isScanning, libraryIdRef, thumbnailQueueVideoIdsKey, videosRef]);
+  }, [applyVideoThumbnailUpdates, getThumbnailStatus, isMainVideoLoading, isPlaylistScrolling, isScanning, libraryIdRef, thumbnailQueueVideoIdsKey, videosRef]);
 }
