@@ -15,8 +15,6 @@ import {
 } from "./watchActivityInsights";
 
 type WatchActivitySectionProps = {
-  carouselCardsByDate: Map<string, HomeVideoCard[]>;
-  carouselTick: number;
   cards: HomeVideoCard[];
   insights: WatchActivityInsights;
   isExpanded: boolean;
@@ -40,8 +38,6 @@ type WatchActivitySectionProps = {
 };
 
 export function WatchActivitySection({
-  carouselCardsByDate,
-  carouselTick,
   cards,
   insights,
   isExpanded,
@@ -128,11 +124,9 @@ export function WatchActivitySection({
           ))}
         </div>
       </div>
-      <div className="watch-activity-calendar" role="list" aria-label="最近观看分布">
+      <div className="watch-activity-calendar" aria-label="最近观看分布">
         {monthGroups.map((month) => (
           <WatchActivityMonth
-            carouselCardsByDate={carouselCardsByDate}
-            carouselTick={carouselTick}
             formatDate={formatDate}
             formatMetric={formatMetric}
             getMetricValue={getWatchActivityMetricValue}
@@ -141,7 +135,6 @@ export function WatchActivitySection({
             metric={metric}
             month={month}
             onSelectDate={onSelectDate}
-            onThumbnailError={onThumbnailError}
             selectedDate={selectedDay?.date}
             weekdayLabels={watchActivityWeekdayLabels}
           />

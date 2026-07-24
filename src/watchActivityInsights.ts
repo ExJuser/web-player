@@ -104,6 +104,7 @@ function getMondayFirstWeekdayIndex(date: Date) {
 export function groupWatchActivityDaysByMonth(days: WatchActivityDayInsight[]): WatchActivityMonthGroup[] {
   const groups: WatchActivityMonthGroup[] = [];
   const groupByKey = new Map<string, WatchActivityMonthGroup>();
+  const spansMultipleYears = new Set(days.map((day) => day.date.slice(0, 4))).size > 1;
 
   days.forEach((day) => {
     const key = day.date.slice(0, 7);
@@ -113,7 +114,9 @@ export function groupWatchActivityDaysByMonth(days: WatchActivityDayInsight[]): 
       const monthStart = new Date(`${key}-01T00:00:00`);
       group = {
         key,
-        label: Number.isFinite(monthNumber) ? `${monthNumber}月` : key,
+        label: Number.isFinite(monthNumber)
+          ? `${spansMultipleYears ? `${day.date.slice(0, 4)}年` : ""}${monthNumber}月`
+          : key,
         leadingEmptyDays: Number.isNaN(monthStart.getTime()) ? 0 : getMondayFirstWeekdayIndex(monthStart),
         activeDays: 0,
         days: [],
@@ -163,6 +166,7 @@ export function buildWatchActivityInsights(
     metric?: WatchActivityMetric;
     today?: string;
     tagLimit?: number;
+    excludedTagKeys?: ReadonlySet<string>;
   } = {},
 ): WatchActivityInsights {
   const rangeDays = options.rangeDays ?? 30;
@@ -193,7 +197,7 @@ export function buildWatchActivityInsights(
     const seenTagKeys = new Set<string>();
     (videoTags[item.videoId] ?? []).forEach((tag) => {
       const key = normalizeTagKey(tag);
-      if (!key || seenTagKeys.has(key)) return;
+      if (!key || options.excludedTagKeys?.has(key) || seenTagKeys.has(key)) return;
       seenTagKeys.add(key);
       const existing = tagStatsByKey.get(key);
       if (existing) {
@@ -226,7 +230,9 @@ export function buildWatchActivityInsights(
     day.videoIds.sort((a, b) => {
       const aActivity = activityStore[createWatchActivityKey(day.date, a)];
       const bActivity = activityStore[createWatchActivityKey(day.date, b)];
-      return (bActivity?.watchedSeconds ?? 0) - (aActivity?.watchedSeconds ?? 0);
+      const aValue = aActivity ? getWatchActivityMetricValue(aActivity, metric) : 0;
+      const bValue = bActivity ? getWatchActivityMetricValue(bActivity, metric) : 0;
+      return bValue - aValue;
     });
   });
   const totals = days.reduce(

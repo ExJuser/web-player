@@ -136,6 +136,31 @@ test("backfills existing playback stats when a video receives a tag later", () =
   assert.equal(afterTagging.tagsByEmissionCount[0].emissionCount, 8);
 });
 
+test("excludes actor tags from tag coverage and rankings", () => {
+  const video = createVideo({ id: "root-a|tagged.mp4|100|1", name: "tagged.mp4", relativePath: "tagged.mp4" });
+  const insights = specialInsights.buildSpecialModeInsights(
+    [video],
+    statsFor(video, { totalPlayedSeconds: 120, emissionCount: 2 }),
+    { [video.id]: ["演员甲", "剧情"] },
+    {},
+    { excludedTagKeys: new Set(["演员甲"]) },
+  );
+
+  assert.equal(insights.summary.taggedVideos, 1);
+  assert.equal(insights.summary.tagCoverage, 1);
+  assert.deepEqual(insights.tagsByVideoCount.map((tag) => tag.tag), ["剧情"]);
+
+  const actorOnly = specialInsights.buildSpecialModeInsights(
+    [video],
+    {},
+    { [video.id]: ["演员甲"] },
+    {},
+    { excludedTagKeys: new Set(["演员甲"]) },
+  );
+  assert.equal(actorOnly.summary.taggedVideos, 0);
+  assert.equal(actorOnly.summary.tagCoverage, 0);
+});
+
 test("keeps ten default special insight entries", () => {
   const videos = Array.from({ length: 12 }, (_, index) =>
     createVideo({

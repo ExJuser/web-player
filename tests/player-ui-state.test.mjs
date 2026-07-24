@@ -566,8 +566,7 @@ test("playlist thumbnail helper excludes active neighbors outside the current pa
 });
 
 test("thumbnail queue ids prioritize home cards and dedupe playlist entries", () => {
-  const videos = ["primary", "next", "recent", "favorite", "activity", "page"].map((id) => ({ id }));
-  const modeFilteredVideoById = new Map(videos.map((video) => [video.id, video]));
+  const videos = ["primary", "next", "recent", "favorite", "page"].map((id) => ({ id }));
 
   assert.deepEqual(
     uiState.createThumbnailQueueVideoIds({
@@ -576,11 +575,9 @@ test("thumbnail queue ids prioritize home cards and dedupe playlist entries", ()
       nextEpisodeVideo: videos[1],
       recentHomeVideos: [videos[2], videos[0]],
       favoriteHomeVideos: [videos[3], null],
-      watchActivityCarouselVideoIds: ["activity", "missing", "next"],
-      modeFilteredVideoById,
-      playlistThumbnailVideos: [videos[5], videos[3]],
+      playlistThumbnailVideos: [videos[4], videos[3]],
     }),
-    ["primary", "next", "recent", "favorite", "activity", "page"],
+    ["primary", "next", "recent", "favorite", "page"],
   );
 
   assert.deepEqual(
@@ -588,15 +585,13 @@ test("thumbnail queue ids prioritize home cards and dedupe playlist entries", ()
       isHomeViewVisible: false,
       recentHomeVideos: [videos[2]],
       favoriteHomeVideos: [videos[3]],
-      watchActivityCarouselVideoIds: ["activity"],
-      modeFilteredVideoById,
-      playlistThumbnailVideos: [videos[5], videos[5]],
+      playlistThumbnailVideos: [videos[4], videos[4]],
     }),
     ["page"],
   );
 });
 
-test("watch activity helpers build carousel and selected day cards", () => {
+test("watch activity helpers resolve a selected day and order cards by the active metric", () => {
   const videos = [
     { id: "a", relativePath: "Show/02.mkv" },
     { id: "b", relativePath: "Show/01.mkv" },
@@ -608,27 +603,24 @@ test("watch activity helpers build carousel and selected day cards", () => {
     { date: "2026-01-02", watchedSeconds: 30, playCount: 1, completedCount: 0, emissionCount: 0, videoIds: ["missing", "a", "b"] },
     { date: "2026-01-03", watchedSeconds: 0, playCount: 0, completedCount: 0, emissionCount: 0, videoIds: ["c"] },
   ];
-  const videoById = new Map(videos.map((video) => [video.id, video]));
-  const carouselCardsByDate = uiState.createWatchActivityCarouselCardsByDate({ days, videoById, createCard, maxCardsPerDay: 2 });
-
-  assert.deepEqual(Array.from(carouselCardsByDate.keys()), ["2026-01-02", "2026-01-03"]);
-  assert.deepEqual(carouselCardsByDate.get("2026-01-02").map((card) => card.video.id), ["a"]);
-  assert.deepEqual(uiState.createWatchActivityCarouselVideoIds(carouselCardsByDate), ["a", "c"]);
   assert.equal(uiState.resolveSelectedWatchActivityDay(days, "missing").date, "2026-01-02");
 
-  assert.deepEqual(
-    uiState.createSelectedWatchActivityCards({
+  const activityStore = {
+    "2026-01-02::a": { watchedSeconds: 10, playCount: 4, completedCount: 1, emissionCount: 2 },
+    "2026-01-02::b": { watchedSeconds: 10, playCount: 2, completedCount: 3, emissionCount: 1 },
+  };
+  const orderFor = (metric) => uiState.createSelectedWatchActivityCards({
       day: days[1],
       videos,
-      activityStore: {
-        "2026-01-02::a": { watchedSeconds: 10 },
-        "2026-01-02::b": { watchedSeconds: 10 },
-        "2026-01-02::c": { watchedSeconds: 60 },
-      },
+      activityStore,
       createCard,
-    }).map((card) => card.video.id),
-    ["b", "a"],
-  );
+      metric,
+    }).map((card) => card.video.id);
+
+  assert.deepEqual(orderFor("watched"), ["b", "a"]);
+  assert.deepEqual(orderFor("plays"), ["a", "b"]);
+  assert.deepEqual(orderFor("completed"), ["b", "a"]);
+  assert.deepEqual(orderFor("emission"), ["a", "b"]);
 });
 
 test("duplicate playlist helpers dedupe videos and build metadata", () => {

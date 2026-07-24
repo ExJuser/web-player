@@ -9,7 +9,7 @@ import { collator, playlistPageSizeOptions } from "./playerConstants";
 import { compareNaturalRelativePath } from "./playerMediaUtils";
 import { inferSeriesTitle, scopedSeriesKeyForVideo, type SeriesVideo } from "./playerSeriesUtils";
 import type { HomeMediaMode } from "./playerTypes";
-import { createWatchActivityKey, type WatchActivityDayInsight } from "./watchActivityInsights";
+import { createWatchActivityKey, getWatchActivityMetricValue, type WatchActivityDayInsight, type WatchActivityMetric } from "./watchActivityInsights";
 
 export type { HomeMediaMode };
 
@@ -119,11 +119,10 @@ type WatchActivityCardForUi<Video extends WatchActivityVideoForUi> = {
   video: Video;
 };
 
-type IdentifiedCardForUi<Video extends IdentifiedVideoForUi = IdentifiedVideoForUi> = {
-  video: Video;
-};
-
-type WatchActivityStoreForUi = Record<string, { watchedSeconds?: number } | undefined>;
+type WatchActivityStoreForUi = Record<
+  string,
+  Pick<WatchActivityDayInsight, "watchedSeconds" | "playCount" | "completedCount" | "emissionCount"> | undefined
+>;
 
 type DuplicateVideoGroupForUi<Video extends RatedVideoForUi> = {
   videos: Video[];
@@ -649,8 +648,6 @@ export function createThumbnailQueueVideoIds<Video extends IdentifiedVideoForUi>
   nextEpisodeVideo?: Video | null;
   recentHomeVideos: Array<Video | null | undefined>;
   favoriteHomeVideos: Array<Video | null | undefined>;
-  watchActivityCarouselVideoIds: string[];
-  modeFilteredVideoById: ReadonlyMap<string, Video>;
   playlistThumbnailVideos: Video[];
 }) {
   const queuedVideos = input.isHomeViewVisible
@@ -659,7 +656,6 @@ export function createThumbnailQueueVideoIds<Video extends IdentifiedVideoForUi>
         input.nextEpisodeVideo,
         ...input.recentHomeVideos,
         ...input.favoriteHomeVideos,
-        ...input.watchActivityCarouselVideoIds.map((videoId) => input.modeFilteredVideoById.get(videoId)),
         ...input.playlistThumbnailVideos,
       ]
     : input.playlistThumbnailVideos;
@@ -669,40 +665,6 @@ export function createThumbnailQueueVideoIds<Video extends IdentifiedVideoForUi>
     if (!video || seenIds.has(video.id)) return;
     seenIds.add(video.id);
     ids.push(video.id);
-  });
-  return ids;
-}
-
-export function createWatchActivityCarouselCardsByDate<Video extends WatchActivityVideoForUi, Card extends WatchActivityCardForUi<Video>>(input: {
-  days: WatchActivityDayInsight[];
-  videoById: ReadonlyMap<string, Video>;
-  createCard: (video: Video) => Card;
-  maxCardsPerDay?: number;
-}) {
-  const maxCardsPerDay = input.maxCardsPerDay ?? 5;
-  const cardsByDate = new Map<string, Card[]>();
-  input.days.forEach((day) => {
-    const cards = day.videoIds
-      .slice(0, maxCardsPerDay)
-      .map((videoId) => input.videoById.get(videoId))
-      .filter((video): video is Video => Boolean(video))
-      .map(input.createCard);
-    if (cards.length) cardsByDate.set(day.date, cards);
-  });
-  return cardsByDate;
-}
-
-export function createWatchActivityCarouselVideoIds<Card extends IdentifiedCardForUi>(
-  cardsByDate: ReadonlyMap<string, Card[]>,
-) {
-  const seenIds = new Set<string>();
-  const ids: string[] = [];
-  cardsByDate.forEach((cards) => {
-    cards.forEach((card) => {
-      if (seenIds.has(card.video.id)) return;
-      seenIds.add(card.video.id);
-      ids.push(card.video.id);
-    });
   });
   return ids;
 }
@@ -723,6 +685,7 @@ export function createSelectedWatchActivityCards<Video extends WatchActivityVide
   videos: Video[];
   activityStore: WatchActivityStoreForUi;
   createCard: (video: Video) => Card;
+  metric: WatchActivityMetric;
   maxCards?: number;
 }) {
   if (!input.day) return [];
@@ -735,7 +698,9 @@ export function createSelectedWatchActivityCards<Video extends WatchActivityVide
     .sort((a, b) => {
       const aActivity = input.activityStore[createWatchActivityKey(day.date, a.video.id)];
       const bActivity = input.activityStore[createWatchActivityKey(day.date, b.video.id)];
-      return (bActivity?.watchedSeconds ?? 0) - (aActivity?.watchedSeconds ?? 0) || compareNaturalRelativePath(a.video.relativePath, b.video.relativePath);
+      const aValue = aActivity ? getWatchActivityMetricValue(aActivity, input.metric) : 0;
+      const bValue = bActivity ? getWatchActivityMetricValue(bActivity, input.metric) : 0;
+      return bValue - aValue || compareNaturalRelativePath(a.video.relativePath, b.video.relativePath);
     })
     .slice(0, maxCards);
 }

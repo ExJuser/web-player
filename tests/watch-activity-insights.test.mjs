@@ -114,6 +114,43 @@ test("groups activity days into Monday-first calendar months", () => {
   );
 });
 
+test("adds years to month labels only when the range crosses a year boundary", () => {
+  const day = (date) => ({ date, watchedSeconds: 0, playCount: 0, completedCount: 0, emissionCount: 0, videoIds: [] });
+  assert.deepEqual(
+    activityInsights.groupWatchActivityDaysByMonth([day("2025-12-31"), day("2026-01-01")]).map((month) => month.label),
+    ["2025年12月", "2026年1月"],
+  );
+  assert.deepEqual(
+    activityInsights.groupWatchActivityDaysByMonth([day("2026-01-01"), day("2026-02-01")]).map((month) => month.label),
+    ["1月", "2月"],
+  );
+});
+
+test("orders daily videos by the selected metric and excludes configured tags", () => {
+  const videos = [createVideo({ id: "video-a" }), createVideo({ id: "video-b" })];
+  const store = {
+    "2026-06-29::video-a": { date: "2026-06-29", videoId: "video-a", watchedSeconds: 10, playCount: 4, completedCount: 1, emissionCount: 2, updatedAt: 1 },
+    "2026-06-29::video-b": { date: "2026-06-29", videoId: "video-b", watchedSeconds: 20, playCount: 2, completedCount: 3, emissionCount: 1, updatedAt: 2 },
+  };
+  const expectedOrders = {
+    watched: ["video-b", "video-a"],
+    plays: ["video-a", "video-b"],
+    completed: ["video-b", "video-a"],
+    emission: ["video-a", "video-b"],
+  };
+
+  Object.entries(expectedOrders).forEach(([metric, expected]) => {
+    const insights = activityInsights.buildWatchActivityInsights(
+      store,
+      videos,
+      { "video-a": ["演员甲", "剧情"], "video-b": ["演员甲"] },
+      { rangeDays: 30, metric, today: "2026-06-29", excludedTagKeys: new Set(["演员甲"]) },
+    );
+    assert.deepEqual(insights.days.at(-1).videoIds, expected);
+    assert.deepEqual(insights.topTags.map((tag) => tag.tag), ["剧情"]);
+  });
+});
+
 test("exports watch activity labels and formats dates", () => {
   assert.deepEqual(activityInsights.watchActivityRangeOptions.map((option) => option.value), [30, 90, 365]);
   assert.deepEqual(activityInsights.watchActivityMetricOptions.map((option) => option.value), ["watched", "plays", "completed", "emission"]);
@@ -122,7 +159,7 @@ test("exports watch activity labels and formats dates", () => {
   assert.match(activityInsights.formatWatchActivityDate("2026-06-29"), /6.*29/);
 });
 
-test("orders daily video ids by watched seconds for thumbnail carousels", () => {
+test("orders daily video ids by watched seconds", () => {
   const videos = [
     createVideo({ id: "video-a", name: "a.mp4" }),
     createVideo({ id: "video-b", name: "b.mp4" }),
