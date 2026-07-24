@@ -32,6 +32,7 @@ type ActorDashboardSectionProps = {
   videoRatings: VideoRatingStore;
   videoStats: VideoStatsStore;
   videoTags: VideoTagStore;
+  systemVideoTags: VideoTagStore;
   formatDuration: (seconds: number) => string;
   formatRelativeTime: (timestamp: number) => string;
   onSetActorCover: (actorId: string, video: VideoItem) => void;
@@ -95,6 +96,7 @@ export function ActorDashboardSection({
   videoRatings,
   videoStats,
   videoTags,
+  systemVideoTags,
   formatDuration,
   formatRelativeTime,
   onSetActorCover,
@@ -223,7 +225,7 @@ export function ActorDashboardSection({
                 <span className="actor-video-metadata">
                   <span className="actor-video-rating-tags">
                     {hasRating ? <RatingChip rating={rating} comment={comment} /> : <span className="rating-chip actor-video-empty-chip">暂无评分</span>}
-                    {tags.length ? <TagChips tags={tags} limit={8} compact /> : <span className="tag-chip-row compact"><span className="tag-chip actor-video-empty-chip">暂无标签</span></span>}
+                    {tags.length ? <TagChips tags={tags} systemTags={systemVideoTags[video.id]} limit={8} compact /> : <span className="tag-chip-row compact"><span className="tag-chip actor-video-empty-chip">暂无标签</span></span>}
                   </span>
                   <span className="actor-video-playback-stats">
                     <small title={`播放次数：${stats?.playCount ?? 0}`}><Play size={13} /> {stats?.playCount ?? 0} 次播放</small>

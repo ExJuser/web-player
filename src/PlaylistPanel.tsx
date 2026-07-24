@@ -72,6 +72,7 @@ type PlaylistPanelProps = {
   videoComments: VideoCommentStore;
   videoRatings: VideoRatingStore;
   videoTags: VideoTagStore;
+  systemVideoTags: VideoTagStore;
   videoActorTags: Record<string, string[]>;
   createVideoTitle: (video: VideoItem) => string;
   onChangePlaylistFilter: (filter: PlaylistFilter) => void;
@@ -154,6 +155,7 @@ export function PlaylistPanel({
   videoComments,
   videoRatings,
   videoTags,
+  systemVideoTags,
   videoActorTags,
   createVideoTitle,
   onChangePlaylistFilter,
@@ -277,6 +279,7 @@ export function PlaylistPanel({
         videoComments={videoComments}
         videoRatings={videoRatings}
         videoTags={videoTags}
+        systemVideoTags={systemVideoTags}
         videoActorTags={videoActorTags}
         visibleVideoCount={visibleVideoCount}
         createVideoTitle={createVideoTitle}

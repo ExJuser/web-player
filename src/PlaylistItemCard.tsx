@@ -26,6 +26,7 @@ type PlaylistItemCardProps = {
   showVideoMetadata: boolean;
   tags: string[];
   actorTags?: string[];
+  systemTags?: string[];
   title: string;
   video: VideoItem;
   onDelete: (video: VideoItem) => void;
@@ -54,6 +55,7 @@ export const PlaylistItemCard = memo(function PlaylistItemCard({
   showVideoMetadata,
   tags,
   actorTags,
+  systemTags,
   title,
   video,
   onDelete,
@@ -116,7 +118,7 @@ export const PlaylistItemCard = memo(function PlaylistItemCard({
             </small>
           ) : null}
           {seriesTitle ? <small className="episode-series">{seriesTitle}</small> : null}
-          {showVideoMetadata ? <TagChips tags={tags} actorTags={actorTags} compact /> : null}
+          {showVideoMetadata ? <TagChips tags={tags} actorTags={actorTags} systemTags={systemTags} compact /> : null}
           {showVideoMetadata ? <RatingChip rating={rating} comment={ratingComment} /> : null}
           {isCompleted ? (
             <span className="episode-progress compact">

@@ -32,7 +32,7 @@ export function HomeResumeSection({
   onThumbnailError,
 }: HomeResumeSectionProps) {
   const hasMetadata = Boolean(
-    card && (card.actorTags?.length || card.tags?.length || typeof card.rating === "number" || card.ratingComment?.trim()),
+    card && (card.actorTags?.length || card.systemTags?.length || card.tags?.length || typeof card.rating === "number" || card.ratingComment?.trim()),
   );
 
   return (
@@ -52,7 +52,7 @@ export function HomeResumeSection({
             <small>{formatHomeMeta(card)}</small>
             {hasMetadata ? (
               <div className="home-resume-metadata">
-                <TagChips tags={card.tags ?? []} actorTags={card.actorTags} limit={10} />
+                <TagChips tags={card.tags ?? []} actorTags={card.actorTags} systemTags={card.systemTags} limit={10} />
                 <RatingChip rating={card.rating} comment={card.ratingComment} />
               </div>
             ) : null}

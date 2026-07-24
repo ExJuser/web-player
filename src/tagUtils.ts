@@ -220,6 +220,25 @@ function getSingleTagSearchScore(queryKey: string, querySynonymGroup: number, ta
   return getSimilarity(queryKey, tagKey) >= 0.72 ? 16 : 0;
 }
 
+export function buildSubtitleSystemVideoTags(videos: VideoItem[], subtitles: SubtitleItem[]): VideoTagStore {
+  return Object.fromEntries(videos.flatMap((video) => {
+    const hasTranslatedSubtitle = subtitles.some((subtitle) =>
+      !subtitle.isManual &&
+      (subtitle.mediaRootId === undefined || subtitle.mediaRootId === video.mediaRootId) &&
+      getSubtitlePathMatchPriority(video.relativePath, subtitle.relativePath) === 0,
+    );
+    return hasTranslatedSubtitle ? [[video.id, [CHINESE_SUBTITLE_SYSTEM_TAG]]] : [];
+  }));
+}
+
+export function mergeVideoTagStores(userTags: VideoTagStore, systemTags: VideoTagStore): VideoTagStore {
+  const videoIds = new Set([...Object.keys(userTags), ...Object.keys(systemTags)]);
+  return Object.fromEntries(Array.from(videoIds).flatMap((videoId) => {
+    const tags = mergeTags(systemTags[videoId] ?? [], userTags[videoId] ?? []);
+    return tags.length ? [[videoId, tags]] : [];
+  }));
+}
+
 export function getTagSearchScore(query: string, tags: string[]) {
   const queryKey = normalizeTagKey(query);
   if (!queryKey) return 0;
@@ -264,3 +283,7 @@ export function createTagInputSuggestions(input: {
   })
     .slice(0, input.limit ?? 8);
 }
+import { getSubtitlePathMatchPriority } from "./playerLibraryUtils";
+import type { SubtitleItem, VideoItem, VideoTagStore } from "./playerTypes";
+
+export const CHINESE_SUBTITLE_SYSTEM_TAG = "中文字幕";

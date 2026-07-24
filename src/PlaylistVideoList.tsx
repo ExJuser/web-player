@@ -45,6 +45,7 @@ type PlaylistVideoListProps = {
   videoComments: VideoCommentStore;
   videoRatings: VideoRatingStore;
   videoTags: VideoTagStore;
+  systemVideoTags: VideoTagStore;
   videoActorTags: Record<string, string[]>;
   visibleVideoCount: number;
   createVideoTitle: (video: VideoItem) => string;
@@ -87,6 +88,7 @@ export function PlaylistVideoList({
   videoComments,
   videoRatings,
   videoTags,
+  systemVideoTags,
   videoActorTags,
   visibleVideoCount,
   createVideoTitle,
@@ -141,6 +143,7 @@ export function PlaylistVideoList({
             seriesTitle={seriesTitle}
             showVideoMetadata={showVideoMetadata}
             tags={tags}
+            systemTags={systemVideoTags[video.id]}
             actorTags={videoActorTags[video.id]}
             title={createVideoTitle(video)}
             video={video}

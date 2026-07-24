@@ -24,6 +24,7 @@ type TagDialogProps = {
   currentVideoId: string;
   currentVideoName: string;
   currentVideoTags: string[];
+  systemTags: string[];
   commonTags: Array<{ label: string; count: number }>;
   actorProfiles: ActorProfileStore;
   currentActorIds: string[];
@@ -65,6 +66,7 @@ export function TagDialog({
   currentVideoId,
   currentVideoName,
   currentVideoTags,
+  systemTags,
   commonTags,
   actorProfiles,
   currentActorIds,
@@ -121,6 +123,10 @@ export function TagDialog({
   const matchingSelectedActorCount = matchingActors.length - filteredOtherActors.length;
   const newActorNameToSave = normalizedActorQuery && !matchingActors.length ? actorQuery.trim() : undefined;
   const visibleCommonTags = areCommonTagsExpanded ? commonTags : commonTags.slice(0, COMMON_TAG_LIMIT);
+  const systemTagKeys = new Set(systemTags.map((tag) => tag.normalize("NFKC").trim().toLocaleLowerCase()));
+  const visibleCurrentVideoTags = currentVideoTags.filter(
+    (tag) => !systemTagKeys.has(tag.normalize("NFKC").trim().toLocaleLowerCase()),
+  );
   const toggleActor = (actorId: string) => setSelectedActorIds((current) => {
     const next = new Set(current);
     if (next.has(actorId)) next.delete(actorId); else next.add(actorId);
@@ -160,16 +166,21 @@ export function TagDialog({
         </div>
 
         <div className="tag-editor-current">
-          {currentVideoTags.length ? (
-            currentVideoTags.map((tag) => (
+          {systemTags.map((tag) => (
+            <div className="tag-editor-chip current-tag-chip system" key={`system:${tag}`}>
+              <span>{tag}</span>
+              <small>系统</small>
+            </div>
+          ))}
+          {visibleCurrentVideoTags.map((tag) => (
               <div className="tag-editor-chip current-tag-chip" key={tag}>
                 <span>{tag}</span>
                 <button className="tag-chip-remove" type="button" title="移除标签" aria-label={`移除标签${tag}`} onClick={() => onRemoveTag(tag)}><X size={13} /></button>
               </div>
-            ))
-          ) : (
+            ))}
+          {!systemTags.length && !visibleCurrentVideoTags.length ? (
             <div className="ai-empty-state">当前视频还没有标签。</div>
-          )}
+          ) : null}
         </div>
 
         <details className="tag-actor-editor">

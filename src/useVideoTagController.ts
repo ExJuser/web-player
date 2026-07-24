@@ -37,6 +37,7 @@ type UseVideoTagControllerOptions = {
   tagMergeDecisionsRef: MutableRefObject<TagMergeDecisionStore>;
   tagMergePrompt: TagMergePrompt | null;
   videoTags: VideoTagStore;
+  tagUsageVideoTags: VideoTagStore;
   videoTagsRef: MutableRefObject<VideoTagStore>;
 };
 
@@ -60,6 +61,7 @@ export function useVideoTagController({
   tagMergeDecisionsRef,
   tagMergePrompt,
   videoTags,
+  tagUsageVideoTags,
   videoTagsRef,
 }: UseVideoTagControllerOptions) {
   const activeTagInputSegment = useMemo(() => getActiveTagInputSegment(tagInput), [tagInput]);
@@ -75,7 +77,7 @@ export function useVideoTagController({
     if (!isTagDialogOpen || !currentVideo) return [];
     const currentTagKeys = new Set(currentVideoTags.map(normalizeTagKey));
     const usageByKey = new Map<string, { label: string; count: number }>();
-    Object.values(videoTags).forEach((tags) => {
+    Object.values(tagUsageVideoTags).forEach((tags) => {
       const seenVideoTagKeys = new Set<string>();
       tags.forEach((tag) => {
         const key = normalizeTagKey(tag);
@@ -87,7 +89,7 @@ export function useVideoTagController({
     });
     return Array.from(usageByKey.values())
       .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, "zh-Hans-CN", { numeric: true }));
-  }, [currentVideo, currentVideoTags, isTagDialogOpen, videoTags]);
+  }, [currentVideo, currentVideoTags, isTagDialogOpen, tagUsageVideoTags]);
   const resolvedActiveTagSuggestionIndex = tagInputSuggestions.length
     ? Math.min(activeTagSuggestionIndex, tagInputSuggestions.length - 1)
     : 0;

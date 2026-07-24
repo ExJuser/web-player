@@ -91,6 +91,32 @@ test("requires every selected tag filter to match by normalized key", () => {
   assert.equal(tagUtils.doTagsSatisfyAllFilters(["剧情"], ["  ", "剧情"]), true);
 });
 
+test("derives a Chinese subtitle system tag only from same-directory translated subtitles", () => {
+  const videos = [
+    { id: "video-1", relativePath: "Show/E01.mkv", mediaRootId: "root-1" },
+    { id: "video-2", relativePath: "Show/E02.mkv", mediaRootId: "root-1" },
+  ];
+  const subtitles = [
+    { id: "subtitle-1", relativePath: "Show/E01-translated.srt", mediaRootId: "root-1", url: "" },
+    { id: "subtitle-2", relativePath: "Show/E02.srt", mediaRootId: "root-1", url: "" },
+    { id: "subtitle-3", relativePath: "Other/E02-translated.srt", mediaRootId: "root-1", url: "" },
+  ];
+
+  assert.deepEqual(tagUtils.buildSubtitleSystemVideoTags(videos, subtitles), {
+    "video-1": ["中文字幕"],
+  });
+});
+
+test("merges same-name user and system tags as one searchable tag", () => {
+  assert.deepEqual(
+    tagUtils.mergeVideoTagStores(
+      { "video-1": ["中文字幕", "剧情"], "video-2": ["中文字幕"] },
+      { "video-1": ["中文字幕"] },
+    ),
+    { "video-1": ["中文字幕", "剧情"], "video-2": ["中文字幕"] },
+  );
+});
+
 test("builds global tag usage stats by tagged video count", () => {
   assert.deepEqual(
     tagUtils.buildGlobalTagUsageStats({

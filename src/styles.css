@@ -5085,6 +5085,12 @@ button {
   color: #f9a8d4;
 }
 
+.tag-chip.system {
+  border-color: rgba(52, 211, 153, 0.42);
+  background: rgba(16, 185, 129, 0.17);
+  color: #86efac;
+}
+
 .rating-chip {
   display: inline-flex;
   align-items: center;
@@ -6580,6 +6586,18 @@ button {
   background: rgba(0, 161, 214, 0.22);
 }
 
+.tag-editor-chip.system {
+  border-color: rgba(52, 211, 153, 0.42);
+  background: rgba(16, 185, 129, 0.17);
+  color: #86efac;
+}
+
+.tag-editor-chip.system small {
+  color: inherit;
+  font-size: 10px;
+  font-weight: 700;
+}
+
 .common-tag-picker {
   display: grid;
   gap: 8px;
@@ -7589,6 +7607,13 @@ button {
   border-color: rgba(190, 24, 93, 0.28);
   background: #fce7f3;
   color: #9d174d;
+}
+
+.app-shell.theme-light .tag-chip.system,
+.app-shell.theme-light .tag-editor-chip.system {
+  border-color: rgba(5, 150, 105, 0.3);
+  background: #d1fae5;
+  color: #047857;
 }
 
 .app-shell.theme-light .rating-chip {
@@ -8861,6 +8886,10 @@ button {
   cursor: default;
 }
 
+.tag-editor-current .tag-editor-chip.system {
+  padding-right: 10px;
+}
+
 .tag-editor-chip > button {
   display: grid;
   width: 24px;
@@ -9179,6 +9208,13 @@ button {
   border-color: rgba(190, 24, 93, 0.28);
   background: #fce7f3;
   color: #9d174d;
+}
+
+:root[data-theme="light"] .tag-chip.system,
+:root[data-theme="light"] .tag-editor-chip.system {
+  border-color: rgba(5, 150, 105, 0.3);
+  background: #d1fae5;
+  color: #047857;
 }
 
 :root[data-theme="light"] .rating-chip {

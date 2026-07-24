@@ -1,17 +1,25 @@
 type TagChipsProps = {
   tags: string[];
   actorTags?: string[];
+  systemTags?: string[];
   limit?: number;
   compact?: boolean;
 };
 
-export function TagChips({ tags, actorTags = [], limit, compact = false }: TagChipsProps) {
+export function TagChips({ tags, actorTags = [], systemTags = [], limit, compact = false }: TagChipsProps) {
+  const systemTagKeys = new Set(systemTags.map((tag) => tag.normalize("NFKC").trim().toLocaleLowerCase()));
   const actorTagKeys = new Set(actorTags.map((tag) => tag.normalize("NFKC").trim().toLocaleLowerCase()));
   const combinedTags = [
-    ...actorTags.map((tag) => ({ label: tag, isActor: true })),
+    ...systemTags.map((tag) => ({ label: tag, kind: "system" as const })),
+    ...actorTags
+      .filter((tag) => !systemTagKeys.has(tag.normalize("NFKC").trim().toLocaleLowerCase()))
+      .map((tag) => ({ label: tag, kind: "actor" as const })),
     ...tags
-      .filter((tag) => !actorTagKeys.has(tag.normalize("NFKC").trim().toLocaleLowerCase()))
-      .map((tag) => ({ label: tag, isActor: false })),
+      .filter((tag) => {
+        const key = tag.normalize("NFKC").trim().toLocaleLowerCase();
+        return !actorTagKeys.has(key) && !systemTagKeys.has(key);
+      })
+      .map((tag) => ({ label: tag, kind: "tag" as const })),
   ];
   const visibleTags = typeof limit === "number" ? combinedTags.slice(0, limit) : combinedTags;
   if (!visibleTags.length) return null;
@@ -19,7 +27,7 @@ export function TagChips({ tags, actorTags = [], limit, compact = false }: TagCh
   return (
     <span className={`tag-chip-row ${compact ? "compact" : ""}`}>
       {visibleTags.map((tag) => (
-        <span className={`tag-chip${tag.isActor ? " actor" : ""}`} key={`${tag.isActor ? "actor" : "tag"}:${tag.label}`}>
+        <span className={`tag-chip${tag.kind === "actor" ? " actor" : tag.kind === "system" ? " system" : ""}`} key={`${tag.kind}:${tag.label}`}>
           {tag.label}
         </span>
       ))}

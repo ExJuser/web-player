@@ -306,7 +306,7 @@ import {
   type RatingFilterOperator,
   type RatingPlaylistMode,
 } from "./playerUiState";
-import { normalizeTagKey } from "./tagUtils";
+import { buildSubtitleSystemVideoTags, mergeVideoTagStores, normalizeTagKey } from "./tagUtils";
 import { createPlaylistSearchDocuments, searchPlaylistVideos } from "./playerPlaylistSearch";
 import {
   createVideoVersionGroups,
@@ -1300,10 +1300,20 @@ export default function App() {
     () => (currentVideoId ? videoById.get(currentVideoId) ?? null : null),
     [currentVideoId, videoById],
   );
+  const systemVideoTags = useMemo(
+    () => buildSubtitleSystemVideoTags(videos, subtitles),
+    [subtitles, videos],
+  );
+  const effectiveVideoTags = useMemo(
+    () => mergeVideoTagStores(videoTags, systemVideoTags),
+    [systemVideoTags, videoTags],
+  );
   const currentVideoSourceChoice = currentVideo ? playbackSourceChoices[currentVideo.id] ?? "compatible" : "compatible";
   const currentVideoPlaybackUrl = currentVideo ? getPlayableVideoUrl(currentVideo, currentVideoSourceChoice) : "";
   const currentVideoHasCompatibleMedia = Boolean(currentVideo?.playability?.compatibleUrl);
   const currentVideoTags = currentVideo ? videoTags[currentVideo.id] ?? [] : [];
+  const currentVideoSystemTags = currentVideo ? systemVideoTags[currentVideo.id] ?? [] : [];
+  const currentVideoEffectiveTags = currentVideo ? effectiveVideoTags[currentVideo.id] ?? [] : [];
   const currentVideoRating = currentVideo ? videoRatings[currentVideo.id] : undefined;
   const currentVideoResolvedActors = useMemo(() => currentVideo ? resolveVideoActors({
     video: currentVideo,
@@ -1400,6 +1410,7 @@ export default function App() {
     tagInput,
     tagMergeDecisionsRef,
     tagMergePrompt,
+    tagUsageVideoTags: effectiveVideoTags,
     videoTags,
     videoTagsRef,
   });
@@ -1487,14 +1498,14 @@ export default function App() {
         path: video.relativePath,
         score: videoRatings[video.id],
         series: seriesTitleByVideoId.get(video.id) ?? inferSeriesTitle(video),
-        tags: (videoTags[video.id] ?? []).filter((tag) => !actorKeys.has(normalizeTagKey(tag))),
+        tags: (effectiveVideoTags[video.id] ?? []).filter((tag) => !actorKeys.has(normalizeTagKey(tag))),
         actors: actorMetadata.names,
         actorAliases: actorMetadata.aliases,
         comment: videoComments[video.id],
         library: (video.mediaRootId ? mediaRootLabelsById[video.mediaRootId] : "") || fallbackMediaRootLabelForVideo(video),
       };
     })),
-    [mediaRootLabelsById, playlistScopeVideos, seriesTitleByVideoId, videoActorSearchMetadata, videoComments, videoRatings, videoTags],
+    [effectiveVideoTags, mediaRootLabelsById, playlistScopeVideos, seriesTitleByVideoId, videoActorSearchMetadata, videoComments, videoRatings],
   );
   const deferredPlaylistSearchQuery = useDeferredValue(playlistSearchQuery);
   const effectivePlaylistSearchQuery = playlistSearchQuery.trim() ? deferredPlaylistSearchQuery : "";
@@ -1628,13 +1639,14 @@ export default function App() {
         progressPercent,
         seriesTitle: seriesTitleByVideoId.get(video.id) ?? inferSeriesTitle(video),
         mediaRootLabel: (video.mediaRootId ? mediaRootLabelsById[video.mediaRootId] : "") || fallbackMediaRootLabelForVideo(video),
-        tags: videoTags[video.id] ?? [],
+        tags: effectiveVideoTags[video.id] ?? [],
         actorTags: videoActorTags[video.id] ?? [],
+        systemTags: systemVideoTags[video.id] ?? [],
         rating: videoRatings[video.id],
         ratingComment: videoComments[video.id],
       };
     },
-    [mediaRootLabelsById, progressStore, seriesTitleByVideoId, videoActorTags, videoComments, videoRatings, videoTags],
+    [effectiveVideoTags, mediaRootLabelsById, progressStore, seriesTitleByVideoId, systemVideoTags, videoActorTags, videoComments, videoRatings],
   );
   const resumableHomeCards = useMemo(
     () =>
@@ -1706,7 +1718,7 @@ export default function App() {
     () => {
       if (homeMediaMode !== "special") return null;
       if (shouldLoadSpecialInsights) {
-        return buildSpecialModeInsights(modeFilteredVideos, videoStatsRef.current, videoTags, progressStore);
+        return buildSpecialModeInsights(modeFilteredVideos, videoStatsRef.current, effectiveVideoTags, progressStore);
       }
       return {
         summary: {
@@ -1727,7 +1739,7 @@ export default function App() {
         tagsByEmissionCount: [],
       };
     },
-    [homeMediaMode, modeFilteredVideos, progressStore, shouldLoadSpecialInsights, videoStatsRevision, videoTags],
+    [effectiveVideoTags, homeMediaMode, modeFilteredVideos, progressStore, shouldLoadSpecialInsights, videoStatsRevision],
   );
   useEffect(() => {
     const nextProfiles = reconcileActorProfiles({
@@ -1808,12 +1820,12 @@ export default function App() {
           topTags: [],
         };
       }
-      return buildWatchActivityInsights(watchActivityRef.current, watchActivityVideos, videoTags, {
+      return buildWatchActivityInsights(watchActivityRef.current, watchActivityVideos, effectiveVideoTags, {
         rangeDays: watchActivityRange,
         metric: watchActivityMetric,
       });
     },
-    [shouldLoadWatchActivity, videoTags, watchActivityMetric, watchActivityRange, watchActivityRevision, watchActivityVideos],
+    [effectiveVideoTags, shouldLoadWatchActivity, watchActivityMetric, watchActivityRange, watchActivityRevision, watchActivityVideos],
   );
   const watchActivityMonthGroups = useMemo(
     () => groupWatchActivityDaysByMonth(watchActivityInsights.days),
@@ -2192,7 +2204,20 @@ export default function App() {
       body: JSON.stringify({ rootId: currentMediaRootId, relativePath: currentVideo.relativePath }),
     })
       .then(({ subtitle }) => {
-        if (isCancelled || !subtitle) return;
+        if (isCancelled) return;
+        if (!subtitle) {
+          const removedSubtitles = subtitlesRef.current.filter((item) =>
+            !item.isManual &&
+            (item.mediaRootId === undefined || item.mediaRootId === currentMediaRootId) &&
+            getSubtitlePathMatchPriority(currentVideo.relativePath, item.relativePath) === 0,
+          );
+          if (!removedSubtitles.length) return;
+          removedSubtitles.forEach((item) => revokeObjectUrl(item.url));
+          const nextSubtitles = subtitlesRef.current.filter((item) => !removedSubtitles.includes(item));
+          subtitlesRef.current = nextSubtitles;
+          setSubtitles(nextSubtitles);
+          return;
+        }
         if (subtitlesRef.current.some((item) => item.id === subtitle.id)) return;
         const isSameSubtitlePath = (item: SubtitleItem) =>
           item.mediaRootId === subtitle.mediaRootId &&
@@ -5823,7 +5848,8 @@ export default function App() {
                   videoComments={videoComments}
                   videoRatings={videoRatings}
                   videoStats={videoStatsRef.current}
-                  videoTags={videoTags}
+                  videoTags={effectiveVideoTags}
+                  systemVideoTags={systemVideoTags}
                   formatDuration={formatCumulativeDuration}
                   formatRelativeTime={formatRelativeTime}
                   onSelectActor={setSelectedActorId}
@@ -6067,7 +6093,7 @@ export default function App() {
             currentVideoRating={currentVideoRating}
             currentVideoSpecialStats={currentVideoSpecialStats}
             currentVideoSourceChoice={currentVideoSourceChoice}
-            currentVideoTagsCount={currentVideoTags.length}
+            currentVideoTagsCount={currentVideoEffectiveTags.length}
             danmakuEnabled={Boolean(danmakuPreferences.enabled && currentDanmakuSource)}
             duration={duration}
             effectivePlaybackRate={effectivePlaybackRate}
@@ -6230,7 +6256,8 @@ export default function App() {
           visibleVideoCount={visibleVideos.length}
           videoComments={videoComments}
           videoRatings={videoRatings}
-          videoTags={videoTags}
+          videoTags={effectiveVideoTags}
+          systemVideoTags={systemVideoTags}
           videoActorTags={videoActorTags}
           createVideoTitle={createVideoMetadataTitle}
           onChangePlaylistFilter={(nextFilter) => {
@@ -6499,6 +6526,7 @@ export default function App() {
       currentVideoId={currentVideo?.id ?? ""}
       currentVideoName={currentVideo?.name ?? ""}
       currentVideoTags={currentVideoTags}
+      systemTags={currentVideoSystemTags}
       commonTags={commonTags}
       actorProfiles={actorProfiles}
       currentActorIds={currentVideoResolvedActors.actorIds}

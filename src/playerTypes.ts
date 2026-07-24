@@ -419,6 +419,7 @@ export type HomeVideoCard = {
   mediaRootLabel?: string;
   tags?: string[];
   actorTags?: string[];
+  systemTags?: string[];
   rating?: number;
   ratingComment?: string;
 };
