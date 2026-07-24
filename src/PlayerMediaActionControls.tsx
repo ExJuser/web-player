@@ -67,18 +67,18 @@ export function PlayerMediaActionControls({
 
   return (
     <>
+      <ControlSelect
+        label={<Subtitles size={18} aria-hidden="true" />}
+        ariaLabel="字幕"
+        value={selectedSubtitleId}
+        options={subtitleControlOptions}
+        onChange={onChangeSubtitle}
+        className="subtitle-control"
+        disabled={!hasCurrentVideo}
+      />
+
       {homeMediaMode !== "special" ? (
         <>
-          <ControlSelect
-            label={<Subtitles size={18} aria-hidden="true" />}
-            ariaLabel="字幕"
-            value={selectedSubtitleId}
-            options={subtitleControlOptions}
-            onChange={onChangeSubtitle}
-            className="subtitle-control"
-            disabled={!hasCurrentVideo}
-          />
-
           <button
             className="icon-button"
             type="button"
