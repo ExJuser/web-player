@@ -25,6 +25,7 @@ type UsePhotoAlbumActionsControllerOptions = {
   photoAlbumProgressRef: MutableRefObject<Record<string, PhotoAlbumProgress>>;
   saveCurrentPhotoAlbumStore: (overrides?: Partial<PhotoAlbumStore>) => Promise<void>;
   selectedPhotoAlbum: PhotoAlbum | null;
+  resolvePhotoAlbum?: (album: PhotoAlbum) => Promise<PhotoAlbum>;
   setActiveView: Dispatch<SetStateAction<ActiveView>>;
   setCurrentPhotoIndex: Dispatch<SetStateAction<number>>;
   setFavoritePhotoAlbumIds: Dispatch<SetStateAction<Set<string>>>;
@@ -46,6 +47,7 @@ export function usePhotoAlbumActionsController({
   photoAlbumProgressRef,
   saveCurrentPhotoAlbumStore,
   selectedPhotoAlbum,
+  resolvePhotoAlbum,
   setActiveView,
   setCurrentPhotoIndex,
   setFavoritePhotoAlbumIds,
@@ -80,15 +82,24 @@ export function usePhotoAlbumActionsController({
 
   const openPhotoAlbum = useCallback(
     (album: PhotoAlbum, options?: { fromBeginning?: boolean; imageIndex?: number }) => {
-      const storedIndex = photoAlbumProgressRef.current[album.id]?.imageIndex ?? 0;
-      const requestedIndex = options?.imageIndex ?? (options?.fromBeginning ? 0 : storedIndex);
-      const nextIndex = Math.min(Math.max(requestedIndex, 0), Math.max(album.images.length - 1, 0));
-      setSelectedPhotoAlbumId(album.id);
-      setCurrentPhotoIndex(nextIndex);
-      setActiveView("photoViewer");
-      persistPhotoAlbumProgress(album, nextIndex, false);
+      const applyOpen = (resolvedAlbum: PhotoAlbum) => {
+        const storedIndex = photoAlbumProgressRef.current[resolvedAlbum.id]?.imageIndex ?? 0;
+        const requestedIndex = options?.imageIndex ?? (options?.fromBeginning ? 0 : storedIndex);
+        const nextIndex = Math.min(Math.max(requestedIndex, 0), Math.max(resolvedAlbum.images.length - 1, 0));
+        setSelectedPhotoAlbumId(resolvedAlbum.id);
+        setCurrentPhotoIndex(nextIndex);
+        setActiveView("photoViewer");
+        persistPhotoAlbumProgress(resolvedAlbum, nextIndex, false);
+      };
+      if (!resolvePhotoAlbum || album.images.length >= album.imageCount) {
+        applyOpen(album);
+        return;
+      }
+      void resolvePhotoAlbum(album).then(applyOpen).catch(() => {
+        setPhotoAlbumMessage(`《${album.title}》图片加载失败，请刷新后重试。`);
+      });
     },
-    [persistPhotoAlbumProgress, photoAlbumProgressRef, setActiveView, setCurrentPhotoIndex, setSelectedPhotoAlbumId],
+    [persistPhotoAlbumProgress, photoAlbumProgressRef, resolvePhotoAlbum, setActiveView, setCurrentPhotoIndex, setPhotoAlbumMessage, setSelectedPhotoAlbumId],
   );
 
   const openRandomPhotoAlbum = useCallback(() => {

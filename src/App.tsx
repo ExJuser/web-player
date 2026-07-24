@@ -132,9 +132,11 @@ import {
   getPhotoAlbumPageBounds,
   getVisiblePhotoAlbums,
   getVisiblePhotoThumbnails,
+  loadCachedPhotoAlbumImages,
   loadCachedPhotoAlbumScan,
   loadPhotoAlbumStore,
   photoAlbumSortOptions,
+  replaceCachedPhotoAlbumScanAlbum,
   saveCachedPhotoAlbumScan,
 } from "./photoAlbumStorage";
 import {
@@ -479,6 +481,7 @@ export default function App() {
   const photoObjectUrlAccessRef = useRef<Record<string, number>>({});
   const decodedPhotoImageIdsRef = useRef(new Set<string>());
   const photoImageFilePromisesRef = useRef<Record<string, Promise<File | null>>>({});
+  const photoAlbumHydrationPromisesRef = useRef(new Map<string, Promise<PhotoAlbum>>());
   const duplicateDetectionRunIdRef = useRef(0);
   const duplicateDetectionAbortRef = useRef<AbortController | null>(null);
   const duplicateFingerprintCacheRef = useRef(new Map<string, DuplicateFingerprintCacheEntry>());
@@ -1129,7 +1132,7 @@ export default function App() {
       try {
         const [directory, cachedScan, store] = await Promise.all([
           readPhotoAlbumFolderHandle(),
-          loadCachedPhotoAlbumScan(),
+          loadCachedPhotoAlbumScan({ includeImages: shouldLoadForMosaic }),
           loadPhotoAlbumStore().catch(() => ({
             version: 1,
             favorites: [],
@@ -3480,6 +3483,27 @@ export default function App() {
     setActiveView("photos");
   }, [cancelAutoNextPrompt, persistCurrentProgress, resetHoldSpeedState, showControls]);
 
+  const resolveCachedPhotoAlbum = useCallback((album: PhotoAlbum) => {
+    if (album.images.length >= album.imageCount) return Promise.resolve(album);
+    const existing = photoAlbumHydrationPromisesRef.current.get(album.id);
+    if (existing) return existing;
+    const promise = loadCachedPhotoAlbumImages(album.id).then((images) => {
+      if (!images.length) throw new Error("Photo album image cache is empty.");
+      const currentAlbum = photoAlbumsRef.current.find((item) => item.id === album.id);
+      if (!currentAlbum) throw new Error("Photo album is no longer available.");
+      if (currentAlbum.images.length >= currentAlbum.imageCount) return currentAlbum;
+      const hydratedAlbum = { ...currentAlbum, images };
+      const nextAlbums = photoAlbumsRef.current.map((item) => item.id === album.id ? hydratedAlbum : item);
+      photoAlbumsRef.current = nextAlbums;
+      setPhotoAlbums(nextAlbums);
+      return hydratedAlbum;
+    }).finally(() => {
+      photoAlbumHydrationPromisesRef.current.delete(album.id);
+    });
+    photoAlbumHydrationPromisesRef.current.set(album.id, promise);
+    return promise;
+  }, []);
+
   const {
     markSelectedPhotoAlbumCompleted,
     movePhoto,
@@ -3500,6 +3524,7 @@ export default function App() {
     photoAlbumProgressRef,
     saveCurrentPhotoAlbumStore,
     selectedPhotoAlbum,
+    resolvePhotoAlbum: resolveCachedPhotoAlbum,
     setActiveView,
     setCurrentPhotoIndex,
     setFavoritePhotoAlbumIds,
@@ -3713,33 +3738,8 @@ export default function App() {
         albumTags: nextAlbumTags,
       });
 
-      void loadCachedPhotoAlbumScan()
-        .then((cache) => {
-          if (!cache || cache.rootId !== album.mediaRootId) return;
-          let didUpdateAlbum = false;
-          const cachedAlbums = cache.albums.flatMap((cachedAlbum) => {
-            if (cachedAlbum.id !== album.id) return [cachedAlbum];
-            didUpdateAlbum = true;
-            if (!remainingImages.length) return [];
-            return [
-              {
-                ...cachedAlbum,
-                coverImageUrl: cachedAlbum.coverImageUrl === photo.url ? "" : cachedAlbum.coverImageUrl,
-                imageCount: remainingImages.length,
-                totalSize: remainingImages.reduce((sum, image) => sum + image.size, 0),
-                updatedAt: remainingImages.reduce((latest, image) => Math.max(latest, image.lastModified), 0),
-                images: remainingImages,
-              },
-            ];
-          });
-          if (!didUpdateAlbum) return;
-          return saveCachedPhotoAlbumScan({
-            ...cache,
-            albums: cachedAlbums,
-            scannedFiles: Math.max(cache.scannedFiles - 1, 0),
-            updatedAt: Date.now(),
-          });
-        })
+      const cachedAlbum = nextAlbums.find((item) => item.id === album.id) ?? null;
+      void replaceCachedPhotoAlbumScanAlbum(album.id, cachedAlbum, -1)
         .catch(() => {
           setPhotoAlbumMessage("图片已删除，但看图扫描缓存更新失败，下次刷新会修正。");
         });
@@ -3883,17 +3883,7 @@ export default function App() {
         albumTags: nextAlbumTags,
       });
 
-      void loadCachedPhotoAlbumScan()
-        .then((cache) => {
-          if (!cache || cache.rootId !== album.mediaRootId) return;
-          if (!cache.albums.some((cachedAlbum) => cachedAlbum.id === album.id)) return;
-          return saveCachedPhotoAlbumScan({
-            ...cache,
-            albums: cache.albums.filter((cachedAlbum) => cachedAlbum.id !== album.id),
-            scannedFiles: Math.max(cache.scannedFiles - album.imageCount, 0),
-            updatedAt: Date.now(),
-          });
-        })
+      void replaceCachedPhotoAlbumScanAlbum(album.id, null, -album.imageCount)
         .catch(() => {
           setPhotoAlbumMessage("图集已删除，但扫描缓存更新失败，下次刷新会修正。");
         });

@@ -265,7 +265,7 @@ function parseCachedPhotoAlbum(source: unknown): PhotoAlbum | null {
     mediaRootId: album.mediaRootId,
     mediaRootLabel: album.mediaRootLabel,
     coverImageUrl: typeof album.coverImageUrl === "string" ? album.coverImageUrl : "",
-    imageCount: images.length,
+    imageCount: Math.max(parseFiniteNumber(album.imageCount, images.length), images.length),
     totalSize: parseFiniteNumber(album.totalSize, images.reduce((sum, image) => sum + image.size, 0)),
     updatedAt: parseFiniteNumber(album.updatedAt, images.reduce((latest, image) => Math.max(latest, image.lastModified), 0)),
     images,
@@ -299,25 +299,29 @@ export function parseCachedPhotoAlbumScan(raw: string): CachedPhotoAlbumScan | n
   };
 }
 
+function serializeCachedPhotoAlbum(album: PhotoAlbum): PhotoAlbum {
+  return {
+    ...album,
+    coverImageUrl: album.coverImageUrl && !album.coverImageUrl.startsWith("blob:") ? album.coverImageUrl : "",
+    images: album.images.map((image) => ({
+      id: image.id,
+      name: image.name,
+      relativePath: image.relativePath,
+      url: image.url && !image.url.startsWith("blob:") ? image.url : "",
+      size: image.size,
+      lastModified: image.lastModified,
+      mediaRootId: image.mediaRootId,
+      index: image.index,
+    })),
+  };
+}
+
 function serializeCachedPhotoAlbumScan(scan: CachedPhotoAlbumScan): CachedPhotoAlbumScan {
   return {
     version: photoAlbumScanCacheVersion,
     rootId: scan.rootId,
     rootName: scan.rootName,
-    albums: scan.albums.map((album) => ({
-      ...album,
-      coverImageUrl: album.coverImageUrl && !album.coverImageUrl.startsWith("blob:") ? album.coverImageUrl : "",
-      images: album.images.map((image) => ({
-        id: image.id,
-        name: image.name,
-        relativePath: image.relativePath,
-        url: image.url && !image.url.startsWith("blob:") ? image.url : "",
-        size: image.size,
-        lastModified: image.lastModified,
-        mediaRootId: image.mediaRootId,
-        index: image.index,
-      })),
-    })),
+    albums: scan.albums.map(serializeCachedPhotoAlbum),
     scannedFiles: scan.scannedFiles,
     updatedAt: scan.updatedAt,
   };
@@ -372,9 +376,9 @@ export async function savePhotoAlbumTags(albumId: string, tags: string[]) {
   if (!response.ok) throw new Error(await readApiError(response));
 }
 
-export async function loadCachedPhotoAlbumScan(): Promise<CachedPhotoAlbumScan | null> {
+export async function loadCachedPhotoAlbumScan(options?: { includeImages?: boolean }): Promise<CachedPhotoAlbumScan | null> {
   try {
-    const response = await fetch("/api/photo-albums/scan-cache", {
+    const response = await fetch(`/api/photo-albums/scan-cache${options?.includeImages ? "?includeImages=true" : ""}`, {
       headers: { Accept: "application/json" },
     });
     if (response.status === 404) return null;
@@ -383,6 +387,34 @@ export async function loadCachedPhotoAlbumScan(): Promise<CachedPhotoAlbumScan |
   } catch {
     return null;
   }
+}
+
+export async function loadCachedPhotoAlbumImages(albumId: string): Promise<PhotoAlbumImage[]> {
+  const response = await fetch(`/api/photo-albums/scan-cache/albums/${encodeURIComponent(albumId)}/images`, {
+    headers: { Accept: "application/json" },
+  });
+  if (!response.ok) throw new Error(await readApiError(response));
+  const payload = await response.json();
+  if (!Array.isArray(payload)) throw new Error("Invalid photo album image cache response.");
+  return payload
+    .map((image, index) => parseCachedPhotoAlbumImage(image, index))
+    .filter((image): image is PhotoAlbumImage => Boolean(image));
+}
+
+export async function replaceCachedPhotoAlbumScanAlbum(
+  albumId: string,
+  album: PhotoAlbum | null,
+  scannedFilesDelta: number,
+) {
+  const response = await fetch(`/api/photo-albums/scan-cache/albums/${encodeURIComponent(albumId)}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify({ album: album ? serializeCachedPhotoAlbum(album) : null, scannedFilesDelta, updatedAt: Date.now() }),
+  });
+  if (!response.ok) throw new Error(await readApiError(response));
 }
 
 export async function saveCachedPhotoAlbumScan(scan: CachedPhotoAlbumScan) {

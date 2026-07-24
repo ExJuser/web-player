@@ -842,6 +842,8 @@ export function playerDataApiPlugin({ projectRoot, env }) {
     const photoAlbumFavoriteMatch = url.pathname.match(/^\/api\/photo-albums\/favorites\/(.+)$/);
     const photoAlbumCoverMatch = url.pathname.match(/^\/api\/photo-albums\/cover\/(.+)$/);
     const photoAlbumTagsMatch = url.pathname.match(/^\/api\/photo-albums\/tags\/(.+)$/);
+    const photoAlbumScanImagesMatch = url.pathname.match(/^\/api\/photo-albums\/scan-cache\/albums\/(.+)\/images$/);
+    const photoAlbumScanAlbumMatch = url.pathname.match(/^\/api\/photo-albums\/scan-cache\/albums\/(.+)$/);
 
     try {
       const store = await getLocalDataStore();
@@ -1443,7 +1445,7 @@ export function playerDataApiPlugin({ projectRoot, env }) {
 
       if (url.pathname === "/api/photo-albums/scan-cache") {
         if (request.method === "GET") {
-          const payload = store.loadLatestPhotoAlbumScanCache();
+          const payload = store.loadLatestPhotoAlbumScanCache({ includeImages: url.searchParams.get("includeImages") === "true" });
           sendJson(response, payload ? 200 : 404, payload ?? { error: "Photo album scan cache not found." });
           return;
         }
@@ -1458,6 +1460,27 @@ export function playerDataApiPlugin({ projectRoot, env }) {
           sendJson(response, 200, { ok: true });
           return;
         }
+      }
+
+      if (photoAlbumScanImagesMatch && request.method === "GET") {
+        const albumId = decodeURIComponent(photoAlbumScanImagesMatch[1]);
+        const images = store.loadPhotoAlbumScanCacheImages(albumId);
+        sendJson(response, images ? 200 : 404, images ?? { error: "Photo album scan cache images not found." });
+        return;
+      }
+
+      if (photoAlbumScanAlbumMatch && request.method === "PUT") {
+        const albumId = decodeURIComponent(photoAlbumScanAlbumMatch[1]);
+        const payload = await parseJsonBody(request);
+        const updated = store.replacePhotoAlbumScanCacheAlbum({
+          rootId: payload?.rootId,
+          albumId,
+          album: payload?.album ?? null,
+          scannedFilesDelta: payload?.scannedFilesDelta,
+          updatedAt: payload?.updatedAt,
+        });
+        sendJson(response, updated ? 200 : 404, updated ? { ok: true } : { error: "Photo album scan cache not found." });
+        return;
       }
 
       if (url.pathname === "/api/ai/tags/merge-suggestion" && request.method === "POST") {

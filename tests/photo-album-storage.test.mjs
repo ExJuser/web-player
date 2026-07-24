@@ -169,6 +169,7 @@ test("photo album scan cache keeps valid albums and drops invalid images", () =>
         mediaRootId: "photos",
         mediaRootLabel: "Photos",
         coverImageUrl: "blob:old",
+        imageCount: 10,
         totalSize: 300,
         updatedAt: 90,
         images: [
@@ -205,6 +206,6 @@ test("photo album scan cache keeps valid albums and drops invalid images", () =>
   assert.equal(parsed.rootName, "Photos");
   assert.equal(parsed.scannedFiles, 3);
   assert.equal(parsed.albums.length, 1);
-  assert.equal(parsed.albums[0].imageCount, 1);
+  assert.equal(parsed.albums[0].imageCount, 10);
   assert.equal(parsed.albums[0].images[0].relativePath, "Set/001.jpg");
 });

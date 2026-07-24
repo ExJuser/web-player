@@ -3,7 +3,7 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { readJsonFile } from "./jsonFiles.mjs";
 
-const schemaVersion = 2;
+const schemaVersion = 3;
 const playerStoreVersion = 6;
 const photoAlbumStoreVersion = 1;
 
@@ -343,13 +343,54 @@ export class LocalDataSqliteStore {
         updated_at INTEGER NOT NULL
       );
 
-      CREATE TABLE IF NOT EXISTS photo_album_scan_caches (
+      CREATE TABLE IF NOT EXISTS photo_album_scan_roots (
         root_id TEXT PRIMARY KEY,
         root_name TEXT NOT NULL,
-        albums_json TEXT NOT NULL,
         scanned_files INTEGER NOT NULL,
         updated_at INTEGER NOT NULL
       );
+
+      CREATE INDEX IF NOT EXISTS photo_album_scan_roots_updated_at_idx
+      ON photo_album_scan_roots(updated_at DESC);
+
+      CREATE TABLE IF NOT EXISTS photo_album_scan_albums (
+        root_id TEXT NOT NULL,
+        album_id TEXT NOT NULL,
+        position INTEGER NOT NULL,
+        title TEXT NOT NULL,
+        relative_path TEXT NOT NULL,
+        media_root_id TEXT NOT NULL,
+        media_root_label TEXT NOT NULL,
+        cover_image_url TEXT NOT NULL,
+        image_count INTEGER NOT NULL,
+        total_size INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        first_image_json TEXT,
+        PRIMARY KEY (root_id, album_id),
+        FOREIGN KEY (root_id) REFERENCES photo_album_scan_roots(root_id) ON DELETE CASCADE
+      ) WITHOUT ROWID;
+
+      CREATE INDEX IF NOT EXISTS photo_album_scan_albums_order_idx
+      ON photo_album_scan_albums(root_id, position);
+
+      CREATE TABLE IF NOT EXISTS photo_album_scan_images (
+        root_id TEXT NOT NULL,
+        album_id TEXT NOT NULL,
+        image_id TEXT NOT NULL,
+        position INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        relative_path TEXT NOT NULL,
+        url TEXT NOT NULL,
+        size INTEGER NOT NULL,
+        last_modified INTEGER NOT NULL,
+        media_root_id TEXT NOT NULL,
+        image_index INTEGER NOT NULL,
+        PRIMARY KEY (root_id, album_id, image_id),
+        FOREIGN KEY (root_id, album_id) REFERENCES photo_album_scan_albums(root_id, album_id) ON DELETE CASCADE
+      ) WITHOUT ROWID;
+
+      CREATE INDEX IF NOT EXISTS photo_album_scan_images_order_idx
+      ON photo_album_scan_images(root_id, album_id, position);
 
       CREATE TABLE IF NOT EXISTS media_root_scan_caches (
         cache_id TEXT PRIMARY KEY,
@@ -377,8 +418,30 @@ export class LocalDataSqliteStore {
         PRIMARY KEY (root_id, relative_path)
       );
     `);
+    this.migrateLegacyPhotoAlbumScanCache();
     this.ensureColumn("video_highlights", "tag_label", "TEXT");
     this.setMeta("schema_version", String(schemaVersion));
+  }
+
+  hasTable(table) {
+    return Boolean(this.db.prepare("SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name = ?").get(table));
+  }
+
+  migrateLegacyPhotoAlbumScanCache() {
+    if (!this.hasTable("photo_album_scan_caches")) return;
+    const rows = allRows(this.db.prepare("SELECT * FROM photo_album_scan_caches"));
+    this.transaction(() => {
+      for (const row of rows) {
+        this.savePhotoAlbumScanCacheSync({
+          rootId: row.root_id,
+          rootName: row.root_name,
+          albums: parseJson(row.albums_json, []),
+          scannedFiles: row.scanned_files,
+          updatedAt: row.updated_at,
+        });
+      }
+      this.db.exec("DROP TABLE photo_album_scan_caches");
+    });
   }
 
   ensureColumn(table, column, definition) {
@@ -1389,29 +1452,155 @@ export class LocalDataSqliteStore {
   }
 
   savePhotoAlbumScanCache(cache) {
-    return this.transaction(() => {
-      this.db
-        .prepare("INSERT INTO photo_album_scan_caches (root_id, root_name, albums_json, scanned_files, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(root_id) DO UPDATE SET root_name = excluded.root_name, albums_json = excluded.albums_json, scanned_files = excluded.scanned_files, updated_at = excluded.updated_at")
-        .run(cache.rootId, cache.rootName, stringifyJson(cache.albums ?? []), Number(cache.scannedFiles) || 0, Number(cache.updatedAt) || now());
+    return this.transaction(() => this.savePhotoAlbumScanCacheSync(cache));
+  }
+
+  savePhotoAlbumScanCacheSync(cache) {
+    const rootId = String(cache?.rootId ?? "").trim();
+    if (!rootId) throw new Error("Photo album scan cache root id is required.");
+    const albums = Array.isArray(cache?.albums) ? cache.albums : [];
+    this.db.prepare("DELETE FROM photo_album_scan_roots WHERE root_id = ?").run(rootId);
+    this.db
+      .prepare("INSERT INTO photo_album_scan_roots (root_id, root_name, scanned_files, updated_at) VALUES (?, ?, ?, ?)")
+      .run(rootId, String(cache?.rootName ?? ""), Number(cache?.scannedFiles) || 0, Number(cache?.updatedAt) || now());
+
+    this.insertPhotoAlbumScanCacheAlbums(rootId, albums);
+  }
+
+  insertPhotoAlbumScanCacheAlbums(rootId, albums) {
+    const albumInsert = this.db.prepare(`
+      INSERT INTO photo_album_scan_albums (
+        root_id, album_id, position, title, relative_path, media_root_id, media_root_label,
+        cover_image_url, image_count, total_size, updated_at, first_image_json
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    const imageInsert = this.db.prepare(`
+      INSERT INTO photo_album_scan_images (
+        root_id, album_id, image_id, position, name, relative_path, url, size,
+        last_modified, media_root_id, image_index
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    albums.forEach((album, albumPosition) => {
+      if (!album?.id) return;
+      const images = Array.isArray(album.images) ? album.images : [];
+      albumInsert.run(
+        rootId,
+        album.id,
+        Number.isInteger(album.position) ? album.position : albumPosition,
+        String(album.title ?? ""),
+        String(album.relativePath ?? ""),
+        String(album.mediaRootId ?? ""),
+        String(album.mediaRootLabel ?? ""),
+        String(album.coverImageUrl ?? ""),
+        Number(album.imageCount) || images.length,
+        Number(album.totalSize) || 0,
+        Number(album.updatedAt) || 0,
+        images[0] ? stringifyJson(images[0]) : null,
+      );
+      images.forEach((image, imagePosition) => {
+        if (!image?.id) return;
+        imageInsert.run(
+          rootId,
+          album.id,
+          image.id,
+          imagePosition,
+          String(image.name ?? ""),
+          String(image.relativePath ?? ""),
+          String(image.url ?? ""),
+          Number(image.size) || 0,
+          Number(image.lastModified) || 0,
+          String(image.mediaRootId ?? album.mediaRootId ?? ""),
+          Number.isFinite(Number(image.index)) ? Number(image.index) : imagePosition,
+        );
+      });
     });
   }
 
-  loadLatestPhotoAlbumScanCache() {
-    const row = this.db.prepare("SELECT * FROM photo_album_scan_caches ORDER BY updated_at DESC LIMIT 1").get();
-    if (!row) return null;
+  replacePhotoAlbumScanCacheAlbum({ rootId, albumId, album, scannedFilesDelta = 0, updatedAt = now() }) {
+    return this.transaction(() => {
+      const resolvedRootId = rootId || this.db.prepare("SELECT root_id FROM photo_album_scan_roots ORDER BY updated_at DESC LIMIT 1").get()?.root_id;
+      if (!resolvedRootId) return false;
+      const root = this.db.prepare("SELECT scanned_files FROM photo_album_scan_roots WHERE root_id = ?").get(resolvedRootId);
+      if (!root) return false;
+      const existingAlbum = this.db.prepare("SELECT position FROM photo_album_scan_albums WHERE root_id = ? AND album_id = ?").get(resolvedRootId, albumId);
+      if (!existingAlbum) return true;
+      this.db.prepare("DELETE FROM photo_album_scan_albums WHERE root_id = ? AND album_id = ?").run(resolvedRootId, albumId);
+      if (album) {
+        const position = existingAlbum?.position
+          ?? this.db.prepare("SELECT COALESCE(MAX(position), -1) + 1 AS position FROM photo_album_scan_albums WHERE root_id = ?").get(resolvedRootId).position;
+        this.insertPhotoAlbumScanCacheAlbums(resolvedRootId, [{ ...album, position }]);
+      }
+      this.db
+        .prepare("UPDATE photo_album_scan_roots SET scanned_files = ?, updated_at = ? WHERE root_id = ?")
+        .run(Math.max(0, root.scanned_files + Number(scannedFilesDelta || 0)), Number(updatedAt) || now(), resolvedRootId);
+      return true;
+    });
+  }
+
+  loadLatestPhotoAlbumScanCache({ includeImages = true } = {}) {
+    const root = this.db.prepare("SELECT * FROM photo_album_scan_roots ORDER BY updated_at DESC LIMIT 1").get();
+    if (!root) return null;
+    const albumRows = allRows(this.db.prepare("SELECT * FROM photo_album_scan_albums WHERE root_id = ? ORDER BY position"), root.root_id);
+    const imagesByAlbumId = new Map();
+    if (includeImages) {
+      for (const image of allRows(this.db.prepare("SELECT * FROM photo_album_scan_images WHERE root_id = ? ORDER BY album_id, position"), root.root_id)) {
+        const images = imagesByAlbumId.get(image.album_id) ?? [];
+        images.push(this.mapPhotoAlbumScanImage(image));
+        imagesByAlbumId.set(image.album_id, images);
+      }
+    }
+    const albums = albumRows.map((album) => ({
+      id: album.album_id,
+      title: album.title,
+      relativePath: album.relative_path,
+      mediaRootId: album.media_root_id,
+      mediaRootLabel: album.media_root_label,
+      coverImageUrl: album.cover_image_url,
+      imageCount: album.image_count,
+      totalSize: album.total_size,
+      updatedAt: album.updated_at,
+      images: includeImages
+        ? imagesByAlbumId.get(album.album_id) ?? []
+        : [parseJson(album.first_image_json, null)].filter(Boolean),
+    }));
     return {
       version: 1,
-      rootId: row.root_id,
-      rootName: row.root_name,
-      albums: parseJson(row.albums_json, []),
-      scannedFiles: row.scanned_files,
-      updatedAt: row.updated_at,
+      rootId: root.root_id,
+      rootName: root.root_name,
+      albums,
+      scannedFiles: root.scanned_files,
+      updatedAt: root.updated_at,
     };
+  }
+
+  mapPhotoAlbumScanImage(image) {
+    return {
+      id: image.image_id,
+      name: image.name,
+      relativePath: image.relative_path,
+      url: image.url,
+      size: image.size,
+      lastModified: image.last_modified,
+      mediaRootId: image.media_root_id,
+      index: image.image_index,
+    };
+  }
+
+  loadPhotoAlbumScanCacheImages(albumId) {
+    const root = this.db.prepare("SELECT root_id FROM photo_album_scan_roots ORDER BY updated_at DESC LIMIT 1").get();
+    if (!root) return null;
+    const album = this.db.prepare("SELECT 1 FROM photo_album_scan_albums WHERE root_id = ? AND album_id = ?").get(root.root_id, albumId);
+    if (!album) return null;
+    return allRows(
+      this.db.prepare("SELECT * FROM photo_album_scan_images WHERE root_id = ? AND album_id = ? ORDER BY position"),
+      root.root_id,
+      albumId,
+    ).map((image) => this.mapPhotoAlbumScanImage(image));
   }
 
   clearPhotoAlbumScanCache() {
     return this.transaction(() => {
-      this.db.prepare("DELETE FROM photo_album_scan_caches").run();
+      this.db.prepare("DELETE FROM photo_album_scan_roots").run();
     });
   }
 

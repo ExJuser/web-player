@@ -563,6 +563,108 @@ test("sqlite media probe cache is keyed by file identity", async () => {
   }
 });
 
+test("sqlite photo album scan cache loads summaries and album images separately", async () => {
+  const context = await createTempStore();
+  try {
+    await context.store.initialize();
+    const images = [0, 1, 2].map((index) => ({
+      id: `image-${index}`,
+      name: `${index}.jpg`,
+      relativePath: `album/${index}.jpg`,
+      url: `/media/album/${index}.jpg`,
+      size: 100 + index,
+      lastModified: 200 + index,
+      mediaRootId: "photos",
+      index,
+    }));
+    context.store.savePhotoAlbumScanCache({
+      rootId: "root",
+      rootName: "Photos",
+      scannedFiles: images.length,
+      updatedAt: 300,
+      albums: [{
+        id: "album",
+        title: "Album",
+        relativePath: "album",
+        mediaRootId: "photos",
+        mediaRootLabel: "Photos",
+        coverImageUrl: images[0].url,
+        imageCount: images.length,
+        totalSize: images.reduce((sum, image) => sum + image.size, 0),
+        updatedAt: 202,
+        images,
+      }],
+    });
+
+    const summary = context.store.loadLatestPhotoAlbumScanCache({ includeImages: false });
+    assert.equal(summary.albums[0].imageCount, 3);
+    assert.deepEqual(summary.albums[0].images, [images[0]]);
+    assert.deepEqual(context.store.loadPhotoAlbumScanCacheImages("album"), images);
+    assert.equal(context.store.loadPhotoAlbumScanCacheImages("missing"), null);
+
+    assert.equal(context.store.replacePhotoAlbumScanCacheAlbum({
+      albumId: "album",
+      album: { ...summary.albums[0], imageCount: 2, images: images.slice(1) },
+      scannedFilesDelta: -1,
+      updatedAt: 400,
+    }), true);
+    assert.deepEqual(context.store.loadPhotoAlbumScanCacheImages("album"), images.slice(1));
+    assert.equal(context.store.loadLatestPhotoAlbumScanCache({ includeImages: false }).scannedFiles, 2);
+
+    assert.equal(context.store.replacePhotoAlbumScanCacheAlbum({
+      albumId: "album",
+      album: null,
+      scannedFilesDelta: -2,
+      updatedAt: 500,
+    }), true);
+    const empty = context.store.loadLatestPhotoAlbumScanCache({ includeImages: false });
+    assert.equal(empty.scannedFiles, 0);
+    assert.deepEqual(empty.albums, []);
+  } finally {
+    context.store.close();
+    await rm(context.root, { recursive: true, force: true });
+  }
+});
+
+test("sqlite initialization migrates the legacy photo album scan json", async () => {
+  const context = await createTempStore();
+  const legacyImage = {
+    id: "legacy-image",
+    name: "legacy.jpg",
+    relativePath: "legacy/legacy.jpg",
+    url: "/media/legacy.jpg",
+    size: 123,
+    lastModified: 456,
+    mediaRootId: "photos",
+    index: 0,
+  };
+  const legacyDb = new DatabaseSync(path.join(context.dataRoot, "web-player.sqlite"));
+  legacyDb.exec("CREATE TABLE photo_album_scan_caches (root_id TEXT PRIMARY KEY, root_name TEXT NOT NULL, albums_json TEXT NOT NULL, scanned_files INTEGER NOT NULL, updated_at INTEGER NOT NULL)");
+  legacyDb.prepare("INSERT INTO photo_album_scan_caches VALUES (?, ?, ?, ?, ?)").run("legacy-root", "Legacy", JSON.stringify([{
+    id: "legacy-album",
+    title: "Legacy album",
+    relativePath: "legacy",
+    mediaRootId: "photos",
+    mediaRootLabel: "Photos",
+    coverImageUrl: legacyImage.url,
+    imageCount: 1,
+    totalSize: 123,
+    updatedAt: 456,
+    images: [legacyImage],
+  }]), 1, 500);
+  legacyDb.close();
+
+  try {
+    await context.store.initialize();
+    assert.equal(context.store.hasTable("photo_album_scan_caches"), false);
+    assert.equal(context.store.getMeta("schema_version"), "3");
+    assert.deepEqual(context.store.loadPhotoAlbumScanCacheImages("legacy-album"), [legacyImage]);
+  } finally {
+    context.store.close();
+    await rm(context.root, { recursive: true, force: true });
+  }
+});
+
 test("sqlite media root scan cache stores the latest global scan", async () => {
   const context = await createTempStore();
   try {
