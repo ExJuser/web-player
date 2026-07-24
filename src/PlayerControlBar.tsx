@@ -29,6 +29,7 @@ type SpecialVideoStats = {
 
 type PlayerControlBarProps = {
   canPlayNext: boolean;
+  canPlayPrevious: boolean;
   canRecordEmission: boolean;
   canUseEmbeddedSubtitles: boolean;
   canRestoreWithLada: boolean;
@@ -99,6 +100,7 @@ type PlayerControlBarProps = {
   onOpenLadaRestoration: () => void;
   onOpenTagDialog: () => void;
   onPlayNext: () => void;
+  onPlayPrevious: () => void;
   onProbeEmbeddedSubtitles: () => void;
   onRecordEmission: () => void;
   onRemoveHighlight: (highlightId: string) => void;
@@ -122,6 +124,7 @@ type PlayerControlBarProps = {
 
 export function PlayerControlBar({
   canPlayNext,
+  canPlayPrevious,
   canRecordEmission,
   canUseEmbeddedSubtitles,
   canRestoreWithLada,
@@ -192,6 +195,7 @@ export function PlayerControlBar({
   onOpenLadaRestoration,
   onOpenTagDialog,
   onPlayNext,
+  onPlayPrevious,
   onProbeEmbeddedSubtitles,
   onRecordEmission,
   onRemoveHighlight,
@@ -256,6 +260,7 @@ export function PlayerControlBar({
       <div className="control-row">
         <PlayerPlaybackControls
           canPlayNext={canPlayNext}
+          canPlayPrevious={canPlayPrevious}
           hasCurrentVideo={hasCurrentVideo}
           isMuted={isMuted}
           isPlaying={isPlaying}
@@ -265,6 +270,7 @@ export function PlayerControlBar({
           onChangePlaybackRate={onChangePlaybackRate}
           onChangeVolume={onChangeVolume}
           onPlayNext={onPlayNext}
+          onPlayPrevious={onPlayPrevious}
           onToggleMute={onToggleMute}
           onTogglePlay={onTogglePlay}
         />

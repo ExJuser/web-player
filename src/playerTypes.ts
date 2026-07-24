@@ -382,6 +382,7 @@ export type ShortcutAction =
   | "toggleMute"
   | "toggleFullscreen"
   | "toggleFavorite"
+  | "playPrevious"
   | "playNext"
   | "togglePrivacy"
   | "toggleCinema"

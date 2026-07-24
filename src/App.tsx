@@ -2331,10 +2331,12 @@ export default function App() {
   const {
     autoNextPrompt,
     canPlayNext,
+    canPlayPrevious,
     cancelAutoNextPrompt,
     confirmAutoNext,
     getNextVideoId,
     playNext,
+    playPrevious,
     startAutoNextPrompt,
   } = useAutoNextController({
     currentVideoId,
@@ -5281,6 +5283,14 @@ export default function App() {
         return;
       }
 
+      if (eventCode === activeShortcuts.playPrevious) {
+        event.preventDefault();
+        if (!event.repeat) {
+          playPrevious();
+        }
+        return;
+      }
+
       if (eventCode === activeShortcuts.seekBackward) {
         event.preventDefault();
         seekBy(-seekStep);
@@ -5372,6 +5382,7 @@ export default function App() {
     isShortcutDialogOpen,
     movePhoto,
     playNext,
+    playPrevious,
     selectedPhotoAlbum,
     showPhotoAlbumList,
     toggleCinemaMode,
@@ -5972,6 +5983,7 @@ export default function App() {
 
           <PlayerControlBar
             canPlayNext={canPlayNext}
+            canPlayPrevious={canPlayPrevious}
             canRecordEmission={canRecordEmission}
             canUseEmbeddedSubtitles={canUseEmbeddedSubtitles}
             canRestoreWithLada={canRestoreWithLada}
@@ -6059,6 +6071,7 @@ export default function App() {
               setTagMergePrompt(null);
             }}
             onPlayNext={playNext}
+            onPlayPrevious={playPrevious}
             onProbeEmbeddedSubtitles={probeEmbeddedSubtitles}
             onRecordEmission={recordEmissionForCurrentVideo}
             onRemoveHighlight={removeCurrentHighEnergySegment}

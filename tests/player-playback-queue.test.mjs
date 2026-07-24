@@ -3,7 +3,9 @@ import test from "node:test";
 
 import { importTsModule } from "./importTsModule.mjs";
 
-const { getNextVideoIdForQueue } = await importTsModule(new URL("../src/playerPlaybackQueue.ts", import.meta.url));
+const { getNextVideoIdForQueue, getPreviousVideoIdForQueue, pickShuffleVideoId } = await importTsModule(
+  new URL("../src/playerPlaybackQueue.ts", import.meta.url),
+);
 const queue = [{ id: "one" }, { id: "two" }, { id: "three" }];
 
 test("selects the next item from the supplied playback queue", () => {
@@ -24,4 +26,27 @@ test("shuffle excludes the current item while keeping the supplied queue scope",
 test("single loop keeps the current video and empty queues have no next item", () => {
   assert.equal(getNextVideoIdForQueue(queue, "two", "single-loop"), "two");
   assert.equal(getNextVideoIdForQueue([], "two", "sequential"), null);
+});
+
+test("selects the previous item and wraps only in list-loop mode", () => {
+  assert.equal(getPreviousVideoIdForQueue(queue, "three", "sequential"), "two");
+  assert.equal(getPreviousVideoIdForQueue(queue, "one", "sequential"), null);
+  assert.equal(getPreviousVideoIdForQueue(queue, "one", "list-loop"), "three");
+  assert.equal(getPreviousVideoIdForQueue(queue, "outside", "sequential"), "three");
+});
+
+test("shuffle consumes every remaining item before starting a new round", () => {
+  const first = pickShuffleVideoId(queue, "one", ["two", "three"], () => 0);
+  assert.equal(first.videoId, "two");
+
+  const second = pickShuffleVideoId(
+    queue,
+    first.videoId,
+    first.remainingIds.filter((videoId) => videoId !== first.videoId),
+    () => 0,
+  );
+  assert.equal(second.videoId, "three");
+
+  const nextRound = pickShuffleVideoId(queue, second.videoId, [], () => 0);
+  assert.equal(nextRound.videoId, "one");
 });

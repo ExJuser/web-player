@@ -38,6 +38,7 @@ test("detects shortcut conflicts while allowing seek and hold speed to share a k
     toggleMute: "KeyM",
     toggleFullscreen: "KeyF",
     toggleFavorite: "KeyS",
+    playPrevious: "KeyB",
     playNext: "KeyN",
     togglePrivacy: "KeyP",
     toggleCinema: "KeyT",

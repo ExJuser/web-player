@@ -1,9 +1,10 @@
-import { Pause, Play, SkipForward, Volume2, VolumeX } from "lucide-react";
+import { Pause, Play, SkipBack, SkipForward, Volume2, VolumeX } from "lucide-react";
 
 import { ControlSelect } from "./ControlSelect";
 
 type PlayerPlaybackControlsProps = {
   canPlayNext: boolean;
+  canPlayPrevious: boolean;
   hasCurrentVideo: boolean;
   isMuted: boolean;
   isPlaying: boolean;
@@ -13,12 +14,14 @@ type PlayerPlaybackControlsProps = {
   onChangePlaybackRate: (rate: number) => void;
   onChangeVolume: (volume: number) => void;
   onPlayNext: () => void;
+  onPlayPrevious: () => void;
   onToggleMute: () => void;
   onTogglePlay: () => void;
 };
 
 export function PlayerPlaybackControls({
   canPlayNext,
+  canPlayPrevious,
   hasCurrentVideo,
   isMuted,
   isPlaying,
@@ -28,15 +31,19 @@ export function PlayerPlaybackControls({
   onChangePlaybackRate,
   onChangeVolume,
   onPlayNext,
+  onPlayPrevious,
   onToggleMute,
   onTogglePlay,
 }: PlayerPlaybackControlsProps) {
   return (
     <>
+      <button className="icon-button" type="button" onClick={onPlayPrevious} disabled={!canPlayPrevious} title="上一集" aria-label="上一集">
+        <SkipBack size={20} />
+      </button>
       <button className="icon-button" type="button" onClick={onTogglePlay} disabled={!hasCurrentVideo} title="播放/暂停">
         {isPlaying ? <Pause size={20} /> : <Play size={20} />}
       </button>
-      <button className="icon-button" type="button" onClick={onPlayNext} disabled={!canPlayNext} title="下一集">
+      <button className="icon-button" type="button" onClick={onPlayNext} disabled={!canPlayNext} title="下一集" aria-label="下一集">
         <SkipForward size={20} />
       </button>
 
