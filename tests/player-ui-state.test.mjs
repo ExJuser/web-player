@@ -527,6 +527,7 @@ test("playlist thumbnail helper prioritizes active neighbors and dedupes viewpor
   assert.deepEqual(
     uiState.createPlaylistThumbnailVideos({
       visibleVideos,
+      pageVideos: visibleVideos,
       viewportVideos: [visibleVideos[0], visibleVideos[4], visibleVideos[7]],
       visibleVideoIndexById,
       currentVideoId: "v4",
@@ -537,12 +538,30 @@ test("playlist thumbnail helper prioritizes active neighbors and dedupes viewpor
   assert.deepEqual(
     uiState.createPlaylistThumbnailVideos({
       visibleVideos,
+      pageVideos: visibleVideos,
       viewportVideos: [visibleVideos[1], visibleVideos[2]],
       visibleVideoIndexById,
       currentVideoId: null,
       activeRadius: 1,
     }).map((video) => video.id),
     ["v1", "v2"],
+  );
+});
+
+test("playlist thumbnail helper excludes active neighbors outside the current page", () => {
+  const visibleVideos = Array.from({ length: 100 }, (_, index) => ({ id: `v${index}` }));
+  const pageVideos = visibleVideos.slice(50, 100);
+
+  assert.deepEqual(
+    uiState.createPlaylistThumbnailVideos({
+      visibleVideos,
+      pageVideos,
+      viewportVideos: [visibleVideos[50], visibleVideos[51]],
+      visibleVideoIndexById: new Map(visibleVideos.map((video, index) => [video.id, index])),
+      currentVideoId: "v10",
+      activeRadius: 5,
+    }).map((video) => video.id),
+    ["v50", "v51"],
   );
 });
 

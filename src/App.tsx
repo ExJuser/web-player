@@ -1543,6 +1543,7 @@ export default function App() {
     [],
   );
   const {
+    isPlaylistScrolling,
     markPlaylistUserScroll,
     playlistThumbnailVideoIdsKey,
     playlistViewport,
@@ -1567,6 +1568,7 @@ export default function App() {
       : [];
     return createPlaylistThumbnailVideos({
       visibleVideos,
+      pageVideos: pagedPlaylistVideos,
       viewportVideos,
       visibleVideoIndexById,
       currentVideoId,
@@ -4345,6 +4347,7 @@ export default function App() {
   useThumbnailQueueController({
     applyVideoThumbnailUpdates,
     isMainVideoLoading,
+    isPlaylistScrolling,
     isScanning,
     libraryIdRef,
     thumbnailQueueVideoIdsKey,

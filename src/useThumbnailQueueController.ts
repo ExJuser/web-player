@@ -1,7 +1,7 @@
 import { useEffect, useRef, type MutableRefObject } from "react";
 
 import { revokeObjectUrl } from "./appResourceCleanup";
-import { thumbnailGenerationConcurrency, thumbnailLookupConcurrency } from "./playerConstants";
+import { thumbnailCommitBatchSize, thumbnailGenerationConcurrency, thumbnailLookupConcurrency } from "./playerConstants";
 import type { VideoItem, VideoMetadata } from "./playerTypes";
 import { generateVideoThumbnail, loadAvailableVideoThumbnail } from "./videoThumbnail";
 
@@ -15,6 +15,7 @@ export type ThumbnailQueueUpdate = {
 type UseThumbnailQueueControllerOptions = {
   applyVideoThumbnailUpdates: (updates: ThumbnailQueueUpdate[]) => void;
   isMainVideoLoading: boolean;
+  isPlaylistScrolling: boolean;
   isScanning: boolean;
   libraryIdRef: MutableRefObject<string | null>;
   thumbnailQueueVideoIdsKey: string;
@@ -24,6 +25,7 @@ type UseThumbnailQueueControllerOptions = {
 export function useThumbnailQueueController({
   applyVideoThumbnailUpdates,
   isMainVideoLoading,
+  isPlaylistScrolling,
   isScanning,
   libraryIdRef,
   thumbnailQueueVideoIdsKey,
@@ -39,7 +41,7 @@ export function useThumbnailQueueController({
     const orderedVideoIds = thumbnailQueueVideoIdsKey ? thumbnailQueueVideoIdsKey.split("\n") : [];
     const videoById = new Map(videosRef.current.map((video) => [video.id, video]));
 
-    if (isScanning || isMainVideoLoading || !orderedVideoIds.length) {
+    if (isScanning || isMainVideoLoading || isPlaylistScrolling || !orderedVideoIds.length) {
       return () => {
         isCancelled = true;
         abortController.abort();
@@ -89,9 +91,22 @@ export function useThumbnailQueueController({
       commitUpdates(updates.filter((update): update is ThumbnailQueueUpdate => Boolean(update)));
     };
 
+    const commitUpdatesAcrossFrames = async (updates: ThumbnailQueueUpdate[]) => {
+      for (let index = 0; index < updates.length; index += thumbnailCommitBatchSize) {
+        if (!isCurrentRun()) {
+          updates.slice(index).forEach((update) => revokeObjectUrl(update.url));
+          return;
+        }
+        commitUpdates(updates.slice(index, index + thumbnailCommitBatchSize));
+        if (index + thumbnailCommitBatchSize < updates.length) {
+          await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+        }
+      }
+    };
+
     const loadQueuedThumbnails = async () => {
       await Promise.all(Array.from({ length: Math.min(thumbnailLookupConcurrency, orderedVideoIds.length) }, (_, index) => lookupWorker(index)));
-      commitUpdates(lookupUpdates.filter((update): update is ThumbnailQueueUpdate => Boolean(update)));
+      await commitUpdatesAcrossFrames(lookupUpdates.filter((update): update is ThumbnailQueueUpdate => Boolean(update)));
       if (!isCurrentRun()) return;
       const videos = pendingGeneration.filter((video): video is VideoItem => Boolean(video));
       for (let index = 0; index < videos.length && isCurrentRun(); index += thumbnailGenerationConcurrency) {
@@ -105,5 +120,5 @@ export function useThumbnailQueueController({
       isCancelled = true;
       abortController.abort();
     };
-  }, [applyVideoThumbnailUpdates, isMainVideoLoading, isScanning, libraryIdRef, thumbnailQueueVideoIdsKey, videosRef]);
+  }, [applyVideoThumbnailUpdates, isMainVideoLoading, isPlaylistScrolling, isScanning, libraryIdRef, thumbnailQueueVideoIdsKey, videosRef]);
 }

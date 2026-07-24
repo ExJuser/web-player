@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type Dispatch, type RefObject, type SetStateAction } from "react";
 
-import { playlistScrollFrameDelay } from "./playerConstants";
+import { playlistScrollFrameDelay, playlistThumbnailScrollIdleDelay } from "./playerConstants";
 
 type PlaylistViewport = { scrollTop: number; height: number };
 
@@ -28,12 +28,14 @@ export function usePlaylistScrollController({
 }: UsePlaylistScrollControllerOptions) {
   const playlistAutoScrollTimerRef = useRef<number | null>(null);
   const playlistScrollFrameRef = useRef<number | null>(null);
+  const playlistScrollIdleTimerRef = useRef<number | null>(null);
   const isPlaylistAutoScrollingRef = useRef(false);
   const lastPlaylistAutoScrollKeyRef = useRef<string | null>(null);
   const lastPlaylistUserScrollAtRef = useRef(0);
   const visibleThumbnailVideoIdsRef = useRef(new Set<string>());
   const [playlistViewport, setPlaylistViewport] = useState<PlaylistViewport>({ scrollTop: 0, height: 0 });
   const [playlistThumbnailVideoIdsKey, setPlaylistThumbnailVideoIdsKey] = useState("");
+  const [isPlaylistScrolling, setIsPlaylistScrolling] = useState(false);
 
   const updatePlaylistViewport = useCallback(() => {
     const playlist = playlistRef.current;
@@ -134,6 +136,14 @@ export function usePlaylistScrollController({
     }
     if (isPlaylistAutoScrollingRef.current) return;
     lastPlaylistUserScrollAtRef.current = Date.now();
+    setIsPlaylistScrolling(true);
+    if (playlistScrollIdleTimerRef.current !== null) {
+      window.clearTimeout(playlistScrollIdleTimerRef.current);
+    }
+    playlistScrollIdleTimerRef.current = window.setTimeout(() => {
+      playlistScrollIdleTimerRef.current = null;
+      setIsPlaylistScrolling(false);
+    }, playlistThumbnailScrollIdleDelay);
   }, [playlistRef, updatePlaylistViewport]);
 
   useLayoutEffect(() => {
@@ -167,11 +177,15 @@ export function usePlaylistScrollController({
       if (playlistScrollFrameRef.current) {
         window.clearTimeout(playlistScrollFrameRef.current);
       }
+      if (playlistScrollIdleTimerRef.current !== null) {
+        window.clearTimeout(playlistScrollIdleTimerRef.current);
+      }
     };
   }, [clearPlaylistAutoScrollTimer]);
 
   return {
     markPlaylistUserScroll,
+    isPlaylistScrolling,
     playlistThumbnailVideoIdsKey,
     playlistViewport,
     scrollPlaylistToTop,
