@@ -1,10 +1,11 @@
-import { Scissors, Sparkles, Star, Subtitles, Tags, Zap } from "lucide-react";
+import { AudioLines, Scissors, Sparkles, Star, Subtitles, Tags, Zap } from "lucide-react";
 
 import { ControlSelect } from "./ControlSelect";
 import type { HomeMediaMode } from "./playerUiState";
 
 type PlayerMediaActionControlsProps = {
   canUseEmbeddedSubtitles: boolean;
+  canGenerateSubtitle: boolean;
   canRestoreWithLada: boolean;
   currentVideoRating: number | null | undefined;
   hasCurrentVideo: boolean;
@@ -19,6 +20,7 @@ type PlayerMediaActionControlsProps = {
   isEditSegmentMarkPending: boolean;
   isSeriesMode: boolean;
   ladaDisabledReason: string;
+  subtitleGenerationDisabledReason: string;
   selectedSubtitleId: string;
   subtitleControlOptions: Array<{ value: string; label: string }>;
   videoTagCount: number;
@@ -29,12 +31,14 @@ type PlayerMediaActionControlsProps = {
   onOpenDanmakuDialog: () => void;
   onOpenRatingDialog: () => void;
   onOpenLadaRestoration: () => void;
+  onOpenSubtitleGeneration: () => void;
   onOpenTagDialog: () => void;
   onProbeEmbeddedSubtitles: () => void;
 };
 
 export function PlayerMediaActionControls({
   canUseEmbeddedSubtitles,
+  canGenerateSubtitle,
   canRestoreWithLada,
   currentVideoRating,
   hasCurrentVideo,
@@ -49,6 +53,7 @@ export function PlayerMediaActionControls({
   isEditSegmentMarkPending,
   isSeriesMode,
   ladaDisabledReason,
+  subtitleGenerationDisabledReason,
   selectedSubtitleId,
   subtitleControlOptions,
   videoTagCount,
@@ -59,6 +64,7 @@ export function PlayerMediaActionControls({
   onOpenDanmakuDialog,
   onOpenRatingDialog,
   onOpenLadaRestoration,
+  onOpenSubtitleGeneration,
   onOpenTagDialog,
   onProbeEmbeddedSubtitles,
 }: PlayerMediaActionControlsProps) {
@@ -67,18 +73,27 @@ export function PlayerMediaActionControls({
 
   return (
     <>
+      <ControlSelect
+        label={<Subtitles size={18} aria-hidden="true" />}
+        ariaLabel="字幕"
+        value={selectedSubtitleId}
+        options={subtitleControlOptions}
+        onChange={onChangeSubtitle}
+        className="subtitle-control"
+        disabled={!hasCurrentVideo}
+      />
+      <button
+        className="icon-button"
+        type="button"
+        onClick={onOpenSubtitleGeneration}
+        disabled={!canGenerateSubtitle}
+        title={canGenerateSubtitle ? "生成日语字幕" : subtitleGenerationDisabledReason}
+        aria-label="生成日语字幕"
+      >
+        <AudioLines size={18} />
+      </button>
       {homeMediaMode !== "special" ? (
         <>
-          <ControlSelect
-            label={<Subtitles size={18} aria-hidden="true" />}
-            ariaLabel="字幕"
-            value={selectedSubtitleId}
-            options={subtitleControlOptions}
-            onChange={onChangeSubtitle}
-            className="subtitle-control"
-            disabled={!hasCurrentVideo}
-          />
-
           <button
             className="icon-button"
             type="button"

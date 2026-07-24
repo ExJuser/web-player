@@ -26,6 +26,13 @@ test("public local config exposes safe media roots and service status", () => {
       BANGUMI_LENS_PROXY: "http://127.0.0.1:7897",
     },
     true,
+    {
+      available: true,
+      engine: "whisper.cpp",
+      modelLabel: "Kotoba-Whisper v2.0",
+      vadAvailable: true,
+      reason: "",
+    },
   );
 
   assert.deepEqual(result, {
@@ -49,6 +56,13 @@ test("public local config exposes safe media roots and service status", () => {
     ],
     ffmpeg: { ffmpeg: true, ffprobe: false },
     lada: { available: true },
+    subtitleGeneration: {
+      available: true,
+      engine: "whisper.cpp",
+      modelLabel: "Kotoba-Whisper v2.0",
+      vadAvailable: true,
+      reason: "",
+    },
     ai: { configured: true, model: "deepseek-reasoner" },
     bangumi: { configured: true, proxyConfigured: true },
   });
@@ -58,6 +72,13 @@ test("public local config reports unconfigured optional services", () => {
   const result = createPublicLocalConfig(defaultAppConfig, {}, {});
 
   assert.deepEqual(result.lada, { available: false });
+  assert.deepEqual(result.subtitleGeneration, {
+    available: false,
+    engine: "whisper.cpp",
+    modelLabel: "Kotoba-Whisper v2.0",
+    vadAvailable: false,
+    reason: "未检测到日语字幕生成引擎。",
+  });
   assert.deepEqual(result.ai, { configured: false, model: "deepseek-chat" });
   assert.deepEqual(result.bangumi, { configured: false, proxyConfigured: false });
 });

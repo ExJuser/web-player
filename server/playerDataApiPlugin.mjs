@@ -53,6 +53,12 @@ import { createBahamutDanmakuService } from "./bahamutDanmaku.mjs";
 import { clearLocalCacheItems, createCacheStatus as createLocalCacheStatus, createDanmakuSourcesStats } from "./cacheStatus.mjs";
 import { callDeepSeek, chunkText, streamDeepSeek } from "./deepSeekClient.mjs";
 import { createEmbeddedSubtitleService } from "./embeddedSubtitles.mjs";
+import {
+  assertSubtitleGenerationMediaRoot,
+  createGeneratedSubtitleService,
+  detectSubtitleGenerationRuntime,
+  publicSubtitleGenerationRuntime,
+} from "./generatedSubtitles.mjs";
 import { hashValue } from "./hashUtils.mjs";
 import { sendBlob, sendJson, sendMediaFile, sendNdjson, sendSerializedJson, writeStreamEvent } from "./httpResponses.mjs";
 import { readJsonFile, writeJsonFile } from "./jsonFiles.mjs";
@@ -75,6 +81,7 @@ let actorCoversRoot;
 let mosaicsRoot;
 let photoAlbumsRoot;
 let embeddedSubtitlesRoot;
+let generatedSubtitlesRoot;
 let compatibleMediaRoot;
 let danmakuSourcesRoot;
 let aiRoot;
@@ -99,6 +106,7 @@ function initializeApiServices(projectRoot) {
   mosaicsRoot = path.join(dataRoot, "mosaics");
   photoAlbumsRoot = path.join(dataRoot, "photo-albums");
   embeddedSubtitlesRoot = path.join(dataRoot, "subtitles");
+  generatedSubtitlesRoot = path.join(dataRoot, "generated-subtitles");
   compatibleMediaRoot = path.join(dataRoot, "compatible-media");
   const danmakuRoot = path.join(dataRoot, "danmaku");
   danmakuSourcesRoot = path.join(danmakuRoot, "sources");
@@ -167,6 +175,7 @@ function createCacheStatusDefinitions(thumbnailMemoryStats = { entries: 0, bytes
     { id: "mosaics", label: "千图作品", path: mosaicsRoot },
     { id: "photo-albums", label: "看图数据", path: photoAlbumsRoot },
     { id: "subtitles", label: "内封字幕", path: embeddedSubtitlesRoot },
+    { id: "generated-subtitles", label: "生成字幕", path: generatedSubtitlesRoot },
     { id: "compatible-media", label: "兼容播放缓存", path: compatibleMediaRoot },
     { id: "danmaku-sources", label: "弹幕源", path: danmakuSourcesRoot, getStats: () => createDanmakuSourcesStats(danmakuSourcesRoot) },
     { id: "ai-summaries", label: "AI 字幕总结", path: path.join(aiRoot, "summaries") },
@@ -766,6 +775,7 @@ export function playerDataApiPlugin({ projectRoot, env }) {
   const mediaRootScanCache = new BoundedLruCache({ maxEntries: 2, maxBytes: 8 * 1024 * 1024 });
   let toolsPromise = null;
   let ladaAvailablePromise = null;
+  let subtitleGenerationRuntimePromise = null;
   let mediaRootsScanPromise = null;
   let photoAlbumsScanPromise = null;
   let localDataStoreReadyPromise = null;
@@ -782,8 +792,21 @@ export function playerDataApiPlugin({ projectRoot, env }) {
     ladaAvailablePromise ??= detectLadaExecutable();
     return ladaAvailablePromise;
   };
+  const getSubtitleGenerationRuntime = () => {
+    subtitleGenerationRuntimePromise ??= detectSubtitleGenerationRuntime({ dataRoot, env });
+    return subtitleGenerationRuntimePromise;
+  };
+  const getPublicSubtitleGenerationRuntime = async () => publicSubtitleGenerationRuntime(await getSubtitleGenerationRuntime());
   const loadLadaCapabilities = createLadaCapabilitiesLoader(runProcess);
   const mediaProcessingTaskApi = createMediaProcessingTaskApi(createMediaProcessingTaskManager());
+  const generatedSubtitles = createGeneratedSubtitleService({
+    cacheRoot: generatedSubtitlesRoot,
+    resolveVideoPath: resolveVideoPathFromConfig,
+    ensureFileExists,
+    runProcess,
+    hashValue,
+    getRuntime: getSubtitleGenerationRuntime,
+  });
   const scanMediaRootsOnce = async () => {
     if (!mediaRootsScanPromise) {
       mediaRootsScanPromise = (async () => scanConfiguredMediaRoots(await loadAppConfig()))().finally(() => {
@@ -919,7 +942,13 @@ export function playerDataApiPlugin({ projectRoot, env }) {
       }
 
       if (url.pathname === "/api/local-config" && request.method === "GET") {
-        sendJson(response, 200, createPublicLocalConfig(await loadAppConfig(), await getTools(), env, await getLadaAvailable()));
+        sendJson(response, 200, createPublicLocalConfig(
+          await loadAppConfig(),
+          await getTools(),
+          env,
+          await getLadaAvailable(),
+          await getPublicSubtitleGenerationRuntime(),
+        ));
         return;
       }
 
@@ -988,7 +1017,13 @@ export function playerDataApiPlugin({ projectRoot, env }) {
         const payload = await parseJsonBody(request);
         const mediaRoot = await upsertMediaRoot(payload);
         sendJson(response, 200, {
-          ...createPublicLocalConfig(await loadAppConfig(), await getTools(), env, await getLadaAvailable()),
+          ...createPublicLocalConfig(
+            await loadAppConfig(),
+            await getTools(),
+            env,
+            await getLadaAvailable(),
+            await getPublicSubtitleGenerationRuntime(),
+          ),
           mediaRoot,
         });
         return;
@@ -998,7 +1033,13 @@ export function playerDataApiPlugin({ projectRoot, env }) {
         const payload = await parseJsonBody(request);
         const result = await updateMediaRootLocalPath(payload);
         sendJson(response, 200, {
-          ...createPublicLocalConfig(result.config, await getTools(), env, await getLadaAvailable()),
+          ...createPublicLocalConfig(
+            result.config,
+            await getTools(),
+            env,
+            await getLadaAvailable(),
+            await getPublicSubtitleGenerationRuntime(),
+          ),
           mediaRoot: result.mediaRoot,
         });
         return;
@@ -1140,6 +1181,26 @@ export function playerDataApiPlugin({ projectRoot, env }) {
         return;
       }
 
+      if (url.pathname === "/api/subtitles/generated/generate" && request.method === "POST") {
+        const payload = await parseJsonBody(request);
+        const config = await loadAppConfig();
+        const root = findMediaRoot(config, payload?.rootId);
+        assertSubtitleGenerationMediaRoot(root);
+        const runtime = await getSubtitleGenerationRuntime();
+        if (!runtime.available) throw new Error(runtime.reason || "日语字幕生成引擎不可用。");
+        try {
+          sendJson(response, 202, mediaProcessingTaskApi.start({
+            kind: "subtitle-generation",
+            videoName: path.basename(payload?.relativePath || ""),
+            initialStatus: "正在准备生成日语字幕...",
+            run: ({ signal, onProgress }) => generatedSubtitles.generateSubtitle(config, payload, { signal, onProgress }),
+          }));
+        } catch (error) {
+          sendJson(response, 409, { error: error instanceof Error ? error.message : "已有影片处理任务正在运行。" });
+        }
+        return;
+      }
+
       if (url.pathname === "/api/media/compatible" && request.method === "DELETE") {
         const payload = await parseJsonBody(request);
         sendJson(response, 200, await deleteCompatibleMedia(await loadAppConfig(), payload));
@@ -1173,6 +1234,12 @@ export function playerDataApiPlugin({ projectRoot, env }) {
       if (url.pathname === "/api/subtitles/embedded/cached" && request.method === "POST") {
         const payload = await parseJsonBody(request);
         sendJson(response, 200, await embeddedSubtitles.readCachedEmbeddedSubtitle(await loadAppConfig(), payload));
+        return;
+      }
+
+      if (url.pathname === "/api/subtitles/generated/cached" && request.method === "POST") {
+        const payload = await parseJsonBody(request);
+        sendJson(response, 200, await generatedSubtitles.readCachedGeneratedSubtitle(await loadAppConfig(), payload));
         return;
       }
 

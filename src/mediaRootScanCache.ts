@@ -20,6 +20,13 @@ export type LocalConfig = {
   mediaRoots: LocalMediaRoot[];
   ffmpeg: { ffmpeg: boolean; ffprobe: boolean };
   lada: { available: boolean };
+  subtitleGeneration: {
+    available: boolean;
+    engine: string;
+    modelLabel: string;
+    vadAvailable: boolean;
+    reason: string;
+  };
   ai: { configured: boolean; model: string };
   bangumi: { configured: boolean; proxyConfigured: boolean };
 };
