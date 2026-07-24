@@ -112,6 +112,7 @@ export function useVideoSelectionController({
 
   const selectVideo = useCallback(
     (videoId: string, options?: SelectVideoOptions) => {
+      if (!videosRef.current.some((video) => video.id === videoId)) return;
       cancelAutoNextPrompt();
       persistCurrentProgress();
       resetHoldSpeedState();

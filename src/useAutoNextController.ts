@@ -1,96 +1,94 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
 
 import { autoNextPromptSeconds } from "./playerConstants";
-import type { AutoNextPrompt, PlaybackMode, PlaylistFilter, VideoItem } from "./playerTypes";
+import { getNextVideoIdForQueue } from "./playerPlaybackQueue";
+import type { AutoNextPrompt, PlaybackMode, VideoItem } from "./playerTypes";
 
 type UseAutoNextControllerOptions = {
   currentVideoId: string | null;
-  favoritePlaylistVideos: VideoItem[];
+  isFavoriteQueue: boolean;
   playbackMode: PlaybackMode;
-  playlistFilter: PlaylistFilter;
+  playbackQueueVideos: VideoItem[];
   selectVideoRef: MutableRefObject<(videoId: string) => void>;
-  seriesFilteredVideos: VideoItem[];
   setMessage: (message: string) => void;
   videosRef: MutableRefObject<VideoItem[]>;
 };
 
 export function useAutoNextController({
   currentVideoId,
-  favoritePlaylistVideos,
+  isFavoriteQueue,
   playbackMode,
-  playlistFilter,
+  playbackQueueVideos,
   selectVideoRef,
-  seriesFilteredVideos,
   setMessage,
   videosRef,
 }: UseAutoNextControllerOptions) {
   const autoNextTimerRef = useRef<number | null>(null);
+  const autoNextSnapshotRef = useRef<{
+    currentVideoId: string | null;
+    nextVideoId: string;
+    playbackMode: PlaybackMode;
+    queueKey: string;
+  } | null>(null);
   const [autoNextPrompt, setAutoNextPrompt] = useState<AutoNextPrompt | null>(null);
+  const queueKey = useMemo(() => playbackQueueVideos.map((video) => video.id).join("\n"), [playbackQueueVideos]);
+  const latestQueueContextRef = useRef({ currentVideoId, playbackMode, queueKey });
+  latestQueueContextRef.current = { currentVideoId, playbackMode, queueKey };
 
   const cancelAutoNextPrompt = useCallback(() => {
     if (autoNextTimerRef.current) {
       window.clearTimeout(autoNextTimerRef.current);
       autoNextTimerRef.current = null;
     }
+    autoNextSnapshotRef.current = null;
     setAutoNextPrompt(null);
   }, []);
 
   const getNextVideoId = useCallback(
-    (mode: PlaybackMode) => {
-      if (mode === "single-loop") {
-        return currentVideoId;
-      }
-
-      const queueVideos =
-        mode === "favorites-only" || playlistFilter === "favorites" ? favoritePlaylistVideos : seriesFilteredVideos;
-      if (!queueVideos.length) return null;
-
-      const queueCurrentIndex = queueVideos.findIndex((video) => video.id === currentVideoId);
-
-      if (mode === "shuffle") {
-        if (queueVideos.length === 1) return queueVideos[0].id;
-        const candidates = queueVideos.filter((video) => video.id !== currentVideoId);
-        return candidates[Math.floor(Math.random() * candidates.length)]?.id ?? null;
-      }
-
-      if (queueCurrentIndex < 0) {
-        return queueVideos[0].id;
-      }
-
-      if (queueCurrentIndex < queueVideos.length - 1) {
-        return queueVideos[queueCurrentIndex + 1].id;
-      }
-
-      return mode === "list-loop" ? queueVideos[0].id : null;
-    },
-    [currentVideoId, favoritePlaylistVideos, playlistFilter, seriesFilteredVideos],
+    (mode: PlaybackMode) => getNextVideoIdForQueue(playbackQueueVideos, currentVideoId, mode),
+    [currentVideoId, playbackQueueVideos],
   );
 
   const playNext = useCallback(() => {
     const nextVideoId = getNextVideoId(playbackMode);
     if (!nextVideoId) {
-      if ((playbackMode === "favorites-only" || playlistFilter === "favorites") && !favoritePlaylistVideos.length) {
+      if (isFavoriteQueue && !playbackQueueVideos.length) {
         setMessage("还没有收藏的视频，无法只播放收藏。");
       }
       return;
     }
     selectVideoRef.current(nextVideoId);
-  }, [favoritePlaylistVideos.length, getNextVideoId, playbackMode, playlistFilter, selectVideoRef, setMessage]);
+  }, [getNextVideoId, isFavoriteQueue, playbackMode, playbackQueueVideos.length, selectVideoRef, setMessage]);
 
   const canPlayNext = useMemo(() => Boolean(getNextVideoId(playbackMode)), [getNextVideoId, playbackMode]);
 
   const confirmAutoNext = useCallback(
     (nextVideoId: string) => {
+      const snapshot = autoNextSnapshotRef.current;
+      const latestContext = latestQueueContextRef.current;
+      const isTargetCurrent = Boolean(
+        snapshot &&
+        snapshot.nextVideoId === nextVideoId &&
+        snapshot.currentVideoId === latestContext.currentVideoId &&
+        snapshot.playbackMode === latestContext.playbackMode &&
+        snapshot.queueKey === latestContext.queueKey &&
+        videosRef.current.some((video) => video.id === nextVideoId),
+      );
       cancelAutoNextPrompt();
+      if (!isTargetCurrent) {
+        setMessage("播放队列已变化，已取消自动播放下一集。");
+        return;
+      }
       selectVideoRef.current(nextVideoId);
     },
-    [cancelAutoNextPrompt, selectVideoRef],
+    [cancelAutoNextPrompt, selectVideoRef, setMessage, videosRef],
   );
 
   const startAutoNextPrompt = useCallback(
     (nextVideoId: string) => {
       const nextVideo = videosRef.current.find((video) => video.id === nextVideoId);
       cancelAutoNextPrompt();
+      autoNextSnapshotRef.current = { currentVideoId, nextVideoId, playbackMode, queueKey };
       setAutoNextPrompt({
         nextVideoId,
         nextVideoName: nextVideo?.name ?? "下一集",
@@ -115,8 +113,12 @@ export function useAutoNextController({
 
       tick(autoNextPromptSeconds);
     },
-    [cancelAutoNextPrompt, confirmAutoNext, videosRef],
+    [cancelAutoNextPrompt, confirmAutoNext, currentVideoId, playbackMode, queueKey, videosRef],
   );
+
+  useEffect(() => {
+    cancelAutoNextPrompt();
+  }, [cancelAutoNextPrompt, currentVideoId, playbackMode, queueKey]);
 
   useEffect(() => {
     return () => {

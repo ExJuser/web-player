@@ -1494,6 +1494,10 @@ export default function App() {
     [effectivePlaylistSearchQuery, playlistScopeVideos, playlistSearchDocumentsById],
   );
   const visibleVideos = playlistSearchResult.videos;
+  const playbackQueueVideos = useMemo(
+    () => playbackMode === "favorites-only" ? getFavoritePlaylistVideos(visibleVideos, favoriteVideoIds) : visibleVideos,
+    [favoriteVideoIds, playbackMode, visibleVideos],
+  );
   const playlistSearchTerms = useMemo(
     () => playlistSearchResult.tokens.map((token) => token.raw),
     [playlistSearchResult.tokens],
@@ -2334,11 +2338,10 @@ export default function App() {
     startAutoNextPrompt,
   } = useAutoNextController({
     currentVideoId,
-    favoritePlaylistVideos,
+    isFavoriteQueue: playbackMode === "favorites-only" || playlistFilter === "favorites",
     playbackMode,
-    playlistFilter,
+    playbackQueueVideos,
     selectVideoRef,
-    seriesFilteredVideos,
     setMessage,
     videosRef,
   });
@@ -3067,8 +3070,18 @@ export default function App() {
   });
 
   useEffect(() => {
-    selectVideoRef.current = selectVideo;
-  }, [selectVideo]);
+    selectVideoRef.current = (videoId) => {
+      if (isDuplicatePlaylistActive) {
+        selectVideo(videoId, { keepDuplicatePlaylist: true, syncSeriesMode: false });
+      } else if (isVersionPlaylistActive) {
+        selectVideo(videoId, { keepVersionPlaylist: true, syncSeriesMode: false });
+      } else if (isRatingPlaylistActive) {
+        selectVideo(videoId, { keepRatingPlaylist: true, syncSeriesMode: false });
+      } else {
+        selectVideo(videoId);
+      }
+    };
+  }, [isDuplicatePlaylistActive, isRatingPlaylistActive, isVersionPlaylistActive, selectVideo]);
 
   const removeDeletedVideoFromState = useCallback(
     async (video: VideoItem) => {
@@ -5432,7 +5445,7 @@ export default function App() {
 
     const nextVideoId = getNextVideoId(playbackMode);
     if (!nextVideoId) {
-      if ((playbackMode === "favorites-only" || playlistFilter === "favorites") && !favoritePlaylistVideos.length) {
+      if ((playbackMode === "favorites-only" || playlistFilter === "favorites") && !playbackQueueVideos.length) {
         setMessage("还没有收藏的视频，无法只播放收藏。");
       }
       return;
