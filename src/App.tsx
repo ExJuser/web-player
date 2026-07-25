@@ -5820,15 +5820,16 @@ export default function App() {
                 }}
                 mediaLibrary={{
                   homeMediaModeLabel,
-                isOpen: isMediaLibraryPanelOpen,
-                isScanning,
-                mediaRootCount: localConfig?.mediaRoots.length ?? 0,
-                mediaRoots: homeModeMediaRoots,
-                mediaRootStatuses: modeFilteredMediaRootStatuses,
-                onConfigureLocalPath: openMediaRootLocalPathDialog,
-                onRefresh: () => void loadGlobalMediaLibrary(),
-                onToggle: () => setIsMediaLibraryPanelOpen((isOpen) => !isOpen),
-              }}
+                  isFloatingPanel: homeMediaMode === "special",
+                  isOpen: isMediaLibraryPanelOpen,
+                  isScanning,
+                  mediaRootCount: localConfig?.mediaRoots.length ?? 0,
+                  mediaRoots: homeModeMediaRoots,
+                  mediaRootStatuses: modeFilteredMediaRootStatuses,
+                  onConfigureLocalPath: openMediaRootLocalPathDialog,
+                  onRefresh: () => void loadGlobalMediaLibrary(),
+                  onToggle: () => setIsMediaLibraryPanelOpen((isOpen) => !isOpen),
+                }}
               tagStats={homeTagStats}
               recap={shouldShowHomeRecap ? {
                 canUseEmbeddedSubtitles: canUseHomeEmbeddedSubtitles,

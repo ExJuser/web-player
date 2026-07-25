@@ -6,6 +6,7 @@ import { formatMediaRootStatus, getMediaRootLocalPathAction } from "./playerUiSt
 
 type HomeMediaLibraryCardProps = {
   homeMediaModeLabel: string;
+  isFloatingPanel: boolean;
   isOpen: boolean;
   isScanning: boolean;
   mediaRootCount: number;
@@ -18,6 +19,7 @@ type HomeMediaLibraryCardProps = {
 
 export function HomeMediaLibraryCard({
   homeMediaModeLabel,
+  isFloatingPanel,
   isOpen,
   isScanning,
   mediaRootCount,
@@ -35,7 +37,10 @@ export function HomeMediaLibraryCard({
   });
 
   return (
-    <section className="home-section media-library-card" aria-busy={isScanning}>
+    <section
+      className={`home-section media-library-card${isFloatingPanel ? " media-library-card-floating" : ""}`}
+      aria-busy={isScanning}
+    >
       <button
         className="media-library-toggle"
         type="button"
