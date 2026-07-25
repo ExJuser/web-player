@@ -2450,6 +2450,10 @@ button {
   font-size: 12px;
 }
 
+.home-tag-stats-card {
+  gap: 9px;
+}
+
 .home-tag-stats-summary {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2465,13 +2469,13 @@ button {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: baseline;
   gap: 8px;
-  padding: 11px 12px;
+  padding: 8px 10px;
   background: #20252d;
 }
 
 .home-tag-stats-summary strong {
   color: #f5f7fb;
-  font-size: 20px;
+  font-size: 18px;
   font-variant-numeric: tabular-nums;
   line-height: 1;
 }
@@ -2501,7 +2505,7 @@ button {
 
 .home-tag-ranking {
   display: grid;
-  gap: 6px;
+  gap: 3px;
 }
 
 .home-tag-ranking-row {
@@ -2510,7 +2514,7 @@ button {
   align-items: center;
   gap: 10px;
   min-width: 0;
-  padding: 9px 10px;
+  padding: 5px 8px;
   border: 1px solid transparent;
   border-radius: 6px;
   background: #20252d;
@@ -2544,7 +2548,7 @@ button {
 .home-tag-ranking-detail {
   display: grid;
   min-width: 0;
-  gap: 7px;
+  gap: 4px;
 }
 
 .home-tag-ranking-copy {
@@ -2584,7 +2588,7 @@ button {
 }
 
 .home-tag-ranking-meter {
-  height: 4px;
+  height: 3px;
   overflow: hidden;
   border-radius: 999px;
   background: #2b323d;
