@@ -2174,6 +2174,16 @@ button {
   align-content: start;
 }
 
+.favorite-home-section {
+  max-height: min(560px, calc(100vh - 160px));
+  min-height: 0;
+  overflow: hidden;
+}
+
+.favorite-home-section .home-compact-list {
+  max-height: min(450px, calc(100vh - 270px));
+}
+
 .favorite-home-more {
   width: 100%;
   justify-content: center;
