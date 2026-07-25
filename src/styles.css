@@ -184,6 +184,23 @@ button {
   overflow: visible;
 }
 
+.playlist-count-summary {
+  display: inline-flex;
+  min-width: 0;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 6px;
+  margin-right: 14px;
+  color: #aab1bd;
+  font-size: 13px;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+
+.playlist-count-summary svg {
+  flex: none;
+}
+
 .top-bar p,
 .playlist-header span {
   margin: 0;
@@ -7019,6 +7036,7 @@ button {
 }
 
 .app-shell.theme-light .top-bar p,
+.app-shell.theme-light .playlist-count-summary,
 .app-shell.theme-light .playlist-header span,
 .app-shell.theme-light .home-empty-state,
 .app-shell.theme-light .home-resume-copy > span:not(.home-section-eyebrow),
@@ -9628,6 +9646,10 @@ button {
 
   .video-summary {
     width: 100%;
+  }
+
+  .playlist-count-summary {
+    flex: none;
   }
 
   .video-metadata-details {
