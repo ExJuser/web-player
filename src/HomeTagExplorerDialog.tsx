@@ -10,6 +10,7 @@ type HomeTagExplorerDialogProps = {
   videos: HomeVideoCard[];
   onClose: () => void;
   onOpenPlaylist: (selection: TagExplorerSelection, startVideoId?: string) => void;
+  onRequestThumbnails: (videoIds: string[]) => void;
   onThumbnailError: (videoId: string) => void;
 };
 
@@ -27,6 +28,7 @@ export function HomeTagExplorerDialog({
   videos,
   onClose,
   onOpenPlaylist,
+  onRequestThumbnails,
   onThumbnailError,
 }: HomeTagExplorerDialogProps) {
   const dialogRef = useRef<HTMLElement | null>(null);
@@ -115,6 +117,12 @@ export function HomeTagExplorerDialog({
     const startIndex = (previewBatch * 6) % prioritizedVideos.length;
     return [...prioritizedVideos.slice(startIndex), ...prioritizedVideos.slice(0, startIndex)].slice(0, 6);
   }, [matchingVideos, previewBatch]);
+  const recommendedVideoIdsKey = recommendedVideos.map((card) => card.video.id).join("\n");
+
+  useEffect(() => {
+    if (!initialTagKey) return;
+    onRequestThumbnails(recommendedVideoIdsKey ? recommendedVideoIdsKey.split("\n") : []);
+  }, [initialTagKey, onRequestThumbnails, recommendedVideoIdsKey]);
 
   if (!initialTagKey) return null;
 

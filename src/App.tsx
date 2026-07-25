@@ -552,6 +552,7 @@ export default function App() {
   const [isDuplicatePlaylistActive, setIsDuplicatePlaylistActive] = useState(false);
   const [isVersionPlaylistActive, setIsVersionPlaylistActive] = useState(false);
   const [tagExplorerInitialKey, setTagExplorerInitialKey] = useState<string | null>(null);
+  const [tagExplorerThumbnailVideoIds, setTagExplorerThumbnailVideoIds] = useState<string[]>([]);
   const [tagPlaylistSelection, setTagPlaylistSelection] = useState<TagExplorerSelection | null>(null);
   const [ratingFilterOperator, setRatingFilterOperator] = useState<RatingFilterOperator>("gt");
   const [ratingFilterThreshold, setRatingFilterThreshold] = useState(8);
@@ -1928,6 +1929,15 @@ export default function App() {
       return video ? [video] : [];
     });
   }, [creativeFeature, growthRingThumbnailVideoIds, homeMediaMode, modeFilteredVideoById, specialHomeSection]);
+  const tagExplorerThumbnailVideos = useMemo(
+    () => tagExplorerInitialKey
+      ? tagExplorerThumbnailVideoIds.flatMap((videoId) => {
+          const video = modeFilteredVideoById.get(videoId);
+          return video ? [video] : [];
+        })
+      : [],
+    [modeFilteredVideoById, tagExplorerInitialKey, tagExplorerThumbnailVideoIds],
+  );
   const thumbnailQueueVideoIds = useMemo(
     () =>
       createThumbnailQueueVideoIds({
@@ -1940,7 +1950,7 @@ export default function App() {
         modeFilteredVideoById,
         playlistThumbnailVideos: isExploreViewVisible
           ? [...actorThumbnailVideos, ...growthRingThumbnailVideos]
-          : isHomeViewVisible ? homeSearchResultVideos : playlistThumbnailVideos,
+          : isHomeViewVisible ? [...homeSearchResultVideos, ...tagExplorerThumbnailVideos] : playlistThumbnailVideos,
       }),
     [
       favoriteHomeCards,
@@ -1955,6 +1965,7 @@ export default function App() {
       playlistThumbnailVideos,
       primaryHomeCard,
       recentHomeCards,
+      tagExplorerThumbnailVideos,
       watchActivityCarouselVideoIds,
     ],
   );
@@ -6442,8 +6453,12 @@ export default function App() {
     <HomeTagExplorerDialog
       initialTagKey={tagExplorerInitialKey}
       videos={homeTagExplorerVideos}
-      onClose={() => setTagExplorerInitialKey(null)}
+      onClose={() => {
+        setTagExplorerInitialKey(null);
+        setTagExplorerThumbnailVideoIds([]);
+      }}
       onOpenPlaylist={openTagPlaylist}
+      onRequestThumbnails={setTagExplorerThumbnailVideoIds}
       onThumbnailError={markVideoThumbnailFailed}
     />
     <HighEnergyTagDialog
