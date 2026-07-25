@@ -186,12 +186,13 @@ button {
 
 .app-shell.home-view .video-summary {
   justify-content: center;
+  overflow: visible;
 }
 
 .home-top-search {
   position: relative;
   z-index: 30;
-  width: min(520px, 100%);
+  width: min(680px, 100%);
   min-width: 0;
 }
 
@@ -2304,7 +2305,7 @@ button {
 
 .favorite-home-section .home-compact-list,
 .home-recent-section .home-list-grid {
-  max-height: min(450px, calc(100vh - 270px));
+  max-height: min(560px, calc(100vh - 160px));
 }
 
 .favorite-home-more {
