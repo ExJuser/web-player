@@ -184,6 +184,10 @@ button {
   overflow: visible;
 }
 
+.app-shell.home-view .video-summary {
+  justify-content: center;
+}
+
 .home-top-search {
   position: relative;
   z-index: 30;
