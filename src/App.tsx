@@ -1658,10 +1658,11 @@ export default function App() {
     [createHomeVideoCard, modeFilteredVideos],
   );
   const primaryResumeCard = resumableHomeCards[0] ?? null;
-  const recentHomeCards = useMemo(
-    () => createRecentHomeCards(modeFilteredVideos, createHomeVideoCard),
+  const allRecentHomeCards = useMemo(
+    () => createRecentHomeCards(modeFilteredVideos, createHomeVideoCard, Number.POSITIVE_INFINITY),
     [createHomeVideoCard, modeFilteredVideos],
   );
+  const recentHomeCards = useMemo(() => allRecentHomeCards.slice(0, 10), [allRecentHomeCards]);
   const favoriteHomeCards = useMemo(
     () =>
       createFavoriteHomeCards({
@@ -5792,7 +5793,7 @@ export default function App() {
                 renderCard={renderHomeListCard}
               />
 
-              <HomeRecentSection cards={recentHomeCards} renderCard={renderHomeListCard} />
+              <HomeRecentSection cards={allRecentHomeCards} previewCount={10} renderCard={renderHomeListCard} />
             </div>
 
               <HomeSideColumn

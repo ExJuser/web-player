@@ -338,7 +338,7 @@ export function createResumableHomeCards<Video extends HomeCardVideoForUi, Progr
 export function createRecentHomeCards<Video extends HomeCardVideoForUi, Progress extends ProgressForUi, Card extends HomeCardForUi<Video, Progress>>(
   videos: Video[],
   createCard: (video: Video) => Card,
-  limit = 6,
+  limit = 10,
 ) {
   return videos
     .map(createCard)
@@ -357,7 +357,7 @@ export function createFavoriteHomeCards<Video extends HomeCardVideoForUi, Progre
   createCard: (video: Video) => Card;
   limit?: number;
 }) {
-  const limit = input.limit ?? 6;
+  const limit = input.limit ?? 10;
   const statusRank = (card: Card) => (card.progress?.completed ? 2 : card.progress ? 0 : 1);
   return input.videos
     .filter((video) => input.favoriteVideoIds.has(video.id))
