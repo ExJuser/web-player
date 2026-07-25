@@ -5748,6 +5748,7 @@ export default function App() {
             systemTags: systemVideoTags[video.id] ?? [],
             rating: videoRatings[video.id],
             comment: videoComments[video.id],
+            searchMatch: playlistSearchResult.matchesByVideoId.get(video.id),
           }))}
           mediaProcessingTask={mediaProcessingTask}
           isExploreViewVisible={isExploreViewVisible}

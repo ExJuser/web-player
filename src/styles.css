@@ -366,6 +366,32 @@ button {
   line-height: 22px;
 }
 
+.home-top-search-reasons {
+  display: flex;
+  gap: 8px;
+  color: #79dfff;
+  font-size: 12px;
+}
+
+.home-top-search-reasons span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.home-top-search-reasons span:first-child {
+  flex: 1 1 auto;
+}
+
+.home-top-search-reasons span:not(:first-child) {
+  flex: 0 1 auto;
+}
+
+.home-top-search-reasons b {
+  font-weight: 600;
+}
+
 .home-top-search-status {
   padding: 14px 10px;
   text-align: center;
@@ -8165,6 +8191,11 @@ button {
 :root[data-theme="light"] .home-top-search-thumbnail {
   background: #edf1f5;
   color: #98a2b3;
+}
+
+.app-shell.theme-light .home-top-search-reasons,
+:root[data-theme="light"] .home-top-search-reasons {
+  color: #0077b6;
 }
 
 .app-shell.theme-light .player-search-form input::placeholder,

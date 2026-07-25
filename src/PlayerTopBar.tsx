@@ -3,6 +3,7 @@ import { forwardRef, useCallback, useEffect, useRef, useState, useSyncExternalSt
 
 import type { MediaProcessingTaskState } from "./MediaProcessingTaskDialog";
 import { RatingChip, TagChips } from "./MetadataChips";
+import type { PlaylistSearchMatch } from "./playerPlaylistSearch";
 import type { PlaylistThumbnailStore } from "./playlistThumbnailStore";
 import type { VideoItem } from "./playerTypes";
 
@@ -14,6 +15,7 @@ type HomeSearchResult = {
   systemTags: string[];
   rating?: number;
   comment?: string;
+  searchMatch?: PlaylistSearchMatch;
 };
 
 type PlayerTopBarProps = {
@@ -296,9 +298,25 @@ function HomeSearchResultItem({
       <span className="home-top-search-result-body">
         <strong>{video.name}</strong>
         <small>{video.relativePath}</small>
+        {result.searchMatch?.reasons.length ? <HomeSearchMatchReasons match={result.searchMatch} /> : null}
         <TagChips tags={result.tags} actorTags={result.actorTags} systemTags={result.systemTags} limit={4} compact />
         <RatingChip rating={result.rating} comment={result.comment} />
       </span>
     </button>
+  );
+}
+
+function HomeSearchMatchReasons({ match }: { match: PlaylistSearchMatch }) {
+  const visibleReasons = match.reasons.slice(0, 2);
+  const hiddenCount = match.reasons.length - visibleReasons.length;
+  const title = match.reasons.map((reason) => `${reason.label}：${reason.value}`).join("\n");
+
+  return (
+    <small className="home-top-search-reasons" title={title}>
+      {visibleReasons.map((reason) => (
+        <span key={`${reason.field}:${reason.value}`}><b>{reason.label}</b> · {reason.value}</span>
+      ))}
+      {hiddenCount ? <span>+{hiddenCount}</span> : null}
+    </small>
   );
 }
