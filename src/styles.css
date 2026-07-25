@@ -2237,6 +2237,80 @@ button {
   font-size: 12px;
 }
 
+.home-tag-stats-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.home-tag-stats-summary div {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border-radius: 6px;
+  background: #20252d;
+}
+
+.home-tag-stats-summary strong {
+  color: #f5f7fb;
+  font-size: 18px;
+}
+
+.home-tag-stats-summary span,
+.home-tag-stats-empty {
+  color: #8e97a5;
+  font-size: 12px;
+}
+
+.home-tag-ranking {
+  display: grid;
+  gap: 8px;
+}
+
+.home-tag-ranking-row {
+  display: grid;
+  grid-template-columns: minmax(72px, 0.8fr) minmax(80px, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.home-tag-ranking-label {
+  overflow: hidden;
+  color: #dce2ea;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.home-tag-ranking-meter {
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #2b323d;
+}
+
+.home-tag-ranking-meter span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #00a1d6;
+}
+
+.home-tag-ranking-row strong {
+  min-width: 2ch;
+  color: #f5f7fb;
+  font-size: 13px;
+  text-align: right;
+}
+
+.home-tag-stats-empty {
+  padding: 10px;
+  border-radius: 6px;
+  background: #20252d;
+  text-align: center;
+}
+
 .watch-activity-card {
   min-width: 0;
 }
@@ -7385,7 +7459,11 @@ button {
 
 .app-shell.theme-light .home-list-card,
 .app-shell.theme-light .home-stats div,
+.app-shell.theme-light .home-tag-stats-summary div,
+.app-shell.theme-light .home-tag-stats-empty,
 .app-shell.theme-light .home-mode-switch,
+:root[data-theme="light"] .home-tag-stats-summary div,
+:root[data-theme="light"] .home-tag-stats-empty,
 .app-shell.theme-light .media-library-toggle,
 .app-shell.theme-light .media-library-row,
 .app-shell.theme-light .home-recap-output,
@@ -7406,6 +7484,20 @@ button {
 .app-shell.theme-light .delete-file-preview {
   border-color: #d7e0ea;
   background: #f8fafc;
+}
+
+.app-shell.theme-light .home-tag-stats-summary strong,
+.app-shell.theme-light .home-tag-ranking-row strong,
+.app-shell.theme-light .home-tag-ranking-label,
+:root[data-theme="light"] .home-tag-stats-summary strong,
+:root[data-theme="light"] .home-tag-ranking-row strong,
+:root[data-theme="light"] .home-tag-ranking-label {
+  color: #172033;
+}
+
+.app-shell.theme-light .home-tag-ranking-meter,
+:root[data-theme="light"] .home-tag-ranking-meter {
+  background: #d7e0ea;
 }
 
 .app-shell.theme-light .media-library-toggle {

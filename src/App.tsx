@@ -1717,6 +1717,31 @@ export default function App() {
     () => createLibraryStats({ videos: modeFilteredVideos, progressStore, favoriteVideoIds, isResumableProgress }),
     [favoriteVideoIds, modeFilteredVideos, progressStore],
   );
+  const homeTagStats = useMemo(() => {
+    if (homeMediaMode !== "special") return null;
+    const tagsByKey = new Map<string, { key: string; label: string; videoCount: number }>();
+    let taggedVideos = 0;
+    modeFilteredVideos.forEach((video) => {
+      const seenKeys = new Set<string>();
+      (effectiveVideoTags[video.id] ?? []).forEach((tag) => {
+        const key = normalizeTagKey(tag);
+        if (!key || seenKeys.has(key)) return;
+        seenKeys.add(key);
+        const existing = tagsByKey.get(key);
+        if (existing) existing.videoCount += 1;
+        else tagsByKey.set(key, { key, label: tag.trim(), videoCount: 1 });
+      });
+      if (seenKeys.size) taggedVideos += 1;
+    });
+    return {
+      coverage: modeFilteredVideos.length ? taggedVideos / modeFilteredVideos.length : 0,
+      taggedVideos,
+      totalTags: tagsByKey.size,
+      tags: Array.from(tagsByKey.values())
+        .sort((a, b) => b.videoCount - a.videoCount || a.label.localeCompare(b.label, "zh-Hans-CN", { numeric: true }))
+        .slice(0, 10),
+    };
+  }, [effectiveVideoTags, homeMediaMode, modeFilteredVideos]);
   const specialModeInsights = useMemo(
     () => {
       if (homeMediaMode !== "special") return null;
@@ -5812,6 +5837,7 @@ export default function App() {
                 ratingFilterThreshold,
                 ratingStats,
               } : null}
+              tagStats={homeTagStats}
               recap={shouldShowHomeRecap ? {
                 canUseEmbeddedSubtitles: canUseHomeEmbeddedSubtitles,
                 canUseRecapSubtitle: canUseHomeRecapSubtitle,
