@@ -100,8 +100,7 @@ export function HomeTagExplorerDialog({
       });
     });
     return Array.from(counts, ([key, count]) => ({ key, count, label: tagLabelsByKey.get(key) ?? key }))
-      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, "zh-Hans-CN", { numeric: true }))
-      .slice(0, 8);
+      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, "zh-Hans-CN", { numeric: true }));
   }, [excludedKeys, includedKeys, matchingVideos, tagLabelsByKey]);
 
   const recommendedVideos = useMemo(() => {
@@ -215,7 +214,7 @@ export function HomeTagExplorerDialog({
               <h3 id="home-tag-related-title">关联标签</h3>
               <span>{relatedTags.length} 项</span>
             </div>
-            <div className="home-tag-explorer-related-list">
+            <div className="home-tag-explorer-related-list custom-scrollbar">
               {relatedTags.map((tag) => (
                 <div className="home-tag-explorer-related-row" key={tag.key}>
                   <button type="button" onClick={() => addIncludedTag(tag.key)} title={`同时包含“${tag.label}”`}>

@@ -2792,6 +2792,8 @@ button {
 }
 
 .home-tag-explorer-related {
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
   border-right: 1px solid #2a313a;
 }
 
@@ -2832,7 +2834,11 @@ button {
 
 .home-tag-explorer-related-list {
   display: grid;
+  min-height: 0;
+  overflow-y: auto;
   gap: 6px;
+  padding-right: 4px;
+  overscroll-behavior: contain;
 }
 
 .home-tag-explorer-related-row {
