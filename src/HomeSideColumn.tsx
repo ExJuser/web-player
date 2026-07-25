@@ -1,7 +1,6 @@
 import type { ComponentProps } from "react";
 
 import { DuplicateVideoSummaryCard } from "./DuplicateVideoSummaryCard";
-import { FavoriteHomeSection } from "./FavoriteHomeSection";
 import { HomeLibraryStats } from "./HomeLibraryStats";
 import { HomeMediaLibraryCard } from "./HomeMediaLibraryCard";
 import { HomeRecapCard } from "./HomeRecapCard";
@@ -10,7 +9,6 @@ import { VideoVersionSummaryCard } from "./VideoVersionSummaryCard";
 
 type HomeSideColumnProps = {
   duplicateSummary: ComponentProps<typeof DuplicateVideoSummaryCard> | null;
-  favorites: ComponentProps<typeof FavoriteHomeSection>;
   libraryStats: ComponentProps<typeof HomeLibraryStats>;
   mediaLibrary: ComponentProps<typeof HomeMediaLibraryCard>;
   ratingFilter: ComponentProps<typeof RatingFilterCard> | null;
@@ -20,7 +18,6 @@ type HomeSideColumnProps = {
 
 export function HomeSideColumn({
   duplicateSummary,
-  favorites,
   libraryStats,
   mediaLibrary,
   ratingFilter,
@@ -31,13 +28,11 @@ export function HomeSideColumn({
     <aside className="home-side-column" aria-label="首页辅助信息">
       <HomeLibraryStats {...libraryStats} />
 
-      <FavoriteHomeSection {...favorites} />
+      <HomeMediaLibraryCard {...mediaLibrary} />
 
       {recap ? <HomeRecapCard {...recap} /> : null}
 
       {ratingFilter ? <RatingFilterCard {...ratingFilter} /> : null}
-
-      <HomeMediaLibraryCard {...mediaLibrary} />
 
       {duplicateSummary ? <DuplicateVideoSummaryCard {...duplicateSummary} /> : null}
 

@@ -1025,10 +1025,21 @@ button {
   min-height: 0;
   flex-direction: column;
   gap: 14px;
-  overflow: auto;
+  overflow: hidden;
   padding-right: 4px;
   scrollbar-color: rgba(142, 151, 165, 0.58) rgba(20, 22, 26, 0.35);
   scrollbar-width: thin;
+}
+
+.home-primary-column {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: start;
+}
+
+.home-primary-column > .home-resume-card,
+.home-primary-column > .home-section:not(.home-recent-section):not(.favorite-home-section) {
+  grid-column: 1 / -1;
 }
 
 .home-side-column {
@@ -9383,6 +9394,7 @@ button {
 
   .home-primary-column,
   .home-side-column {
+    display: flex;
     min-height: auto;
     overflow: visible;
   }

@@ -365,6 +365,7 @@ import { HomeRecentSection } from "./HomeRecentSection";
 import { HomeResumeSection } from "./HomeResumeSection";
 import { HomeSideColumn } from "./HomeSideColumn";
 import { HomeModeCard } from "./HomeModeCard";
+import { FavoriteHomeSection } from "./FavoriteHomeSection";
 import { HomeSpecialInsightsSection } from "./HomeSpecialInsightsSection";
 import { HomeListCard } from "./HomeVideoCards";
 import { MediaRootDialogsGroup } from "./MediaRootDialogsGroup";
@@ -5766,6 +5767,13 @@ export default function App() {
                 />
               ) : null}
 
+              <FavoriteHomeSection
+                cards={favoriteHomeCards}
+                totalCount={libraryStats.favorites}
+                onOpenAll={openFavoritePlaylist}
+                renderCard={renderHomeListCard}
+              />
+
               <HomeRecentSection cards={recentHomeCards} renderCard={renderHomeListCard} />
             </div>
 
@@ -5839,12 +5847,6 @@ export default function App() {
                 videoCount: versionPlaylistVideos.length,
                 onOpenPlaylist: openVersionPlaylist,
               } : null}
-              favorites={{
-                cards: favoriteHomeCards,
-                totalCount: libraryStats.favorites,
-                onOpenAll: openFavoritePlaylist,
-                renderCard: renderHomeListCard,
-              }}
             />
           </section>
         ) : null}

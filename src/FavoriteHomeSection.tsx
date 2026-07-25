@@ -15,7 +15,7 @@ export function FavoriteHomeSection({ cards, totalCount, onOpenAll, renderCard }
   }
 
   return (
-    <section className="home-section">
+    <section className="home-section favorite-home-section">
       <div className="home-section-header">
         <h2>收藏 / 稍后看</h2>
         <span>{totalCount} 个</span>
