@@ -1045,11 +1045,11 @@ button {
 
 .home-primary-column > .home-stats {
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  min-height: 88px;
+  min-height: 70px;
 }
 
 .home-primary-column > .home-stats > div {
-  min-height: 88px;
+  min-height: 70px;
 }
 
 .home-side-column {
@@ -1082,8 +1082,8 @@ button {
   display: grid;
   grid-template-columns: minmax(240px, min(38%, 462px)) minmax(0, 1fr);
   gap: 28px;
-  min-height: 540px;
-  padding: 24px;
+  min-height: 520px;
+  padding: 20px;
 }
 
 .home-resume-card.has-thumbnail {
