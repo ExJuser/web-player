@@ -10,17 +10,17 @@ type FavoriteHomeSectionProps = {
 };
 
 export function FavoriteHomeSection({ cards, totalCount, onOpenAll, renderCard }: FavoriteHomeSectionProps) {
-  if (!cards.length) {
-    return null;
-  }
-
   return (
     <section className="home-section favorite-home-section">
       <div className="home-section-header">
         <h2>收藏 / 稍后看</h2>
         <span>{totalCount} 个</span>
       </div>
-      <div className="home-compact-list">{cards.map(renderCard)}</div>
+      {cards.length ? (
+        <div className="home-compact-list">{cards.map(renderCard)}</div>
+      ) : (
+        <div className="empty-list compact">还没有影片</div>
+      )}
       {totalCount > cards.length ? (
         <button className="secondary-button favorite-home-more" type="button" onClick={onOpenAll}>
           查看全部 {totalCount} 个收藏
