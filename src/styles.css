@@ -1047,6 +1047,10 @@ button {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+.home-primary-column > .home-stats > div {
+  padding: 10px 14px 8px;
+}
+
 .home-side-column {
   padding-right: 0;
 }
