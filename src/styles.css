@@ -2174,13 +2174,15 @@ button {
   align-content: start;
 }
 
-.favorite-home-section {
+.favorite-home-section,
+.home-recent-section {
   max-height: min(560px, calc(100vh - 160px));
   min-height: 0;
   overflow: hidden;
 }
 
-.favorite-home-section .home-compact-list {
+.favorite-home-section .home-compact-list,
+.home-recent-section .home-list-grid {
   max-height: min(450px, calc(100vh - 270px));
 }
 
