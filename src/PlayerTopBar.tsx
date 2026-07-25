@@ -1,4 +1,4 @@
-import { Compass, FolderOpen, HardDrive, Images, Info, Moon, Scissors, Search, Sparkles, Sun } from "lucide-react";
+import { Compass, FolderOpen, HardDrive, Images, Info, LoaderCircle, Moon, Scissors, Search, Sparkles, Sun, X } from "lucide-react";
 import { forwardRef, useEffect, useRef, useState } from "react";
 
 import type { MediaProcessingTaskState } from "./MediaProcessingTaskDialog";
@@ -8,7 +8,11 @@ type VideoMetadataRow = readonly [string, string];
 type PlayerTopBarProps = {
   currentVideoId: string | null;
   canShowExplore: boolean;
+  homeSearchQuery: string;
+  homeSearchResultCount: number;
+  homeSearchResults: readonly { id: string; name: string; relativePath: string }[];
   isExploreViewVisible: boolean;
+  isHomeSearchPending: boolean;
   mediaProcessingTask: MediaProcessingTaskState | null;
   isHomeViewVisible: boolean;
   isNonPlayerViewVisible: boolean;
@@ -22,7 +26,10 @@ type PlayerTopBarProps = {
   onAddMediaLibrary: () => void;
   onOpenCacheStatus: () => void;
   onOpenMediaProcessingTask: () => void;
-  onShowPlaylistSearch: () => void;
+  onChangeHomeSearch: (query: string) => void;
+  onClearHomeSearch: () => void;
+  onFocusHomeSearch: () => void;
+  onSelectHomeSearchResult: (videoId: string) => void;
   onShowExplore: () => void;
   onShowHome: () => void;
   onShowPhotoAlbums: () => void;
@@ -33,7 +40,11 @@ export const PlayerTopBar = forwardRef<HTMLElement, PlayerTopBarProps>(function 
   {
     currentVideoId,
     canShowExplore,
+    homeSearchQuery,
+    homeSearchResultCount,
+    homeSearchResults,
     isExploreViewVisible,
+    isHomeSearchPending,
     mediaProcessingTask,
     isHomeViewVisible,
     isNonPlayerViewVisible,
@@ -47,7 +58,10 @@ export const PlayerTopBar = forwardRef<HTMLElement, PlayerTopBarProps>(function 
     onAddMediaLibrary,
     onOpenCacheStatus,
     onOpenMediaProcessingTask,
-    onShowPlaylistSearch,
+    onChangeHomeSearch,
+    onClearHomeSearch,
+    onFocusHomeSearch,
+    onSelectHomeSearchResult,
     onShowExplore,
     onShowHome,
     onShowPhotoAlbums,
@@ -56,8 +70,10 @@ export const PlayerTopBar = forwardRef<HTMLElement, PlayerTopBarProps>(function 
   ref
 ) {
   const [isMetadataPinnedOpen, setIsMetadataPinnedOpen] = useState(false);
+  const [isHomeSearchFocused, setIsHomeSearchFocused] = useState(false);
   const metadataCardRef = useRef<HTMLButtonElement>(null);
   const shouldShowMetadata = Boolean(currentVideoId) && !isPrivacyMode && !isNonPlayerViewVisible;
+  const hasHomeSearchQuery = Boolean(homeSearchQuery.trim());
   const themeToggleLabel = theme === "dark" ? "切换到白天模式" : "切换到黑夜模式";
 
   useEffect(() => {
@@ -108,7 +124,61 @@ export const PlayerTopBar = forwardRef<HTMLElement, PlayerTopBarProps>(function 
               {playabilityMessage ? <span className="compatible-media-status">{playabilityMessage}</span> : null}
             </span>
           </button>
-        ) : isHomeViewVisible ? null : (
+        ) : isHomeViewVisible ? (
+          <form
+            className="home-top-search"
+            role="search"
+            onFocus={(event) => {
+              if (event.currentTarget.contains(event.relatedTarget)) return;
+              setIsHomeSearchFocused(true);
+              onFocusHomeSearch();
+            }}
+            onBlur={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget)) setIsHomeSearchFocused(false);
+            }}
+            onSubmit={(event) => {
+              event.preventDefault();
+              const firstResult = homeSearchResults[0];
+              if (firstResult && !isHomeSearchPending) onSelectHomeSearchResult(firstResult.id);
+            }}
+          >
+            <Search className="home-top-search-icon" size={17} aria-hidden="true" />
+            <input
+              type="search"
+              value={homeSearchQuery}
+              onChange={(event) => onChangeHomeSearch(event.target.value)}
+              placeholder="搜索片名、演员、标签或路径"
+              aria-label="搜索影片"
+              aria-controls="home-search-results"
+              aria-expanded={isHomeSearchFocused && hasHomeSearchQuery}
+              aria-busy={isHomeSearchPending}
+            />
+            {hasHomeSearchQuery ? (
+              <span className="home-top-search-actions">
+                {isHomeSearchPending ? <LoaderCircle className="home-top-search-loading" size={15} aria-hidden="true" /> : <span>{homeSearchResultCount}</span>}
+                <button type="button" onClick={onClearHomeSearch} title="清空搜索" aria-label="清空搜索">
+                  <X size={15} />
+                </button>
+              </span>
+            ) : null}
+            {isHomeSearchFocused && hasHomeSearchQuery ? (
+              <div className="home-top-search-results" id="home-search-results" role="listbox" aria-label="影片搜索结果">
+                {isHomeSearchPending ? (
+                  <div className="home-top-search-status">正在搜索...</div>
+                ) : homeSearchResults.length ? (
+                  homeSearchResults.map((video) => (
+                    <button key={video.id} type="button" role="option" aria-selected="false" onClick={() => onSelectHomeSearchResult(video.id)}>
+                      <strong>{video.name}</strong>
+                      <small>{video.relativePath}</small>
+                    </button>
+                  ))
+                ) : (
+                  <div className="home-top-search-status">没有找到匹配影片</div>
+                )}
+              </div>
+            ) : null}
+          </form>
+        ) : (
           <p className="current-video-title">{summaryFallbackText}</p>
         )}
       </div>
@@ -118,12 +188,6 @@ export const PlayerTopBar = forwardRef<HTMLElement, PlayerTopBarProps>(function 
             {mediaProcessingTask.kind === "lada" ? <Sparkles size={16} className="spin-icon" /> : <Scissors size={16} className="spin-icon" />}
             <span>{Math.round(mediaProcessingTask.progress)}%</span>
             <small>{mediaProcessingTask.videoName}</small>
-          </button>
-        ) : null}
-        {!isPrivacyMode && isHomeViewVisible && videoCount ? (
-          <button className="secondary-button top-home-button" type="button" onClick={onShowPlaylistSearch}>
-            <Search size={17} />
-            搜索影片
           </button>
         ) : null}
         {!isPrivacyMode && isHomeViewVisible ? (

@@ -3575,12 +3575,20 @@ export default function App() {
     setActiveView("home");
   }, [cancelAutoNextPrompt, persistCurrentProgress, resetHoldSpeedState, showControls]);
 
-  const showPlaylistSearch = useCallback(() => {
-    setActiveView("player");
-    window.requestAnimationFrame(() => {
-      document.querySelector<HTMLInputElement>(".player-search-form input")?.focus();
-    });
+  const resetHomeSearchScope = useCallback(() => {
+    setPlaylistPage(1);
+    setPlaylistFilter("all");
+    setIsDuplicatePlaylistActive(false);
+    setIsVersionPlaylistActive(false);
+    setRatingPlaylistMode(null);
+    setIsSeriesMode(false);
+    setIsSeriesMenuOpen(false);
   }, []);
+
+  const changeHomeSearch = useCallback((query: string) => {
+    resetHomeSearchScope();
+    setPlaylistSearchQuery(query);
+  }, [resetHomeSearchScope]);
 
   const showExploreView = useCallback(() => {
     persistCurrentProgress();
@@ -5745,8 +5753,12 @@ export default function App() {
           ref={topBarRef}
           canShowExplore={homeMediaMode === "special"}
           currentVideoId={currentVideo?.id ?? null}
+          homeSearchQuery={playlistSearchQuery}
+          homeSearchResultCount={visibleVideos.length}
+          homeSearchResults={playlistSearchQuery.trim() ? visibleVideos.slice(0, 8) : []}
           mediaProcessingTask={mediaProcessingTask}
           isExploreViewVisible={isExploreViewVisible}
+          isHomeSearchPending={isPlaylistSearchPending}
           isHomeViewVisible={isHomeViewVisible}
           isNonPlayerViewVisible={isNonPlayerViewVisible}
           isPrivacyMode={isPrivacyMode}
@@ -5757,9 +5769,12 @@ export default function App() {
           theme={theme}
           videoCount={videos.length}
           onAddMediaLibrary={requestAddMediaLibrary}
+          onChangeHomeSearch={changeHomeSearch}
+          onClearHomeSearch={() => setPlaylistSearchQuery("")}
+          onFocusHomeSearch={resetHomeSearchScope}
           onOpenCacheStatus={openCacheStatusDialog}
           onOpenMediaProcessingTask={reopenMediaProcessingTask}
-          onShowPlaylistSearch={showPlaylistSearch}
+          onSelectHomeSearchResult={(videoId) => selectVideo(videoId, { syncSeriesMode: false })}
           onShowExplore={showExploreView}
           onShowHome={showHomeView}
           onShowPhotoAlbums={showPhotoAlbumsView}
