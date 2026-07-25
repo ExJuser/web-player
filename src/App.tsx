@@ -3575,6 +3575,13 @@ export default function App() {
     setActiveView("home");
   }, [cancelAutoNextPrompt, persistCurrentProgress, resetHoldSpeedState, showControls]);
 
+  const showPlaylistSearch = useCallback(() => {
+    setActiveView("player");
+    window.requestAnimationFrame(() => {
+      document.querySelector<HTMLInputElement>(".player-search-form input")?.focus();
+    });
+  }, []);
+
   const showExploreView = useCallback(() => {
     persistCurrentProgress();
     videoRef.current?.pause();
@@ -5752,6 +5759,7 @@ export default function App() {
           onAddMediaLibrary={requestAddMediaLibrary}
           onOpenCacheStatus={openCacheStatusDialog}
           onOpenMediaProcessingTask={reopenMediaProcessingTask}
+          onShowPlaylistSearch={showPlaylistSearch}
           onShowExplore={showExploreView}
           onShowHome={showHomeView}
           onShowPhotoAlbums={showPhotoAlbumsView}

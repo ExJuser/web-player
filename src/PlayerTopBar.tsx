@@ -1,4 +1,4 @@
-import { Compass, FolderOpen, HardDrive, Images, Info, Moon, Scissors, Sparkles, Sun } from "lucide-react";
+import { Compass, FolderOpen, HardDrive, Images, Info, Moon, Scissors, Search, Sparkles, Sun } from "lucide-react";
 import { forwardRef, useEffect, useRef, useState } from "react";
 
 import type { MediaProcessingTaskState } from "./MediaProcessingTaskDialog";
@@ -22,6 +22,7 @@ type PlayerTopBarProps = {
   onAddMediaLibrary: () => void;
   onOpenCacheStatus: () => void;
   onOpenMediaProcessingTask: () => void;
+  onShowPlaylistSearch: () => void;
   onShowExplore: () => void;
   onShowHome: () => void;
   onShowPhotoAlbums: () => void;
@@ -46,6 +47,7 @@ export const PlayerTopBar = forwardRef<HTMLElement, PlayerTopBarProps>(function 
     onAddMediaLibrary,
     onOpenCacheStatus,
     onOpenMediaProcessingTask,
+    onShowPlaylistSearch,
     onShowExplore,
     onShowHome,
     onShowPhotoAlbums,
@@ -116,6 +118,12 @@ export const PlayerTopBar = forwardRef<HTMLElement, PlayerTopBarProps>(function 
             {mediaProcessingTask.kind === "lada" ? <Sparkles size={16} className="spin-icon" /> : <Scissors size={16} className="spin-icon" />}
             <span>{Math.round(mediaProcessingTask.progress)}%</span>
             <small>{mediaProcessingTask.videoName}</small>
+          </button>
+        ) : null}
+        {!isPrivacyMode && isHomeViewVisible && videoCount ? (
+          <button className="secondary-button top-home-button" type="button" onClick={onShowPlaylistSearch}>
+            <Search size={17} />
+            搜索影片
           </button>
         ) : null}
         {!isPrivacyMode && isHomeViewVisible ? (
