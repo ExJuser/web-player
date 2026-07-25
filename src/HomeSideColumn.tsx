@@ -5,14 +5,12 @@ import { HomeMediaLibraryCard } from "./HomeMediaLibraryCard";
 import { HomeModeCard } from "./HomeModeCard";
 import { HomeRecapCard } from "./HomeRecapCard";
 import { HomeTagStats } from "./HomeTagStats";
-import { RatingFilterCard } from "./RatingFilterCard";
 import { VideoVersionSummaryCard } from "./VideoVersionSummaryCard";
 
 type HomeSideColumnProps = {
   duplicateSummary: ComponentProps<typeof DuplicateVideoSummaryCard> | null;
   mediaLibrary: ComponentProps<typeof HomeMediaLibraryCard>;
   mode: ComponentProps<typeof HomeModeCard>;
-  ratingFilter: ComponentProps<typeof RatingFilterCard> | null;
   recap: ComponentProps<typeof HomeRecapCard> | null;
   tagStats: ComponentProps<typeof HomeTagStats> | null;
   videoVersions: ComponentProps<typeof VideoVersionSummaryCard> | null;
@@ -22,7 +20,6 @@ export function HomeSideColumn({
   duplicateSummary,
   mediaLibrary,
   mode,
-  ratingFilter,
   recap,
   tagStats,
   videoVersions,
@@ -34,8 +31,6 @@ export function HomeSideColumn({
       <HomeMediaLibraryCard {...mediaLibrary} />
 
       {recap ? <HomeRecapCard {...recap} /> : null}
-
-      {ratingFilter ? <RatingFilterCard {...ratingFilter} /> : null}
 
       {tagStats ? <HomeTagStats {...tagStats} /> : null}
 

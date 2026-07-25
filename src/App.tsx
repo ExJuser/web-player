@@ -265,7 +265,6 @@ import {
   createPrimaryHomeCard,
   createRecentHomeCards,
   createThumbnailQueueVideoIds,
-  createRatingStats,
   createResumableHomeCards,
   createSeriesOptions,
   createSeriesOptionsKey,
@@ -276,7 +275,6 @@ import {
   createVideoIndexById,
   createWatchActivityCarouselCardsByDate,
   createWatchActivityCarouselVideoIds,
-  countRatingFilterMatches,
   filterVideosBySeries,
   filterRatingPlaylistVideos,
   formatPlaylistVisibleCountLabel,
@@ -1268,7 +1266,6 @@ export default function App() {
     [isPlaylistSortReversed, isSeriesMode, modeFilteredVideos, playlistSortMode, videoStatsRevision],
   );
   const ratingFilterLabel = getRatingFilterLabel(ratingFilterOperator, ratingFilterThreshold);
-  const ratingStats = useMemo(() => createRatingStats(modeFilteredVideos, videoRatings), [modeFilteredVideos, videoRatings]);
   const ratingPlaylistVideos = useMemo(
     () =>
       filterRatingPlaylistVideos(
@@ -1279,13 +1276,6 @@ export default function App() {
         ratingFilterThreshold,
       ),
     [isRatingFilterEnabled, playlistVideos, ratingFilterOperator, ratingFilterThreshold, ratingPlaylistMode, videoRatings],
-  );
-  const numericRatingPlaylistCount = useMemo(
-    () =>
-      isRatingFilterEnabled
-        ? countRatingFilterMatches(playlistVideos, videoRatings, ratingFilterOperator, ratingFilterThreshold)
-        : 0,
-    [isRatingFilterEnabled, playlistVideos, ratingFilterOperator, ratingFilterThreshold, videoRatings],
   );
   const seriesOptions = useMemo(
     () => createSeriesOptions(playlistVideos, localConfig?.mediaRoots ?? []),
@@ -5849,27 +5839,6 @@ export default function App() {
                 onRefresh: () => void loadGlobalMediaLibrary(),
                 onToggle: () => setIsMediaLibraryPanelOpen((isOpen) => !isOpen),
               }}
-              ratingFilter={isRatingFilterEnabled ? {
-                numericRatingPlaylistCount,
-                onOpenHigh: () => {
-                  setRatingFilterOperator("gt");
-                  setRatingFilterThreshold(8);
-                  openRatingPlaylist("numeric", "gt", 8);
-                },
-                onOpenLow: () => {
-                  setRatingFilterOperator("lt");
-                  setRatingFilterThreshold(6);
-                  openRatingPlaylist("numeric", "lt", 6);
-                },
-                onOpenNumeric: () => openRatingPlaylist("numeric"),
-                onOpenUnrated: () => openRatingPlaylist("unrated"),
-                onOperatorChange: setRatingFilterOperator,
-                onThresholdChange: (threshold) => setRatingFilterThreshold(clamp(threshold, 0, 10)),
-                ratingFilterLabel,
-                ratingFilterOperator,
-                ratingFilterThreshold,
-                ratingStats,
-              } : null}
               tagStats={homeTagStats}
               recap={shouldShowHomeRecap ? {
                 canUseEmbeddedSubtitles: canUseHomeEmbeddedSubtitles,
