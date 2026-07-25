@@ -192,7 +192,7 @@ button {
 .home-top-search {
   position: relative;
   z-index: 30;
-  width: min(680px, 100%);
+  width: min(884px, 100%);
   min-width: 0;
 }
 
