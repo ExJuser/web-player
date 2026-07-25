@@ -1515,6 +1515,10 @@ export default function App() {
     [effectivePlaylistSearchQuery, playlistScopeVideos, playlistSearchDocumentsById],
   );
   const visibleVideos = playlistSearchResult.videos;
+  const homeSearchResultVideos = useMemo(
+    () => playlistSearchQuery.trim() && !isPlaylistSearchPending ? visibleVideos.slice(0, 8) : [],
+    [isPlaylistSearchPending, playlistSearchQuery, visibleVideos],
+  );
   const playbackQueueVideos = useMemo(
     () => playbackMode === "favorites-only" ? getFavoritePlaylistVideos(visibleVideos, favoriteVideoIds) : visibleVideos,
     [favoriteVideoIds, playbackMode, visibleVideos],
@@ -1912,12 +1916,13 @@ export default function App() {
         modeFilteredVideoById,
         playlistThumbnailVideos: isExploreViewVisible
           ? [...actorThumbnailVideos, ...growthRingThumbnailVideos]
-          : isHomeViewVisible ? [] : playlistThumbnailVideos,
+          : isHomeViewVisible ? homeSearchResultVideos : playlistThumbnailVideos,
       }),
     [
       favoriteHomeCards,
       actorThumbnailVideos,
       growthRingThumbnailVideos,
+      homeSearchResultVideos,
       isHomeViewVisible,
       isExploreViewVisible,
       isThumbnailDashboardVisible,
@@ -5755,7 +5760,14 @@ export default function App() {
           currentVideoId={currentVideo?.id ?? null}
           homeSearchQuery={playlistSearchQuery}
           homeSearchResultCount={visibleVideos.length}
-          homeSearchResults={playlistSearchQuery.trim() ? visibleVideos.slice(0, 8) : []}
+          homeSearchResults={homeSearchResultVideos.map((video) => ({
+            video,
+            tags: effectiveVideoTags[video.id] ?? [],
+            actorTags: videoActorTags[video.id] ?? [],
+            systemTags: systemVideoTags[video.id] ?? [],
+            rating: videoRatings[video.id],
+            comment: videoComments[video.id],
+          }))}
           mediaProcessingTask={mediaProcessingTask}
           isExploreViewVisible={isExploreViewVisible}
           isHomeSearchPending={isPlaylistSearchPending}
@@ -5774,7 +5786,9 @@ export default function App() {
           onFocusHomeSearch={resetHomeSearchScope}
           onOpenCacheStatus={openCacheStatusDialog}
           onOpenMediaProcessingTask={reopenMediaProcessingTask}
+          onThumbnailError={markVideoThumbnailFailed}
           onSelectHomeSearchResult={(videoId) => selectVideo(videoId, { syncSeriesMode: false })}
+          playlistThumbnailStore={playlistThumbnailStore}
           onShowExplore={showExploreView}
           onShowHome={showHomeView}
           onShowPhotoAlbums={showPhotoAlbumsView}

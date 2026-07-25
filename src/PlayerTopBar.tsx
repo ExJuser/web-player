@@ -1,16 +1,27 @@
-import { Compass, FolderOpen, HardDrive, Images, Info, LoaderCircle, Moon, Scissors, Search, Sparkles, Sun, X } from "lucide-react";
-import { forwardRef, useEffect, useRef, useState } from "react";
+import { Compass, Film, FolderOpen, HardDrive, Images, Info, LoaderCircle, Moon, Scissors, Search, Sparkles, Sun, X } from "lucide-react";
+import { forwardRef, useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import type { MediaProcessingTaskState } from "./MediaProcessingTaskDialog";
+import { RatingChip, TagChips } from "./MetadataChips";
+import type { PlaylistThumbnailStore } from "./playlistThumbnailStore";
+import type { VideoItem } from "./playerTypes";
 
 type VideoMetadataRow = readonly [string, string];
+type HomeSearchResult = {
+  video: VideoItem;
+  tags: string[];
+  actorTags: string[];
+  systemTags: string[];
+  rating?: number;
+  comment?: string;
+};
 
 type PlayerTopBarProps = {
   currentVideoId: string | null;
   canShowExplore: boolean;
   homeSearchQuery: string;
   homeSearchResultCount: number;
-  homeSearchResults: readonly { id: string; name: string; relativePath: string }[];
+  homeSearchResults: readonly HomeSearchResult[];
   isExploreViewVisible: boolean;
   isHomeSearchPending: boolean;
   mediaProcessingTask: MediaProcessingTaskState | null;
@@ -19,6 +30,7 @@ type PlayerTopBarProps = {
   isPrivacyMode: boolean;
   isScanning: boolean;
   metadataRows: readonly VideoMetadataRow[];
+  playlistThumbnailStore: PlaylistThumbnailStore;
   summaryFallbackText: string;
   theme: "dark" | "light";
   videoCount: number;
@@ -26,6 +38,7 @@ type PlayerTopBarProps = {
   onAddMediaLibrary: () => void;
   onOpenCacheStatus: () => void;
   onOpenMediaProcessingTask: () => void;
+  onThumbnailError: (videoId: string) => void;
   onChangeHomeSearch: (query: string) => void;
   onClearHomeSearch: () => void;
   onFocusHomeSearch: () => void;
@@ -51,6 +64,7 @@ export const PlayerTopBar = forwardRef<HTMLElement, PlayerTopBarProps>(function 
     isPrivacyMode,
     isScanning,
     metadataRows,
+    playlistThumbnailStore,
     summaryFallbackText,
     theme,
     videoCount,
@@ -58,6 +72,7 @@ export const PlayerTopBar = forwardRef<HTMLElement, PlayerTopBarProps>(function 
     onAddMediaLibrary,
     onOpenCacheStatus,
     onOpenMediaProcessingTask,
+    onThumbnailError,
     onChangeHomeSearch,
     onClearHomeSearch,
     onFocusHomeSearch,
@@ -139,7 +154,7 @@ export const PlayerTopBar = forwardRef<HTMLElement, PlayerTopBarProps>(function 
             onSubmit={(event) => {
               event.preventDefault();
               const firstResult = homeSearchResults[0];
-              if (firstResult && !isHomeSearchPending) onSelectHomeSearchResult(firstResult.id);
+              if (firstResult && !isHomeSearchPending) onSelectHomeSearchResult(firstResult.video.id);
             }}
           >
             <Search className="home-top-search-icon" size={17} aria-hidden="true" />
@@ -166,11 +181,14 @@ export const PlayerTopBar = forwardRef<HTMLElement, PlayerTopBarProps>(function 
                 {isHomeSearchPending ? (
                   <div className="home-top-search-status">正在搜索...</div>
                 ) : homeSearchResults.length ? (
-                  homeSearchResults.map((video) => (
-                    <button key={video.id} type="button" role="option" aria-selected="false" onClick={() => onSelectHomeSearchResult(video.id)}>
-                      <strong>{video.name}</strong>
-                      <small>{video.relativePath}</small>
-                    </button>
+                  homeSearchResults.map((result) => (
+                    <HomeSearchResultItem
+                      key={result.video.id}
+                      result={result}
+                      playlistThumbnailStore={playlistThumbnailStore}
+                      onSelect={onSelectHomeSearchResult}
+                      onThumbnailError={onThumbnailError}
+                    />
                   ))
                 ) : (
                   <div className="home-top-search-status">没有找到匹配影片</div>
@@ -242,3 +260,45 @@ export const PlayerTopBar = forwardRef<HTMLElement, PlayerTopBarProps>(function 
     </header>
   );
 });
+
+function HomeSearchResultItem({
+  result,
+  playlistThumbnailStore,
+  onSelect,
+  onThumbnailError,
+}: {
+  result: HomeSearchResult;
+  playlistThumbnailStore: PlaylistThumbnailStore;
+  onSelect: (videoId: string) => void;
+  onThumbnailError: (videoId: string) => void;
+}) {
+  const { video } = result;
+  const subscribeToThumbnail = useCallback(
+    (listener: () => void) => playlistThumbnailStore.subscribe(video.id, listener),
+    [playlistThumbnailStore, video.id],
+  );
+  const getThumbnailSnapshot = useCallback(
+    () => playlistThumbnailStore.get(video.id),
+    [playlistThumbnailStore, video.id],
+  );
+  const playlistThumbnail = useSyncExternalStore(subscribeToThumbnail, getThumbnailSnapshot, getThumbnailSnapshot);
+  const thumbnailUrl = playlistThumbnail?.url ?? video.thumbnailUrl;
+
+  return (
+    <button className="home-top-search-result" type="button" role="option" aria-selected="false" onClick={() => onSelect(video.id)}>
+      <span className={`home-top-search-thumbnail ${thumbnailUrl ? "has-image" : ""}`} aria-hidden="true">
+        {thumbnailUrl ? (
+          <img src={thumbnailUrl} alt="" decoding="async" loading="lazy" draggable={false} onError={() => onThumbnailError(video.id)} />
+        ) : (
+          <Film size={22} />
+        )}
+      </span>
+      <span className="home-top-search-result-body">
+        <strong>{video.name}</strong>
+        <small>{video.relativePath}</small>
+        <TagChips tags={result.tags} actorTags={result.actorTags} systemTags={result.systemTags} limit={4} compact />
+        <RatingChip rating={result.rating} comment={result.comment} />
+      </span>
+    </button>
+  );
+}
