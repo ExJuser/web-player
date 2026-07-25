@@ -366,7 +366,7 @@ export type PlaylistSortMode =
   | "emissionCount";
 export type PlaybackMode = "sequential" | "single-loop" | "list-loop" | "shuffle" | "favorites-only";
 export type HomeMediaMode = "all" | "anime" | "special";
-export type ActiveView = "home" | "player" | "photos" | "photoViewer";
+export type ActiveView = "home" | "explore" | "player" | "photos" | "photoViewer";
 export type AutoNextPrompt = {
   nextVideoId: string;
   nextVideoName: string;

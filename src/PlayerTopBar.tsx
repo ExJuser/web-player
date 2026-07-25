@@ -1,4 +1,4 @@
-import { FolderOpen, HardDrive, Images, Info, Moon, Scissors, Sparkles, Sun } from "lucide-react";
+import { Compass, FolderOpen, HardDrive, Images, Info, Moon, Scissors, Sparkles, Sun } from "lucide-react";
 import { forwardRef, useEffect, useRef, useState } from "react";
 
 import type { MediaProcessingTaskState } from "./MediaProcessingTaskDialog";
@@ -7,6 +7,8 @@ type VideoMetadataRow = readonly [string, string];
 
 type PlayerTopBarProps = {
   currentVideoId: string | null;
+  canShowExplore: boolean;
+  isExploreViewVisible: boolean;
   mediaProcessingTask: MediaProcessingTaskState | null;
   isHomeViewVisible: boolean;
   isNonPlayerViewVisible: boolean;
@@ -20,6 +22,7 @@ type PlayerTopBarProps = {
   onAddMediaLibrary: () => void;
   onOpenCacheStatus: () => void;
   onOpenMediaProcessingTask: () => void;
+  onShowExplore: () => void;
   onShowHome: () => void;
   onShowPhotoAlbums: () => void;
   onToggleTheme: () => void;
@@ -28,6 +31,8 @@ type PlayerTopBarProps = {
 export const PlayerTopBar = forwardRef<HTMLElement, PlayerTopBarProps>(function PlayerTopBar(
   {
     currentVideoId,
+    canShowExplore,
+    isExploreViewVisible,
     mediaProcessingTask,
     isHomeViewVisible,
     isNonPlayerViewVisible,
@@ -41,6 +46,7 @@ export const PlayerTopBar = forwardRef<HTMLElement, PlayerTopBarProps>(function 
     onAddMediaLibrary,
     onOpenCacheStatus,
     onOpenMediaProcessingTask,
+    onShowExplore,
     onShowHome,
     onShowPhotoAlbums,
     onToggleTheme,
@@ -134,7 +140,13 @@ export const PlayerTopBar = forwardRef<HTMLElement, PlayerTopBarProps>(function 
             {isScanning ? "扫描中" : "新增媒体库"}
           </button>
         ) : null}
-        {!isPrivacyMode && videoCount && !isHomeViewVisible ? (
+        {!isPrivacyMode && isHomeViewVisible && canShowExplore ? (
+          <button className="secondary-button top-home-button" type="button" onClick={onShowExplore}>
+            <Compass size={17} />
+            探索
+          </button>
+        ) : null}
+        {!isPrivacyMode && (videoCount || isExploreViewVisible) && !isHomeViewVisible ? (
           <button className="secondary-button top-home-button" type="button" onClick={onShowHome}>
             首页
           </button>

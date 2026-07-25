@@ -991,6 +991,33 @@ button {
   overflow: hidden;
 }
 
+.explore-dashboard {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 14px;
+  overflow: hidden;
+}
+
+.explore-dashboard[hidden] {
+  display: none;
+}
+
+.explore-content {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 14px;
+  overflow: auto;
+  padding-right: 4px;
+  scrollbar-color: rgba(142, 151, 165, 0.58) rgba(20, 22, 26, 0.35);
+  scrollbar-width: thin;
+}
+
 .home-primary-column,
 .home-side-column {
   display: flex;
@@ -2637,12 +2664,12 @@ button {
   gap: 6px;
 }
 
-.home-primary-column .special-insight-summary,
-.home-primary-column .special-insight-tabs {
+.explore-content .special-insight-summary,
+.explore-content .special-insight-tabs {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
-.home-primary-column .special-insight-list {
+.explore-content .special-insight-list {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
@@ -2720,7 +2747,7 @@ button {
   gap: 14px;
 }
 
-.home-primary-column .special-tag-groups {
+.explore-content .special-tag-groups {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
@@ -9325,6 +9352,13 @@ button {
     overflow: visible;
   }
 
+  .explore-dashboard,
+  .explore-content {
+    min-height: auto;
+    flex: 0 0 auto;
+    overflow: visible;
+  }
+
   .photo-dashboard {
     overflow: auto;
   }
@@ -9564,13 +9598,13 @@ button {
     padding: 8px;
   }
 
-  .home-primary-column .special-insight-summary,
-  .home-primary-column .special-insight-tabs {
+  .explore-content .special-insight-summary,
+  .explore-content .special-insight-tabs {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .home-primary-column .special-insight-list,
-  .home-primary-column .special-tag-groups {
+  .explore-content .special-insight-list,
+  .explore-content .special-tag-groups {
     grid-template-columns: 1fr;
   }
 
@@ -9951,11 +9985,6 @@ button {
   color: #667085;
 }
 /* Special-mode mosaic studio */
-.home-dashboard.mosaic-active {
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr);
-}
-
 .mosaic-studio {
   position: relative;
   min-width: 0;
@@ -10168,7 +10197,7 @@ button {
 :root[data-theme="light"] .mosaic-progressive-preview { background: radial-gradient(circle at center, rgba(126,91,224,.12), transparent 55%), #f8f7fc; }
 
 @media (min-width: 901px) {
-  .home-dashboard.mosaic-active .home-primary-column { overflow: hidden; }
+  .explore-dashboard.mosaic-active .explore-content { overflow: hidden; }
   .mosaic-studio { display: flex; min-height: 0; flex: 1; flex-direction: column; }
   .mosaic-studio-hero { flex: 0 0 auto; }
   .mosaic-studio-layout { min-height: 0; flex: 1; overflow: hidden; }
@@ -10887,7 +10916,7 @@ button {
 }
 
 @media (min-width: 901px) {
-  .home-dashboard.growth-rings-active .home-primary-column {
+  .explore-dashboard.growth-rings-active .explore-content {
     overflow: hidden;
   }
 }
@@ -11159,7 +11188,7 @@ button {
 
 
 @media (min-width: 901px) {
-  .home-dashboard.mosaic-active .creative-feature-shell {
+  .explore-dashboard.mosaic-active .creative-feature-shell {
     overflow: hidden;
   }
 }
