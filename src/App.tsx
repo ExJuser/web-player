@@ -544,7 +544,7 @@ export default function App() {
   const [homeProgressRecapVideoId, setHomeProgressRecapVideoId] = useState("");
   const [isHomeProgressRecapLoading, setIsHomeProgressRecapLoading] = useState(false);
   const [specialInsightTab, setSpecialInsightTab] = useState<SpecialInsightTab>("played");
-  const [isSpecialInsightsExpanded, setIsSpecialInsightsExpanded] = useState(false);
+  const [isSpecialInsightsExpanded, setIsSpecialInsightsExpanded] = useState(true);
   const [duplicateVideoGroups, setDuplicateVideoGroups] = useState<DuplicateVideoGroup[]>([]);
   const [duplicateDetectionProgress, setDuplicateDetectionProgress] = useState<DuplicateDetectionProgress | null>(null);
   const [duplicateDetectionMessage, setDuplicateDetectionMessage] = useState("尚未检测重复视频。");
@@ -673,7 +673,7 @@ export default function App() {
   const [watchActivityRevision, setWatchActivityRevision] = useState(0);
   const [watchActivityRange, setWatchActivityRange] = useState<WatchActivityRange>(30);
   const [watchActivityMetric, setWatchActivityMetric] = useState<WatchActivityMetric>("watched");
-  const [isWatchActivityExpanded, setIsWatchActivityExpanded] = useState(false);
+  const [isWatchActivityExpanded, setIsWatchActivityExpanded] = useState(true);
   const [selectedWatchActivityDate, setSelectedWatchActivityDate] = useState<string | null>(null);
   const [watchActivityCarouselTick, setWatchActivityCarouselTick] = useState(0);
   const [launchEffectKey, setLaunchEffectKey] = useState(0);
