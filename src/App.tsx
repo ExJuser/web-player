@@ -1491,10 +1491,11 @@ export default function App() {
         actors: actorMetadata.names,
         actorAliases: actorMetadata.aliases,
         comment: videoComments[video.id],
+        highlightDescriptions: (videoHighlights[video.id] ?? []).flatMap((highlight) => highlight.tag ? [highlight.tag] : []),
         library: (video.mediaRootId ? mediaRootLabelsById[video.mediaRootId] : "") || fallbackMediaRootLabelForVideo(video),
       };
     })),
-    [effectiveVideoTags, mediaRootLabelsById, playlistScopeVideos, seriesTitleByVideoId, videoActorSearchMetadata, videoComments, videoRatings],
+    [effectiveVideoTags, mediaRootLabelsById, playlistScopeVideos, seriesTitleByVideoId, videoActorSearchMetadata, videoComments, videoHighlights, videoRatings],
   );
   const deferredPlaylistSearchQuery = useDeferredValue(playlistSearchQuery);
   const effectivePlaylistSearchQuery = playlistSearchQuery.trim() ? deferredPlaylistSearchQuery : "";

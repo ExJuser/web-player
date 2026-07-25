@@ -33,7 +33,7 @@ test("matches all query tokens across different metadata fields while preserving
   ]);
 });
 
-test("matches actor aliases, comments, library names, and traditional Chinese queries", () => {
+test("matches actor aliases, comments, highlight descriptions, library names, and traditional Chinese queries", () => {
   const videos = [{ id: "video" }];
   const documents = search.createPlaylistSearchDocuments([
     {
@@ -42,12 +42,16 @@ test("matches actor aliases, comments, library names, and traditional Chinese qu
       path: "Short/clip.mp4",
       actorAliases: ["Aoyama Yoshino"],
       comment: "最终回镜头很好",
+      highlightDescriptions: ["天台上的吉他独奏"],
       library: "特别收藏",
     },
   ]);
 
   assert.deepEqual(search.searchPlaylistVideos(videos, documents, "動畫").videos, videos);
   assert.equal(search.searchPlaylistVideos(videos, documents, '"最终回" yoshino 特别').videos.length, 1);
+  assert.deepEqual(search.searchPlaylistVideos(videos, documents, "吉他独奏").matchesByVideoId.get("video").reasons, [
+    { field: "highlight", label: "高能片段", value: "天台上的吉他独奏" },
+  ]);
 });
 
 test("returns non-title reasons but suppresses redundant path reasons for title matches", () => {

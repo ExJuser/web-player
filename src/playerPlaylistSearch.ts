@@ -2,7 +2,7 @@ import { Converter } from "opencc-js/t2cn";
 
 const traditionalToSimplified = Converter({ from: "tw", to: "cn" });
 
-export type PlaylistSearchField = "title" | "path" | "series" | "tag" | "actor" | "comment" | "library";
+export type PlaylistSearchField = "title" | "path" | "series" | "tag" | "actor" | "comment" | "highlight" | "library";
 
 export type PlaylistSearchRecord = {
   id: string;
@@ -14,6 +14,7 @@ export type PlaylistSearchRecord = {
   actors?: string[];
   actorAliases?: string[];
   comment?: string;
+  highlightDescriptions?: string[];
   library?: string;
 };
 
@@ -49,6 +50,7 @@ const fieldLabels: Record<Exclude<PlaylistSearchField, "title">, string> = {
   tag: "标签",
   actor: "演员",
   comment: "备注",
+  highlight: "高能片段",
   library: "媒体库",
 };
 
@@ -102,6 +104,7 @@ function createPlaylistSearchDocument(record: PlaylistSearchRecord): PlaylistSea
   addValues("tag", record.tags ?? []);
   addValues("actor", [...(record.actors ?? []), ...(record.actorAliases ?? [])]);
   addValues("comment", [record.comment]);
+  addValues("highlight", record.highlightDescriptions ?? []);
   addValues("library", [record.library]);
 
   return {
