@@ -361,6 +361,7 @@ import { DeletionDialogs } from "./DeletionDialogs";
 import { DuplicateVideoGroupCard } from "./DuplicateVideoGroupCard";
 import { HighEnergyTagDialog } from "./HighEnergyTagDialog";
 import { HomeNextEpisodeSection } from "./HomeNextEpisodeSection";
+import { HomeLibraryStats } from "./HomeLibraryStats";
 import { HomeRecentSection } from "./HomeRecentSection";
 import { HomeResumeSection } from "./HomeResumeSection";
 import { HomeSideColumn } from "./HomeSideColumn";
@@ -5770,6 +5771,8 @@ export default function App() {
               onModeChange={updateHomeMediaMode}
             />
             <div className="home-primary-column">
+              <HomeLibraryStats stats={libraryStats} />
+
               <HomeResumeSection
                 actionLabel={primaryHomeAction}
                 card={primaryHomeCard}
@@ -5803,7 +5806,6 @@ export default function App() {
             </div>
 
             <HomeSideColumn
-              libraryStats={{ stats: libraryStats }}
               mediaLibrary={{
                 homeMediaMode,
                 homeMediaModeLabel,

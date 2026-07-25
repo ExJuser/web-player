@@ -1038,8 +1038,13 @@ button {
 }
 
 .home-primary-column > .home-resume-card,
+.home-primary-column > .home-stats,
 .home-primary-column > .home-section:not(.home-recent-section):not(.favorite-home-section) {
   grid-column: 1 / -1;
+}
+
+.home-primary-column > .home-stats {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .home-side-column {
@@ -9614,6 +9619,10 @@ button {
 @media (max-width: 640px) {
   .app-shell {
     padding: 12px;
+  }
+
+  .home-primary-column > .home-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .top-bar,
