@@ -1701,6 +1701,7 @@ export default function App() {
     && creativeFeature === "rings";
   const isPhotoAlbumViewVisible =
     (activeView === "photos" || activeView === "photoViewer") && !isPrivacyMode && !isCinemaMode && !isFullscreen;
+  const isThumbnailDashboardVisible = isHomeViewVisible || isExploreViewVisible;
   const isNonPlayerViewVisible = isHomeViewVisible || isExploreViewVisible || isPhotoAlbumViewVisible;
   useEffect(() => {
     if (!isExploreViewVisible || !shouldLoadWatchActivity) return undefined;
@@ -1877,7 +1878,7 @@ export default function App() {
   const thumbnailQueueVideoIds = useMemo(
     () =>
       createThumbnailQueueVideoIds({
-        isHomeViewVisible: isHomeViewVisible || isExploreViewVisible,
+        isHomeViewVisible: isThumbnailDashboardVisible,
         primaryHomeVideo: isHomeViewVisible ? primaryHomeCard?.video : null,
         nextEpisodeVideo: isHomeViewVisible ? nextEpisodeCard?.video : null,
         recentHomeVideos: isHomeViewVisible ? recentHomeCards.map((card) => card.video) : [],
@@ -1894,6 +1895,7 @@ export default function App() {
       growthRingThumbnailVideos,
       isHomeViewVisible,
       isExploreViewVisible,
+      isThumbnailDashboardVisible,
       modeFilteredVideoById,
       nextEpisodeCard,
       playlistThumbnailVideos,
@@ -2790,7 +2792,7 @@ export default function App() {
 
   const applyVideoThumbnailUpdates = useCallback((updates: ThumbnailQueueUpdate[]) => {
     if (!updates.length) return;
-    if (!isHomeViewVisible) {
+    if (!isThumbnailDashboardVisible) {
       playlistThumbnailStore.setMany(updates);
       return;
     }
@@ -2820,7 +2822,7 @@ export default function App() {
     if (!didChange) return;
     videosRef.current = nextVideos;
     startTransition(() => setVideos(nextVideos));
-  }, [isHomeViewVisible, playlistThumbnailStore]);
+  }, [isThumbnailDashboardVisible, playlistThumbnailStore]);
 
   const updateVideoMetadata = useCallback(
     (videoId: string, metadata: VideoMetadata) => {
@@ -4432,10 +4434,10 @@ export default function App() {
   });
 
   const getQueuedThumbnailStatus = useCallback(
-    (video: VideoItem) => isHomeViewVisible
+    (video: VideoItem) => isThumbnailDashboardVisible
       ? video.thumbnailStatus
       : playlistThumbnailStore.get(video.id)?.status ?? video.thumbnailStatus,
-    [isHomeViewVisible, playlistThumbnailStore],
+    [isThumbnailDashboardVisible, playlistThumbnailStore],
   );
   const markPlaylistThumbnailFailed = useCallback(
     (videoId: string) => playlistThumbnailStore.setFailed(videoId),
@@ -4450,7 +4452,7 @@ export default function App() {
     isScanning,
     libraryIdRef,
     thumbnailQueueVideoIdsKey,
-    thumbnailVariant: isHomeViewVisible ? "standard" : "playlist",
+    thumbnailVariant: isThumbnailDashboardVisible ? "standard" : "playlist",
     videosRef,
   });
 
