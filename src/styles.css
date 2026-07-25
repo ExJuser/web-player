@@ -1045,10 +1045,11 @@ button {
 
 .home-primary-column > .home-stats {
   grid-template-columns: repeat(4, minmax(0, 1fr));
+  min-height: 88px;
 }
 
 .home-primary-column > .home-stats > div {
-  padding: 14px 14px 18px;
+  min-height: 88px;
 }
 
 .home-side-column {
