@@ -17,7 +17,7 @@ const store = {
   watchActivity: {},
   tagMergeDecisions: {},
   danmakuPreferences: {},
-  preferences: { homeMediaMode: "all" },
+  preferences: { homeMediaMode: "anime" },
   settings: { theme: "dark" },
   metadata: { id: "global" },
   videoHighlights: { video: [{ id: "highlight" }] },

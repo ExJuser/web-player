@@ -1,11 +1,10 @@
 import { ChevronDown, HardDrive, RefreshCw } from "lucide-react";
 
 import type { LocalMediaRoot } from "./mediaRootScanCache";
-import type { HomeMediaMode, PlayerMediaRootStatus } from "./playerTypes";
+import type { PlayerMediaRootStatus } from "./playerTypes";
 import { formatMediaRootStatus, getMediaRootLocalPathAction } from "./playerUiState";
 
 type HomeMediaLibraryCardProps = {
-  homeMediaMode: HomeMediaMode;
   homeMediaModeLabel: string;
   isOpen: boolean;
   isScanning: boolean;
@@ -18,7 +17,6 @@ type HomeMediaLibraryCardProps = {
 };
 
 export function HomeMediaLibraryCard({
-  homeMediaMode,
   homeMediaModeLabel,
   isOpen,
   isScanning,
@@ -45,7 +43,7 @@ export function HomeMediaLibraryCard({
         aria-controls="home-media-library-panel"
         onClick={onToggle}
       >
-        <span>{homeMediaMode === "all" ? "全局媒体库" : `${homeMediaModeLabel}媒体库`}</span>
+        <span>{`${homeMediaModeLabel}媒体库`}</span>
         <span>{`${readyRootCount} / ${mediaRoots.length} 可用`}</span>
         <ChevronDown className="media-library-toggle-chevron" size={16} aria-hidden="true" />
       </button>

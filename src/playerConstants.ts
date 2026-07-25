@@ -94,7 +94,7 @@ export const defaultPlayerPreferences: PlayerPreferences = {
   seekStep: 15,
   holdPlaybackRate: 4,
   shortcuts: defaultShortcuts,
-  homeMediaMode: "all",
+  homeMediaMode: "anime",
   isSeriesMode: false,
   selectedSeriesKey: "all",
   isCinemaMode: false,

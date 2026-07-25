@@ -272,8 +272,6 @@ export function getCompatibleMediaAction(video: VideoForCompatibilityUi | null |
 }
 
 export function isMediaRootInHomeMode(root: MediaRootForUi, mode: HomeMediaMode) {
-  if (mode === "all") return true;
-
   const normalizedLabel = (root.label ?? "").trim();
   if (mode === "anime") return normalizedLabel.toLowerCase() === "anime";
   return normalizedLabel.toUpperCase().endsWith("AV");
@@ -292,7 +290,6 @@ export function filterVideosByHomeMediaMode<Video extends ModeVideoForUi>(
   mode: HomeMediaMode,
   mediaRootIds: ReadonlySet<string | undefined>,
 ) {
-  if (mode === "all") return videos;
   return videos.filter((video) => Boolean(video.mediaRootId && mediaRootIds.has(video.mediaRootId)));
 }
 
@@ -301,7 +298,6 @@ export function filterMediaRootStatusesByHomeMediaMode<Status extends MediaRootS
   mode: HomeMediaMode,
   mediaRootIds: ReadonlySet<string | undefined>,
 ) {
-  if (mode === "all") return statuses;
   return statuses.filter((status) => mediaRootIds.has(status.id));
 }
 
@@ -415,15 +411,11 @@ export function getRatingFilterLabel(operator: RatingFilterOperator, threshold: 
 }
 
 export function getHomeMediaModeLabel(mode: HomeMediaMode) {
-  if (mode === "anime") return "追番模式";
-  if (mode === "special") return "特殊模式";
-  return "全部";
+  return mode === "anime" ? "追番模式" : "特殊模式";
 }
 
 export function getPlayerMediaModeLabel(mode: HomeMediaMode) {
-  if (mode === "anime") return "追番";
-  if (mode === "special") return "特殊";
-  return "全部";
+  return mode === "anime" ? "追番" : "特殊";
 }
 
 export function getActiveRatingPlaylistLabel(mode: RatingPlaylistMode | null, filterLabel: string) {
@@ -598,7 +590,7 @@ export function createPlaylistPanelLabels(input: {
           ? `${input.playlistVisibleCountLabel} / ${input.modeFilteredVideoCount} 个收藏`
           : input.isPlaylistSeriesMode
             ? `${input.playlistVisibleCountLabel} / ${input.modeFilteredVideoCount} 个视频`
-            : input.homeMediaMode === "all" || input.homeMediaMode === "special"
+            : input.homeMediaMode === "special"
               ? `${input.playlistVisibleCountLabel} 个视频`
               : `${input.homeMediaModeLabel} · ${input.playlistVisibleCountLabel} 个视频`
         : input.totalVideoCount
@@ -850,7 +842,7 @@ export function shouldShowHomeRecapCard(mode: HomeMediaMode) {
 }
 
 export function shouldShowNextEpisodeCard(mode: HomeMediaMode) {
-  return mode !== "special";
+  return mode === "anime";
 }
 
 export function resolvePlayerEntrySeriesMode(mode: HomeMediaMode, seriesKey: string | null | undefined) {

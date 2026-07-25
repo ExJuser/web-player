@@ -363,7 +363,7 @@ export function parseTagMergeDecisions(source: unknown): TagMergeDecisionStore {
 }
 
 function parseHomeMediaMode(value: unknown): HomeMediaMode | null {
-  return value === "all" || value === "anime" || value === "special" ? value : null;
+  return value === "anime" || value === "special" ? value : null;
 }
 
 function inferDuplicateDetectionMode(result: { mode?: unknown; scopeKey?: unknown }, fallbackMode?: HomeMediaMode): HomeMediaMode | null {
@@ -436,7 +436,7 @@ export function parseDuplicateDetectionResult(source: unknown, fallbackMode?: Ho
 export function parseDuplicateDetectionResults(source: unknown, legacySource?: unknown): PlayerDataStore["duplicateDetections"] {
   const results: PlayerDataStore["duplicateDetections"] = {};
   if (source && typeof source === "object" && !Array.isArray(source)) {
-    (["all", "anime", "special"] as const).forEach((mode) => {
+    (["anime", "special"] as const).forEach((mode) => {
       const parsed = parseDuplicateDetectionResult((source as Record<string, unknown>)[mode], mode);
       if (parsed && parsed.mode === mode) results[mode] = parsed;
     });

@@ -78,7 +78,7 @@ export function HomeResumeSection({
           <h2>{videoCount ? `当前${homeMediaModeLabel}没有可播放视频` : "新增一个媒体库开始播放"}</h2>
           <p>
             {videoCount
-              ? "切换到全部模式，或确认对应媒体库已完成扫描。"
+              ? "请切换媒体模式，或确认对应媒体库已完成扫描。"
               : "播放器会把你选择的目录加入全局媒体库，扫描视频、匹配字幕并保存观看进度。"}
           </p>
           {!videoCount ? (

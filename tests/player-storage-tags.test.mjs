@@ -352,7 +352,7 @@ test("player preferences remember the home media mode", () => {
     items: {},
     favorites: [],
   }));
-  assert.equal(oldStore.preferences.homeMediaMode, "all");
+  assert.equal(oldStore.preferences.homeMediaMode, "anime");
 });
 
 test("player preferences remember stat playlist sort modes", () => {
@@ -403,7 +403,7 @@ test("default player data store contains tag containers", () => {
   assert.deepEqual(store.videoHighlights, {});
   assert.deepEqual(store.danmakuSelections, {});
   assert.equal(store.danmakuPreferences.showSimplified, true);
-  assert.equal(store.preferences.homeMediaMode, "all");
+  assert.equal(store.preferences.homeMediaMode, "anime");
   assert.equal(store.duplicateDetection, null);
   assert.deepEqual(store.duplicateDetections, {});
 });

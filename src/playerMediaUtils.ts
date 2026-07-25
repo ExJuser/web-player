@@ -271,7 +271,7 @@ export type DuplicateNameSimilarityPair = {
   localScore: number;
 };
 
-export type DuplicateDetectionMode = "all" | "anime" | "special";
+export type DuplicateDetectionMode = "anime" | "special";
 
 export type DuplicateDetectionContext = {
   mode?: DuplicateDetectionMode;

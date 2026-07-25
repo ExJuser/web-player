@@ -259,12 +259,9 @@ test("home media mode helpers filter roots videos and statuses", () => {
   ];
   const animeRoots = uiState.getHomeModeMediaRoots(mediaRoots, "anime");
   const animeRootIds = uiState.createMediaRootIdSet(animeRoots);
-  const allRootIds = uiState.createMediaRootIdSet(uiState.getHomeModeMediaRoots(mediaRoots, "all"));
 
   assert.deepEqual(animeRoots, [mediaRoots[1]]);
-  assert.equal(uiState.filterVideosByHomeMediaMode(videos, "all", allRootIds), videos);
   assert.deepEqual(uiState.filterVideosByHomeMediaMode(videos, "anime", animeRootIds), [videos[1]]);
-  assert.equal(uiState.filterMediaRootStatusesByHomeMediaMode(statuses, "all", allRootIds), statuses);
   assert.deepEqual(uiState.filterMediaRootStatusesByHomeMediaMode(statuses, "anime", animeRootIds), [statuses[1]]);
 });
 
@@ -442,10 +439,8 @@ test("rating playlist helpers derive stats and filtered videos", () => {
 
   assert.equal(uiState.getHomeMediaModeLabel("anime"), "追番模式");
   assert.equal(uiState.getHomeMediaModeLabel("special"), "特殊模式");
-  assert.equal(uiState.getHomeMediaModeLabel("all"), "全部");
   assert.equal(uiState.getPlayerMediaModeLabel("anime"), "追番");
   assert.equal(uiState.getPlayerMediaModeLabel("special"), "特殊");
-  assert.equal(uiState.getPlayerMediaModeLabel("all"), "全部");
   assert.equal(uiState.getRatingFilterLabel("gt", 8), "评分 > 8");
   assert.equal(uiState.getActiveRatingPlaylistLabel("unrated", "评分 > 8"), "未评分");
   assert.equal(uiState.getActiveRatingPlaylistLabel("numeric", "评分 > 8"), "评分 > 8");
@@ -497,8 +492,8 @@ test("playlist panel labels preserve playlist title branches", () => {
     activeRatingPlaylistLabel: "评分 > 8",
     modeFilteredVideoCount: 80,
     playlistFilter: "all",
-    homeMediaMode: "all",
-    homeMediaModeLabel: "全部",
+    homeMediaMode: "special",
+    homeMediaModeLabel: "特殊模式",
     totalVideoCount: 80,
   };
 
@@ -671,18 +666,12 @@ test("series helpers derive options and filter selected series", () => {
   assert.equal(uiState.getActiveSeriesOption(options, { isSeriesMode: false, selectedSeriesKey: "all", currentSeriesKey: "" }), null);
 });
 
-test("home all mode includes unlabeled and temporary media roots", () => {
-  assert.equal(uiState.isMediaRootInHomeMode({}, "all"), true);
-});
-
 test("home recap card entry is shown only in anime mode", () => {
   assert.equal(uiState.shouldShowHomeRecapCard("anime"), true);
-  assert.equal(uiState.shouldShowHomeRecapCard("all"), false);
   assert.equal(uiState.shouldShowHomeRecapCard("special"), false);
 });
 
 test("next episode card is hidden in special mode", () => {
-  assert.equal(uiState.shouldShowNextEpisodeCard("all"), true);
   assert.equal(uiState.shouldShowNextEpisodeCard("anime"), true);
   assert.equal(uiState.shouldShowNextEpisodeCard("special"), false);
 });
@@ -696,7 +685,7 @@ test("anime player entry enables series mode for the current folder series", () 
 });
 
 test("non-anime player entry uses regular playlist mode", () => {
-  assert.deepEqual(uiState.resolvePlayerEntrySeriesMode("all", "root-1::show-a"), {
+  assert.deepEqual(uiState.resolvePlayerEntrySeriesMode("special", "root-1::show-a"), {
     isSeriesMode: false,
     selectedSeriesKey: "all",
     resetPlaylistFilter: false,

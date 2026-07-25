@@ -70,7 +70,7 @@ test("sqlite player data patch updates selected fields without clearing deferred
       items: { video1: { currentTime: 1, duration: 10, completed: false, updatedAt: 1 } },
       videoTags: { video1: ["old"] },
       embeddedSubtitles: [{ id: "subtitle1", videoId: "video1", name: "字幕", relativePath: "video.mkv", format: "vtt" }],
-      duplicateDetections: { all: { mode: "all", pairs: [], updatedAt: 1 } },
+      duplicateDetections: { anime: { mode: "anime", pairs: [], updatedAt: 1 } },
     });
 
     context.store.patchPlayerDataStore("global", {
@@ -195,7 +195,7 @@ test("sqlite incremental writes keep unrelated player data", async () => {
       embeddedSubtitles: [],
       danmakuSelections: {},
       danmakuPreferences: {},
-      preferences: { homeMediaMode: "all" },
+      preferences: { homeMediaMode: "anime" },
       settings: { volume: 0.5, skipFolderAccessPrompt: false },
     });
 

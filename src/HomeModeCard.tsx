@@ -1,4 +1,4 @@
-import { Play, ShieldCheck, Subtitles } from "lucide-react";
+import { ShieldCheck, Subtitles } from "lucide-react";
 
 import type { HomeMediaMode } from "./playerTypes";
 
@@ -16,15 +16,6 @@ export function HomeModeCard({ homeMediaMode, homeMediaModeLabel, onModeChange }
         <span>{homeMediaModeLabel}</span>
       </div>
       <div className="home-mode-switch" role="group" aria-label="首页媒体库模式">
-        <button
-          className={homeMediaMode === "all" ? "active" : ""}
-          type="button"
-          onClick={() => onModeChange("all")}
-          aria-pressed={homeMediaMode === "all"}
-        >
-          <Play size={15} />
-          全部
-        </button>
         <button
           className={homeMediaMode === "anime" ? "active" : ""}
           type="button"

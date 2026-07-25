@@ -805,7 +805,6 @@ export default function App() {
   }, []);
 
   const getVideosForHomeMode = useCallback((items: VideoItem[], mode: HomeMediaMode) => {
-    if (mode === "all") return items;
     const modeRootIds = new Set(
       (localConfigRef.current?.mediaRoots ?? [])
         .filter((root) => isMediaRootInHomeMode(root, mode))
@@ -3275,10 +3274,7 @@ export default function App() {
           .filter((root) => isMediaRootInHomeMode(root, homeMediaMode))
           .map((root) => root.id),
       );
-      const nextDuplicateVideos =
-        homeMediaMode === "all"
-          ? nextVideos
-          : nextVideos.filter((item) => Boolean(item.mediaRootId && modeRootIds.has(item.mediaRootId)));
+      const nextDuplicateVideos = nextVideos.filter((item) => Boolean(item.mediaRootId && modeRootIds.has(item.mediaRootId)));
       let nextResultsByMode = pruneDuplicateDetectionsForVideos(duplicateDetectionResultsByModeRef.current ?? {}, nextVideos);
       if (duplicateDetectionResultScopeKeyRef.current) {
         const nextDuplicateGroups = rebuildDuplicateVideoGroups(nextDuplicateVideos, duplicateVideoGroupsRef.current);
@@ -5805,10 +5801,9 @@ export default function App() {
               <HomeRecentSection cards={recentHomeCards} renderCard={renderHomeListCard} />
             </div>
 
-            <HomeSideColumn
-              mediaLibrary={{
-                homeMediaMode,
-                homeMediaModeLabel,
+              <HomeSideColumn
+                mediaLibrary={{
+                  homeMediaModeLabel,
                 isOpen: isMediaLibraryPanelOpen,
                 isScanning,
                 mediaRootCount: localConfig?.mediaRoots.length ?? 0,

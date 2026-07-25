@@ -56,7 +56,7 @@ export function pruneDuplicateDetectionsForVideos(
 ): NonNullable<PlayerDataStore["duplicateDetections"]> {
   const videoIds = new Set(videos.map((video) => video.id));
   const nextResultsByMode: PlayerDataStore["duplicateDetections"] = {};
-  (["all", "anime", "special"] as const).forEach((mode) => {
+  (["anime", "special"] as const).forEach((mode) => {
     const result = resultsByMode?.[mode];
     const pairs = result?.pairs.filter((pair) => videoIds.has(pair.aId) && videoIds.has(pair.bId)) ?? [];
     if (result && pairs.length) {
