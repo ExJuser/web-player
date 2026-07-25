@@ -13,6 +13,7 @@ type HomeTagStatsProps = {
 
 export function HomeTagStats({ coverage, taggedVideos, tags, totalTags }: HomeTagStatsProps) {
   const maxVideoCount = tags[0]?.videoCount ?? 0;
+  const coveragePercent = Math.round(coverage * 100);
 
   return (
     <section className="home-section home-tag-stats-card">
@@ -22,26 +23,54 @@ export function HomeTagStats({ coverage, taggedVideos, tags, totalTags }: HomeTa
       </div>
       <div className="home-tag-stats-summary" aria-label="标签使用概况">
         <div>
-          <strong>{taggedVideos}</strong>
           <span>已标注视频</span>
+          <strong>{taggedVideos}<small>部</small></strong>
         </div>
         <div>
-          <strong>{Math.round(coverage * 100)}%</strong>
           <span>标签覆盖率</span>
+          <strong>{coveragePercent}<small>%</small></strong>
         </div>
       </div>
       {tags.length ? (
-        <div className="home-tag-ranking" role="list" aria-label="常用标签">
-          {tags.map((tag) => (
-            <div className="home-tag-ranking-row" key={tag.key} role="listitem">
-              <span className="home-tag-ranking-label" title={tag.label}>{tag.label}</span>
-              <span className="home-tag-ranking-meter" aria-hidden="true">
-                <span style={{ width: `${(tag.videoCount / maxVideoCount) * 100}%` }} />
-              </span>
-              <strong>{tag.videoCount}</strong>
-            </div>
-          ))}
-        </div>
+        <>
+          <div className="home-tag-ranking-header" aria-hidden="true">
+            <span>常用标签排行</span>
+            <span>覆盖视频 / 占比</span>
+          </div>
+          <div className="home-tag-ranking" role="list" aria-label="常用标签排行">
+            {tags.map((tag, index) => {
+              const taggedVideoPercent = taggedVideos
+                ? Math.round((tag.videoCount / taggedVideos) * 100)
+                : 0;
+              const relativeWidth = maxVideoCount
+                ? (tag.videoCount / maxVideoCount) * 100
+                : 0;
+
+              return (
+                <div
+                  className="home-tag-ranking-row"
+                  key={tag.key}
+                  role="listitem"
+                  aria-label={`${tag.label}，覆盖 ${tag.videoCount} 部视频，占已标注视频 ${taggedVideoPercent}%`}
+                >
+                  <span className="home-tag-ranking-index">{String(index + 1).padStart(2, "0")}</span>
+                  <div className="home-tag-ranking-detail">
+                    <div className="home-tag-ranking-copy">
+                      <span className="home-tag-ranking-label" title={tag.label}>{tag.label}</span>
+                      <span className="home-tag-ranking-value">
+                        <strong>{tag.videoCount}</strong>
+                        <small>部 · {taggedVideoPercent}%</small>
+                      </span>
+                    </div>
+                    <span className="home-tag-ranking-meter" aria-hidden="true">
+                      <span style={{ width: `${relativeWidth}%` }} />
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
       ) : (
         <div className="home-tag-stats-empty">当前模式暂无标签</div>
       )}
