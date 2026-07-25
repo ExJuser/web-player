@@ -2635,6 +2635,7 @@ button {
   display: grid;
   grid-template-rows: auto auto auto minmax(0, 1fr) auto;
   width: min(960px, 100%);
+  height: min(680px, calc(100vh - 36px));
   max-height: calc(100vh - 36px);
   overflow: hidden;
   border: 1px solid #303743;
