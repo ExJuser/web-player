@@ -5719,7 +5719,7 @@ export default function App() {
   const currentVideoPlayabilityMessage = currentVideo?.playability?.performanceWarning ?? "";
   const isCurrentHighEnergyMarkPending = pendingHighEnergyStart?.videoId === currentVideo?.id;
   const isCurrentEditSegmentMarkPending = pendingEditSegmentStart?.videoId === currentVideo?.id;
-  const { ariaLabel: playlistPanelAriaLabel, title: playlistPanelTitle, countLabel: playlistCountLabel } = createPlaylistPanelLabels({ isDuplicatePlaylistActive, isVersionPlaylistActive, isRatingPlaylistActive, isPlaylistSeriesMode, playlistVisibleCountLabel, duplicateGroupCount: activeDuplicateVideoGroups.length, versionGroupCount: videoVersionGroups.length, activeRatingPlaylistLabel, modeFilteredVideoCount: modeFilteredVideos.length, playlistFilter, homeMediaMode, homeMediaModeLabel, totalVideoCount: videos.length });
+  const { ariaLabel: playlistPanelAriaLabel, title: playlistPanelTitle } = createPlaylistPanelLabels({ isDuplicatePlaylistActive, isVersionPlaylistActive, isRatingPlaylistActive, isPlaylistSeriesMode, playlistVisibleCountLabel, duplicateGroupCount: activeDuplicateVideoGroups.length, versionGroupCount: videoVersionGroups.length, activeRatingPlaylistLabel, modeFilteredVideoCount: modeFilteredVideos.length, playlistFilter, homeMediaMode, homeMediaModeLabel, totalVideoCount: videos.length });
 
   return (
     <>
@@ -5753,7 +5753,6 @@ export default function App() {
           summaryFallbackText={currentVideoSummaryFallbackText}
           theme={theme}
           videoCount={videos.length}
-          playlistCountLabel={playlistCountLabel}
           onAddMediaLibrary={requestAddMediaLibrary}
           onOpenCacheStatus={openCacheStatusDialog}
           onOpenMediaProcessingTask={reopenMediaProcessingTask}

@@ -587,31 +587,25 @@ export function createPlaylistPanelLabels(input: {
         ? "追番列表"
         : "播放列表";
 
-  const countLabel = input.modeFilteredVideoCount
-    ? input.playlistFilter === "favorites"
-      ? `${input.playlistVisibleCountLabel} / ${input.modeFilteredVideoCount} 个收藏`
-      : input.isPlaylistSeriesMode
-        ? `${input.playlistVisibleCountLabel} / ${input.modeFilteredVideoCount} 个视频`
-        : `${input.playlistVisibleCountLabel} 个视频`
-    : "";
-
   const title = input.isDuplicatePlaylistActive
-    ? `重复列表 · ${input.duplicateGroupCount} 组`
+    ? `重复列表 · ${input.playlistVisibleCountLabel} 个视频 · ${input.duplicateGroupCount} 组`
     : input.isVersionPlaylistActive
-      ? `版本列表 · ${input.versionGroupCount} 组`
+      ? `版本列表 · ${input.playlistVisibleCountLabel} 个视频 · ${input.versionGroupCount} 组`
     : input.isRatingPlaylistActive
-      ? `评分列表 · ${input.activeRatingPlaylistLabel}`
+      ? `评分列表 · ${input.playlistVisibleCountLabel} 个视频 · ${input.activeRatingPlaylistLabel}`
       : input.modeFilteredVideoCount
         ? input.playlistFilter === "favorites"
-          ? "收藏列表"
+          ? `${input.playlistVisibleCountLabel} / ${input.modeFilteredVideoCount} 个收藏`
           : input.isPlaylistSeriesMode
-            ? "追番列表"
-            : "播放列表"
+            ? `${input.playlistVisibleCountLabel} / ${input.modeFilteredVideoCount} 个视频`
+            : input.homeMediaMode === "all" || input.homeMediaMode === "special"
+              ? `${input.playlistVisibleCountLabel} 个视频`
+              : `${input.homeMediaModeLabel} · ${input.playlistVisibleCountLabel} 个视频`
         : input.totalVideoCount
           ? `当前${input.homeMediaModeLabel}没有视频`
           : "等待新增媒体库";
 
-  return { ariaLabel, title, countLabel };
+  return { ariaLabel, title };
 }
 
 export function createPlaylistThumbnailVideos<Video extends IdentifiedVideoForUi>(input: {

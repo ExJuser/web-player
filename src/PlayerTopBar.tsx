@@ -1,4 +1,4 @@
-import { Compass, Film, FolderOpen, HardDrive, Images, Info, Moon, Scissors, Sparkles, Sun } from "lucide-react";
+import { Compass, FolderOpen, HardDrive, Images, Info, Moon, Scissors, Sparkles, Sun } from "lucide-react";
 import { forwardRef, useEffect, useRef, useState } from "react";
 
 import type { MediaProcessingTaskState } from "./MediaProcessingTaskDialog";
@@ -18,7 +18,6 @@ type PlayerTopBarProps = {
   summaryFallbackText: string;
   theme: "dark" | "light";
   videoCount: number;
-  playlistCountLabel: string;
   playabilityMessage: string;
   onAddMediaLibrary: () => void;
   onOpenCacheStatus: () => void;
@@ -43,7 +42,6 @@ export const PlayerTopBar = forwardRef<HTMLElement, PlayerTopBarProps>(function 
     summaryFallbackText,
     theme,
     videoCount,
-    playlistCountLabel,
     playabilityMessage,
     onAddMediaLibrary,
     onOpenCacheStatus,
@@ -75,9 +73,6 @@ export const PlayerTopBar = forwardRef<HTMLElement, PlayerTopBarProps>(function 
   return (
     <header className="top-bar" ref={ref}>
       <div className={`video-summary${shouldShowMetadata ? " has-metadata" : ""}`}>
-        {!isHomeViewVisible && playlistCountLabel ? (
-          <span className="playlist-count-summary"><Film size={15} />{playlistCountLabel}</span>
-        ) : null}
         {shouldShowMetadata ? (
           <button
             ref={metadataCardRef}
