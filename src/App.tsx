@@ -356,7 +356,6 @@ import {
   type CompatibleMediaTaskState,
 } from "./CompatibleMediaDialogs";
 import { DeletionDialogs } from "./DeletionDialogs";
-import { DuplicateVideoGroupCard } from "./DuplicateVideoGroupCard";
 import { HighEnergyTagDialog } from "./HighEnergyTagDialog";
 import { HomeNextEpisodeSection } from "./HomeNextEpisodeSection";
 import { HomeLibraryStats } from "./HomeLibraryStats";
@@ -5694,15 +5693,6 @@ export default function App() {
     requestDeletePhotoAlbum,
     togglePhotoAlbumFavorite,
   ]);
-  const renderDuplicateVideoGroup = useCallback((group: DuplicateVideoGroup) => (
-    <DuplicateVideoGroupCard
-      formatFileSize={formatFileSize}
-      formatTime={formatTime}
-      group={group}
-      key={group.id}
-      onOpenVideo={openDuplicateVideo}
-    />
-  ), [openDuplicateVideo]);
   const duplicateDetectionPercent = duplicateDetectionProgress?.percent ?? 0;
   const duplicateDetectionDisplayMessage =
     duplicateVideoGroups.length && !isDuplicateDetectionResultCurrent && !isDuplicateDetectionRunning
@@ -5860,12 +5850,11 @@ export default function App() {
                 detectionMessage: duplicateDetectionDisplayMessage,
                 detectionPercent: duplicateDetectionPercent,
                 duplicatePlaylistCount: duplicatePlaylistVideos.length,
-                groups: activeDuplicateVideoGroups,
+                groupCount: activeDuplicateVideoGroups.length,
                 isRunning: isDuplicateDetectionRunning,
                 onOpenPlaylist: openDuplicatePlaylist,
                 onRunDetection: () => void runDuplicateVideoDetection(),
                 progress: duplicateDetectionProgress,
-                renderGroup: renderDuplicateVideoGroup,
                 totalVideoCount: modeFilteredVideos.length,
               } : null}
               videoVersions={homeMediaMode === "special" ? {

@@ -1,40 +1,33 @@
 import { Activity, Play, Sparkles } from "lucide-react";
-import type { ReactNode } from "react";
-
-import type { DuplicateVideoGroup } from "./playerMediaUtils";
 
 type DuplicateVideoSummaryCardProps = {
   detectionMessage: string;
   detectionPercent: number;
   duplicatePlaylistCount: number;
-  groups: DuplicateVideoGroup[];
+  groupCount: number;
   isRunning: boolean;
   progress: { percent: number } | null;
   totalVideoCount: number;
   onOpenPlaylist: () => void;
   onRunDetection: () => void;
-  renderGroup: (group: DuplicateVideoGroup) => ReactNode;
 };
-
-const duplicateGroupPreviewLimit = 2;
 
 export function DuplicateVideoSummaryCard({
   detectionMessage,
   detectionPercent,
   duplicatePlaylistCount,
-  groups,
+  groupCount,
   isRunning,
   progress,
   totalVideoCount,
   onOpenPlaylist,
   onRunDetection,
-  renderGroup,
 }: DuplicateVideoSummaryCardProps) {
   return (
     <section className="home-section duplicate-video-card">
       <div className="home-section-header">
         <h2>重复视频</h2>
-        <span>{isRunning ? `${detectionPercent}%` : `${groups.length} 组`}</span>
+        <span>{isRunning ? `${detectionPercent}%` : `${groupCount} 组`}</span>
       </div>
       <div className="duplicate-video-summary" role="status" aria-live="polite">
         <Sparkles size={24} />
@@ -74,20 +67,6 @@ export function DuplicateVideoSummaryCard({
           进入重复列表
         </button>
       </div>
-      {groups.length ? (
-        <div className="duplicate-video-groups">
-          {groups.slice(0, duplicateGroupPreviewLimit).map(renderGroup)}
-          {groups.length > duplicateGroupPreviewLimit ? (
-            <button
-              className="secondary-button duplicate-video-more"
-              type="button"
-              onClick={onOpenPlaylist}
-            >
-              查看全部 {groups.length} 组
-            </button>
-          ) : null}
-        </div>
-      ) : null}
     </section>
   );
 }
