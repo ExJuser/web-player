@@ -365,7 +365,6 @@ import { HomeLibraryStats } from "./HomeLibraryStats";
 import { HomeRecentSection } from "./HomeRecentSection";
 import { HomeResumeSection } from "./HomeResumeSection";
 import { HomeSideColumn } from "./HomeSideColumn";
-import { HomeModeCard } from "./HomeModeCard";
 import { FavoriteHomeSection } from "./FavoriteHomeSection";
 import { HomeSpecialInsightsSection } from "./HomeSpecialInsightsSection";
 import { HomeListCard } from "./HomeVideoCards";
@@ -5761,11 +5760,6 @@ export default function App() {
 
         {isHomeViewVisible ? (
           <section className="home-dashboard" aria-label="继续观看首页">
-            <HomeModeCard
-              homeMediaMode={homeMediaMode}
-              homeMediaModeLabel={homeMediaModeLabel}
-              onModeChange={updateHomeMediaMode}
-            />
             <div className="home-primary-column">
               <HomeLibraryStats stats={libraryStats} />
 
@@ -5802,6 +5796,11 @@ export default function App() {
             </div>
 
               <HomeSideColumn
+                mode={{
+                  homeMediaMode,
+                  homeMediaModeLabel,
+                  onModeChange: updateHomeMediaMode,
+                }}
                 mediaLibrary={{
                   homeMediaModeLabel,
                 isOpen: isMediaLibraryPanelOpen,

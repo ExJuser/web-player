@@ -984,7 +984,7 @@ button {
 .home-dashboard {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   gap: 14px;
   min-height: 0;
   flex: 1;
@@ -1054,19 +1054,6 @@ button {
 
 .home-side-column {
   padding-right: 0;
-}
-
-.home-dashboard > .home-mode-card {
-  display: flex;
-  grid-column: 1 / -1;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 10px 14px;
-}
-
-.home-dashboard > .home-mode-card .home-mode-switch {
-  width: min(100%, 440px);
 }
 
 .home-resume-card,
@@ -9506,11 +9493,6 @@ button {
     display: flex;
     min-height: auto;
     overflow: visible;
-  }
-
-  .home-dashboard > .home-mode-card {
-    align-items: stretch;
-    flex-direction: column;
   }
 
   .home-resume-card,
