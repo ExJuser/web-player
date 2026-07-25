@@ -2835,6 +2835,8 @@ button {
 
 .home-tag-explorer-related-list {
   display: grid;
+  grid-auto-rows: minmax(35px, max-content);
+  align-content: start;
   min-height: 0;
   overflow-y: auto;
   gap: 6px;
