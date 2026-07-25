@@ -305,6 +305,7 @@ import {
   type RatingPlaylistMode,
 } from "./playerUiState";
 import { buildSubtitleSystemVideoTags, mergeVideoTagStores, normalizeTagKey } from "./tagUtils";
+import { formatTagExplorerSearchQuery, matchesTagExplorerSelection, type TagExplorerSelection } from "./tagExplorer";
 import { createPlaylistSearchDocuments, searchPlaylistVideos } from "./playerPlaylistSearch";
 import {
   createVideoVersionGroups,
@@ -362,6 +363,7 @@ import { HomeLibraryStats } from "./HomeLibraryStats";
 import { HomeRecentSection } from "./HomeRecentSection";
 import { HomeResumeSection } from "./HomeResumeSection";
 import { HomeSideColumn } from "./HomeSideColumn";
+import { HomeTagExplorerDialog } from "./HomeTagExplorerDialog";
 import { FavoriteHomeSection } from "./FavoriteHomeSection";
 import { HomeSpecialInsightsSection } from "./HomeSpecialInsightsSection";
 import { HomeListCard } from "./HomeVideoCards";
@@ -549,6 +551,8 @@ export default function App() {
   const [isDuplicateDetectionRunning, setIsDuplicateDetectionRunning] = useState(false);
   const [isDuplicatePlaylistActive, setIsDuplicatePlaylistActive] = useState(false);
   const [isVersionPlaylistActive, setIsVersionPlaylistActive] = useState(false);
+  const [tagExplorerInitialKey, setTagExplorerInitialKey] = useState<string | null>(null);
+  const [tagPlaylistSelection, setTagPlaylistSelection] = useState<TagExplorerSelection | null>(null);
   const [ratingFilterOperator, setRatingFilterOperator] = useState<RatingFilterOperator>("gt");
   const [ratingFilterThreshold, setRatingFilterThreshold] = useState(8);
   const [ratingPlaylistMode, setRatingPlaylistMode] = useState<RatingPlaylistMode | null>(null);
@@ -1458,12 +1462,21 @@ export default function App() {
     () => createVideoVersionPlaylistMetaByVideoId(videoVersionGroups),
     [videoVersionGroups],
   );
+  const tagPlaylistVideos = useMemo(
+    () => tagPlaylistSelection
+      ? playlistVideos.filter((video) => matchesTagExplorerSelection(effectiveVideoTags[video.id] ?? [], tagPlaylistSelection))
+      : [],
+    [effectiveVideoTags, playlistVideos, tagPlaylistSelection],
+  );
   const playlistScopeVideos = useMemo(
-    () =>
-      resolveVisiblePlaylistVideos({
+    () => {
+      const resolvedVideos = resolveVisiblePlaylistVideos({
         isDuplicatePlaylistActive, duplicatePlaylistVideos, isVersionPlaylistActive, versionPlaylistVideos, ratingPlaylistMode, ratingPlaylistVideos, playlistFilter, favoritePlaylistVideos, seriesFilteredVideos,
-      }),
-    [duplicatePlaylistVideos, favoritePlaylistVideos, isDuplicatePlaylistActive, isVersionPlaylistActive, playlistFilter, ratingPlaylistMode, ratingPlaylistVideos, seriesFilteredVideos, versionPlaylistVideos],
+      });
+      if (isDuplicatePlaylistActive || isVersionPlaylistActive || ratingPlaylistMode) return resolvedVideos;
+      return tagPlaylistSelection ? tagPlaylistVideos : resolvedVideos;
+    },
+    [duplicatePlaylistVideos, favoritePlaylistVideos, isDuplicatePlaylistActive, isVersionPlaylistActive, playlistFilter, ratingPlaylistMode, ratingPlaylistVideos, seriesFilteredVideos, tagPlaylistSelection, tagPlaylistVideos, versionPlaylistVideos],
   );
   const videoActorSearchMetadata = useMemo(() => Object.fromEntries(playlistScopeVideos.map((video) => {
     const resolved = resolveVideoActors({ video, profiles: actorProfiles, videoTags, actorTagDefinitions, videoActorOverrides });
@@ -1498,8 +1511,12 @@ export default function App() {
     [effectiveVideoTags, mediaRootLabelsById, playlistScopeVideos, seriesTitleByVideoId, videoActorSearchMetadata, videoComments, videoHighlights, videoRatings],
   );
   const deferredPlaylistSearchQuery = useDeferredValue(playlistSearchQuery);
-  const effectivePlaylistSearchQuery = playlistSearchQuery.trim() ? deferredPlaylistSearchQuery : "";
-  const isPlaylistSearchPending = Boolean(playlistSearchQuery.trim()) && deferredPlaylistSearchQuery !== playlistSearchQuery;
+  const effectivePlaylistSearchQuery = tagPlaylistSelection
+    ? ""
+    : playlistSearchQuery.trim() ? deferredPlaylistSearchQuery : "";
+  const isPlaylistSearchPending = !tagPlaylistSelection
+    && Boolean(playlistSearchQuery.trim())
+    && deferredPlaylistSearchQuery !== playlistSearchQuery;
   const playlistSearchResult = useMemo(
     () => searchPlaylistVideos(playlistScopeVideos, playlistSearchDocumentsById, effectivePlaylistSearchQuery),
     [effectivePlaylistSearchQuery, playlistScopeVideos, playlistSearchDocumentsById],
@@ -1518,16 +1535,24 @@ export default function App() {
     [playlistSearchResult.tokens],
   );
   const isRatingPlaylistActive = Boolean(ratingPlaylistMode);
+  const isTagPlaylistActive = Boolean(
+    tagPlaylistSelection && !isDuplicatePlaylistActive && !isVersionPlaylistActive && !isRatingPlaylistActive,
+  );
   const activeRatingPlaylistLabel = getActiveRatingPlaylistLabel(ratingPlaylistMode, ratingFilterLabel);
-  const isPlaylistSeriesMode = isSeriesMode && !isDuplicatePlaylistActive && !isVersionPlaylistActive && !isRatingPlaylistActive;
+  const isPlaylistSeriesMode = isSeriesMode
+    && !isDuplicatePlaylistActive
+    && !isVersionPlaylistActive
+    && !isRatingPlaylistActive
+    && !isTagPlaylistActive;
   const playlistIndexById = useMemo(
-    () =>
-      createVideoIndexById(
-        resolvePlaylistIndexVideos({
-          isDuplicatePlaylistActive, isVersionPlaylistActive, isRatingPlaylistActive, duplicatePlaylistVideos, versionPlaylistVideos, ratingPlaylistVideos, playlistVideos,
-        }),
-      ),
-    [duplicatePlaylistVideos, isDuplicatePlaylistActive, isRatingPlaylistActive, isVersionPlaylistActive, playlistVideos, ratingPlaylistVideos, versionPlaylistVideos],
+    () => createVideoIndexById(
+      isTagPlaylistActive
+        ? tagPlaylistVideos
+        : resolvePlaylistIndexVideos({
+            isDuplicatePlaylistActive, isVersionPlaylistActive, isRatingPlaylistActive, duplicatePlaylistVideos, versionPlaylistVideos, ratingPlaylistVideos, playlistVideos,
+          }),
+    ),
+    [duplicatePlaylistVideos, isDuplicatePlaylistActive, isRatingPlaylistActive, isTagPlaylistActive, isVersionPlaylistActive, playlistVideos, ratingPlaylistVideos, tagPlaylistVideos, versionPlaylistVideos],
   );
   const visibleVideoIndexById = useMemo(() => createVideoIndexById(visibleVideos), [visibleVideos]);
   const playlistPageCount = Math.max(1, Math.ceil(visibleVideos.length / playlistPageSize));
@@ -1620,6 +1645,11 @@ export default function App() {
       setRatingPlaylistMode(null);
     }
   }, [isRatingFilterEnabled, ratingPlaylistMode]);
+  useEffect(() => {
+    if (!tagPlaylistSelection || tagPlaylistVideos.length) return;
+    setTagPlaylistSelection(null);
+    setPlaylistSearchQuery("");
+  }, [tagPlaylistSelection, tagPlaylistVideos.length]);
   const createHomeVideoCard = useCallback(
     (video: VideoItem): HomeVideoCard => {
       const progress = progressStore[video.id];
@@ -1735,6 +1765,10 @@ export default function App() {
         .slice(0, 10),
     };
   }, [effectiveVideoTags, homeMediaMode, modeFilteredVideos]);
+  const homeTagExplorerVideos = useMemo(
+    () => homeMediaMode === "special" ? modeFilteredVideos.map(createHomeVideoCard) : [],
+    [createHomeVideoCard, homeMediaMode, modeFilteredVideos],
+  );
   const specialModeInsights = useMemo(
     () => {
       if (homeMediaMode !== "special") return null;
@@ -3478,6 +3512,8 @@ export default function App() {
 
   const openVideoFromHome = useCallback(
     (video: VideoItem, options?: { fromBeginning?: boolean }) => {
+      setTagPlaylistSelection(null);
+      setPlaylistSearchQuery("");
       startFromBeginningVideoIdRef.current = options?.fromBeginning ? video.id : null;
       selectVideo(video.id);
     },
@@ -3495,11 +3531,30 @@ export default function App() {
     [selectVideo],
   );
 
+  const openTagPlaylist = useCallback((selection: TagExplorerSelection, startVideoId?: string) => {
+    const matchingVideos = playlistVideos.filter(
+      (video) => matchesTagExplorerSelection(effectiveVideoTags[video.id] ?? [], selection),
+    );
+    const firstVideo = matchingVideos.find((video) => video.id === startVideoId) ?? matchingVideos[0];
+    if (!firstVideo) return;
+    setPlaylistPage(1);
+    setPlaylistSearchQuery(formatTagExplorerSearchQuery(selection));
+    setTagPlaylistSelection(selection);
+    setIsDuplicatePlaylistActive(false);
+    setIsVersionPlaylistActive(false);
+    setRatingPlaylistMode(null);
+    setPlaylistFilter("all");
+    setIsSeriesMode(false);
+    setIsSeriesMenuOpen(false);
+    selectVideo(firstVideo.id, { syncSeriesMode: false });
+  }, [effectiveVideoTags, playlistVideos, selectVideo]);
+
   const openDuplicatePlaylist = useCallback(() => {
     const firstVideo = duplicatePlaylistVideos[0];
     if (!firstVideo) return;
     setPlaylistPage(1);
     setPlaylistSearchQuery("");
+    setTagPlaylistSelection(null);
     setIsDuplicatePlaylistActive(true);
     setRatingPlaylistMode(null);
     setPlaylistFilter("all");
@@ -3512,6 +3567,7 @@ export default function App() {
     if (!firstVideo) return;
     setPlaylistPage(1);
     setPlaylistSearchQuery("");
+    setTagPlaylistSelection(null);
     setIsDuplicatePlaylistActive(false);
     setIsVersionPlaylistActive(true);
     setRatingPlaylistMode(null);
@@ -3540,6 +3596,7 @@ export default function App() {
     if (!firstVideo) return;
     setPlaylistPage(1);
     setPlaylistSearchQuery("");
+    setTagPlaylistSelection(null);
     setRatingPlaylistMode(mode);
     setIsDuplicatePlaylistActive(false);
     setPlaylistFilter("all");
@@ -3552,6 +3609,7 @@ export default function App() {
     if (!firstVideo) return;
     setPlaylistPage(1);
     setPlaylistSearchQuery("");
+    setTagPlaylistSelection(null);
     setIsDuplicatePlaylistActive(false);
     setIsVersionPlaylistActive(false);
     setRatingPlaylistMode(null);
@@ -3573,6 +3631,7 @@ export default function App() {
   const resetHomeSearchScope = useCallback(() => {
     setPlaylistPage(1);
     setPlaylistFilter("all");
+    setTagPlaylistSelection(null);
     setIsDuplicatePlaylistActive(false);
     setIsVersionPlaylistActive(false);
     setRatingPlaylistMode(null);
@@ -5716,7 +5775,11 @@ export default function App() {
   const currentVideoPlayabilityMessage = currentVideo?.playability?.performanceWarning ?? "";
   const isCurrentHighEnergyMarkPending = pendingHighEnergyStart?.videoId === currentVideo?.id;
   const isCurrentEditSegmentMarkPending = pendingEditSegmentStart?.videoId === currentVideo?.id;
-  const { ariaLabel: playlistPanelAriaLabel, title: playlistPanelTitle } = createPlaylistPanelLabels({ isDuplicatePlaylistActive, isVersionPlaylistActive, isRatingPlaylistActive, isPlaylistSeriesMode, playlistVisibleCountLabel, duplicateGroupCount: activeDuplicateVideoGroups.length, versionGroupCount: videoVersionGroups.length, activeRatingPlaylistLabel, modeFilteredVideoCount: modeFilteredVideos.length, playlistFilter, homeMediaMode, homeMediaModeLabel, totalVideoCount: videos.length });
+  const defaultPlaylistPanelLabels = createPlaylistPanelLabels({ isDuplicatePlaylistActive, isVersionPlaylistActive, isRatingPlaylistActive, isPlaylistSeriesMode, playlistVisibleCountLabel, duplicateGroupCount: activeDuplicateVideoGroups.length, versionGroupCount: videoVersionGroups.length, activeRatingPlaylistLabel, modeFilteredVideoCount: modeFilteredVideos.length, playlistFilter, homeMediaMode, homeMediaModeLabel, totalVideoCount: videos.length });
+  const playlistPanelAriaLabel = isTagPlaylistActive ? "标签组合播放列表" : defaultPlaylistPanelLabels.ariaLabel;
+  const playlistPanelTitle = isTagPlaylistActive
+    ? `标签片单 · ${playlistVisibleCountLabel} 个视频`
+    : defaultPlaylistPanelLabels.title;
 
   return (
     <>
@@ -5818,7 +5881,11 @@ export default function App() {
                 mode={{
                   homeMediaMode,
                   homeMediaModeLabel,
-                  onModeChange: updateHomeMediaMode,
+                  onModeChange: (nextMode) => {
+                    setTagPlaylistSelection(null);
+                    setPlaylistSearchQuery("");
+                    updateHomeMediaMode(nextMode);
+                  },
                 }}
                 mediaLibrary={{
                   homeMediaModeLabel,
@@ -5832,7 +5899,10 @@ export default function App() {
                   onRefresh: () => void loadGlobalMediaLibrary(),
                   onToggle: () => setIsMediaLibraryPanelOpen((isOpen) => !isOpen),
                 }}
-              tagStats={homeTagStats}
+              tagStats={homeTagStats ? {
+                ...homeTagStats,
+                onExploreTag: setTagExplorerInitialKey,
+              } : null}
               recap={shouldShowHomeRecap ? {
                 canUseEmbeddedSubtitles: canUseHomeEmbeddedSubtitles,
                 canUseRecapSubtitle: canUseHomeRecapSubtitle,
@@ -6251,6 +6321,7 @@ export default function App() {
           isCurrentVideoVisible={isCurrentVideoVisible}
           isDuplicatePlaylistActive={isDuplicatePlaylistActive}
           isVersionPlaylistActive={isVersionPlaylistActive}
+          isTagPlaylistActive={isTagPlaylistActive}
           isPlaylistSeriesMode={isPlaylistSeriesMode}
           isPlaylistSortReversed={isPlaylistSortReversed}
           isRatingPlaylistActive={isRatingPlaylistActive}
@@ -6298,11 +6369,13 @@ export default function App() {
           }}
           onChangePlaylistSortMode={updatePlaylistSortMode}
           onChangePlaylistSearch={(query) => {
+            setTagPlaylistSelection(null);
             setPlaylistSearchQuery(query);
             setPlaylistPage(1);
             scrollPlaylistToTop("auto");
           }}
           onClearPlaylistSearch={() => {
+            setTagPlaylistSelection(null);
             setPlaylistSearchQuery("");
             setPlaylistPage(1);
             scrollPlaylistToTop("auto");
@@ -6310,6 +6383,11 @@ export default function App() {
           onClearDuplicatePlaylist={() => {
             setPlaylistPage(1);
             setIsDuplicatePlaylistActive(false);
+          }}
+          onClearTagPlaylist={() => {
+            setPlaylistPage(1);
+            setTagPlaylistSelection(null);
+            setPlaylistSearchQuery("");
           }}
           onClearVersionPlaylist={() => {
             setPlaylistPage(1);
@@ -6361,6 +6439,13 @@ export default function App() {
         </>
       ) : null}
     </main>
+    <HomeTagExplorerDialog
+      initialTagKey={tagExplorerInitialKey}
+      videos={homeTagExplorerVideos}
+      onClose={() => setTagExplorerInitialKey(null)}
+      onOpenPlaylist={openTagPlaylist}
+      onThumbnailError={markVideoThumbnailFailed}
+    />
     <HighEnergyTagDialog
       prompt={highEnergyTagPrompt}
       onClose={() => setHighEnergyTagPrompt(null)}

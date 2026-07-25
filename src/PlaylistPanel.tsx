@@ -34,6 +34,7 @@ type PlaylistPanelProps = {
   isCurrentVideoVisible: boolean;
   isDuplicatePlaylistActive: boolean;
   isVersionPlaylistActive: boolean;
+  isTagPlaylistActive: boolean;
   isPlaylistSeriesMode: boolean;
   isPlaylistSortReversed: boolean;
   isRatingPlaylistActive: boolean;
@@ -80,6 +81,7 @@ type PlaylistPanelProps = {
   onChangePlaylistSearch: (query: string) => void;
   onClearPlaylistSearch: () => void;
   onClearDuplicatePlaylist: () => void;
+  onClearTagPlaylist: () => void;
   onClearVersionPlaylist: () => void;
   onClearRatingPlaylist: () => void;
   onCommitPlaylistPageInput: () => void;
@@ -117,6 +119,7 @@ export function PlaylistPanel({
   isCurrentVideoVisible,
   isDuplicatePlaylistActive,
   isVersionPlaylistActive,
+  isTagPlaylistActive,
   isPlaylistSeriesMode,
   isPlaylistSortReversed,
   isRatingPlaylistActive,
@@ -163,6 +166,7 @@ export function PlaylistPanel({
   onChangePlaylistSearch,
   onClearPlaylistSearch,
   onClearDuplicatePlaylist,
+  onClearTagPlaylist,
   onClearVersionPlaylist,
   onClearRatingPlaylist,
   onCommitPlaylistPageInput,
@@ -188,7 +192,7 @@ export function PlaylistPanel({
       <div className="playlist-header">
         <div className="playlist-title-row">
           <span className={`player-mode-indicator mode-${homeMediaMode}`} title={`当前播放模式：${playerMediaModeLabel}`}>
-            {isDuplicatePlaylistActive ? "重复" : isVersionPlaylistActive ? "版本" : isRatingPlaylistActive ? "评分" : playerMediaModeLabel}
+            {isDuplicatePlaylistActive ? "重复" : isVersionPlaylistActive ? "版本" : isRatingPlaylistActive ? "评分" : isTagPlaylistActive ? "标签" : playerMediaModeLabel}
           </span>
           <span className="playlist-title-text">{playlistTitle}</span>
         </div>
@@ -201,6 +205,7 @@ export function PlaylistPanel({
           isCurrentVideoVisible={isCurrentVideoVisible}
           isDuplicatePlaylistActive={isDuplicatePlaylistActive}
           isVersionPlaylistActive={isVersionPlaylistActive}
+          isTagPlaylistActive={isTagPlaylistActive}
           isPlaylistSeriesMode={isPlaylistSeriesMode}
           isPlaylistSortReversed={isPlaylistSortReversed}
           isRatingPlaylistActive={isRatingPlaylistActive}
@@ -214,6 +219,7 @@ export function PlaylistPanel({
           onChangePlaylistFilter={onChangePlaylistFilter}
           onChangePlaylistSortMode={onChangePlaylistSortMode}
           onClearDuplicatePlaylist={onClearDuplicatePlaylist}
+          onClearTagPlaylist={onClearTagPlaylist}
           onClearVersionPlaylist={onClearVersionPlaylist}
           onClearRatingPlaylist={onClearRatingPlaylist}
           onOpenBangumiSubject={onOpenBangumiSubject}

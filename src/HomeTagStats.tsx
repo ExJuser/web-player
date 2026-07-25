@@ -9,9 +9,10 @@ type HomeTagStatsProps = {
   taggedVideos: number;
   tags: HomeTagStat[];
   totalTags: number;
+  onExploreTag: (tagKey: string) => void;
 };
 
-export function HomeTagStats({ coverage, taggedVideos, tags, totalTags }: HomeTagStatsProps) {
+export function HomeTagStats({ coverage, taggedVideos, tags, totalTags, onExploreTag }: HomeTagStatsProps) {
   const maxVideoCount = tags[0]?.videoCount ?? 0;
   const coveragePercent = Math.round(coverage * 100);
 
@@ -47,11 +48,14 @@ export function HomeTagStats({ coverage, taggedVideos, tags, totalTags }: HomeTa
                 : 0;
 
               return (
-                <div
+                <button
                   className="home-tag-ranking-row"
                   key={tag.key}
                   role="listitem"
+                  type="button"
+                  onClick={() => onExploreTag(tag.key)}
                   aria-label={`${tag.label}，覆盖 ${tag.videoCount} 部视频，占已标注视频 ${taggedVideoPercent}%`}
+                  title={`探索标签“${tag.label}”`}
                 >
                   <span className="home-tag-ranking-index">{String(index + 1).padStart(2, "0")}</span>
                   <div className="home-tag-ranking-detail">
@@ -66,7 +70,7 @@ export function HomeTagStats({ coverage, taggedVideos, tags, totalTags }: HomeTa
                       <span style={{ width: `${relativeWidth}%` }} />
                     </span>
                   </div>
-                </div>
+                </button>
               );
             })}
           </div>

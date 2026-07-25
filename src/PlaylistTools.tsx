@@ -16,6 +16,7 @@ type PlaylistToolsProps = {
   isCurrentVideoVisible: boolean;
   isDuplicatePlaylistActive: boolean;
   isVersionPlaylistActive: boolean;
+  isTagPlaylistActive: boolean;
   isPlaylistSeriesMode: boolean;
   isPlaylistSortReversed: boolean;
   isRatingPlaylistActive: boolean;
@@ -29,6 +30,7 @@ type PlaylistToolsProps = {
   onChangePlaylistFilter: (filter: PlaylistFilter) => void;
   onChangePlaylistSortMode: (sortMode: PlaylistSortMode) => void;
   onClearDuplicatePlaylist: () => void;
+  onClearTagPlaylist: () => void;
   onClearVersionPlaylist: () => void;
   onClearRatingPlaylist: () => void;
   onOpenBangumiSubject: () => void;
@@ -48,6 +50,7 @@ export function PlaylistTools({
   isCurrentVideoVisible,
   isDuplicatePlaylistActive,
   isVersionPlaylistActive,
+  isTagPlaylistActive,
   isPlaylistSeriesMode,
   isPlaylistSortReversed,
   isRatingPlaylistActive,
@@ -61,6 +64,7 @@ export function PlaylistTools({
   onChangePlaylistFilter,
   onChangePlaylistSortMode,
   onClearDuplicatePlaylist,
+  onClearTagPlaylist,
   onClearVersionPlaylist,
   onClearRatingPlaylist,
   onOpenBangumiSubject,
@@ -140,6 +144,10 @@ export function PlaylistTools({
         </button>
       ) : isRatingPlaylistActive ? (
         <button className="playlist-clear-button" type="button" onClick={onClearRatingPlaylist} title="退出评分列表">
+          退出
+        </button>
+      ) : isTagPlaylistActive ? (
+        <button className="playlist-clear-button" type="button" onClick={onClearTagPlaylist} title="退出标签片单">
           退出
         </button>
       ) : !isPlaylistSeriesMode ? (
