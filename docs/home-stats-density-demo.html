@@ -196,6 +196,269 @@
       background: var(--surface);
     }
 
+    /* 推荐方案：顶部片库概览 */
+    .featured-scheme {
+      overflow: visible;
+      border-color: color-mix(in srgb, var(--accent) 48%, var(--border));
+    }
+
+    .featured-scheme .scheme-head {
+      background: linear-gradient(90deg, var(--accent-soft), transparent 62%);
+    }
+
+    .topbar-preview {
+      container-type: inline-size;
+    }
+
+    .popover-stage {
+      min-height: 286px;
+    }
+
+    .mock-topbar {
+      display: grid;
+      grid-template-columns: minmax(260px, 1fr) auto;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+    }
+
+    .mock-search {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      min-width: 0;
+      height: 36px;
+      padding: 0 12px;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      background: var(--surface);
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .mock-search span:last-child {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .mock-top-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .mock-action,
+    .library-stats-trigger {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      height: 34px;
+      padding: 0 11px;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      background: var(--surface);
+      color: var(--text);
+      font-size: 13px;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+
+    .mock-action.primary {
+      border-color: var(--accent);
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .mock-action svg,
+    .library-stats-trigger svg {
+      width: 16px;
+      height: 16px;
+      flex: 0 0 auto;
+      stroke: currentColor;
+      stroke-width: 1.8;
+      fill: none;
+    }
+
+    .library-stats-anchor {
+      position: relative;
+      z-index: 5;
+    }
+
+    .library-stats-trigger {
+      min-width: 94px;
+      border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+    }
+
+    .library-stats-trigger:hover,
+    .library-stats-trigger:focus-visible,
+    .library-stats-anchor.is-pinned .library-stats-trigger,
+    .library-stats-anchor:focus-within .library-stats-trigger {
+      border-color: var(--accent);
+      background: var(--accent-soft);
+    }
+
+    .library-stats-trigger strong {
+      padding-left: 7px;
+      border-left: 1px solid var(--border);
+      color: var(--text);
+      font-size: 14px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .library-stats-trigger .status-dot {
+      width: 5px;
+      height: 5px;
+      margin-left: -2px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--green) 14%, transparent);
+    }
+
+    .library-stats-popover {
+      position: absolute;
+      top: calc(100% + 10px);
+      right: 0;
+      width: min(336px, calc(100vw - 56px));
+      padding: 14px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--surface);
+      box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(-5px) scale(0.985);
+      transform-origin: top right;
+      transition: opacity 150ms ease, transform 150ms ease;
+    }
+
+    .library-stats-popover::before {
+      content: "";
+      position: absolute;
+      top: -5px;
+      right: 32px;
+      width: 9px;
+      height: 9px;
+      border-top: 1px solid var(--border);
+      border-left: 1px solid var(--border);
+      background: var(--surface);
+      transform: rotate(45deg);
+    }
+
+    .library-stats-anchor:hover .library-stats-popover,
+    .library-stats-anchor:focus-within .library-stats-popover,
+    .library-stats-anchor.is-pinned .library-stats-popover {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateY(0) scale(1);
+    }
+
+    .stats-popover-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .stats-popover-title {
+      display: flex;
+      align-items: baseline;
+      gap: 7px;
+      min-width: 0;
+    }
+
+    .stats-popover-title strong {
+      font-size: 14px;
+    }
+
+    .stats-popover-title span {
+      color: var(--muted);
+      font-size: 11px;
+      white-space: nowrap;
+    }
+
+    .scope-badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 22px;
+      padding: 3px 7px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-size: 10px;
+      white-space: nowrap;
+    }
+
+    .popover-metrics {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      overflow: hidden;
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      background: var(--surface-strong);
+    }
+
+    .popover-metric {
+      min-width: 0;
+      padding: 11px 9px;
+    }
+
+    .popover-metric + .popover-metric {
+      border-left: 1px solid var(--border);
+    }
+
+    .popover-metric strong {
+      display: block;
+      margin-bottom: 3px;
+      font-size: 18px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .popover-metric span {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      color: var(--muted);
+      font-size: 11px;
+      white-space: nowrap;
+    }
+
+    .metric-marker {
+      width: 5px;
+      height: 5px;
+      flex: 0 0 auto;
+      border-radius: 50%;
+      background: var(--muted);
+    }
+
+    .metric-marker.unfinished {
+      background: var(--yellow);
+    }
+
+    .metric-marker.completed {
+      background: var(--green);
+    }
+
+    .metric-marker.favorite {
+      background: var(--accent);
+    }
+
+    .popover-foot {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 10px;
+    }
+
+    .popover-foot span:last-child {
+      color: var(--text);
+    }
+
     .stat-number {
       font-variant-numeric: tabular-nums;
       font-weight: 750;
@@ -525,6 +788,36 @@
         justify-content: center;
       }
     }
+
+    @container (max-width: 620px) {
+      .mock-topbar {
+        grid-template-columns: 1fr;
+      }
+
+      .mock-top-actions {
+        width: 100%;
+      }
+
+      .mock-action {
+        flex: 1 1 auto;
+      }
+
+      .library-stats-anchor {
+        flex: 0 0 auto;
+      }
+
+      .library-stats-popover {
+        right: -80px;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .preview,
+      .chevron,
+      .library-stats-popover {
+        transition: none;
+      }
+    }
   </style>
 </head>
 <body>
@@ -541,6 +834,92 @@
     </header>
 
     <div class="comparison">
+      <section class="scheme featured-scheme">
+        <header class="scheme-head">
+          <div class="scheme-title">
+            <span class="scheme-index">07</span>
+            <h2>顶部片库概览按钮</h2>
+            <span class="recommend">新推荐 · 最省首页空间</span>
+          </div>
+          <span class="scheme-note">悬停预览 · 点击锁定</span>
+        </header>
+        <div class="preview-wrap popover-stage">
+          <div class="preview topbar-preview">
+            <div class="mock-topbar">
+              <div class="mock-search" aria-label="搜索框示意">
+                <span aria-hidden="true">⌕</span>
+                <span>搜索当前媒体模式的影片、路径或标签</span>
+              </div>
+              <div class="mock-top-actions">
+                <button class="mock-action" type="button">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M4 6.5h16v11H4z"></path>
+                    <path d="M7 14.5h10M8 10h.01M12 10h.01"></path>
+                  </svg>
+                  本地缓存
+                </button>
+
+                <div class="library-stats-anchor is-pinned" id="libraryStatsAnchor">
+                  <button
+                    class="library-stats-trigger"
+                    id="libraryStatsTrigger"
+                    type="button"
+                    aria-expanded="true"
+                    aria-controls="libraryStatsPopover"
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <rect x="3.5" y="5" width="17" height="14" rx="2"></rect>
+                      <path d="M8 5v14M16 5v14M3.5 9h4.5M3.5 15h4.5M16 9h4.5M16 15h4.5"></path>
+                    </svg>
+                    <span>影片</span>
+                    <strong>961</strong>
+                    <span class="status-dot" aria-hidden="true"></span>
+                  </button>
+
+                  <div class="library-stats-popover" id="libraryStatsPopover" role="dialog" aria-label="片库概览">
+                    <div class="stats-popover-head">
+                      <div class="stats-popover-title">
+                        <strong>片库概览</strong>
+                        <span>共 961 部</span>
+                      </div>
+                      <span class="scope-badge">当前媒体模式</span>
+                    </div>
+
+                    <div class="popover-metrics">
+                      <div class="popover-metric">
+                        <strong>485</strong>
+                        <span><i class="metric-marker unfinished" aria-hidden="true"></i>未看完</span>
+                      </div>
+                      <div class="popover-metric">
+                        <strong>0</strong>
+                        <span><i class="metric-marker completed" aria-hidden="true"></i>已看完</span>
+                      </div>
+                      <div class="popover-metric">
+                        <strong>1</strong>
+                        <span><i class="metric-marker favorite" aria-hidden="true"></i>收藏</span>
+                      </div>
+                    </div>
+
+                    <div class="popover-foot">
+                      <span>随媒体模式实时更新</span>
+                      <span>再次点击收起</span>
+                    </div>
+                  </div>
+                </div>
+
+                <button class="mock-action primary" type="button">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M3.5 7.5h6l2-2h9v13h-17z"></path>
+                    <path d="M12 10v5M9.5 12.5h5"></path>
+                  </svg>
+                  新增媒体库
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section class="scheme">
         <header class="scheme-head">
           <div class="scheme-title">
@@ -685,6 +1064,8 @@
     const filterFeedback = document.getElementById("filterFeedback");
     const collapsedStats = document.getElementById("collapsedStats");
     const collapseTrigger = document.getElementById("collapseTrigger");
+    const libraryStatsAnchor = document.getElementById("libraryStatsAnchor");
+    const libraryStatsTrigger = document.getElementById("libraryStatsTrigger");
 
     themeToggle.addEventListener("click", () => {
       const isLight = root.dataset.theme !== "light";
@@ -711,6 +1092,19 @@
     collapseTrigger.addEventListener("click", () => {
       const isOpen = collapsedStats.classList.toggle("is-open");
       collapseTrigger.setAttribute("aria-expanded", String(isOpen));
+    });
+
+    libraryStatsTrigger.addEventListener("click", () => {
+      const isPinned = libraryStatsAnchor.classList.toggle("is-pinned");
+      libraryStatsTrigger.setAttribute("aria-expanded", String(isPinned));
+    });
+
+    document.addEventListener("click", (event) => {
+      if (libraryStatsAnchor.contains(event.target)) {
+        return;
+      }
+      libraryStatsAnchor.classList.remove("is-pinned");
+      libraryStatsTrigger.setAttribute("aria-expanded", "false");
     });
   </script>
 </body>
