@@ -359,7 +359,6 @@ import {
 import { DeletionDialogs } from "./DeletionDialogs";
 import { HighEnergyTagDialog } from "./HighEnergyTagDialog";
 import { HomeNextEpisodeSection } from "./HomeNextEpisodeSection";
-import { HomeLibraryStats } from "./HomeLibraryStats";
 import { HomeRecentSection } from "./HomeRecentSection";
 import { HomeResumeSection } from "./HomeResumeSection";
 import { HomeSideColumn } from "./HomeSideColumn";
@@ -5824,6 +5823,7 @@ export default function App() {
             comment: videoComments[video.id],
             searchMatch: playlistSearchResult.matchesByVideoId.get(video.id),
           }))}
+          homeMediaModeLabel={homeMediaModeLabel}
           mediaProcessingTask={mediaProcessingTask}
           isExploreViewVisible={isExploreViewVisible}
           isHomeSearchPending={isPlaylistSearchPending}
@@ -5831,6 +5831,7 @@ export default function App() {
           isNonPlayerViewVisible={isNonPlayerViewVisible}
           isPrivacyMode={isPrivacyMode}
           isScanning={isScanning}
+          libraryStats={libraryStats}
           metadataRows={currentVideoMetadataRows}
           playabilityMessage={currentVideoPlayabilityMessage}
           summaryFallbackText={currentVideoSummaryFallbackText}
@@ -5854,8 +5855,6 @@ export default function App() {
         {isHomeViewVisible ? (
           <section className="home-dashboard" aria-label="继续观看首页">
             <div className="home-primary-column">
-              <HomeLibraryStats stats={libraryStats} />
-
               <HomeResumeSection
                 actionLabel={primaryHomeAction}
                 card={primaryHomeCard}
