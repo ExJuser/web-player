@@ -189,6 +189,22 @@ button {
   overflow: visible;
 }
 
+@media (min-width: 1281px) {
+  .app-shell.home-view .top-bar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1150px) minmax(max-content, 1fr);
+  }
+
+  .app-shell.home-view .video-summary {
+    grid-column: 2;
+  }
+
+  .app-shell.home-view .top-actions {
+    grid-column: 3;
+    justify-self: end;
+  }
+}
+
 .home-top-search {
   position: relative;
   z-index: 30;
