@@ -9814,6 +9814,10 @@ button {
   width: 96px;
 }
 
+.actor-page-size-control .control-select {
+  width: 118px;
+}
+
 .actor-sort-controls .control-select-trigger {
   height: 42px;
   padding: 0 14px 0 12px;

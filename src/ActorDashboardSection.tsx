@@ -9,9 +9,23 @@ import { readActorCover } from "./playerStorage";
 import type { VideoCommentStore, VideoItem, VideoRatingStore, VideoStatsStore, VideoTagStore } from "./playerTypes";
 import { createVideoStatsKey } from "./playerUiState";
 
-const actorPageSize = 12;
+const defaultActorPageSize = 12;
+const actorPageSizeOptions = [12, 24, 48, 96] as const;
+const actorPageSizeStorageKey = "local-web-player-actor-page-size";
 const actorVideoPageSize = 12;
 const unresolvedPageSize = 24;
+
+function readStoredActorPageSize() {
+  if (typeof window === "undefined") return defaultActorPageSize;
+  try {
+    const storedPageSize = Number(window.localStorage.getItem(actorPageSizeStorageKey));
+    return actorPageSizeOptions.includes(storedPageSize as (typeof actorPageSizeOptions)[number])
+      ? storedPageSize
+      : defaultActorPageSize;
+  } catch {
+    return defaultActorPageSize;
+  }
+}
 
 function hasNamedVideoArtwork(video: VideoItem) {
   return Boolean(video.posterFile || video.posterUrl || video.fanartFile || video.fanartUrl || video.thumbFile || video.thumbUrl);
@@ -108,6 +122,7 @@ export function ActorDashboardSection({
   const [sort, setSort] = useState<"name" | "count" | "recent" | "playCount" | "duration" | "emissionCount">("count");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [actorPage, setActorPage] = useState(1);
+  const [actorPageSize, setActorPageSize] = useState(readStoredActorPageSize);
   const [visibleActorVideoCount, setVisibleActorVideoCount] = useState(actorVideoPageSize);
   const [unresolvedPage, setUnresolvedPage] = useState(1);
   const [showUnresolved, setShowUnresolved] = useState(false);
@@ -140,7 +155,14 @@ export function ActorDashboardSection({
   }, [actors, query, sort, sortDirection]);
   const actorPageCount = Math.max(1, Math.ceil(filteredActors.length / actorPageSize));
   const unresolvedPageCount = Math.max(1, Math.ceil(unresolvedVideos.length / unresolvedPageSize));
-  useEffect(() => setActorPage(1), [query, sort, sortDirection]);
+  useEffect(() => setActorPage(1), [actorPageSize, query, sort, sortDirection]);
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(actorPageSizeStorageKey, String(actorPageSize));
+    } catch {
+      // Storage can be unavailable in private or restricted browser contexts.
+    }
+  }, [actorPageSize]);
   useEffect(() => setVisibleActorVideoCount(actorVideoPageSize), [selected?.actor.id]);
   useEffect(() => setPendingCoverRemovalActorId(null), [selected?.actor.id]);
   useLayoutEffect(() => {
@@ -176,7 +198,7 @@ export function ActorDashboardSection({
     observer.observe(target);
     return () => observer.disconnect();
   }, [selected?.videos.length, visibleActorVideoCount]);
-  const visibleActors = useMemo(() => filteredActors.slice((actorPage - 1) * actorPageSize, actorPage * actorPageSize), [actorPage, filteredActors]);
+  const visibleActors = useMemo(() => filteredActors.slice((actorPage - 1) * actorPageSize, actorPage * actorPageSize), [actorPage, actorPageSize, filteredActors]);
   const visibleActorVideos = useMemo(
     () => selected?.videos.slice(0, visibleActorVideoCount) ?? [],
     [selected?.videos, visibleActorVideoCount],
@@ -270,7 +292,7 @@ export function ActorDashboardSection({
   return (
     <section className="actor-dashboard" aria-label="演员视图">
       <div className="actor-dashboard-header"><div><h2>演员视图</h2><p>{actors.length} 名演员 · {unresolvedVideos.length} 部未识别影片</p></div><button className="secondary-button" type="button" onClick={() => { setUnresolvedPage(1); setShowUnresolved(true); }}><Film size={15} /> 未识别影片</button></div>
-      <div className="actor-toolbar"><label><Search size={16} /><input value={query} placeholder="搜索演员姓名或别名" onChange={(event) => setQuery(event.target.value)} /></label><div className="actor-sort-controls"><ControlSelect label="" ariaLabel="演员排序字段" value={sort} options={[{ value: "count", label: "影片数" }, { value: "playCount", label: "播放次数" }, { value: "duration", label: "时长" }, { value: "emissionCount", label: "发射次数" }, { value: "name", label: "姓名" }, { value: "recent", label: "最近影片" }]} onChange={setSort} className="actor-sort-control" /><ControlSelect label="" ariaLabel="演员排序方向" value={sortDirection} options={[{ value: "desc", label: "降序" }, { value: "asc", label: "升序" }]} onChange={setSortDirection} className="actor-sort-direction-control" /></div></div>
+      <div className="actor-toolbar"><label><Search size={16} /><input value={query} placeholder="搜索演员姓名或别名" onChange={(event) => setQuery(event.target.value)} /></label><div className="actor-sort-controls"><ControlSelect label="" ariaLabel="演员排序字段" value={sort} options={[{ value: "count", label: "影片数" }, { value: "playCount", label: "播放次数" }, { value: "duration", label: "时长" }, { value: "emissionCount", label: "发射次数" }, { value: "name", label: "姓名" }, { value: "recent", label: "最近影片" }]} onChange={setSort} className="actor-sort-control" /><ControlSelect label="" ariaLabel="演员排序方向" value={sortDirection} options={[{ value: "desc", label: "降序" }, { value: "asc", label: "升序" }]} onChange={setSortDirection} className="actor-sort-direction-control" /><ControlSelect label="" ariaLabel="演员每页数量" value={actorPageSize} options={actorPageSizeOptions.map((pageSize) => ({ value: pageSize, label: `每页 ${pageSize} 名` }))} onChange={setActorPageSize} className="actor-page-size-control" /></div></div>
       {visibleActors.length ? <div className="actor-card-grid">{visibleActors.map((entry) => <button className="actor-card" type="button" key={entry.actor.id} onClick={() => onSelectActor(entry.actor.id)}><StoredActorCover actorId={entry.actor.id} actorName={entry.actor.name} fallbackVideo={entry.representativeVideo} libraryId={libraryId} onAvailabilityChange={handleActorCoverAvailabilityChange} onThumbnailError={onThumbnailError} version={actorCoverVersions[entry.actor.id] ?? 0} /><span className="actor-card-details"><span className="actor-card-heading"><strong>{entry.actor.name}</strong><small><Users size={13} /> {entry.videos.length} 部影片</small></span><span className="actor-card-tags">{entry.commonTags.length ? entry.commonTags.map((tag) => <span key={tag}>{tag}</span>) : <em>暂无常用标签</em>}</span><span className="actor-card-stats"><small title={`播放次数：${entry.stats.playCount}`}><Play size={13} /> {entry.stats.playCount} 次</small><small title={`累计播放时长：${formatDuration(entry.stats.totalPlayedSeconds)}`}><Clock3 size={13} /> {formatDuration(entry.stats.totalPlayedSeconds)}</small><small title={`发射次数：${entry.stats.emissionCount}`}><Rocket size={13} /> {entry.stats.emissionCount} 次</small><small title={`上次观看：${entry.stats.lastWatchedAt ? formatRelativeTime(entry.stats.lastWatchedAt) : "暂无"}`}><History size={13} /> {entry.stats.lastWatchedAt ? formatRelativeTime(entry.stats.lastWatchedAt) : "暂无观看"}</small></span></span></button>)}</div> : <div className="ai-empty-state">没有符合条件的演员。</div>}
       {actorPageCount > 1 ? <div className="pagination-controls"><button className="secondary-button" type="button" disabled={actorPage <= 1} onClick={() => setActorPage((value) => value - 1)}>上一页</button><span>{actorPage} / {actorPageCount}</span><button className="secondary-button" type="button" disabled={actorPage >= actorPageCount} onClick={() => setActorPage((value) => value + 1)}>下一页</button></div> : null}
     </section>
