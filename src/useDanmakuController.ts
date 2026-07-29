@@ -2,10 +2,7 @@ import { useCallback, useEffect, type Dispatch, type MutableRefObject, type SetS
 
 import type { DanmakuSourcePayload } from "./appTypes";
 import { fetchLocalJson as fetchJson } from "./localApiClient";
-import {
-  createDanmakuComment,
-  formatDanmakuLoadedMessage,
-} from "./danmakuUtils";
+import { formatDanmakuLoadedMessage } from "./danmakuPresentationUtils";
 import { saveDanmakuPreferences, saveDanmakuSelection } from "./playerStorage";
 import type {
   DanmakuComment,
@@ -29,6 +26,13 @@ type UseDanmakuControllerOptions = {
   setIsDanmakuSourceDetailOpen: Dispatch<SetStateAction<boolean>>;
 };
 
+async function normalizeDanmakuComments(comments: DanmakuSourcePayload["comments"]) {
+  const { createDanmakuComment } = await import("./danmakuUtils");
+  return comments
+    .map((comment) => createDanmakuComment(comment))
+    .filter((comment): comment is DanmakuComment => Boolean(comment));
+}
+
 export function useDanmakuController({
   currentDanmakuSource,
   currentVideo,
@@ -43,8 +47,7 @@ export function useDanmakuController({
   setIsDanmakuSourceDetailOpen,
 }: UseDanmakuControllerOptions) {
   const applyDanmakuSourcePayload = useCallback(
-    (payload: DanmakuSourcePayload, options?: { persist?: boolean; message?: string }) => {
-      const nextComments = payload.comments.map((comment) => createDanmakuComment(comment)).filter((comment): comment is DanmakuComment => Boolean(comment));
+    (payload: DanmakuSourcePayload, nextComments: DanmakuComment[], options?: { persist?: boolean; message?: string }) => {
       setCurrentDanmakuSource(payload.source);
       setDanmakuComments(nextComments);
       setDanmakuMessage(options?.message ?? formatDanmakuLoadedMessage(payload.source, nextComments));
@@ -79,8 +82,8 @@ export function useDanmakuController({
           method: "POST",
           body: JSON.stringify({ sourceId }),
         });
-        const nextComments = payload.comments.map((comment) => createDanmakuComment(comment)).filter((comment): comment is DanmakuComment => Boolean(comment));
-        applyDanmakuSourcePayload(payload, { message: formatDanmakuLoadedMessage(payload.source, nextComments, "已恢复") });
+        const nextComments = await normalizeDanmakuComments(payload.comments);
+        applyDanmakuSourcePayload(payload, nextComments, { message: formatDanmakuLoadedMessage(payload.source, nextComments, "已恢复") });
       } catch (error) {
         setCurrentDanmakuSource(null);
         setDanmakuComments([]);
@@ -129,8 +132,8 @@ export function useDanmakuController({
           method: "POST",
           body: JSON.stringify({ url: url.trim(), mergeSourceId: currentDanmakuSource?.id }),
         });
-        const nextComments = payload.comments.map((comment) => createDanmakuComment(comment)).filter((comment): comment is DanmakuComment => Boolean(comment));
-        applyDanmakuSourcePayload(payload, { persist: true, message: formatDanmakuLoadedMessage(payload.source, nextComments) });
+        const nextComments = await normalizeDanmakuComments(payload.comments);
+        applyDanmakuSourcePayload(payload, nextComments, { persist: true, message: formatDanmakuLoadedMessage(payload.source, nextComments) });
       } catch (error) {
         setDanmakuMessage(error instanceof Error ? error.message : "弹幕拉取失败。");
       } finally {

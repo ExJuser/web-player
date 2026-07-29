@@ -2,6 +2,7 @@ import {
   FolderOpen,
 } from "lucide-react";
 import {
+  lazy,
   startTransition,
   useCallback,
   useDeferredValue,
@@ -172,7 +173,7 @@ import {
   getDanmakuLane,
   getDanmakuLaneCount,
   getDanmakuSourceBreakdown,
-} from "./danmakuUtils";
+} from "./danmakuPresentationUtils";
 import {
   usePlaybackDuration,
   usePlaybackPlaying,
@@ -319,7 +320,8 @@ import {
 } from "./playerUiState";
 import { buildSubtitleSystemVideoTags, mergeVideoTagStores, normalizeTagKey } from "./tagUtils";
 import { formatTagExplorerSearchQuery, matchesTagExplorerSelection, type TagExplorerSelection } from "./tagExplorer";
-import { createPlaylistSearchDocuments, searchPlaylistVideos } from "./playerPlaylistSearch";
+import type { PlaylistSearchRecord } from "./playerPlaylistSearch";
+import { useLibrarySearch } from "./useLibrarySearch";
 import {
   createVideoVersionGroups,
   createVideoVersionPlaylistMetaByVideoId,
@@ -381,13 +383,9 @@ import { HomeSpecialInsightsSection } from "./HomeSpecialInsightsSection";
 import { HomeListCard } from "./HomeVideoCards";
 import { MediaRootDialogsGroup } from "./MediaRootDialogsGroup";
 import { CreativeWorkshopSection, type CreativeFeature } from "./CreativeWorkshopSection";
-import { MosaicStudioSection } from "./MosaicStudioSection";
-import { VideoGrowthRingsSection } from "./VideoGrowthRingsSection";
 import { PhotoAlbumCard } from "./PhotoAlbumCard";
 import { PhotoAlbumTagDialog } from "./PhotoAlbumTagDialog";
 import type { PhotoAlbumViewFilter } from "./PhotoAlbumToolbar";
-import { PhotoDashboardSection } from "./PhotoDashboardSection";
-import { PhotoViewerSection } from "./PhotoViewerSection";
 import { PlaylistPanel } from "./PlaylistPanel";
 import { createPlaylistThumbnailStore } from "./playlistThumbnailStore";
 import { PlayerControlBar } from "./PlayerControlBar";
@@ -398,8 +396,25 @@ import { RatingDialog } from "./RatingDialog";
 import { ShortcutDialog } from "./ShortcutDialog";
 import { TagDialog } from "./TagDialog";
 import { WatchActivitySection } from "./WatchActivitySection";
-import { ActorDashboardSection } from "./ActorDashboardSection";
 import { ActorEditDialog } from "./ActorEditDialog";
+import { LazyFeatureBoundary } from "./LazyFeatureBoundary";
+
+const loadActorDashboard = () => import("./ActorDashboardSection");
+const loadMosaicStudio = () => import("./MosaicStudioSection");
+const loadVideoGrowthRings = () => import("./VideoGrowthRingsSection");
+const loadPhotoDashboard = () => import("./PhotoDashboardSection");
+const loadPhotoViewer = () => import("./PhotoViewerSection");
+
+const ActorDashboardSection = lazy(() =>
+  loadActorDashboard().then((module) => ({ default: module.ActorDashboardSection })));
+const MosaicStudioSection = lazy(() =>
+  loadMosaicStudio().then((module) => ({ default: module.MosaicStudioSection })));
+const VideoGrowthRingsSection = lazy(() =>
+  loadVideoGrowthRings().then((module) => ({ default: module.VideoGrowthRingsSection })));
+const PhotoDashboardSection = lazy(() =>
+  loadPhotoDashboard().then((module) => ({ default: module.PhotoDashboardSection })));
+const PhotoViewerSection = lazy(() =>
+  loadPhotoViewer().then((module) => ({ default: module.PhotoViewerSection })));
 
 const playlistResizeMinWidth = 280;
 const playlistResizeDefaultWidth = 360;
@@ -1575,8 +1590,8 @@ export default function App() {
     () => Object.fromEntries(Object.entries(videoActorSearchMetadata).map(([videoId, metadata]) => [videoId, metadata.names])),
     [videoActorSearchMetadata],
   );
-  const playlistSearchDocumentsById = useMemo(
-    () => createPlaylistSearchDocuments(playlistScopeVideos.map((video) => {
+  const playlistSearchRecords = useMemo<PlaylistSearchRecord[]>(
+    () => playlistScopeVideos.map((video) => {
       const actorMetadata = videoActorSearchMetadata[video.id] ?? { names: [], aliases: [] };
       const actorKeys = new Set([...actorMetadata.names, ...actorMetadata.aliases].map(normalizeTagKey));
       return {
@@ -1592,20 +1607,22 @@ export default function App() {
         highlightDescriptions: (videoHighlights[video.id] ?? []).flatMap((highlight) => highlight.tag ? [highlight.tag] : []),
         library: (video.mediaRootId ? mediaRootLabelsById[video.mediaRootId] : "") || fallbackMediaRootLabelForVideo(video),
       };
-    })),
+    }),
     [effectiveVideoTags, mediaRootLabelsById, playlistScopeVideos, seriesTitleByVideoId, videoActorSearchMetadata, videoComments, videoHighlights, videoRatings],
   );
   const deferredPlaylistSearchQuery = useDeferredValue(playlistSearchQuery);
   const effectivePlaylistSearchQuery = tagPlaylistSelection
     ? ""
     : playlistSearchQuery.trim() ? deferredPlaylistSearchQuery : "";
-  const isPlaylistSearchPending = !tagPlaylistSelection
+  const isDeferredPlaylistSearchPending = !tagPlaylistSelection
     && Boolean(playlistSearchQuery.trim())
     && deferredPlaylistSearchQuery !== playlistSearchQuery;
-  const playlistSearchResult = useMemo(
-    () => searchPlaylistVideos(playlistScopeVideos, playlistSearchDocumentsById, effectivePlaylistSearchQuery),
-    [effectivePlaylistSearchQuery, playlistScopeVideos, playlistSearchDocumentsById],
+  const playlistSearchResult = useLibrarySearch(
+    playlistScopeVideos,
+    playlistSearchRecords,
+    effectivePlaylistSearchQuery,
   );
+  const isPlaylistSearchPending = isDeferredPlaylistSearchPending || playlistSearchResult.isPending;
   const visibleVideos = playlistSearchResult.videos;
   const homeSearchResultVideos = useMemo(
     () => playlistSearchQuery.trim() && !isPlaylistSearchPending ? visibleVideos.slice(0, 8) : [],
@@ -3795,6 +3812,15 @@ export default function App() {
     resetHomeSearchScope();
     setPlaylistSearchQuery(query);
   }, [resetHomeSearchScope]);
+  const preloadExplore = useCallback(() => {
+    void loadActorDashboard();
+  }, []);
+  const preloadPhotoAlbums = useCallback(() => {
+    void Promise.all([loadPhotoDashboard(), loadPhotoViewer()]);
+  }, []);
+  const preloadCreativeFeature = useCallback((feature: CreativeFeature) => {
+    void (feature === "mosaic" ? loadMosaicStudio() : loadVideoGrowthRings());
+  }, []);
 
   const showExploreView = useCallback(() => {
     setActiveView("explore");
@@ -6110,6 +6136,8 @@ export default function App() {
           onShowExplore={showExploreView}
           onShowHome={showHomeView}
           onShowPhotoAlbums={showPhotoAlbumsView}
+          onPreloadExplore={preloadExplore}
+          onPreloadPhotoAlbums={preloadPhotoAlbums}
           onToggleTheme={toggleTheme}
         />
 
@@ -6220,7 +6248,15 @@ export default function App() {
           >
             <nav className="special-view-switch" aria-label="探索功能">
               <button className={specialHomeSection === "overview" ? "active" : ""} type="button" onClick={() => navigateExploreSection("overview")}>概览</button>
-              <button className={specialHomeSection === "actors" ? "active" : ""} type="button" onClick={() => navigateExploreSection("actors")}>演员</button>
+              <button
+                className={specialHomeSection === "actors" ? "active" : ""}
+                type="button"
+                onClick={() => navigateExploreSection("actors")}
+                onFocus={() => void loadActorDashboard()}
+                onMouseEnter={() => void loadActorDashboard()}
+              >
+                演员
+              </button>
               <button className={specialHomeSection === "creative" ? "active" : ""} type="button" onClick={() => navigateExploreSection("creative")}>创意工坊</button>
             </nav>
 
@@ -6260,58 +6296,67 @@ export default function App() {
                     </button>
                   ) : null}
                   {creativeFeature === "rings" ? (
-                    <VideoGrowthRingsSection
-                      forest={growthRingForest}
-                      query={growthRingQuery}
-                      selectedLayerKey={selectedGrowthRingLayerKey}
-                      selectedVideoId={selectedGrowthRingVideoId}
-                      sort={growthRingSort}
-                      visibleLimit={growthRingVisibleLimit}
-                      formatDuration={formatCumulativeDuration}
-                      onOpenVideo={openVideoFromHome}
-                      onQueryChange={setGrowthRingQuery}
-                      onSelectLayer={setSelectedGrowthRingLayerKey}
-                      onSelectVideo={setSelectedGrowthRingVideoId}
-                      onSortChange={setGrowthRingSort}
-                      onThumbnailError={markVideoThumbnailFailed}
-                      onVisibleLimitChange={setGrowthRingVisibleLimit}
-                      onVisibleVideoIdsChange={updateGrowthRingThumbnailVideos}
-                    />
+                    <LazyFeatureBoundary label="影像年轮">
+                      <VideoGrowthRingsSection
+                        forest={growthRingForest}
+                        query={growthRingQuery}
+                        selectedLayerKey={selectedGrowthRingLayerKey}
+                        selectedVideoId={selectedGrowthRingVideoId}
+                        sort={growthRingSort}
+                        visibleLimit={growthRingVisibleLimit}
+                        formatDuration={formatCumulativeDuration}
+                        onOpenVideo={openVideoFromHome}
+                        onQueryChange={setGrowthRingQuery}
+                        onSelectLayer={setSelectedGrowthRingLayerKey}
+                        onSelectVideo={setSelectedGrowthRingVideoId}
+                        onSortChange={setGrowthRingSort}
+                        onThumbnailError={markVideoThumbnailFailed}
+                        onVisibleLimitChange={setGrowthRingVisibleLimit}
+                        onVisibleVideoIdsChange={updateGrowthRingThumbnailVideos}
+                      />
+                    </LazyFeatureBoundary>
                   ) : creativeFeature === "mosaic" ? (
-                    <MosaicStudioSection
-                      albums={photoAlbums}
-                      videos={modeFilteredVideos}
-                      onOpenAlbum={openMosaicPhotoAlbum}
-                      onOpenVideo={openVideoFromHome}
-                    />
+                    <LazyFeatureBoundary label="千图成像">
+                      <MosaicStudioSection
+                        albums={photoAlbums}
+                        videos={modeFilteredVideos}
+                        onOpenAlbum={openMosaicPhotoAlbum}
+                        onOpenVideo={openVideoFromHome}
+                      />
+                    </LazyFeatureBoundary>
                   ) : (
-                    <CreativeWorkshopSection onOpenFeature={openCreativeFeatureRoute} />
+                    <CreativeWorkshopSection
+                      onOpenFeature={openCreativeFeatureRoute}
+                      onPreloadFeature={preloadCreativeFeature}
+                    />
                   )}
                 </section>
               ) : specialHomeSection === "actors" ? (
-                <ActorDashboardSection
-                  actors={actorInsights.actors}
-                  unresolvedVideos={actorInsights.unresolvedVideos}
-                  selectedActorId={selectedActorId}
-                  libraryId={libraryId}
-                  actorCoverVersions={actorCoverVersions}
-                  actorCoverPendingAction={actorCoverPendingAction}
-                  videoComments={videoComments}
-                  videoRatings={videoRatings}
-                  videoStats={videoStatsRef.current}
-                  videoTags={effectiveVideoTags}
-                  systemVideoTags={systemVideoTags}
-                  formatDuration={formatCumulativeDuration}
-                  formatRelativeTime={formatRelativeTime}
-                  onSelectActor={selectActorRoute}
-                  onOpenVideo={openVideoFromHome}
-                  onEditVideoActors={(video) => setActorEditVideoId(video.id)}
-                  onThumbnailError={markVideoThumbnailFailed}
-                  onSetActorCover={(actorId, video) => void saveActorCoverFromVideo(actorId, video)}
-                  onUploadActorCover={(actorId, file) => void saveUploadedActorCover(actorId, file)}
-                  onRemoveActorCover={(actorId) => void removeStoredActorCover(actorId)}
-                  onActorThumbnailVideosChange={updateActorThumbnailVideos}
-                />
+                <LazyFeatureBoundary label="演员视图">
+                  <ActorDashboardSection
+                    actors={actorInsights.actors}
+                    unresolvedVideos={actorInsights.unresolvedVideos}
+                    selectedActorId={selectedActorId}
+                    libraryId={libraryId}
+                    actorCoverVersions={actorCoverVersions}
+                    actorCoverPendingAction={actorCoverPendingAction}
+                    videoComments={videoComments}
+                    videoRatings={videoRatings}
+                    videoStats={videoStatsRef.current}
+                    videoTags={effectiveVideoTags}
+                    systemVideoTags={systemVideoTags}
+                    formatDuration={formatCumulativeDuration}
+                    formatRelativeTime={formatRelativeTime}
+                    onSelectActor={selectActorRoute}
+                    onOpenVideo={openVideoFromHome}
+                    onEditVideoActors={(video) => setActorEditVideoId(video.id)}
+                    onThumbnailError={markVideoThumbnailFailed}
+                    onSetActorCover={(actorId, video) => void saveActorCoverFromVideo(actorId, video)}
+                    onUploadActorCover={(actorId, file) => void saveUploadedActorCover(actorId, file)}
+                    onRemoveActorCover={(actorId) => void removeStoredActorCover(actorId)}
+                    onActorThumbnailVideosChange={updateActorThumbnailVideos}
+                  />
+                </LazyFeatureBoundary>
               ) : (
                 <HomeSpecialInsightsSection
                   activeTab={specialInsightTab}
@@ -6336,58 +6381,62 @@ export default function App() {
         ) : null}
 
         {isPhotoAlbumViewVisible && activeView === "photos" ? (
-          <PhotoDashboardSection
-            currentPage={photoAlbumPage}
-            end={photoAlbumPageEnd}
-            filter={photoAlbumFilter}
-            isGridCompact={isPhotoAlbumGridCompact}
-            isLoading={isPhotoAlbumsLoading}
-            message={photoAlbumMessage}
-            pageCount={photoAlbumPageCount}
-            pagedPhotoAlbums={pagedPhotoAlbums}
-            photoRootStatuses={photoRootStatuses}
-            searchQuery={photoAlbumSearchQuery}
-            sortMode={photoAlbumSortMode}
-            sortOptions={photoAlbumSortOptions}
-            start={photoAlbumPageStart}
-            stats={photoAlbumStats}
-            totalVisibleAlbums={visiblePhotoAlbums.length}
-            onChooseDirectory={() => void choosePhotoAlbumDirectory()}
-            onFilterChange={updatePhotoAlbumFilter}
-            onNextPage={() => setPhotoAlbumPage((page) => Math.min(page + 1, photoAlbumPageCount))}
-            onPreviousPage={() => setPhotoAlbumPage((page) => Math.max(page - 1, 1))}
-            onRandomAlbum={openRandomPhotoAlbum}
-            onRefresh={() => void refreshPhotoAlbumDirectory()}
-            onRenderAlbum={renderPhotoAlbumCard}
-            onSearchChange={setPhotoAlbumSearchQuery}
-            onSearchClear={() => setPhotoAlbumSearchQuery("")}
-            onSortModeChange={updatePhotoAlbumSortMode}
-          />
+          <LazyFeatureBoundary label="看图">
+            <PhotoDashboardSection
+              currentPage={photoAlbumPage}
+              end={photoAlbumPageEnd}
+              filter={photoAlbumFilter}
+              isGridCompact={isPhotoAlbumGridCompact}
+              isLoading={isPhotoAlbumsLoading}
+              message={photoAlbumMessage}
+              pageCount={photoAlbumPageCount}
+              pagedPhotoAlbums={pagedPhotoAlbums}
+              photoRootStatuses={photoRootStatuses}
+              searchQuery={photoAlbumSearchQuery}
+              sortMode={photoAlbumSortMode}
+              sortOptions={photoAlbumSortOptions}
+              start={photoAlbumPageStart}
+              stats={photoAlbumStats}
+              totalVisibleAlbums={visiblePhotoAlbums.length}
+              onChooseDirectory={() => void choosePhotoAlbumDirectory()}
+              onFilterChange={updatePhotoAlbumFilter}
+              onNextPage={() => setPhotoAlbumPage((page) => Math.min(page + 1, photoAlbumPageCount))}
+              onPreviousPage={() => setPhotoAlbumPage((page) => Math.max(page - 1, 1))}
+              onRandomAlbum={openRandomPhotoAlbum}
+              onRefresh={() => void refreshPhotoAlbumDirectory()}
+              onRenderAlbum={renderPhotoAlbumCard}
+              onSearchChange={setPhotoAlbumSearchQuery}
+              onSearchClear={() => setPhotoAlbumSearchQuery("")}
+              onSortModeChange={updatePhotoAlbumSortMode}
+            />
+          </LazyFeatureBoundary>
         ) : null}
 
         {isPhotoAlbumViewVisible && activeView === "photoViewer" && selectedPhotoAlbum ? (
-          <PhotoViewerSection
-            album={selectedPhotoAlbum}
-            currentIndex={currentPhotoIndex}
-            currentPhoto={currentPhoto}
-            currentPhotoUrl={currentPhotoUrl}
-            isCoverCurrent={Boolean(currentPhoto && photoAlbumCoverPreferences[selectedPhotoAlbum.id] === currentPhoto.id)}
-            isFavorite={favoritePhotoAlbumIds.has(selectedPhotoAlbum.id)}
-            thumbnails={visiblePhotoThumbnails}
-            getImageUrl={getPhotoImageUrl}
-            onBack={returnFromPhotoViewer}
-            onDeleteCurrentPhoto={requestDeleteCurrentPhoto}
-            onEditTags={openPhotoAlbumTagEditor}
-            onMarkCompleted={markSelectedPhotoAlbumCompleted}
-            onMove={movePhoto}
-            onResetProgress={resetSelectedPhotoAlbumProgress}
-            onSelectImage={(image) => {
-              setCurrentPhotoIndex(image.index);
-              persistPhotoAlbumProgress(selectedPhotoAlbum, image.index, image.index === selectedPhotoAlbum.images.length - 1);
-            }}
-            onSetCover={setPhotoAlbumCover}
-            onToggleFavorite={togglePhotoAlbumFavorite}
-          />
+          <LazyFeatureBoundary label="图集阅读器">
+            <PhotoViewerSection
+              album={selectedPhotoAlbum}
+              currentIndex={currentPhotoIndex}
+              currentPhoto={currentPhoto}
+              currentPhotoUrl={currentPhotoUrl}
+              isCoverCurrent={Boolean(currentPhoto && photoAlbumCoverPreferences[selectedPhotoAlbum.id] === currentPhoto.id)}
+              isFavorite={favoritePhotoAlbumIds.has(selectedPhotoAlbum.id)}
+              thumbnails={visiblePhotoThumbnails}
+              getImageUrl={getPhotoImageUrl}
+              onBack={returnFromPhotoViewer}
+              onDeleteCurrentPhoto={requestDeleteCurrentPhoto}
+              onEditTags={openPhotoAlbumTagEditor}
+              onMarkCompleted={markSelectedPhotoAlbumCompleted}
+              onMove={movePhoto}
+              onResetProgress={resetSelectedPhotoAlbumProgress}
+              onSelectImage={(image) => {
+                setCurrentPhotoIndex(image.index);
+                persistPhotoAlbumProgress(selectedPhotoAlbum, image.index, image.index === selectedPhotoAlbum.images.length - 1);
+              }}
+              onSetCover={setPhotoAlbumCover}
+              onToggleFavorite={togglePhotoAlbumFavorite}
+            />
+          </LazyFeatureBoundary>
         ) : null}
 
         <div

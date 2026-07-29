@@ -1,7 +1,7 @@
 import { Trash2, X } from "lucide-react";
 
 import { danmakuSpeedMax, danmakuSpeedMin, danmakuSpeedStep } from "./playerConstants";
-import { formatDanmakuProviderLabel, formatDanmakuSpeedLevel } from "./danmakuUtils";
+import { formatDanmakuProviderLabel, formatDanmakuSpeedLevel } from "./danmakuPresentationUtils";
 import type { DanmakuPreferences, DanmakuSource, DanmakuSourceBreakdown } from "./playerTypes";
 
 type DanmakuDialogProps = {

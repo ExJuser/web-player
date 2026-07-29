@@ -7,7 +7,7 @@ import { PlayerStagePlaceholders } from "./PlayerStagePlaceholders";
 import { PlayerVideoElement } from "./PlayerVideoElement";
 import { RocketLaunchEffect } from "./RocketLaunchEffect";
 import { TimelinePreviewTargets } from "./TimelinePreviewTargets";
-import { getActiveDanmakuComments } from "./danmakuUtils";
+import { getActiveDanmakuComments } from "./danmakuPresentationUtils";
 import { usePlaybackSnapshot, type PlaybackRuntimeApi } from "./playbackRuntime";
 import type { AutoNextPrompt, DanmakuComment, DanmakuPreferences, SubtitleItem, SubtitleStylePreferences } from "./playerTypes";
 

@@ -44,6 +44,39 @@ body {
   background: #14161a;
 }
 
+.feature-loading,
+.feature-load-error {
+  display: grid;
+  min-height: 180px;
+  place-items: center;
+  align-content: center;
+  gap: 12px;
+  padding: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background: rgba(24, 27, 33, 0.92);
+  color: #f5f7fb;
+  text-align: center;
+}
+
+.feature-load-error > span {
+  color: rgba(245, 247, 251, 0.68);
+}
+
+.app-shell.theme-light .feature-loading,
+.app-shell.theme-light .feature-load-error,
+:root[data-theme="light"] .feature-loading,
+:root[data-theme="light"] .feature-load-error {
+  border-color: rgba(17, 24, 39, 0.12);
+  background: rgba(255, 255, 255, 0.94);
+  color: #18202d;
+}
+
+.app-shell.theme-light .feature-load-error > span,
+:root[data-theme="light"] .feature-load-error > span {
+  color: rgba(24, 32, 45, 0.68);
+}
+
 button,
 input,
 select {

@@ -57,6 +57,8 @@ type PlayerTopBarProps = {
   onShowExplore: () => void;
   onShowHome: () => void;
   onShowPhotoAlbums: () => void;
+  onPreloadExplore?: () => void;
+  onPreloadPhotoAlbums?: () => void;
   onToggleTheme: () => void;
 };
 
@@ -93,6 +95,8 @@ export const PlayerTopBar = forwardRef<HTMLElement, PlayerTopBarProps>(function 
     onShowExplore,
     onShowHome,
     onShowPhotoAlbums,
+    onPreloadExplore,
+    onPreloadPhotoAlbums,
     onToggleTheme,
   },
   ref
@@ -310,7 +314,13 @@ export const PlayerTopBar = forwardRef<HTMLElement, PlayerTopBarProps>(function 
           </button>
         ) : null}
         {!isPrivacyMode && isHomeViewVisible && canShowExplore ? (
-          <button className="secondary-button top-home-button" type="button" onClick={onShowExplore}>
+          <button
+            className="secondary-button top-home-button"
+            type="button"
+            onClick={onShowExplore}
+            onFocus={onPreloadExplore}
+            onMouseEnter={onPreloadExplore}
+          >
             <Compass size={17} />
             探索
           </button>
@@ -321,7 +331,13 @@ export const PlayerTopBar = forwardRef<HTMLElement, PlayerTopBarProps>(function 
           </button>
         ) : null}
         {!isPrivacyMode && isHomeViewVisible ? (
-          <button className="secondary-button top-home-button" type="button" onClick={onShowPhotoAlbums}>
+          <button
+            className="secondary-button top-home-button"
+            type="button"
+            onClick={onShowPhotoAlbums}
+            onFocus={onPreloadPhotoAlbums}
+            onMouseEnter={onPreloadPhotoAlbums}
+          >
             <Images size={17} />
             看图
           </button>

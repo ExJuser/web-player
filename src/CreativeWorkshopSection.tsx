@@ -4,6 +4,7 @@ export type CreativeFeature = "mosaic" | "rings";
 
 type CreativeWorkshopSectionProps = {
   onOpenFeature: (feature: CreativeFeature) => void;
+  onPreloadFeature?: (feature: CreativeFeature) => void;
 };
 
 const features: Array<{
@@ -29,7 +30,7 @@ const features: Array<{
   },
 ];
 
-export function CreativeWorkshopSection({ onOpenFeature }: CreativeWorkshopSectionProps) {
+export function CreativeWorkshopSection({ onOpenFeature, onPreloadFeature }: CreativeWorkshopSectionProps) {
   return (
     <section className="creative-workshop">
       <header className="creative-workshop-hero">
@@ -46,6 +47,8 @@ export function CreativeWorkshopSection({ onOpenFeature }: CreativeWorkshopSecti
               key={feature.id}
               type="button"
               onClick={() => onOpenFeature(feature.id)}
+              onFocus={() => onPreloadFeature?.(feature.id)}
+              onMouseEnter={() => onPreloadFeature?.(feature.id)}
             >
               <span className="creative-feature-number">0{index + 1}</span>
               <span className="creative-feature-visual"><Icon size={52} strokeWidth={1.35} /></span>
