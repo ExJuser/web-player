@@ -15,6 +15,13 @@ import {
 } from "react";
 
 import { fetchLocalJson as fetchJson } from "./localApiClient";
+import {
+  activeViewForRoute,
+  parseAppRoute,
+  serializeAppRoute,
+  type AppRoute,
+  type ExploreSection,
+} from "./appRoute";
 import { ROCKET_LAUNCH_EFFECT_DURATION_MS } from "./rocketLaunchParticles";
 import { useAiSubtitleController } from "./useAiSubtitleController";
 import { useAutoNextController } from "./useAutoNextController";
@@ -401,6 +408,10 @@ function isServerPhotoImage(image: PhotoAlbumImage) {
 }
 
 export default function App() {
+  const initialAppRouteRef = useRef<AppRoute | null>(null);
+  initialAppRouteRef.current ??= parseAppRoute(window.location.hash);
+  const initialAppRoute = initialAppRouteRef.current;
+  const appRouteRef = useRef<AppRoute>(initialAppRoute);
   const playlistThumbnailStoreRef = useRef<ReturnType<typeof createPlaylistThumbnailStore> | null>(null);
   playlistThumbnailStoreRef.current ??= createPlaylistThumbnailStore();
   const playlistThumbnailStore = playlistThumbnailStoreRef.current;
@@ -491,6 +502,20 @@ export default function App() {
   const duplicateVideoGroupsRef = useRef<DuplicateVideoGroup[]>([]);
   const duplicateDetectionResultScopeKeyRef = useRef("");
   const duplicateDetectionMessageRef = useRef("尚未检测重复视频。");
+  const [appRoute, setAppRoute] = useState<AppRoute>(initialAppRoute);
+  const [hasInitialMediaLoadSettled, setHasInitialMediaLoadSettled] = useState(false);
+
+  const updateAppRoute = useCallback((nextRoute: AppRoute, options?: { replace?: boolean }) => {
+    const nextHash = serializeAppRoute(nextRoute);
+    const nextUrl = `${window.location.pathname}${window.location.search}${nextHash}`;
+    if (options?.replace) {
+      window.history.replaceState(window.history.state, "", nextUrl);
+    } else if (window.location.hash !== nextHash) {
+      window.history.pushState(window.history.state, "", nextUrl);
+    }
+    appRouteRef.current = nextRoute;
+    setAppRoute(nextRoute);
+  }, []);
 
   useEffect(() => {
     if (!shouldStartLegacyThumbnailMigration()) return;
@@ -559,13 +584,19 @@ export default function App() {
   const [ratingFilterThreshold, setRatingFilterThreshold] = useState(8);
   const [ratingPlaylistMode, setRatingPlaylistMode] = useState<RatingPlaylistMode | null>(null);
   const [libraryId, setLibraryId] = useState<string | null>(null);
-  const [currentVideoId, setCurrentVideoId] = useState<string | null>(null);
+  const [currentVideoId, setCurrentVideoId] = useState<string | null>(
+    initialAppRoute.kind === "player" ? initialAppRoute.videoId : null,
+  );
   currentVideoIdRef.current = currentVideoId;
-  const [activeView, setActiveView] = useState<ActiveView>("home");
+  const [activeView, setActiveView] = useState<ActiveView>(() => activeViewForRoute(initialAppRoute));
   const [photoAlbums, setPhotoAlbums] = useState<PhotoAlbum[]>([]);
   const [photoRootStatuses, setPhotoRootStatuses] = useState<PlayerMediaRootStatus[]>([]);
-  const [selectedPhotoAlbumId, setSelectedPhotoAlbumId] = useState<string | null>(null);
-  const photoViewerReturnRef = useRef<"photos" | "mosaic">("photos");
+  const [selectedPhotoAlbumId, setSelectedPhotoAlbumId] = useState<string | null>(
+    initialAppRoute.kind === "photoViewer" ? initialAppRoute.albumId : null,
+  );
+  const photoViewerReturnRef = useRef<"photos" | "mosaic">(
+    initialAppRoute.kind === "photoViewer" ? initialAppRoute.returnTo : "photos",
+  );
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
   const [photoObjectUrls, setPhotoObjectUrls] = useState<Record<string, string>>({});
   const [photoAlbumProgress, setPhotoAlbumProgress] = useState<Record<string, PhotoAlbumProgress>>({});
@@ -615,9 +646,36 @@ export default function App() {
   const [actorProfiles, setActorProfiles] = useState<ActorProfileStore>({});
   const [actorTagDefinitions, setActorTagDefinitions] = useState<ActorTagDefinitionStore>({});
   const [videoActorOverrides, setVideoActorOverrides] = useState<VideoActorOverrideStore>({});
-  const [specialHomeSection, setSpecialHomeSection] = useState<"overview" | "actors" | "creative">("overview");
-  const [creativeFeature, setCreativeFeature] = useState<CreativeFeature | null>(null);
-  const [selectedActorId, setSelectedActorId] = useState<string | null>(null);
+  const [specialHomeSection, setSpecialHomeSection] = useState<ExploreSection>(
+    initialAppRoute.kind === "explore" ? initialAppRoute.section : "overview",
+  );
+  const [creativeFeature, setCreativeFeature] = useState<CreativeFeature | null>(
+    initialAppRoute.kind === "explore" && initialAppRoute.section === "creative"
+      ? initialAppRoute.feature ?? null
+      : null,
+  );
+  const [selectedActorId, setSelectedActorId] = useState<string | null>(
+    initialAppRoute.kind === "explore" && initialAppRoute.section === "actors"
+      ? initialAppRoute.actorId ?? null
+      : null,
+  );
+
+  useEffect(() => {
+    setActiveView(activeViewForRoute(appRoute));
+    if (appRoute.kind === "explore") {
+      setSpecialHomeSection(appRoute.section);
+      setSelectedActorId(appRoute.section === "actors" ? appRoute.actorId ?? null : null);
+      setCreativeFeature(appRoute.section === "creative" ? appRoute.feature ?? null : null);
+    }
+    if (appRoute.kind === "photoViewer") {
+      photoViewerReturnRef.current = appRoute.returnTo;
+      setSelectedPhotoAlbumId(appRoute.albumId);
+    } else if (appRoute.kind === "photos") {
+      photoViewerReturnRef.current = "photos";
+      setSelectedPhotoAlbumId(null);
+    }
+  }, [appRoute]);
+
   const [actorCoverVersions, setActorCoverVersions] = useState<Record<string, number>>({});
   const [actorCoverPendingAction, setActorCoverPendingAction] = useState<string | null>(null);
   const [actorThumbnailVideoIds, setActorThumbnailVideoIds] = useState<string[]>([]);
@@ -1123,7 +1181,7 @@ export default function App() {
   }, [applyServerPhotoAlbumScan, isPhotoAlbumsLoading, loadPhotoAlbumDirectory]);
 
   useEffect(() => {
-    const shouldLoadForPhotoView = activeView === "photos";
+    const shouldLoadForPhotoView = activeView === "photos" || activeView === "photoViewer";
     const shouldLoadForMosaic = activeView === "explore"
       && homeMediaMode === "special"
       && specialHomeSection === "creative"
@@ -1836,6 +1894,19 @@ export default function App() {
     videoStats: videoStatsRef.current,
     watchActivity: watchActivityRef.current,
   }), [actorProfiles, actorTagDefinitions, modeFilteredVideos, videoActorOverrides, videoStatsRevision, videoTags, watchActivityRevision]);
+  useEffect(() => {
+    if (
+      appRoute.kind !== "explore"
+      || appRoute.section !== "actors"
+      || !appRoute.actorId
+      || !hasInitialMediaLoadSettled
+    ) {
+      return;
+    }
+    if (!actorInsights.actors.some((entry) => entry.actor.id === appRoute.actorId)) {
+      updateAppRoute({ kind: "explore", section: "actors" }, { replace: true });
+    }
+  }, [actorInsights.actors, appRoute, hasInitialMediaLoadSettled, updateAppRoute]);
   const growthRingForest = useMemo(
     () => shouldLoadGrowthRings
       ? buildVideoGrowthRingForest(watchActivityRef.current, modeFilteredVideos)
@@ -2739,7 +2810,6 @@ export default function App() {
     );
     const resumeTarget = getLatestResumableVideo(nextVideos, nextDataStore.progress);
     setCurrentVideoId((currentId) => currentId ?? resumeTarget?.video.id ?? sortedVideos[0]?.id ?? null);
-    setActiveView("home");
     setMessage(`已加载上次媒体库结果：${nextVideos.length} 个视频，未重新扫描磁盘`);
     requestAnimationFrame(() => {
       performance.mark("startup:home-interactive");
@@ -2816,7 +2886,6 @@ export default function App() {
       );
       const resumeTarget = getLatestResumableVideo(nextVideos, nextDataStore.progress);
       setCurrentVideoId((currentId) => currentId ?? resumeTarget?.video.id ?? sortedVideos[0]?.id ?? null);
-      setActiveView("home");
       requestAnimationFrame(() => {
         performance.mark("startup:home-interactive");
         performance.measure("startup:home-interactive", "startup:scan-start", "startup:home-interactive");
@@ -2836,12 +2905,12 @@ export default function App() {
   useEffect(() => {
     if (!localConfig) return;
     if (shouldAutoScanGlobalMediaLibrary(localConfig)) {
-      void loadGlobalMediaLibrary();
+      void loadGlobalMediaLibrary().finally(() => setHasInitialMediaLoadSettled(true));
       return;
     }
     if (mediaRootCacheLoadAttemptedRef.current) return;
     mediaRootCacheLoadAttemptedRef.current = true;
-    void restoreCachedGlobalMediaLibrary();
+    void restoreCachedGlobalMediaLibrary().finally(() => setHasInitialMediaLoadSettled(true));
   }, [loadGlobalMediaLibrary, localConfig, restoreCachedGlobalMediaLibrary]);
 
   useEffect(() => {
@@ -3218,6 +3287,12 @@ export default function App() {
     setIsHoldSpeedActive(false);
   }, []);
 
+  const navigateToPlayerRoute = useCallback((videoId: string) => {
+    const replace = appRouteRef.current.kind === "player";
+    setActiveView("player");
+    updateAppRoute({ kind: "player", videoId }, { replace });
+  }, [updateAppRoute]);
+
   const { selectVideo } = useVideoSelectionController({
     autoSubtitleSelectionVideoIdRef,
     cancelAutoNextPrompt,
@@ -3231,7 +3306,7 @@ export default function App() {
     resetTimelinePreview,
     resetHoldSpeedState,
     seriesTitleByVideoId,
-    setActiveView,
+    onNavigateToPlayer: navigateToPlayerRoute,
     setCurrentTime,
     setCurrentVideoId,
     setDuration,
@@ -3261,6 +3336,34 @@ export default function App() {
       }
     };
   }, [isDuplicatePlaylistActive, isRatingPlaylistActive, isVersionPlaylistActive, selectVideo]);
+
+  const previousNavigationRouteRef = useRef<AppRoute>(initialAppRoute);
+  useEffect(() => {
+    const previousRoute = previousNavigationRouteRef.current;
+    previousNavigationRouteRef.current = appRoute;
+    if (previousRoute.kind !== "player" || appRoute.kind === "player") return;
+    persistCurrentProgress();
+    videoRef.current?.pause();
+    cancelAutoNextPrompt();
+    resetHoldSpeedState();
+    showControls();
+  }, [appRoute, cancelAutoNextPrompt, persistCurrentProgress, resetHoldSpeedState, showControls]);
+
+  useEffect(() => {
+    if (appRoute.kind !== "player" || !hasInitialMediaLoadSettled) return;
+    if (!videos.some((video) => video.id === appRoute.videoId)) {
+      setCurrentVideoId(null);
+      updateAppRoute({ kind: "home" }, { replace: true });
+      return;
+    }
+    if (currentVideoId !== appRoute.videoId) {
+      selectVideo(appRoute.videoId, {
+        autoPlay: false,
+        focus: false,
+        updateRoute: false,
+      });
+    }
+  }, [appRoute, currentVideoId, hasInitialMediaLoadSettled, selectVideo, updateAppRoute, videos]);
 
   const removeDeletedVideoFromState = useCallback(
     async (video: VideoItem) => {
@@ -3503,6 +3606,7 @@ export default function App() {
       if (isDeletingCurrentVideo) {
         if (nextVideo) {
           setActiveView("player");
+          updateAppRoute({ kind: "player", videoId: nextVideo.id }, { replace: true });
           pendingAutoPlayVideoIdRef.current = nextVideo.id;
           autoSubtitleSelectionVideoIdRef.current = nextVideo.id;
           isMainVideoLoadingRef.current = true;
@@ -3521,6 +3625,7 @@ export default function App() {
           setDuration(0);
           setIsPlaying(false);
           setActiveView("home");
+          updateAppRoute({ kind: "home" }, { replace: true });
         }
       }
     } catch (error) {
@@ -3537,6 +3642,7 @@ export default function App() {
     resetTimelinePreview,
     videoDeleteCandidate,
     playbackQueueVideos,
+    updateAppRoute,
     updateSelectedSubtitleId,
   ]);
 
@@ -3650,13 +3756,9 @@ export default function App() {
   }, [favoriteHomeCards, selectVideo]);
 
   const showHomeView = useCallback(() => {
-    persistCurrentProgress();
-    videoRef.current?.pause();
-    cancelAutoNextPrompt();
-    resetHoldSpeedState();
-    showControls();
     setActiveView("home");
-  }, [cancelAutoNextPrompt, persistCurrentProgress, resetHoldSpeedState, showControls]);
+    updateAppRoute({ kind: "home" });
+  }, [updateAppRoute]);
 
   const resetHomeSearchScope = useCallback(() => {
     setPlaylistPage(1);
@@ -3669,29 +3771,48 @@ export default function App() {
     setIsSeriesMenuOpen(false);
   }, []);
 
+  useEffect(() => {
+    const syncRouteFromLocation = () => {
+      const nextRoute = parseAppRoute(window.location.hash);
+      const canonicalHash = serializeAppRoute(nextRoute);
+      if (window.location.hash !== canonicalHash) {
+        const nextUrl = `${window.location.pathname}${window.location.search}${canonicalHash}`;
+        window.history.replaceState(window.history.state, "", nextUrl);
+      }
+      appRouteRef.current = nextRoute;
+      setAppRoute(nextRoute);
+    };
+
+    window.addEventListener("popstate", syncRouteFromLocation);
+    window.addEventListener("hashchange", syncRouteFromLocation);
+    syncRouteFromLocation();
+    return () => {
+      window.removeEventListener("popstate", syncRouteFromLocation);
+      window.removeEventListener("hashchange", syncRouteFromLocation);
+    };
+  }, []);
+
   const changeHomeSearch = useCallback((query: string) => {
     resetHomeSearchScope();
     setPlaylistSearchQuery(query);
   }, [resetHomeSearchScope]);
 
   const showExploreView = useCallback(() => {
-    persistCurrentProgress();
-    videoRef.current?.pause();
-    cancelAutoNextPrompt();
-    resetHoldSpeedState();
-    showControls();
     setActiveView("explore");
-  }, [cancelAutoNextPrompt, persistCurrentProgress, resetHoldSpeedState, showControls]);
+    updateAppRoute(
+      specialHomeSection === "actors"
+        ? { kind: "explore", section: "actors", ...(selectedActorId ? { actorId: selectedActorId } : {}) }
+        : specialHomeSection === "creative"
+          ? { kind: "explore", section: "creative", ...(creativeFeature ? { feature: creativeFeature } : {}) }
+          : { kind: "explore", section: "overview" },
+    );
+  }, [creativeFeature, selectedActorId, specialHomeSection, updateAppRoute]);
 
   const showPhotoAlbumsView = useCallback(() => {
-    persistCurrentProgress();
-    videoRef.current?.pause();
-    cancelAutoNextPrompt();
-    resetHoldSpeedState();
-    showControls();
     photoViewerReturnRef.current = "photos";
     setActiveView("photos");
-  }, [cancelAutoNextPrompt, persistCurrentProgress, resetHoldSpeedState, showControls]);
+    updateAppRoute({ kind: "photos" });
+  }, [updateAppRoute]);
 
   const resolveCachedPhotoAlbum = useCallback((album: PhotoAlbum) => {
     if (album.images.length >= album.imageCount) return Promise.resolve(album);
@@ -3714,6 +3835,16 @@ export default function App() {
     return promise;
   }, []);
 
+  const openPhotoAlbumRoute = useCallback((album: PhotoAlbum, imageIndex: number) => {
+    setActiveView("photoViewer");
+    updateAppRoute({
+      kind: "photoViewer",
+      albumId: album.id,
+      imageId: album.images[imageIndex]?.id,
+      returnTo: photoViewerReturnRef.current,
+    });
+  }, [updateAppRoute]);
+
   const {
     markSelectedPhotoAlbumCompleted,
     movePhoto,
@@ -3734,8 +3865,9 @@ export default function App() {
     photoAlbumProgressRef,
     saveCurrentPhotoAlbumStore,
     selectedPhotoAlbum,
+    onOpenPhotoAlbumRoute: openPhotoAlbumRoute,
+    onShowPhotoAlbumListRoute: showPhotoAlbumsView,
     resolvePhotoAlbum: resolveCachedPhotoAlbum,
-    setActiveView,
     setCurrentPhotoIndex,
     setFavoritePhotoAlbumIds,
     setPhotoAlbumCoverPreferences,
@@ -3760,11 +3892,84 @@ export default function App() {
       setSpecialHomeSection("creative");
       setCreativeFeature("mosaic");
       setActiveView("explore");
+      updateAppRoute({ kind: "explore", section: "creative", feature: "mosaic" });
       return;
     }
     photoViewerReturnRef.current = "photos";
     showPhotoAlbumList();
-  }, [showPhotoAlbumList]);
+  }, [showPhotoAlbumList, updateAppRoute]);
+
+  const appliedPhotoViewerRouteRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (appRoute.kind !== "photoViewer") {
+      appliedPhotoViewerRouteRef.current = null;
+      return;
+    }
+    if (!hasLoadedPhotoAlbums || isPhotoAlbumsLoading) return;
+    const routeKey = serializeAppRoute(appRoute);
+    const album = photoAlbums.find((item) => item.id === appRoute.albumId);
+    if (!album) {
+      updateAppRoute({ kind: "photos" }, { replace: true });
+      return;
+    }
+
+    let isCancelled = false;
+    void resolveCachedPhotoAlbum(album).then((resolvedAlbum) => {
+      if (isCancelled || serializeAppRoute(appRouteRef.current) !== routeKey) return;
+      const requestedIndex = appRoute.imageId
+        ? resolvedAlbum.images.findIndex((image) => image.id === appRoute.imageId)
+        : -1;
+      const storedIndex = photoAlbumProgressRef.current[resolvedAlbum.id]?.imageIndex ?? 0;
+      const nextIndex = Math.min(
+        Math.max(requestedIndex >= 0 ? requestedIndex : storedIndex, 0),
+        Math.max(resolvedAlbum.images.length - 1, 0),
+      );
+      const nextImageId = resolvedAlbum.images[nextIndex]?.id;
+      photoViewerReturnRef.current = appRoute.returnTo;
+      setSelectedPhotoAlbumId(resolvedAlbum.id);
+      setCurrentPhotoIndex(nextIndex);
+      persistPhotoAlbumProgress(resolvedAlbum, nextIndex, false);
+      appliedPhotoViewerRouteRef.current = routeKey;
+      if (nextImageId !== appRoute.imageId) {
+        updateAppRoute({
+          kind: "photoViewer",
+          albumId: resolvedAlbum.id,
+          ...(nextImageId ? { imageId: nextImageId } : {}),
+          returnTo: appRoute.returnTo,
+        }, { replace: true });
+      }
+    }).catch(() => {
+      if (isCancelled) return;
+      setPhotoAlbumMessage(`《${album.title}》图片加载失败，请刷新后重试。`);
+      updateAppRoute({ kind: "photos" }, { replace: true });
+    });
+    return () => {
+      isCancelled = true;
+    };
+  }, [
+    appRoute,
+    hasLoadedPhotoAlbums,
+    isPhotoAlbumsLoading,
+    persistPhotoAlbumProgress,
+    photoAlbumProgressRef,
+    photoAlbums,
+    resolveCachedPhotoAlbum,
+    updateAppRoute,
+  ]);
+
+  useEffect(() => {
+    if (appRoute.kind !== "photoViewer" || activeView !== "photoViewer") return;
+    if (appliedPhotoViewerRouteRef.current !== serializeAppRoute(appRoute)) return;
+    const album = photoAlbums.find((item) => item.id === selectedPhotoAlbumId);
+    const image = album?.images[currentPhotoIndex];
+    if (!album || !image || image.id === appRoute.imageId) return;
+    updateAppRoute({
+      kind: "photoViewer",
+      albumId: album.id,
+      imageId: image.id,
+      returnTo: photoViewerReturnRef.current,
+    }, { replace: true });
+  }, [activeView, appRoute, currentPhotoIndex, photoAlbums, selectedPhotoAlbumId, updateAppRoute]);
 
   const clearPhotoAlbumAccessAfterWritePermissionDenied = useCallback(async () => {
     await clearPhotoAlbumFolderHandle().catch(() => undefined);
@@ -3786,8 +3991,9 @@ export default function App() {
     setPhotoDeleteError("");
     setHasLoadedPhotoAlbums(true);
     setActiveView("photos");
+    updateAppRoute({ kind: "photos" }, { replace: true });
     setPhotoAlbumMessage("旧看图目录记录没有写入权限，已自动清除。请重新选择看图文件夹以授予删除权限。");
-  }, []);
+  }, [updateAppRoute]);
 
   const requestDeleteCurrentPhoto = useCallback(() => {
     if (!selectedPhotoAlbum) return;
@@ -3939,7 +4145,10 @@ export default function App() {
       setFavoritePhotoAlbumIds(nextFavorites);
       setCurrentPhotoIndex(nextPhotoIndex);
       setSelectedPhotoAlbumId(nextSelectedAlbumId);
-      if (!remainingImages.length) setActiveView("photos");
+      if (!remainingImages.length) {
+        setActiveView("photos");
+        updateAppRoute({ kind: "photos" }, { replace: true });
+      }
 
       await saveCurrentPhotoAlbumStore({
         progress: nextProgress,
@@ -3968,7 +4177,7 @@ export default function App() {
     } finally {
       setIsPhotoDeletePending(false);
     }
-  }, [clearPhotoAlbumAccessAfterWritePermissionDenied, isPhotoDeletePending, photoDeleteCandidate, saveCurrentPhotoAlbumStore]);
+  }, [clearPhotoAlbumAccessAfterWritePermissionDenied, isPhotoDeletePending, photoDeleteCandidate, saveCurrentPhotoAlbumStore, updateAppRoute]);
 
   const confirmDeletePhotoAlbum = useCallback(async () => {
     if (!photoAlbumDeleteCandidate || isPhotoDeletePending) return;
@@ -4082,6 +4291,7 @@ export default function App() {
         setSelectedPhotoAlbumId(null);
         setCurrentPhotoIndex(0);
         setActiveView("photos");
+        updateAppRoute({ kind: "photos" }, { replace: true });
       }
       setPhotoAlbumPage(1);
       setPhotoAlbumDeleteCandidate(null);
@@ -4114,6 +4324,7 @@ export default function App() {
     photoAlbumDeleteCandidate,
     saveCurrentPhotoAlbumStore,
     selectedPhotoAlbumId,
+    updateAppRoute,
   ]);
 
   useEffect(() => {
@@ -4284,6 +4495,7 @@ export default function App() {
         setPlaylistPage(1);
         setPlaylistFilter("all");
         setActiveView("home");
+        updateAppRoute({ kind: "home" });
 
         for await (const batch of collectVideos(directory, nextMediaRootId)) {
           media = mergeMediaBatch(media, {
@@ -4442,6 +4654,7 @@ export default function App() {
       resolveMediaRootId,
       revokeReplacedMediaRootVideoUrls,
       revokeVideoUrls,
+      updateAppRoute,
     ],
   );
 
@@ -4513,6 +4726,7 @@ export default function App() {
       setPlaylistPage(1);
       setPlaylistFilter("all");
       setActiveView("home");
+      updateAppRoute({ kind: "home" }, { replace: true });
       setCurrentVideoId(getSortedVideos(media.videos, playlistSortMode, isPlaylistSortReversed)[0]?.id ?? null);
       setMessage(
         media.videos.length
@@ -4532,6 +4746,7 @@ export default function App() {
       selectedSeriesKey,
       shortcuts,
       subtitleStyle,
+      updateAppRoute,
     ],
   );
 
@@ -5094,7 +5309,8 @@ export default function App() {
     setLibraryId(null);
     setMediaRootId(null);
     setActiveView("home");
-  }, [clearLoadedMedia]);
+    updateAppRoute({ kind: "home" }, { replace: true });
+  }, [clearLoadedMedia, updateAppRoute]);
 
   const {
     cacheStatus,
@@ -5715,6 +5931,32 @@ export default function App() {
       : videoIds);
   }, []);
 
+  const navigateExploreSection = useCallback((section: ExploreSection) => {
+    setActiveView("explore");
+    setSpecialHomeSection(section);
+    setSelectedActorId(null);
+    setCreativeFeature(null);
+    updateAppRoute({ kind: "explore", section });
+  }, [updateAppRoute]);
+
+  const selectActorRoute = useCallback((actorId: string | null) => {
+    setSelectedActorId(actorId);
+    updateAppRoute({
+      kind: "explore",
+      section: "actors",
+      ...(actorId ? { actorId } : {}),
+    });
+  }, [updateAppRoute]);
+
+  const openCreativeFeatureRoute = useCallback((feature: CreativeFeature | null) => {
+    setCreativeFeature(feature);
+    updateAppRoute({
+      kind: "explore",
+      section: "creative",
+      ...(feature ? { feature } : {}),
+    });
+  }, [updateAppRoute]);
+
   const updateGrowthRingThumbnailVideos = useCallback((videoIds: string[]) => {
     setGrowthRingThumbnailVideoIds((currentVideoIds) => currentVideoIds.length === videoIds.length
       && currentVideoIds.every((videoId, index) => videoId === videoIds[index])
@@ -5979,9 +6221,9 @@ export default function App() {
             hidden={!isExploreViewVisible}
           >
             <nav className="special-view-switch" aria-label="探索功能">
-              <button className={specialHomeSection === "overview" ? "active" : ""} type="button" onClick={() => setSpecialHomeSection("overview")}>概览</button>
-              <button className={specialHomeSection === "actors" ? "active" : ""} type="button" onClick={() => setSpecialHomeSection("actors")}>演员</button>
-              <button className={specialHomeSection === "creative" ? "active" : ""} type="button" onClick={() => setSpecialHomeSection("creative")}>创意工坊</button>
+              <button className={specialHomeSection === "overview" ? "active" : ""} type="button" onClick={() => navigateExploreSection("overview")}>概览</button>
+              <button className={specialHomeSection === "actors" ? "active" : ""} type="button" onClick={() => navigateExploreSection("actors")}>演员</button>
+              <button className={specialHomeSection === "creative" ? "active" : ""} type="button" onClick={() => navigateExploreSection("creative")}>创意工坊</button>
             </nav>
 
             <div className="explore-content">
@@ -6015,7 +6257,7 @@ export default function App() {
               {specialHomeSection === "creative" ? (
                 <section className={`creative-feature-shell${creativeFeature ? " has-feature" : ""}`}>
                   {creativeFeature ? (
-                    <button className="creative-feature-back" type="button" onClick={() => setCreativeFeature(null)}>
+                    <button className="creative-feature-back" type="button" onClick={() => openCreativeFeatureRoute(null)}>
                       ← 返回创意工坊
                     </button>
                   ) : null}
@@ -6045,7 +6287,7 @@ export default function App() {
                       onOpenVideo={openVideoFromHome}
                     />
                   ) : (
-                    <CreativeWorkshopSection onOpenFeature={setCreativeFeature} />
+                    <CreativeWorkshopSection onOpenFeature={openCreativeFeatureRoute} />
                   )}
                 </section>
               ) : specialHomeSection === "actors" ? (
@@ -6063,7 +6305,7 @@ export default function App() {
                   systemVideoTags={systemVideoTags}
                   formatDuration={formatCumulativeDuration}
                   formatRelativeTime={formatRelativeTime}
-                  onSelectActor={setSelectedActorId}
+                  onSelectActor={selectActorRoute}
                   onOpenVideo={openVideoFromHome}
                   onEditVideoActors={(video) => setActorEditVideoId(video.id)}
                   onThumbnailError={markVideoThumbnailFailed}

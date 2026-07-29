@@ -1,11 +1,14 @@
 import { useCallback, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
 
-import type { ActiveView, HomeMediaMode, PlayerPreferences, PlaylistFilter, VideoItem } from "./playerTypes";
+import type { HomeMediaMode, PlayerPreferences, PlaylistFilter, VideoItem } from "./playerTypes";
 import { inferSeriesTitle, scopedSeriesKeyForVideo } from "./playerSeriesUtils";
 import { resolvePlayerEntrySeriesMode, type RatingPlaylistMode } from "./playerUiState";
 
 type SelectVideoOptions = {
+  autoPlay?: boolean;
+  focus?: boolean;
   syncSeriesMode?: boolean;
+  updateRoute?: boolean;
   keepDuplicatePlaylist?: boolean;
   keepVersionPlaylist?: boolean;
   keepRatingPlaylist?: boolean;
@@ -24,7 +27,7 @@ type UseVideoSelectionControllerOptions = {
   resetTimelinePreview: () => void;
   resetHoldSpeedState: () => void;
   seriesTitleByVideoId: Map<string, string>;
-  setActiveView: Dispatch<SetStateAction<ActiveView>>;
+  onNavigateToPlayer: (videoId: string) => void;
   setCurrentTime: Dispatch<SetStateAction<number>>;
   setCurrentVideoId: Dispatch<SetStateAction<string | null>>;
   setDuration: Dispatch<SetStateAction<number>>;
@@ -54,7 +57,7 @@ export function useVideoSelectionController({
   resetTimelinePreview,
   resetHoldSpeedState,
   seriesTitleByVideoId,
-  setActiveView,
+  onNavigateToPlayer,
   setCurrentTime,
   setCurrentVideoId,
   setDuration,
@@ -128,8 +131,8 @@ export function useVideoSelectionController({
       if (!options?.keepRatingPlaylist) {
         setRatingPlaylistMode(null);
       }
-      setActiveView("player");
-      pendingAutoPlayVideoIdRef.current = videoId;
+      if (options?.updateRoute !== false) onNavigateToPlayer(videoId);
+      pendingAutoPlayVideoIdRef.current = options?.autoPlay === false ? null : videoId;
       autoSubtitleSelectionVideoIdRef.current = videoId;
       isMainVideoLoadingRef.current = true;
       setIsMainVideoLoading(true);
@@ -140,7 +143,7 @@ export function useVideoSelectionController({
       resetTimelinePreview();
       updateSelectedSubtitleId("off");
       setVideoAspectRatio(16 / 9);
-      focusPlayer();
+      if (options?.focus !== false) focusPlayer();
     },
     [
       autoSubtitleSelectionVideoIdRef,
@@ -151,7 +154,7 @@ export function useVideoSelectionController({
       persistCurrentProgress,
       resetTimelinePreview,
       resetHoldSpeedState,
-      setActiveView,
+      onNavigateToPlayer,
       setCurrentTime,
       setCurrentVideoId,
       setDuration,
