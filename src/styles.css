@@ -9690,8 +9690,7 @@ button {
 }
 
 .actor-dashboard-header,
-.actor-toolbar,
-.actor-unresolved-list > div {
+.actor-toolbar {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -10178,42 +10177,6 @@ button {
   color: #98a2b3;
 }
 
-.actor-unresolved-list {
-  display: grid;
-  gap: 8px;
-}
-
-.actor-unresolved-list > div {
-  justify-content: space-between;
-  padding: 12px 14px;
-  border-radius: 10px;
-  background: rgba(15, 23, 42, 0.52);
-}
-
-.actor-unresolved-video-button {
-  display: flex;
-  flex: 1;
-  min-width: 0;
-  align-items: center;
-  gap: 8px;
-  padding: 0;
-  border: 0;
-  color: inherit;
-  text-align: left;
-  background: transparent;
-  cursor: pointer;
-  overflow-wrap: anywhere;
-}
-
-.actor-unresolved-video-button:hover {
-  color: #c4b5fd;
-}
-
-.app-shell.theme-light .actor-unresolved-video-button:hover,
-:root[data-theme="light"] .actor-unresolved-video-button:hover {
-  color: #7c3aed;
-}
-
 .actor-edit-dialog {
   position: relative;
   display: grid;
@@ -10477,13 +10440,11 @@ button {
 .app-shell.theme-light .actor-card,
 .app-shell.theme-light .actor-video-card,
 .app-shell.theme-light .actor-toolbar label,
-.app-shell.theme-light .actor-unresolved-list > div,
 .app-shell.theme-light .actor-edit-dialog,
 :root[data-theme="light"] .special-view-switch,
 :root[data-theme="light"] .actor-card,
 :root[data-theme="light"] .actor-video-card,
 :root[data-theme="light"] .actor-toolbar label,
-:root[data-theme="light"] .actor-unresolved-list > div,
 :root[data-theme="light"] .actor-edit-dialog {
   color: #172033;
   background: rgba(255, 255, 255, 0.94);
@@ -10511,7 +10472,6 @@ button {
   .actor-shuffle-button { flex: 1 1 auto; width: auto; }
   .actor-card-grid,
   .actor-video-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .actor-unresolved-list > div { align-items: stretch; flex-direction: column; }
   .tag-actor-editor-heading { align-items: flex-start; flex-direction: column; gap: 4px; }
   .tag-actor-actions > button { width: 100%; }
 }

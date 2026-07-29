@@ -301,19 +301,22 @@ export function ActorDashboardSection({
     () => selected?.videos.slice(0, visibleActorVideoCount) ?? [],
     [selected?.videos, visibleActorVideoCount],
   );
+  const pagedUnresolvedVideos = useMemo(
+    () => unresolvedVideos.slice((unresolvedPage - 1) * unresolvedPageSize, unresolvedPage * unresolvedPageSize),
+    [unresolvedPage, unresolvedVideos],
+  );
   const missingActorThumbnailVideoIds = useMemo(() => visibleActorCards.every(({ entry }) => actorCoverAvailability[entry.actor.id] !== undefined)
     ? visibleActorCards.filter(({ entry }) => !actorCoverAvailability[entry.actor.id]).map(({ coverVideo }) => coverVideo.id)
     : [], [actorCoverAvailability, visibleActorCards]);
   const actorThumbnailVideoIds = useMemo(() => selected
     ? visibleActorVideos.map(({ video }) => video.id)
     : showUnresolved
-      ? []
+      ? pagedUnresolvedVideos.map((video) => video.id)
       : missingActorThumbnailVideoIds,
-  [missingActorThumbnailVideoIds, selected, showUnresolved, visibleActorVideos]);
+  [missingActorThumbnailVideoIds, pagedUnresolvedVideos, selected, showUnresolved, visibleActorVideos]);
   useEffect(() => {
     onActorThumbnailVideosChange(actorThumbnailVideoIds);
   }, [actorThumbnailVideoIds, onActorThumbnailVideosChange]);
-  const pagedUnresolvedVideos = unresolvedVideos.slice((unresolvedPage - 1) * unresolvedPageSize, unresolvedPage * unresolvedPageSize);
   const showNextActorBatch = () => {
     setDiscoveryState((current) => {
       const recentActorIds = [
@@ -400,7 +403,33 @@ export function ActorDashboardSection({
     return (
       <section className="actor-dashboard" aria-label="未识别影片">
         <div className="actor-dashboard-header"><button className="secondary-button" type="button" onClick={() => setShowUnresolved(false)}><ArrowLeft size={16} /> 返回演员列表</button><div><h2>未识别影片</h2><p>{unresolvedVideos.length} 部影片</p></div></div>
-        <div className="actor-unresolved-list">{pagedUnresolvedVideos.map((video) => <div key={video.id}><button className="actor-unresolved-video-button" type="button" onClick={() => onOpenVideo(video)} title={`播放 ${video.name}`}><Film size={16} /><strong>{video.name}</strong></button><button className="primary-button" type="button" onClick={() => onEditVideoActors(video)}>指定演员</button></div>)}</div>
+        <div className="actor-video-grid">
+          {pagedUnresolvedVideos.map((video) => {
+            const stats = videoStats[createVideoStatsKey(video)];
+            const tags = videoTags[video.id] ?? [];
+            const rating = videoRatings[video.id];
+            const comment = videoComments[video.id];
+            const hasRating = typeof rating === "number" || Boolean(comment?.trim());
+            return <article className="actor-video-card" key={video.id}>
+              <button type="button" onClick={() => onOpenVideo(video)} title={`播放 ${video.name}`}>
+                <span className={`actor-cover ${video.thumbnailUrl ? "has-image" : ""} ${video.thumbnailUrl && !hasNamedVideoArtwork(video) ? "generated-thumbnail" : ""}`}>{video.thumbnailUrl ? <img src={video.thumbnailUrl} alt="" decoding="async" loading="lazy" draggable={false} onError={() => onThumbnailError(video.id)} /> : <Film size={28} />}</span>
+                <strong>{video.name}</strong>
+                <span className="actor-video-metadata">
+                  <span className="actor-video-rating-tags">
+                    {hasRating ? <RatingChip rating={rating} comment={comment} /> : <span className="rating-chip actor-video-empty-chip">暂无评分</span>}
+                    {tags.length ? <TagChips tags={tags} systemTags={systemVideoTags[video.id]} limit={8} compact /> : <span className="tag-chip-row compact"><span className="tag-chip actor-video-empty-chip">暂无标签</span></span>}
+                  </span>
+                  <span className="actor-video-playback-stats">
+                    <small title={`播放次数：${stats?.playCount ?? 0}`}><Play size={13} /> {stats?.playCount ?? 0} 次播放</small>
+                    <small title={`累计播放时长：${formatDuration(stats?.totalPlayedSeconds ?? 0)}`}><Clock3 size={13} /> {formatDuration(stats?.totalPlayedSeconds ?? 0)}</small>
+                    <small title={`发射次数：${stats?.emissionCount ?? 0}`}><Rocket size={13} /> {stats?.emissionCount ?? 0} 次</small>
+                  </span>
+                </span>
+              </button>
+              <div><span className="actor-source">未识别</span><button className="primary-button actor-correction-button" type="button" onClick={() => onEditVideoActors(video)}><Pencil size={13} /> 指定演员</button></div>
+            </article>;
+          })}
+        </div>
         {unresolvedPageCount > 1 ? <div className="pagination-controls"><button className="secondary-button" type="button" disabled={unresolvedPage <= 1} onClick={() => setUnresolvedPage((value) => value - 1)}>上一页</button><span>{unresolvedPage} / {unresolvedPageCount}</span><button className="secondary-button" type="button" disabled={unresolvedPage >= unresolvedPageCount} onClick={() => setUnresolvedPage((value) => value + 1)}>下一页</button></div> : null}
       </section>
     );
