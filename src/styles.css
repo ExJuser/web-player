@@ -7811,7 +7811,6 @@ button {
 
 .tag-input-suggestions .tag-create-option {
   justify-content: flex-start;
-  border-top-color: rgba(121, 223, 255, 0.16);
   color: #79dfff;
 }
 
