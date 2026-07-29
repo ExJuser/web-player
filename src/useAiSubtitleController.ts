@@ -12,8 +12,8 @@ import { readSubtitleText } from "./subtitleMedia";
 import type { SubtitleItem, VideoItem } from "./playerTypes";
 
 type UseAiSubtitleControllerOptions = {
-  currentTime: number;
   currentVideo: VideoItem | null;
+  getCurrentTime: () => number;
   localConfig: LocalConfig | null;
   selectedSubtitle: SubtitleItem | null;
   setAiMessage: Dispatch<SetStateAction<string>>;
@@ -27,8 +27,8 @@ type UseAiSubtitleControllerOptions = {
 };
 
 export function useAiSubtitleController({
-  currentTime,
   currentVideo,
+  getCurrentTime,
   localConfig,
   selectedSubtitle,
   setAiMessage,
@@ -101,6 +101,7 @@ export function useAiSubtitleController({
     setAiMessage("正在根据字幕片段回答...");
     setSubtitleAnswer("");
     try {
+      const currentTime = getCurrentTime();
       const subtitleText = await readSubtitleText(selectedSubtitle);
       const cues = parseSubtitleCues(subtitleText);
       if (!cues.length) throw new Error("当前字幕没有可检索的文本片段。");
@@ -124,8 +125,8 @@ export function useAiSubtitleController({
       setIsAiLoading(false);
     }
   }, [
-    currentTime,
     currentVideo,
+    getCurrentTime,
     localConfig,
     selectedSubtitle,
     setAiMessage,
@@ -148,6 +149,7 @@ export function useAiSubtitleController({
     setAiMessage("正在生成进度回顾...");
     setSubtitleRecap("");
     try {
+      const currentTime = getCurrentTime();
       const subtitleText = await readSubtitleText(selectedSubtitle);
       const cues = parseSubtitleCues(subtitleText);
       if (!cues.length) throw new Error("当前字幕没有可回顾的文本片段。");
@@ -174,8 +176,8 @@ export function useAiSubtitleController({
       setIsAiLoading(false);
     }
   }, [
-    currentTime,
     currentVideo,
+    getCurrentTime,
     localConfig,
     selectedSubtitle,
     setAiMessage,

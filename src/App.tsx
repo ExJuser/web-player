@@ -168,12 +168,16 @@ import {
 import {
   danmakuLaneLineHeight,
   formatDanmakuLaneTop,
-  getActiveDanmakuComments,
   getDanmakuBreakdownTotal,
   getDanmakuLane,
   getDanmakuLaneCount,
   getDanmakuSourceBreakdown,
 } from "./danmakuUtils";
+import {
+  usePlaybackDuration,
+  usePlaybackPlaying,
+  usePlaybackRuntime,
+} from "./playbackRuntime";
 import { fallbackMediaRootLabelForVideo } from "./mediaPathUtils";
 import {
   createLibraryMetadata,
@@ -824,9 +828,12 @@ export default function App() {
     setLocalConfig,
     setMessage,
   });
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
+  const playbackRuntime = usePlaybackRuntime();
+  const duration = usePlaybackDuration(playbackRuntime);
+  const isPlaying = usePlaybackPlaying(playbackRuntime);
+  const setCurrentTime = playbackRuntime.setCurrentTime;
+  const setDuration = playbackRuntime.setDuration;
+  const setIsPlaying = playbackRuntime.setIsPlaying;
   const [playbackRate, setPlaybackRate] = useState(1);
   const [seekStep, setSeekStep] = useState(defaultPlayerPreferences.seekStep);
   const [holdPlaybackRate, setHoldPlaybackRate] = useState(defaultPlayerPreferences.holdPlaybackRate);
@@ -2091,9 +2098,8 @@ export default function App() {
     setTagPrompt: setHighEnergyTagPrompt,
     tagPrompt: highEnergyTagPrompt,
   } = useHighEnergySegmentController({
-    currentTime,
     currentVideo,
-    duration,
+    getPlaybackSnapshot: playbackRuntime.getSnapshot,
     setMessage,
     setVideoHighlights,
     videoHighlightsRef,
@@ -2103,9 +2109,8 @@ export default function App() {
     pendingStart: pendingEditSegmentStart,
     removeCurrentSegment: removeCurrentEditSegment,
   } = useVideoEditSegmentController({
-    currentTime,
     currentVideo,
-    duration,
+    getPlaybackSnapshot: playbackRuntime.getSnapshot,
     setMessage,
     setVideoEditSegments,
     videoEditSegmentsRef,
@@ -2336,12 +2341,6 @@ export default function App() {
   const danmakuSourceTotalCount = useMemo(() => getDanmakuBreakdownTotal(danmakuSourceBreakdown) || danmakuComments.length, [danmakuComments.length, danmakuSourceBreakdown]);
   const shouldUseDanmakuPlaybackClock =
     danmakuPreferences.enabled && isDanmakuAvailable && danmakuComments.length > 0 && !isPrivacyMode;
-  const activeDanmakuComments = useMemo(() => {
-    if (!danmakuPreferences.enabled || !currentVideo || !danmakuComments.length || isPrivacyMode) return [];
-    const durationSeconds = danmakuPreferences.speed;
-    const displayLimit = Math.max(12, Math.round(90 * danmakuPreferences.density));
-    return getActiveDanmakuComments({ comments: danmakuComments, currentTime, durationSeconds, displayLimit });
-  }, [currentTime, currentVideo, danmakuComments, danmakuPreferences.density, danmakuPreferences.enabled, danmakuPreferences.speed, isPrivacyMode]);
   const danmakuLaneCount = getDanmakuLaneCount(danmakuPreferences.displayArea, danmakuPreferences.fontSize, danmakuLayerHeight);
   const currentMediaLibraryRoot = useMemo(() => {
     const roots = localConfig?.mediaRoots ?? [];
@@ -4444,7 +4443,7 @@ export default function App() {
       resizeObserver.disconnect();
       window.removeEventListener("resize", updateDanmakuLayerHeight);
     };
-  }, [activeDanmakuComments.length, isDanmakuAvailable]);
+  }, [isDanmakuAvailable]);
 
   const loadDirectoryMedia = useCallback(
     async (
@@ -5270,8 +5269,8 @@ export default function App() {
     loadProgressRecap,
     loadSubtitleSummary,
   } = useAiSubtitleController({
-    currentTime,
     currentVideo,
+    getCurrentTime: playbackRuntime.getCurrentTime,
     localConfig,
     selectedSubtitle,
     setAiMessage,
@@ -5913,7 +5912,6 @@ export default function App() {
     startAutoNextPrompt(nextVideoId);
   };
 
-  const progressPercent = duration ? Math.min(100, (currentTime / duration) * 100) : 0;
   const primaryHomeLabels = createPrimaryHomeLabels({
     primaryResumeCard,
     modeFilteredVideoCount: modeFilteredVideos.length,
@@ -6409,10 +6407,9 @@ export default function App() {
           tabIndex={-1}
         >
           <PlayerStage
-            activeDanmakuComments={activeDanmakuComments}
             autoNextPrompt={autoNextPrompt}
-            currentTime={currentTime}
             currentVideoSourceAspectRatio={currentVideoSourceAspectRatio}
+            danmakuComments={danmakuComments}
             danmakuLaneCount={danmakuLaneCount}
             danmakuLaneLineHeight={danmakuLaneLineHeight}
             danmakuLayerRef={danmakuLayerRef}
@@ -6420,7 +6417,6 @@ export default function App() {
             doubleClickFeedback={doubleClickFeedback}
             hasCurrentVideo={Boolean(currentVideo)}
             isDanmakuAvailable={isDanmakuAvailable}
-            isPlaying={isPlaying}
             isPrivacyMode={isPrivacyMode}
             isVideoSideways={isVideoSideways}
             launchEffectKey={launchEffectKey}
@@ -6429,6 +6425,7 @@ export default function App() {
             playerOverlayFeedback={playerOverlayFeedback}
             previewCanvasRef={previewCanvasRef}
             previewVideoRef={previewVideoRef}
+            playbackRuntime={playbackRuntime}
             selectedSubtitle={selectedSubtitle}
             subtitleStyle={subtitleStyle}
             videoRef={videoRef}
@@ -6461,7 +6458,6 @@ export default function App() {
             canRestoreWithLada={canRestoreWithLada}
             canGenerateMontage={canGenerateHighlightMontage}
             controlBarRef={controlBarRef}
-            currentTime={currentTime}
             currentVideoHasCompatibleMedia={currentVideoHasCompatibleMedia}
             currentVideoHighlights={currentVideoHighlights}
             currentVideoEditSegments={currentVideoEditSegments}
@@ -6470,7 +6466,6 @@ export default function App() {
             currentVideoSourceChoice={currentVideoSourceChoice}
             currentVideoTagsCount={currentVideoEffectiveTags.length}
             danmakuEnabled={Boolean(danmakuPreferences.enabled && currentDanmakuSource)}
-            duration={duration}
             effectivePlaybackRate={effectivePlaybackRate}
             hasCurrentVideo={Boolean(currentVideo)}
             hasSelectedSubtitle={Boolean(selectedSubtitle)}
@@ -6481,12 +6476,11 @@ export default function App() {
             isCinemaMode={isCinemaMode}
             isDeletingCompatibleMedia={isDeletingCompatibleMedia}
             isEmbeddedSubtitleLoading={isEmbeddedSubtitleLoading}
-            isEditSegmentMarkDisabled={!currentVideo || !duration || isPrivacyMode}
+            isEditSegmentMarkDisabled={!currentVideo || isPrivacyMode}
             isEditSegmentMarkPending={isCurrentEditSegmentMarkPending}
-            isHighEnergyMarkDisabled={!currentVideo || !duration || isPrivacyMode}
+            isHighEnergyMarkDisabled={!currentVideo || isPrivacyMode}
             isHighEnergyMarkPending={isCurrentHighEnergyMarkPending}
             isMuted={isMuted}
-            isPlaying={isPlaying}
             isPrivacyMode={isPrivacyMode}
             isSeriesMode={isSeriesMode}
             ladaDisabledReason={ladaRestorationDisabledReason}
@@ -6495,7 +6489,7 @@ export default function App() {
             playbackMode={playbackMode}
             playbackModeOptions={playbackModeOptions}
             playbackRateOptions={playbackRateSelectOptions}
-            progressPercent={progressPercent}
+            playbackRuntime={playbackRuntime}
             seekStep={seekStep}
             seekStepOptions={seekStepSelectOptions}
             selectedSubtitleId={selectedSubtitleId}
@@ -7008,7 +7002,7 @@ export default function App() {
       subtitleRecap={subtitleRecap}
       aiMessage={aiMessage}
       isAiLoading={isAiLoading}
-      currentTime={currentTime}
+      playbackRuntime={playbackRuntime}
       onClose={() => setIsAiPanelOpen(false)}
       onTabChange={setAiTab}
       onQuestionChange={setSubtitleQuestion}

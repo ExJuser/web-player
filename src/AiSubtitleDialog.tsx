@@ -1,4 +1,5 @@
 import { X } from "lucide-react";
+import { usePlaybackSnapshot, type PlaybackRuntimeApi } from "./playbackRuntime";
 
 export type AiSubtitleTab = "summary" | "qa" | "recap";
 
@@ -13,7 +14,7 @@ type AiSubtitleDialogProps = {
   subtitleRecap: string;
   aiMessage: string;
   isAiLoading: boolean;
-  currentTime: number;
+  playbackRuntime: PlaybackRuntimeApi;
   onClose: () => void;
   onTabChange: (tab: AiSubtitleTab) => void;
   onQuestionChange: (value: string) => void;
@@ -34,7 +35,7 @@ export function AiSubtitleDialog({
   subtitleRecap,
   aiMessage,
   isAiLoading,
-  currentTime,
+  playbackRuntime,
   onClose,
   onTabChange,
   onQuestionChange,
@@ -43,6 +44,7 @@ export function AiSubtitleDialog({
   onLoadRecap,
   formatTime,
 }: AiSubtitleDialogProps) {
+  const { currentTime } = usePlaybackSnapshot(playbackRuntime);
   if (!isOpen) return null;
 
   return (

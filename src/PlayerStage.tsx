@@ -1,4 +1,4 @@
-import type { Ref, SyntheticEvent } from "react";
+import { useMemo, type Ref, type SyntheticEvent } from "react";
 
 import { AutoNextPromptCard } from "./AutoNextPromptCard";
 import { PlayerDanmakuLayer } from "./PlayerDanmakuLayer";
@@ -7,6 +7,8 @@ import { PlayerStagePlaceholders } from "./PlayerStagePlaceholders";
 import { PlayerVideoElement } from "./PlayerVideoElement";
 import { RocketLaunchEffect } from "./RocketLaunchEffect";
 import { TimelinePreviewTargets } from "./TimelinePreviewTargets";
+import { getActiveDanmakuComments } from "./danmakuUtils";
+import { usePlaybackSnapshot, type PlaybackRuntimeApi } from "./playbackRuntime";
 import type { AutoNextPrompt, DanmakuComment, DanmakuPreferences, SubtitleItem, SubtitleStylePreferences } from "./playerTypes";
 
 type DoubleClickFeedback = {
@@ -15,10 +17,9 @@ type DoubleClickFeedback = {
 };
 
 type PlayerStageProps = {
-  activeDanmakuComments: DanmakuComment[];
   autoNextPrompt: AutoNextPrompt | null;
-  currentTime: number;
   currentVideoSourceAspectRatio: number;
+  danmakuComments: DanmakuComment[];
   danmakuLaneCount: number;
   danmakuLaneLineHeight: number;
   danmakuLayerRef: Ref<HTMLDivElement>;
@@ -26,7 +27,6 @@ type PlayerStageProps = {
   doubleClickFeedback: DoubleClickFeedback | null;
   hasCurrentVideo: boolean;
   isDanmakuAvailable: boolean;
-  isPlaying: boolean;
   isPrivacyMode: boolean;
   isVideoSideways: boolean;
   launchEffectKey: number;
@@ -35,6 +35,7 @@ type PlayerStageProps = {
   playerOverlayFeedback: string;
   previewCanvasRef: Ref<HTMLCanvasElement>;
   previewVideoRef: Ref<HTMLVideoElement>;
+  playbackRuntime: PlaybackRuntimeApi;
   selectedSubtitle: SubtitleItem | null;
   subtitleStyle: SubtitleStylePreferences;
   videoRef: Ref<HTMLVideoElement>;
@@ -51,10 +52,9 @@ type PlayerStageProps = {
 };
 
 export function PlayerStage({
-  activeDanmakuComments,
   autoNextPrompt,
-  currentTime,
   currentVideoSourceAspectRatio,
+  danmakuComments,
   danmakuLaneCount,
   danmakuLaneLineHeight,
   danmakuLayerRef,
@@ -62,7 +62,6 @@ export function PlayerStage({
   doubleClickFeedback,
   hasCurrentVideo,
   isDanmakuAvailable,
-  isPlaying,
   isPrivacyMode,
   isVideoSideways,
   launchEffectKey,
@@ -71,6 +70,7 @@ export function PlayerStage({
   playerOverlayFeedback,
   previewCanvasRef,
   previewVideoRef,
+  playbackRuntime,
   selectedSubtitle,
   subtitleStyle,
   videoRef,
@@ -85,6 +85,25 @@ export function PlayerStage({
   onTimeUpdate,
   onTogglePlay,
 }: PlayerStageProps) {
+  const { currentTime, isPlaying } = usePlaybackSnapshot(playbackRuntime);
+  const activeDanmakuComments = useMemo(() => {
+    if (!danmakuPreferences.enabled || !hasCurrentVideo || !danmakuComments.length || isPrivacyMode) return [];
+    return getActiveDanmakuComments({
+      comments: danmakuComments,
+      currentTime,
+      durationSeconds: danmakuPreferences.speed,
+      displayLimit: Math.max(12, Math.round(90 * danmakuPreferences.density)),
+    });
+  }, [
+    currentTime,
+    danmakuComments,
+    danmakuPreferences.density,
+    danmakuPreferences.enabled,
+    danmakuPreferences.speed,
+    hasCurrentVideo,
+    isPrivacyMode,
+  ]);
+
   return (
     <>
       <div className="player-viewport">

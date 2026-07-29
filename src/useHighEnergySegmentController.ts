@@ -7,18 +7,16 @@ import { savePlayerVideoHighlights } from "./playerStorage";
 import type { VideoHighlightSegment, VideoHighlightStore, VideoItem } from "./playerTypes";
 
 type UseHighEnergySegmentControllerOptions = {
-  currentTime: number;
   currentVideo: VideoItem | null;
-  duration: number;
+  getPlaybackSnapshot: () => { currentTime: number; duration: number };
   setMessage: (message: string) => void;
   setVideoHighlights: Dispatch<SetStateAction<VideoHighlightStore>>;
   videoHighlightsRef: MutableRefObject<VideoHighlightStore>;
 };
 
 export function useHighEnergySegmentController({
-  currentTime,
   currentVideo,
-  duration,
+  getPlaybackSnapshot,
   setMessage,
   setVideoHighlights,
   videoHighlightsRef,
@@ -32,6 +30,7 @@ export function useHighEnergySegmentController({
   }, [currentVideo?.id]);
 
   const markCurrentSegment = useCallback(() => {
+    const { currentTime, duration } = getPlaybackSnapshot();
     if (!currentVideo || !duration) return;
     const markTime = clamp(currentTime, 0, duration);
     if (!pendingStart || pendingStart.videoId !== currentVideo.id) {
@@ -55,7 +54,7 @@ export function useHighEnergySegmentController({
       tagInput: "",
     });
     setMessage(`已选择高能片段 ${formatTime(startTime)} - ${formatTime(endTime)}，请填写标签。`);
-  }, [currentTime, currentVideo, duration, pendingStart, setMessage]);
+  }, [currentVideo, getPlaybackSnapshot, pendingStart, setMessage]);
 
   const saveTagPrompt = useCallback(() => {
     if (!tagPrompt) return;

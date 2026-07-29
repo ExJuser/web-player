@@ -7,18 +7,16 @@ import type { VideoEditSegmentStore, VideoItem } from "./playerTypes";
 import { createVideoEditSegment } from "./videoEditUtils";
 
 type UseVideoEditSegmentControllerOptions = {
-  currentTime: number;
   currentVideo: VideoItem | null;
-  duration: number;
+  getPlaybackSnapshot: () => { currentTime: number; duration: number };
   setMessage: (message: string) => void;
   setVideoEditSegments: Dispatch<SetStateAction<VideoEditSegmentStore>>;
   videoEditSegmentsRef: MutableRefObject<VideoEditSegmentStore>;
 };
 
 export function useVideoEditSegmentController({
-  currentTime,
   currentVideo,
-  duration,
+  getPlaybackSnapshot,
   setMessage,
   setVideoEditSegments,
   videoEditSegmentsRef,
@@ -30,6 +28,7 @@ export function useVideoEditSegmentController({
   }, [currentVideo?.id]);
 
   const markCurrentSegment = useCallback(() => {
+    const { currentTime, duration } = getPlaybackSnapshot();
     if (!currentVideo || !duration) return;
     const markTime = clamp(currentTime, 0, duration);
     if (!pendingStart || pendingStart.videoId !== currentVideo.id) {
@@ -53,7 +52,7 @@ export function useVideoEditSegmentController({
     void savePlayerVideoEditSegments(currentVideo.id, nextVideoSegments).catch(() => {
       setMessage("剪辑保留片段保存失败。");
     });
-  }, [currentTime, currentVideo, duration, pendingStart, setMessage, setVideoEditSegments, videoEditSegmentsRef]);
+  }, [currentVideo, getPlaybackSnapshot, pendingStart, setMessage, setVideoEditSegments, videoEditSegmentsRef]);
 
   const removeCurrentSegment = useCallback((segmentId: string) => {
     if (!currentVideo) return;

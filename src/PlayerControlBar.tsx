@@ -6,6 +6,7 @@ import { PlayerPlaybackControls } from "./PlayerPlaybackControls";
 import { PlayerTimelineControls } from "./PlayerTimelineControls";
 import { PlayerViewControls } from "./PlayerViewControls";
 import { SpecialStatsControl } from "./SpecialStatsControl";
+import { usePlaybackSnapshot, type PlaybackRuntimeApi } from "./playbackRuntime";
 import type { HomeMediaMode } from "./playerUiState";
 import type { PlaybackMode, SubtitleStylePreferences, VideoEditSegment, VideoHighlightSegment } from "./playerTypes";
 
@@ -35,7 +36,6 @@ type PlayerControlBarProps = {
   canRestoreWithLada: boolean;
   canGenerateMontage: boolean;
   controlBarRef: Ref<HTMLDivElement>;
-  currentTime: number;
   currentVideoHasCompatibleMedia: boolean;
   currentVideoHighlights: VideoHighlightSegment[];
   currentVideoEditSegments: VideoEditSegment[];
@@ -44,7 +44,6 @@ type PlayerControlBarProps = {
   currentVideoSourceChoice: PlaybackSourceChoice;
   currentVideoTagsCount: number;
   danmakuEnabled: boolean;
-  duration: number;
   effectivePlaybackRate: number;
   hasCurrentVideo: boolean;
   hasSelectedSubtitle: boolean;
@@ -60,7 +59,6 @@ type PlayerControlBarProps = {
   isHighEnergyMarkDisabled: boolean;
   isHighEnergyMarkPending: boolean;
   isMuted: boolean;
-  isPlaying: boolean;
   isPrivacyMode: boolean;
   isSeriesMode: boolean;
   ladaDisabledReason: string;
@@ -69,7 +67,7 @@ type PlayerControlBarProps = {
   playbackMode: PlaybackMode;
   playbackModeOptions: Array<{ value: PlaybackMode; label: string }>;
   playbackRateOptions: Array<{ value: number; label: string }>;
-  progressPercent: number;
+  playbackRuntime: PlaybackRuntimeApi;
   seekStep: number;
   seekStepOptions: Array<{ value: number; label: string }>;
   selectedSubtitleId: string;
@@ -132,7 +130,6 @@ export function PlayerControlBar({
   canRestoreWithLada,
   canGenerateMontage,
   controlBarRef,
-  currentTime,
   currentVideoHasCompatibleMedia,
   currentVideoHighlights,
   currentVideoEditSegments,
@@ -141,7 +138,6 @@ export function PlayerControlBar({
   currentVideoSourceChoice,
   currentVideoTagsCount,
   danmakuEnabled,
-  duration,
   effectivePlaybackRate,
   hasCurrentVideo,
   hasSelectedSubtitle,
@@ -157,7 +153,6 @@ export function PlayerControlBar({
   isHighEnergyMarkDisabled,
   isHighEnergyMarkPending,
   isMuted,
-  isPlaying,
   isPrivacyMode,
   isSeriesMode,
   ladaDisabledReason,
@@ -166,7 +161,7 @@ export function PlayerControlBar({
   playbackMode,
   playbackModeOptions,
   playbackRateOptions,
-  progressPercent,
+  playbackRuntime,
   seekStep,
   seekStepOptions,
   selectedSubtitleId,
@@ -220,6 +215,8 @@ export function PlayerControlBar({
   onUpdateTimelinePreview,
   onUpdateTimelinePreviewFromTime,
 }: PlayerControlBarProps) {
+  const { currentTime, duration, isPlaying } = usePlaybackSnapshot(playbackRuntime);
+  const progressPercent = duration ? Math.min(100, (currentTime / duration) * 100) : 0;
   const handleMouseMove: MouseEventHandler<HTMLDivElement> = (event) => {
     event.stopPropagation();
     onKeepControlsVisible();
@@ -310,9 +307,9 @@ export function PlayerControlBar({
           isAiPanelOpen={isAiPanelOpen}
           isDanmakuActive={danmakuEnabled}
           isEmbeddedSubtitleLoading={isEmbeddedSubtitleLoading}
-          isHighEnergyMarkDisabled={isHighEnergyMarkDisabled}
+          isHighEnergyMarkDisabled={isHighEnergyMarkDisabled || !duration}
           isHighEnergyMarkPending={isHighEnergyMarkPending}
-          isEditSegmentMarkDisabled={isEditSegmentMarkDisabled}
+          isEditSegmentMarkDisabled={isEditSegmentMarkDisabled || !duration}
           isEditSegmentMarkPending={isEditSegmentMarkPending}
           isSeriesMode={isSeriesMode}
           ladaDisabledReason={ladaDisabledReason}
