@@ -40,6 +40,7 @@ type TagDialogProps = {
   resolvedActiveTagSuggestionIndex: number;
   activeTagSuggestionId?: string;
   isTagSuggestionLoading: boolean;
+  isTagQueryActorName: boolean;
   tagMergePrompt: TagDialogMergePrompt | null;
   tagMessage: string;
   hasCurrentVideo: boolean;
@@ -85,6 +86,7 @@ export function TagDialog({
   resolvedActiveTagSuggestionIndex,
   activeTagSuggestionId,
   isTagSuggestionLoading,
+  isTagQueryActorName,
   tagMergePrompt,
   tagMessage,
   hasCurrentVideo,
@@ -137,7 +139,8 @@ export function TagDialog({
   const normalizedTagQuery = normalizeTagKey(tagQuery);
   const hasExactTagSuggestion = currentVideoTags.some((tag) => normalizeTagKey(tag) === normalizedTagQuery)
     || tagInputSuggestions.some((tag) => tag.key === normalizedTagQuery);
-  const hasTagSearchResults = tagInputSuggestions.length > 0 || !hasExactTagSuggestion;
+  const shouldOfferCreateTag = !hasExactTagSuggestion && !isTagQueryActorName;
+  const hasTagSearchResults = tagInputSuggestions.length > 0 || shouldOfferCreateTag;
   const systemTagKeys = new Set(systemTags.map((tag) => tag.normalize("NFKC").trim().toLocaleLowerCase()));
   const visibleCurrentVideoTags = currentVideoTags.filter(
     (tag) => !systemTagKeys.has(tag.normalize("NFKC").trim().toLocaleLowerCase()),
@@ -312,7 +315,7 @@ export function TagDialog({
                   <small>{tag.count} 部</small>
                 </button>
               ))}
-              {!hasExactTagSuggestion ? (
+              {shouldOfferCreateTag ? (
                 <button
                   className="tag-create-option"
                   type="button"

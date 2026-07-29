@@ -6689,6 +6689,7 @@ export default function App() {
       resolvedActiveTagSuggestionIndex={resolvedActiveTagSuggestionIndex}
       activeTagSuggestionId={activeTagSuggestionId}
       isTagSuggestionLoading={isTagSuggestionLoading}
+      isTagQueryActorName={isKnownActorName(activeTagInputSegment)}
       tagMergePrompt={tagMergePrompt}
       tagMessage={tagMessage}
       hasCurrentVideo={Boolean(currentVideo)}
