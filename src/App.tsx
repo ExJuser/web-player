@@ -121,9 +121,11 @@ import {
   addActorNamesToSelection,
   addActorProfile,
   buildActorInsights,
+  createActorAliasIndex,
   reconcileActorProfiles,
   resolveVideoActors,
 } from "./actorUtils";
+import { normalizeActorKey } from "./actorNfoCore.mjs";
 import {
   clearCachedPhotoAlbumScan,
   createPhotoAlbumStats,
@@ -1332,10 +1334,15 @@ export default function App() {
       videoActorOverrides: nextOverrides,
     }).catch(() => setMessage("演员数据保存失败。"));
   }, [actorProfilesRef, actorTagDefinitionsRef, saveCurrentPlayerDataStore, videoActorOverridesRef]);
-  const addCurrentVideoActorTags = useCallback((tags: string[]) => {
+  const addCurrentVideoActorTags = useCallback((tags: string[], force = false) => {
     if (!currentVideo) return;
+    const actorAliasIndex = force ? null : createActorAliasIndex(actorProfilesRef.current);
+    const actorTags = force
+      ? tags
+      : tags.filter((tag) => actorAliasIndex?.has(normalizeActorKey(tag)));
+    if (!actorTags.length) return;
     const nextDefinitions = { ...actorTagDefinitionsRef.current };
-    tags.forEach((tag) => {
+    actorTags.forEach((tag) => {
       const key = normalizeTagKey(tag);
       if (!key) return;
       nextDefinitions[key] = { key, label: tag.trim(), updatedAt: Date.now() };
@@ -1343,7 +1350,7 @@ export default function App() {
     const merged = addActorNamesToSelection({
       profiles: actorProfilesRef.current,
       actorIds: currentVideoResolvedActors.actorIds,
-      names: tags,
+      names: actorTags,
     });
     const nextOverrides = {
       ...videoActorOverridesRef.current,

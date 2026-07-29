@@ -26,7 +26,7 @@ type UseVideoTagControllerOptions = {
   isTagInputActor: boolean;
   isTagSuggestionLoading: boolean;
   localConfig: LocalConfig | null;
-  onMarkActorTags: (tags: string[]) => void;
+  onMarkActorTags: (tags: string[], force?: boolean) => void;
   playerPreferencesRef: MutableRefObject<PlayerPreferences>;
   setActiveTagSuggestionIndex: Dispatch<SetStateAction<number>>;
   setIsTagSuggestionLoading: Dispatch<SetStateAction<boolean>>;
@@ -238,7 +238,7 @@ export function useVideoTagController({
     const didSave = await replaceVideoTags(nextVideoTags, `已保存 ${nextTags.length} 个标签。`);
     if (!didSave) return;
     recordRecentVideoTags(addedTags);
-    if (options?.markAsActor) onMarkActorTags(resolvedTags);
+    onMarkActorTags(resolvedTags, options?.markAsActor);
     setTagInput("");
     setTagMergePrompt(null);
   }, [
