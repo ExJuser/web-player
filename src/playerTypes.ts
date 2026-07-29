@@ -395,6 +395,12 @@ export type SubtitleStylePreferences = {
   fontWeight: 400 | 600 | 700;
 };
 
+export type RecentVideoTag = {
+  key: string;
+  label: string;
+  usedAt: number;
+};
+
 export type PlayerPreferences = {
   playlistSortMode: PlaylistSortMode;
   isPlaylistSortReversed: boolean;
@@ -409,6 +415,7 @@ export type PlayerPreferences = {
   isCinemaMode: boolean;
   startFromHighEnergy: boolean;
   subtitleStyle: SubtitleStylePreferences;
+  recentVideoTags: RecentVideoTag[];
 };
 
 export type HomeVideoCard = {

@@ -7668,6 +7668,30 @@ button {
   font-size: 13px;
 }
 
+.tag-view-tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tag-view-tabs button {
+  min-height: 30px;
+  padding: 0 12px;
+  border: 1px solid rgba(121, 223, 255, 0.18);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted-text);
+  cursor: pointer;
+}
+
+.tag-view-tabs button:hover,
+.tag-view-tabs button:focus-visible,
+.tag-view-tabs button.active {
+  border-color: rgba(121, 223, 255, 0.42);
+  background: rgba(0, 161, 214, 0.18);
+  color: #dff8ff;
+}
+
 .common-tag-list {
   display: flex;
   flex-wrap: wrap;
@@ -9016,6 +9040,20 @@ button {
 .app-shell.theme-light .tag-input-suggestions button:hover,
 .app-shell.theme-light .tag-input-suggestions button:focus-visible,
 .app-shell.theme-light .tag-input-suggestions button.active {
+  border-color: rgba(0, 161, 214, 0.4);
+  background: #dff3fb;
+  color: #005f86;
+}
+
+.app-shell.theme-light .tag-view-tabs button {
+  border-color: #d7e0ea;
+  background: #f8fafc;
+  color: #667085;
+}
+
+.app-shell.theme-light .tag-view-tabs button:hover,
+.app-shell.theme-light .tag-view-tabs button:focus-visible,
+.app-shell.theme-light .tag-view-tabs button.active {
   border-color: rgba(0, 161, 214, 0.4);
   background: #dff3fb;
   color: #005f86;
@@ -10646,6 +10684,20 @@ button {
 :root[data-theme="light"] .tag-input-suggestions button:hover,
 :root[data-theme="light"] .tag-input-suggestions button:focus-visible,
 :root[data-theme="light"] .tag-input-suggestions button.active {
+  border-color: rgba(0, 161, 214, 0.4);
+  background: #dff3fb;
+  color: #005f86;
+}
+
+:root[data-theme="light"] .tag-view-tabs button {
+  border-color: #d7e0ea;
+  background: #f8fafc;
+  color: #667085;
+}
+
+:root[data-theme="light"] .tag-view-tabs button:hover,
+:root[data-theme="light"] .tag-view-tabs button:focus-visible,
+:root[data-theme="light"] .tag-view-tabs button.active {
   border-color: rgba(0, 161, 214, 0.4);
   background: #dff3fb;
   color: #005f86;

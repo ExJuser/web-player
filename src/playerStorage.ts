@@ -16,6 +16,7 @@ import type {
   PersistedDuplicateVideoPair,
   PlayerPersistentSettings,
   PlayerPreferences,
+  RecentVideoTag,
   ProgressStore,
   PersistedEmbeddedSubtitle,
   ShortcutAction,
@@ -550,6 +551,27 @@ export function parseShortcuts(source: unknown): ShortcutMap {
   ) as ShortcutMap;
 }
 
+export function parseRecentVideoTags(source: unknown): RecentVideoTag[] {
+  if (!Array.isArray(source)) return [];
+  const candidates = source.flatMap((value): RecentVideoTag[] => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+    const entry = value as Partial<RecentVideoTag>;
+    const label = typeof entry.label === "string" ? entry.label.trim() : "";
+    const key = normalizeVideoTagKey(typeof entry.key === "string" ? entry.key : label);
+    const usedAt = Number(entry.usedAt);
+    return key && label && Number.isFinite(usedAt) && usedAt > 0 ? [{ key, label, usedAt }] : [];
+  });
+  const seen = new Set<string>();
+  return candidates
+    .sort((a, b) => b.usedAt - a.usedAt)
+    .filter((entry) => {
+      if (seen.has(entry.key)) return false;
+      seen.add(entry.key);
+      return true;
+    })
+    .slice(0, 20);
+}
+
 export function parsePlayerPreferences(source: unknown): PlayerPreferences {
   if (!source || typeof source !== "object" || Array.isArray(source)) return defaultPlayerPreferences;
   const preferences = source as Partial<PlayerPreferences>;
@@ -618,6 +640,7 @@ export function parsePlayerPreferences(source: unknown): PlayerPreferences {
           ? preferences.subtitleStyle.fontWeight
           : defaultPlayerPreferences.subtitleStyle.fontWeight,
     },
+    recentVideoTags: parseRecentVideoTags(preferences.recentVideoTags),
   };
 }
 

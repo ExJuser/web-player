@@ -1376,10 +1376,12 @@ export default function App() {
     activeTagInputSegment,
     activeTagSuggestionId,
     addTagsToCurrentVideo,
+    allTags,
     applyTagMergeSuggestion,
     commonTags,
     getAllLibraryTags,
     keepTagMergeSuggestion,
+    recentTags,
     removeTagFromCurrentVideo,
     resolvedActiveTagSuggestionIndex,
     submitTagInput,
@@ -1394,6 +1396,7 @@ export default function App() {
     isTagSuggestionLoading,
     localConfig,
     onMarkActorTags: addCurrentVideoActorTags,
+    playerPreferencesRef,
     setActiveTagSuggestionIndex,
     setIsTagSuggestionLoading,
     setTagInput,
@@ -4469,6 +4472,7 @@ export default function App() {
         isCinemaMode,
         startFromHighEnergy,
         subtitleStyle,
+        recentVideoTags: playerPreferencesRef.current.recentVideoTags,
       };
       favoriteVideoIdsRef.current = new Set();
       setProgressStore({});
@@ -6660,6 +6664,8 @@ export default function App() {
       currentVideoTags={currentVideoTags}
       systemTags={currentVideoSystemTags}
       commonTags={commonTags}
+      allTags={allTags}
+      recentTags={recentTags}
       actorProfiles={actorProfiles}
       currentActorIds={currentVideoResolvedActors.actorIds}
       currentActorSource={currentVideoResolvedActors.source}

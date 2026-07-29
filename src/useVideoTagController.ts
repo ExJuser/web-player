@@ -3,8 +3,8 @@ import { useCallback, useEffect, useMemo, type Dispatch, type MutableRefObject, 
 import type { AiTagMergeSuggestionResponse, TagMergePrompt } from "./appTypes";
 import { fetchLocalJson as fetchJson } from "./localApiClient";
 import type { LocalConfig } from "./mediaRootScanCache";
-import { savePlayerVideoTags, saveTagMergeDecisions } from "./playerStorage";
-import type { TagMergeDecisionStore, VideoItem, VideoTagStore } from "./playerTypes";
+import { savePlayerPreference, savePlayerVideoTags, saveTagMergeDecisions } from "./playerStorage";
+import type { PlayerPreferences, TagMergeDecisionStore, VideoItem, VideoTagStore } from "./playerTypes";
 import {
   createTagInputSuggestions,
   createTagPairKey,
@@ -26,6 +26,7 @@ type UseVideoTagControllerOptions = {
   isTagSuggestionLoading: boolean;
   localConfig: LocalConfig | null;
   onMarkActorTags: (tags: string[]) => void;
+  playerPreferencesRef: MutableRefObject<PlayerPreferences>;
   setActiveTagSuggestionIndex: Dispatch<SetStateAction<number>>;
   setIsTagSuggestionLoading: Dispatch<SetStateAction<boolean>>;
   setTagInput: Dispatch<SetStateAction<string>>;
@@ -50,6 +51,7 @@ export function useVideoTagController({
   isTagSuggestionLoading,
   localConfig,
   onMarkActorTags,
+  playerPreferencesRef,
   setActiveTagSuggestionIndex,
   setIsTagSuggestionLoading,
   setTagInput,
@@ -73,23 +75,38 @@ export function useVideoTagController({
       currentTags: currentVideoTags,
     });
   }, [activeTagInputSegment, currentVideo, currentVideoTags, isTagDialogOpen, videoTags]);
-  const commonTags = useMemo(() => {
-    if (!isTagDialogOpen || !currentVideo) return [];
+  const tagViews = useMemo(() => {
+    if (!isTagDialogOpen || !currentVideo) return { allTags: [], commonTags: [], recentTags: [] };
     const currentTagKeys = new Set(currentVideoTags.map(normalizeTagKey));
     const usageByKey = new Map<string, { label: string; count: number }>();
     Object.values(tagUsageVideoTags).forEach((tags) => {
       const seenVideoTagKeys = new Set<string>();
       tags.forEach((tag) => {
         const key = normalizeTagKey(tag);
-        if (!key || currentTagKeys.has(key) || seenVideoTagKeys.has(key)) return;
+        if (!key || seenVideoTagKeys.has(key)) return;
         seenVideoTagKeys.add(key);
         const usage = usageByKey.get(key);
         usageByKey.set(key, { label: usage?.label ?? tag, count: (usage?.count ?? 0) + 1 });
       });
     });
-    return Array.from(usageByKey.values())
+    const availableTags = Array.from(usageByKey.entries())
+      .filter(([key]) => !currentTagKeys.has(key))
+      .map(([, usage]) => usage);
+    const commonTags = availableTags
+      .slice()
       .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, "zh-Hans-CN", { numeric: true }));
-  }, [currentVideo, currentVideoTags, isTagDialogOpen, tagUsageVideoTags]);
+    const allTags = availableTags
+      .slice()
+      .sort((a, b) => a.label.localeCompare(b.label, "zh-Hans-CN", { numeric: true }));
+    const recentTags = playerPreferencesRef.current.recentVideoTags
+      .filter((entry) => !currentTagKeys.has(entry.key))
+      .map((entry) => ({
+        label: entry.label,
+        count: usageByKey.get(entry.key)?.count ?? 0,
+      }));
+    return { allTags, commonTags, recentTags };
+  }, [currentVideo, currentVideoTags, isTagDialogOpen, playerPreferencesRef, tagUsageVideoTags]);
+  const { allTags, commonTags, recentTags } = tagViews;
   const resolvedActiveTagSuggestionIndex = tagInputSuggestions.length
     ? Math.min(activeTagSuggestionIndex, tagInputSuggestions.length - 1)
     : 0;
@@ -97,21 +114,46 @@ export function useVideoTagController({
     ? `tag-input-suggestion-${resolvedActiveTagSuggestionIndex}`
     : undefined;
 
-  const replaceVideoTags = useCallback((nextVideoTags: VideoTagStore, successMessage?: string) => {
+  const replaceVideoTags = useCallback(async (nextVideoTags: VideoTagStore, successMessage?: string) => {
     const previousVideoTags = videoTagsRef.current;
     videoTagsRef.current = nextVideoTags;
     setVideoTags(nextVideoTags);
 
     const changedVideoIds = Array.from(new Set([...Object.keys(previousVideoTags), ...Object.keys(nextVideoTags)]))
       .filter((videoId) => previousVideoTags[videoId] !== nextVideoTags[videoId]);
-    Promise.all(changedVideoIds.map((videoId) => savePlayerVideoTags(videoId, nextVideoTags[videoId] ?? [])))
-      .then(() => {
-        if (successMessage) setTagMessage(successMessage);
-      })
-      .catch(() => {
-        setTagMessage("无法写入项目数据目录，请确认通过 npm run dev 或 npm run preview 启动。");
-      });
+    try {
+      await Promise.all(changedVideoIds.map((videoId) => savePlayerVideoTags(videoId, nextVideoTags[videoId] ?? [])));
+      if (successMessage) setTagMessage(successMessage);
+      return true;
+    } catch {
+      setTagMessage("无法写入项目数据目录，请确认通过 npm run dev 或 npm run preview 启动。");
+      return false;
+    }
   }, [setTagMessage, setVideoTags, videoTagsRef]);
+
+  const recordRecentVideoTags = useCallback((tags: string[]) => {
+    const usedAt = Date.now();
+    const incomingKeys = new Set<string>();
+    const incoming = tags.flatMap((label, index) => {
+      const trimmedLabel = label.trim();
+      const key = normalizeTagKey(trimmedLabel);
+      if (!key || incomingKeys.has(key)) return [];
+      incomingKeys.add(key);
+      return key ? [{ key, label: trimmedLabel, usedAt: usedAt - index }] : [];
+    });
+    if (!incoming.length) return;
+    const recentVideoTags = [
+      ...incoming,
+      ...playerPreferencesRef.current.recentVideoTags.filter((entry) => !incomingKeys.has(entry.key)),
+    ].slice(0, 20);
+    playerPreferencesRef.current = {
+      ...playerPreferencesRef.current,
+      recentVideoTags,
+    };
+    savePlayerPreference("recentVideoTags", recentVideoTags).catch(() => {
+      setTagMessage("标签已保存，但最近使用记录保存失败。");
+    });
+  }, [playerPreferencesRef, setTagMessage]);
 
   const replaceTagMergeDecisions = useCallback((nextDecisions: TagMergeDecisionStore) => {
     tagMergeDecisionsRef.current = nextDecisions;
@@ -185,11 +227,15 @@ export function useVideoTagController({
     }
 
     const nextTags = mergeTags(existingVideoTags, resolvedTags);
+    const existingTagKeys = new Set(existingVideoTags.map(normalizeTagKey));
+    const addedTags = resolvedTags.filter((tag) => !existingTagKeys.has(normalizeTagKey(tag)));
     const nextVideoTags = {
       ...videoTagsRef.current,
       [currentVideo.id]: nextTags,
     };
-    replaceVideoTags(nextVideoTags, `已保存 ${nextTags.length} 个标签。`);
+    const didSave = await replaceVideoTags(nextVideoTags, `已保存 ${nextTags.length} 个标签。`);
+    if (!didSave) return;
+    recordRecentVideoTags(addedTags);
     if (options?.markAsActor) onMarkActorTags(resolvedTags);
     setTagInput("");
     setTagMergePrompt(null);
@@ -198,6 +244,7 @@ export function useVideoTagController({
     getAllLibraryTags,
     localConfig,
     onMarkActorTags,
+    recordRecentVideoTags,
     replaceVideoTags,
     setIsTagSuggestionLoading,
     setTagInput,
@@ -232,7 +279,7 @@ export function useVideoTagController({
     } else {
       delete nextVideoTags[currentVideo.id];
     }
-    replaceVideoTags(nextVideoTags, "标签已移除。");
+    void replaceVideoTags(nextVideoTags, "标签已移除。");
   }, [currentVideo, replaceVideoTags, videoTagsRef]);
 
   const applyTagMergeSuggestion = useCallback(() => {
@@ -277,10 +324,12 @@ export function useVideoTagController({
     activeTagInputSegment,
     activeTagSuggestionId,
     addTagsToCurrentVideo,
+    allTags,
     applyTagMergeSuggestion,
     commonTags,
     getAllLibraryTags,
     keepTagMergeSuggestion,
+    recentTags,
     removeTagFromCurrentVideo,
     replaceVideoTags,
     resolvedActiveTagSuggestionIndex,

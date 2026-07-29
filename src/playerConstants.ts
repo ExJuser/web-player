@@ -104,6 +104,7 @@ export const defaultPlayerPreferences: PlayerPreferences = {
     fontFamily: "sans-serif",
     fontWeight: 600,
   },
+  recentVideoTags: [],
 };
 
 export const defaultPlayerSettings = {

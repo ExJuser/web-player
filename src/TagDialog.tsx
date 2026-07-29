@@ -15,6 +15,7 @@ export type TagDialogMergePrompt = {
 };
 
 const COMMON_TAG_LIMIT = 20;
+type TagView = "recent" | "common" | "all";
 
 type TagDialogProps = {
   isOpen: boolean;
@@ -26,6 +27,8 @@ type TagDialogProps = {
   currentVideoTags: string[];
   systemTags: string[];
   commonTags: Array<{ label: string; count: number }>;
+  allTags: Array<{ label: string; count: number }>;
+  recentTags: Array<{ label: string; count: number }>;
   actorProfiles: ActorProfileStore;
   currentActorIds: string[];
   currentActorSource: ActorSource | null;
@@ -69,6 +72,8 @@ export function TagDialog({
   currentVideoTags,
   systemTags,
   commonTags,
+  allTags,
+  recentTags,
   actorProfiles,
   currentActorIds,
   currentActorSource,
@@ -103,14 +108,14 @@ export function TagDialog({
 }: TagDialogProps) {
   const [selectedActorIds, setSelectedActorIds] = useState<Set<string>>(() => new Set(currentActorIds));
   const [actorQuery, setActorQuery] = useState("");
-  const [areCommonTagsExpanded, setAreCommonTagsExpanded] = useState(false);
+  const [tagView, setTagView] = useState<TagView>("common");
   const currentActorIdsKey = currentActorIds.join("\u0000");
   useEffect(() => {
     setSelectedActorIds(new Set(currentActorIdsKey ? currentActorIdsKey.split("\u0000") : []));
     setActorQuery("");
   }, [currentActorIdsKey, currentVideoId]);
   useEffect(() => {
-    if (isOpen) setAreCommonTagsExpanded(false);
+    if (isOpen) setTagView(recentTags.length ? "recent" : "common");
   }, [currentVideoId, isOpen]);
   const actors = useMemo(
     () => Object.values(actorProfiles).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" })),
@@ -124,7 +129,11 @@ export function TagDialog({
   const filteredOtherActors = matchingActors.filter((actor) => !selectedActorIds.has(actor.id));
   const matchingSelectedActorCount = matchingActors.length - filteredOtherActors.length;
   const newActorNameToSave = normalizedActorQuery && !matchingActors.length ? actorQuery.trim() : undefined;
-  const visibleCommonTags = areCommonTagsExpanded ? commonTags : commonTags.slice(0, COMMON_TAG_LIMIT);
+  const visibleTagOptions = tagView === "recent"
+    ? recentTags
+    : tagView === "all"
+      ? allTags
+      : commonTags.slice(0, COMMON_TAG_LIMIT);
   const normalizedTagQuery = normalizeTagKey(tagQuery);
   const hasExactTagSuggestion = tagInputSuggestions.some((tag) => tag.key === normalizedTagQuery);
   const systemTagKeys = new Set(systemTags.map((tag) => tag.normalize("NFKC").trim().toLocaleLowerCase()));
@@ -313,35 +322,44 @@ export function TagDialog({
               ) : null}
             </div>
           </section>
-        ) : commonTags.length ? (
-          <section className="common-tag-picker" aria-labelledby="common-tag-picker-title">
-            <strong id="common-tag-picker-title">常用标签</strong>
-            <div className={`common-tag-list custom-scrollbar${areCommonTagsExpanded ? " expanded" : ""}`}>
-              {visibleCommonTags.map((tag) => (
+        ) : recentTags.length || commonTags.length ? (
+          <section
+            aria-label={tagView === "recent" ? "最近使用标签" : tagView === "all" ? "全部标签" : "常用标签"}
+            className="common-tag-picker"
+          >
+            <div className="tag-view-tabs" role="tablist" aria-label="标签列表">
+              {([
+                ["recent", "最近"],
+                ["common", "常用"],
+                ["all", "全部"],
+              ] as const).map(([view, label]) => (
+                <button
+                  aria-selected={tagView === view}
+                  className={tagView === view ? "active" : ""}
+                  key={view}
+                  role="tab"
+                  type="button"
+                  onClick={() => setTagView(view)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div className={`common-tag-list custom-scrollbar${tagView === "all" ? " expanded" : ""}`}>
+              {visibleTagOptions.map((tag) => (
                 <button
                   className="tag-editor-chip"
-                  key={tag.label}
+                  key={normalizeTagKey(tag.label)}
                   type="button"
                   disabled={!hasCurrentVideo || isTagSuggestionLoading}
                   title={`${tag.label}：关联 ${tag.count} 部影片`}
                   onClick={() => onQuickAddTag(tag.label)}
                 >
                   <span>{tag.label}</span>
-                  <small>{tag.count} 部</small>
+                  <small>{tag.count ? `${tag.count} 部` : "最近使用"}</small>
                 </button>
               ))}
             </div>
-            {commonTags.length > COMMON_TAG_LIMIT ? (
-              <button
-                aria-expanded={areCommonTagsExpanded}
-                className="tag-editor-chip common-tag-toggle"
-                type="button"
-                onClick={() => setAreCommonTagsExpanded((current) => !current)}
-              >
-                <span>{areCommonTagsExpanded ? "收起" : `展开全部（${commonTags.length - COMMON_TAG_LIMIT}）`}</span>
-                <ChevronDown aria-hidden="true" size={15} />
-              </button>
-            ) : null}
           </section>
         ) : null}
         <label className="tag-actor-toggle">

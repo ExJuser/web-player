@@ -43,6 +43,28 @@ test("player preferences remember whether playback starts from high energy highl
   assert.equal(storage.parsePlayerPreferences({ startFromHighEnergy: "true" }).startFromHighEnergy, false);
 });
 
+test("player preferences clean, deduplicate, sort, and bound recent video tags", () => {
+  const source = Array.from({ length: 24 }, (_, index) => ({
+    key: index === 22 ? "重复 标签" : `tag-${index}`,
+    label: index === 22 ? "重复标签" : `标签${index}`,
+    usedAt: 100 + index,
+  }));
+  source.push({ key: "重复标签", label: "旧重复标签", usedAt: 50 });
+  source.push({ key: "", label: "", usedAt: 999 });
+  source.push({ key: "invalid", label: "无效时间", usedAt: "unknown" });
+
+  const recentVideoTags = storage.parsePlayerPreferences({ recentVideoTags: source }).recentVideoTags;
+
+  assert.equal(recentVideoTags.length, 20);
+  assert.equal(recentVideoTags[0].label, "标签23");
+  assert.equal(recentVideoTags.filter((entry) => entry.key === "重复标签").length, 1);
+  assert.deepEqual(storage.parsePlayerPreferences({}).recentVideoTags, []);
+  assert.deepEqual(
+    storage.getPersistedPlayerPreferences(storage.parsePlayerPreferences({ recentVideoTags })).recentVideoTags,
+    recentVideoTags,
+  );
+});
+
 test("player preferences parse playback controls with defaults", () => {
   const defaults = storage.parsePlayerPreferences({});
   assert.equal(defaults.playbackMode, "sequential");

@@ -20,6 +20,12 @@ test("tag search results stay in normal flow and use a bounded custom list", () 
   assert.match(listRule?.groups?.body ?? "", /overflow:\s*auto;/);
 });
 
+test("tag view tabs have light theme coverage in app and root scopes", () => {
+  assert.match(styles, /\.tag-view-tabs button\.active\s*\{/);
+  assert.match(styles, /\.app-shell\.theme-light \.tag-view-tabs button\s*\{/);
+  assert.match(styles, /:root\[data-theme="light"\] \.tag-view-tabs button\s*\{/);
+});
+
 test("tag chips have explicit light theme colors in app and root theme scopes", () => {
   const appShellRule = styles.match(
     /\.app-shell\.theme-light \.tag-chip,\s*\.app-shell\.theme-light \.tag-editor-chip\s*\{(?<body>[^}]+)\}/,
