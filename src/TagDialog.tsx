@@ -137,6 +137,7 @@ export function TagDialog({
   const normalizedTagQuery = normalizeTagKey(tagQuery);
   const hasExactTagSuggestion = currentVideoTags.some((tag) => normalizeTagKey(tag) === normalizedTagQuery)
     || tagInputSuggestions.some((tag) => tag.key === normalizedTagQuery);
+  const hasTagSearchResults = tagInputSuggestions.length > 0 || !hasExactTagSuggestion;
   const systemTagKeys = new Set(systemTags.map((tag) => tag.normalize("NFKC").trim().toLocaleLowerCase()));
   const visibleCurrentVideoTags = currentVideoTags.filter(
     (tag) => !systemTagKeys.has(tag.normalize("NFKC").trim().toLocaleLowerCase()),
@@ -291,7 +292,7 @@ export function TagDialog({
             {isTagSuggestionLoading ? "查询中" : "添加"}
           </button>
         </form>
-        {tagQuery ? (
+        {tagQuery ? (hasTagSearchResults ? (
           <section className="tag-search-results" aria-labelledby="tag-search-results-title">
             <strong id="tag-search-results-title">搜索结果</strong>
             <div className="tag-input-suggestions custom-scrollbar" id="tag-input-suggestions" role="listbox" aria-label="已有标签候选">
@@ -323,7 +324,7 @@ export function TagDialog({
               ) : null}
             </div>
           </section>
-        ) : recentTags.length || commonTags.length ? (
+        ) : null) : recentTags.length || commonTags.length ? (
           <section
             aria-label={tagView === "recent" ? "最近使用标签" : tagView === "all" ? "全部标签" : "常用标签"}
             className="common-tag-picker"
