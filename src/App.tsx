@@ -1317,6 +1317,11 @@ export default function App() {
     actorTagDefinitions,
     videoActorOverrides,
   }) : { actorIds: [], source: null }, [actorProfiles, actorTagDefinitions, currentVideo, videoActorOverrides, videoTags]);
+  const currentActorAliasIndex = useMemo(() => createActorAliasIndex(actorProfiles), [actorProfiles]);
+  const isKnownActorName = useCallback(
+    (name: string) => currentActorAliasIndex.has(normalizeActorKey(name)),
+    [currentActorAliasIndex],
+  );
   const persistActorState = useCallback((
     nextProfiles: ActorProfileStore,
     nextDefinitions: ActorTagDefinitionStore,
@@ -1336,10 +1341,9 @@ export default function App() {
   }, [actorProfilesRef, actorTagDefinitionsRef, saveCurrentPlayerDataStore, videoActorOverridesRef]);
   const addCurrentVideoActorTags = useCallback((tags: string[], force = false) => {
     if (!currentVideo) return;
-    const actorAliasIndex = force ? null : createActorAliasIndex(actorProfilesRef.current);
     const actorTags = force
       ? tags
-      : tags.filter((tag) => actorAliasIndex?.has(normalizeActorKey(tag)));
+      : tags.filter(isKnownActorName);
     if (!actorTags.length) return;
     const nextDefinitions = { ...actorTagDefinitionsRef.current };
     actorTags.forEach((tag) => {
@@ -1357,7 +1361,7 @@ export default function App() {
       [currentVideo.id]: { actorIds: merged.actorIds, updatedAt: Date.now() },
     };
     persistActorState(merged.profiles, nextDefinitions, nextOverrides);
-  }, [actorProfilesRef, actorTagDefinitionsRef, currentVideo, currentVideoResolvedActors.actorIds, persistActorState, videoActorOverridesRef]);
+  }, [actorProfilesRef, actorTagDefinitionsRef, currentVideo, currentVideoResolvedActors.actorIds, isKnownActorName, persistActorState, videoActorOverridesRef]);
   const saveCurrentVideoActorOverride = useCallback((actorIds: string[], newActorName?: string) => {
     if (!currentVideo) return;
     const merged = addActorNamesToSelection({
@@ -1401,6 +1405,7 @@ export default function App() {
     isTagDialogOpen,
     isTagInputActor,
     isTagSuggestionLoading,
+    isKnownActorName,
     localConfig,
     onMarkActorTags: addCurrentVideoActorTags,
     playerPreferencesRef,

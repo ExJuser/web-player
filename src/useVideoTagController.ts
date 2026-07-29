@@ -25,6 +25,7 @@ type UseVideoTagControllerOptions = {
   isTagDialogOpen: boolean;
   isTagInputActor: boolean;
   isTagSuggestionLoading: boolean;
+  isKnownActorName: (name: string) => boolean;
   localConfig: LocalConfig | null;
   onMarkActorTags: (tags: string[], force?: boolean) => void;
   playerPreferencesRef: MutableRefObject<PlayerPreferences>;
@@ -50,6 +51,7 @@ export function useVideoTagController({
   isTagDialogOpen,
   isTagInputActor,
   isTagSuggestionLoading,
+  isKnownActorName,
   localConfig,
   onMarkActorTags,
   playerPreferencesRef,
@@ -188,9 +190,10 @@ export function useVideoTagController({
     }
 
     const { resolvedTags, unmatchedTags } = splitTagsByExistingMatch(incomingTags, allTags);
+    const unmatchedMergeTags = unmatchedTags.filter((tag) => !isKnownActorName(tag));
 
-    if (!options?.skipPrompt && unmatchedTags.length) {
-      const suggestion = unmatchedTags
+    if (!options?.skipPrompt && unmatchedMergeTags.length) {
+      const suggestion = unmatchedMergeTags
         .map((tag) => findTagMergeSuggestion(tag, allTags, tagMergeDecisionsRef.current))
         .find((item): item is TagMergeSuggestion => Boolean(item));
       if (suggestion) {
@@ -204,7 +207,7 @@ export function useVideoTagController({
         try {
           const aiSuggestion = await fetchJson<AiTagMergeSuggestionResponse>("/api/ai/tags/merge-suggestion", {
             method: "POST",
-            body: JSON.stringify({ newTags: unmatchedTags, existingTags: allTags }),
+            body: JSON.stringify({ newTags: unmatchedMergeTags, existingTags: allTags }),
           });
           if (aiSuggestion.newTag && aiSuggestion.existingTag) {
             setTagMergePrompt({
@@ -244,6 +247,7 @@ export function useVideoTagController({
   }, [
     currentVideo,
     getAllLibraryTags,
+    isKnownActorName,
     localConfig,
     onMarkActorTags,
     recordRecentVideoTags,
