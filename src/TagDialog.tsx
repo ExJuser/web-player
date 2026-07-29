@@ -1,5 +1,5 @@
 import { ChevronDown, RefreshCw, RotateCcw, Tags, UserPlus, X } from "lucide-react";
-import { useEffect, useMemo, useState, type PointerEvent as ReactPointerEvent, type Ref } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type Ref } from "react";
 
 import type { ActorProfileStore, ActorSource } from "./playerTypes";
 import { normalizeTagKey, type TagInputSuggestion, type TagMergeSuggestion } from "./tagUtils";
@@ -118,6 +118,7 @@ export function TagDialog({
   const [selectedActorIds, setSelectedActorIds] = useState<Set<string>>(() => new Set(currentActorIds));
   const [actorQuery, setActorQuery] = useState("");
   const [tagView, setTagView] = useState<TagView>("common");
+  const tagInputSuggestionsRef = useRef<HTMLDivElement>(null);
   const currentActorIdsKey = currentActorIds.join("\u0000");
   useEffect(() => {
     setSelectedActorIds(new Set(currentActorIdsKey ? currentActorIdsKey.split("\u0000") : []));
@@ -158,6 +159,11 @@ export function TagDialog({
   const visibleCurrentVideoTags = currentVideoTags.filter(
     (tag) => !systemTagKeys.has(tag.normalize("NFKC").trim().toLocaleLowerCase()),
   );
+  useEffect(() => {
+    tagInputSuggestionsRef.current
+      ?.querySelector<HTMLElement>('[aria-selected="true"]')
+      ?.scrollIntoView({ block: "nearest" });
+  }, [resolvedActiveTagSuggestionIndex]);
   const toggleActor = (actorId: string) => setSelectedActorIds((current) => {
     const next = new Set(current);
     if (next.has(actorId)) next.delete(actorId); else next.add(actorId);
@@ -326,7 +332,7 @@ export function TagDialog({
         {tagQuery ? (hasTagSearchResults ? (
           <section className="tag-search-results" aria-labelledby="tag-search-results-title">
             <strong id="tag-search-results-title">搜索结果</strong>
-            <div className="tag-input-suggestions custom-scrollbar" id="tag-input-suggestions" role="listbox" aria-label="演员或标签候选">
+            <div ref={tagInputSuggestionsRef} className="tag-input-suggestions custom-scrollbar" id="tag-input-suggestions" role="listbox" aria-label="演员或标签候选">
               {tagInputOptions.map((option, index) => option.type === "create" ? (
                 <button
                   className={`tag-create-option${index === resolvedActiveTagSuggestionIndex ? " active" : ""}`}
