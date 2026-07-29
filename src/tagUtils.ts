@@ -27,6 +27,8 @@ export type TagInputSuggestion = {
   key: string;
   label: string;
   count: number;
+  kind?: "actor";
+  actorId?: string;
 };
 
 export type TagSearchIndexEntry = TagInputSuggestion & {
@@ -275,7 +277,10 @@ function createPinyinSearchText(label: string, pattern: "pinyin" | "first") {
   }));
 }
 
-export function createTagSearchIndex(allVideoTags: Record<string, string[] | undefined>): TagSearchIndexEntry[] {
+export function createTagSearchIndex(
+  allVideoTags: Record<string, string[] | undefined>,
+  specialTags: TagInputSuggestion[] = [],
+): TagSearchIndexEntry[] {
   const candidatesByKey = new Map<string, TagInputSuggestion>();
   Object.values(allVideoTags).forEach((tags) => {
     const seenVideoTagKeys = new Set<string>();
@@ -290,6 +295,10 @@ export function createTagSearchIndex(allVideoTags: Record<string, string[] | und
         count: (existing?.count ?? 0) + 1,
       });
     });
+  });
+  specialTags.forEach((candidate) => {
+    if (!candidate.key || !candidate.label.trim()) return;
+    candidatesByKey.set(`actor:${candidate.actorId ?? candidate.key}:${candidate.key}`, candidate);
   });
   return Array.from(candidatesByKey.values()).map((candidate) => ({
     ...candidate,
@@ -312,7 +321,7 @@ export function createTagInputSuggestions(input: {
   const candidatesByKey = new Map<string, TagInputSuggestion & { matchRank: number }>();
   input.tagIndex.forEach((candidate) => {
     const { count, fullPinyin, initials, key, label } = candidate;
-    if (currentTagKeys.has(key)) return;
+    if (candidate.kind !== "actor" && currentTagKeys.has(key)) return;
     const matchScore = getSingleTagSearchScore(queryKey, querySynonymGroup, label, key);
     const matchRank = key === queryKey
       ? 0
@@ -330,11 +339,21 @@ export function createTagInputSuggestions(input: {
                   ? 6
                   : -1;
     if (matchRank < 0) return;
-    candidatesByKey.set(key, { key, label, count, matchRank });
+    const candidateKey = candidate.kind === "actor"
+      ? `actor:${candidate.actorId ?? key}:${key}`
+      : `tag:${key}`;
+    candidatesByKey.set(candidateKey, {
+      key,
+      label,
+      count,
+      ...(candidate.kind === "actor" ? { kind: candidate.kind, actorId: candidate.actorId } : {}),
+      matchRank,
+    });
   });
   return Array.from(candidatesByKey.values())
     .sort((a, b) =>
-      a.matchRank - b.matchRank
+      Number(b.kind === "actor") - Number(a.kind === "actor")
+      || a.matchRank - b.matchRank
       || b.count - a.count
       || a.label.localeCompare(b.label, "zh-Hans-CN", { numeric: true }),
     )

@@ -4,7 +4,7 @@ import type { AiTagMergeSuggestionResponse, TagMergePrompt } from "./appTypes";
 import { fetchLocalJson as fetchJson } from "./localApiClient";
 import type { LocalConfig } from "./mediaRootScanCache";
 import { savePlayerPreference, savePlayerVideoTags, saveTagMergeDecisions } from "./playerStorage";
-import type { PlayerPreferences, TagMergeDecisionStore, VideoItem, VideoTagStore } from "./playerTypes";
+import type { ActorProfileStore, PlayerPreferences, TagMergeDecisionStore, VideoItem, VideoTagStore } from "./playerTypes";
 import {
   createTagInputSuggestions,
   createTagSearchIndex,
@@ -20,6 +20,7 @@ import {
 
 type UseVideoTagControllerOptions = {
   activeTagSuggestionIndex: number;
+  actorProfiles: ActorProfileStore;
   currentVideo: VideoItem | null;
   currentVideoTags: string[];
   isTagDialogOpen: boolean;
@@ -46,6 +47,7 @@ type UseVideoTagControllerOptions = {
 
 export function useVideoTagController({
   activeTagSuggestionIndex,
+  actorProfiles,
   currentVideo,
   currentVideoTags,
   isTagDialogOpen,
@@ -70,7 +72,22 @@ export function useVideoTagController({
   videoTagsRef,
 }: UseVideoTagControllerOptions) {
   const activeTagInputSegment = useMemo(() => getActiveTagInputSegment(tagInput), [tagInput]);
-  const tagSearchIndex = useMemo(() => createTagSearchIndex(videoTags), [videoTags]);
+  const actorSpecialTags = useMemo(() => {
+    const seen = new Set<string>();
+    return Object.values(actorProfiles).flatMap((profile) =>
+      [profile.name, ...profile.aliases.map((alias) => alias.label)].flatMap((label) => {
+        const key = normalizeTagKey(label);
+        const identity = `${profile.id}\u0000${key}`;
+        if (!key || seen.has(identity)) return [];
+        seen.add(identity);
+        return [{ actorId: profile.id, count: 0, key, kind: "actor" as const, label }];
+      }),
+    );
+  }, [actorProfiles]);
+  const tagSearchIndex = useMemo(
+    () => createTagSearchIndex(videoTags, actorSpecialTags),
+    [actorSpecialTags, videoTags],
+  );
   const tagInputSuggestions = useMemo(() => {
     if (!isTagDialogOpen || !currentVideo || !activeTagInputSegment) return [];
     return createTagInputSuggestions({
@@ -111,8 +128,8 @@ export function useVideoTagController({
     return { allTags, commonTags, recentTags };
   }, [currentVideo, currentVideoTags, isTagDialogOpen, playerPreferencesRef, tagUsageVideoTags]);
   const { allTags, commonTags, recentTags } = tagViews;
-  const isTagQueryActorName = Boolean(activeTagInputSegment && isKnownActorName(activeTagInputSegment));
-  const tagInputOptionCount = isTagQueryActorName ? 2 : tagInputSuggestions.length;
+  const hasActorTagSuggestions = tagInputSuggestions.some((suggestion) => suggestion.kind === "actor");
+  const tagInputOptionCount = tagInputSuggestions.length + (hasActorTagSuggestions ? 1 : 0);
   const resolvedActiveTagSuggestionIndex = tagInputOptionCount
     ? Math.min(activeTagSuggestionIndex, tagInputOptionCount - 1)
     : 0;
@@ -276,14 +293,13 @@ export function useVideoTagController({
     void addTagsToCurrentVideo(parseTagInput(resolvedInput), { markAsActor: isTagInputActor });
   }, [addTagsToCurrentVideo, isTagInputActor, isTagSuggestionLoading, tagInput]);
 
-  const submitActorNameInput = useCallback(() => {
-    if (isTagSuggestionLoading || !activeTagInputSegment || !isKnownActorName(activeTagInputSegment)) return;
-    onMarkActorTags([activeTagInputSegment]);
+  const submitActorNameSuggestion = useCallback((name: string) => {
+    if (isTagSuggestionLoading || !isKnownActorName(name)) return;
+    onMarkActorTags([name]);
     setTagInput("");
     setTagMergePrompt(null);
     setTagMessage("影片演员已添加。");
   }, [
-    activeTagInputSegment,
     isKnownActorName,
     isTagSuggestionLoading,
     onMarkActorTags,
@@ -360,14 +376,14 @@ export function useVideoTagController({
     applyTagMergeSuggestion,
     commonTags,
     getAllLibraryTags,
-    isTagQueryActorName,
+    hasActorTagSuggestions,
     keepTagMergeSuggestion,
     recentTags,
     removeTagFromCurrentVideo,
     replaceVideoTags,
     resolvedActiveTagSuggestionIndex,
     submitActorNameAsNewTag,
-    submitActorNameInput,
+    submitActorNameSuggestion,
     submitTagInput,
     submitTagInputSuggestion,
     tagInputSuggestions,

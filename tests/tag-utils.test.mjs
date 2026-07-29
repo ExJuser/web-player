@@ -136,6 +136,37 @@ test("finds Chinese tags by full pinyin, spaced pinyin, and initials", () => {
   })[0]?.label, "AI-字幕");
 });
 
+test("includes actor special tags in pinyin suggestions ahead of regular tags", () => {
+  const tagIndex = tagUtils.createTagSearchIndex({
+    a: ["奶妈"],
+  }, [{
+    actorId: "actor:naimei",
+    count: 0,
+    key: tagUtils.normalizeTagKey("奶妹"),
+    kind: "actor",
+    label: "奶妹",
+  }]);
+
+  assert.deepEqual(tagUtils.createTagInputSuggestions({
+    query: "nm",
+    tagIndex,
+    currentTags: [],
+  }), [
+    {
+      actorId: "actor:naimei",
+      count: 0,
+      key: "奶妹",
+      kind: "actor",
+      label: "奶妹",
+    },
+    {
+      count: 1,
+      key: "奶妈",
+      label: "奶妈",
+    },
+  ]);
+});
+
 test("requires every selected tag filter to match by normalized key", () => {
   assert.equal(tagUtils.doTagsSatisfyAllFilters(["剧情", "AI-字幕"], []), true);
   assert.equal(tagUtils.doTagsSatisfyAllFilters(["剧情", "AI-字幕", "长镜头"], ["剧情", "ＡＩ字幕"]), true);
