@@ -135,7 +135,8 @@ export function TagDialog({
       ? allTags
       : commonTags.slice(0, COMMON_TAG_LIMIT);
   const normalizedTagQuery = normalizeTagKey(tagQuery);
-  const hasExactTagSuggestion = tagInputSuggestions.some((tag) => tag.key === normalizedTagQuery);
+  const hasExactTagSuggestion = currentVideoTags.some((tag) => normalizeTagKey(tag) === normalizedTagQuery)
+    || tagInputSuggestions.some((tag) => tag.key === normalizedTagQuery);
   const systemTagKeys = new Set(systemTags.map((tag) => tag.normalize("NFKC").trim().toLocaleLowerCase()));
   const visibleCurrentVideoTags = currentVideoTags.filter(
     (tag) => !systemTagKeys.has(tag.normalize("NFKC").trim().toLocaleLowerCase()),
