@@ -21,6 +21,12 @@ export type TagUsageStat = {
   videoIds: string[];
 };
 
+export type TagInputSuggestion = {
+  key: string;
+  label: string;
+  count: number;
+};
+
 const tagSeparators = /[\s,，、;；|]+/u;
 
 const synonymGroups = [
@@ -263,25 +269,39 @@ export function createTagInputSuggestions(input: {
 
   const currentTagKeys = new Set(input.currentTags.map(normalizeTagKey).filter(Boolean));
   const querySynonymGroup = getSynonymGroupKey(input.query);
-  const seen = new Set<string>();
-  const candidates: string[] = [];
+  const candidatesByKey = new Map<string, TagInputSuggestion & { matchRank: number }>();
   Object.values(input.allVideoTags).forEach((tags) => {
+    const seenVideoTagKeys = new Set<string>();
     tags?.forEach((tag) => {
       const key = normalizeTagKey(tag);
-      if (!key || seen.has(key) || currentTagKeys.has(key)) return;
-      if (!key.includes(queryKey) && getSingleTagSearchScore(queryKey, querySynonymGroup, tag, key) <= 0) return;
-      seen.add(key);
-      candidates.push(tag);
+      if (!key || seenVideoTagKeys.has(key) || currentTagKeys.has(key)) return;
+      seenVideoTagKeys.add(key);
+      const matchScore = getSingleTagSearchScore(queryKey, querySynonymGroup, tag, key);
+      if (matchScore <= 0) return;
+      const matchRank = key === queryKey
+        ? 0
+        : key.startsWith(queryKey)
+          ? 1
+          : key.includes(queryKey) || queryKey.includes(key)
+            ? 2
+            : 3;
+      const existing = candidatesByKey.get(key);
+      candidatesByKey.set(key, {
+        key,
+        label: existing?.label ?? tag,
+        count: (existing?.count ?? 0) + 1,
+        matchRank: Math.min(existing?.matchRank ?? matchRank, matchRank),
+      });
     });
   });
-  return candidates.sort((a, b) => {
-    const aKey = normalizeTagKey(a);
-    const bKey = normalizeTagKey(b);
-    const aPrefix = aKey.startsWith(queryKey) ? 0 : 1;
-    const bPrefix = bKey.startsWith(queryKey) ? 0 : 1;
-    return aPrefix - bPrefix || a.localeCompare(b, "zh-Hans-CN", { numeric: true });
-  })
-    .slice(0, input.limit ?? 8);
+  return Array.from(candidatesByKey.values())
+    .sort((a, b) =>
+      a.matchRank - b.matchRank
+      || b.count - a.count
+      || a.label.localeCompare(b.label, "zh-Hans-CN", { numeric: true }),
+    )
+    .slice(0, input.limit ?? 8)
+    .map(({ matchRank: _matchRank, ...candidate }) => candidate);
 }
 import { getSubtitlePathMatchPriority } from "./playerLibraryUtils";
 import type { SubtitleItem, VideoItem, VideoTagStore } from "./playerTypes";

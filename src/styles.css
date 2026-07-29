@@ -7707,7 +7707,6 @@ button {
 }
 
 .tag-editor-field {
-  position: relative;
   min-width: 0;
 }
 
@@ -7723,11 +7722,6 @@ button {
 }
 
 .tag-input-suggestions {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  left: 0;
-  z-index: 50;
   display: grid;
   max-height: 188px;
   padding: 6px;
@@ -7751,7 +7745,10 @@ button {
 }
 
 .tag-input-suggestions button {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   width: 100%;
   min-height: 30px;
   padding: 0 10px;
@@ -7764,6 +7761,34 @@ button {
   white-space: nowrap;
   text-align: left;
   cursor: pointer;
+}
+
+.tag-input-suggestions button span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tag-input-suggestions button small {
+  flex: none;
+  color: var(--muted-text);
+  font-size: 11px;
+}
+
+.tag-search-results {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.tag-search-results > strong {
+  font-size: 13px;
+}
+
+.tag-input-suggestions .tag-create-option {
+  justify-content: flex-start;
+  border-top-color: rgba(121, 223, 255, 0.16);
+  color: #79dfff;
 }
 
 .tag-input-suggestions button:hover,

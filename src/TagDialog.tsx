@@ -2,7 +2,7 @@ import { ChevronDown, RefreshCw, RotateCcw, Tags, UserPlus, X } from "lucide-rea
 import { useEffect, useMemo, useState, type PointerEvent as ReactPointerEvent, type Ref } from "react";
 
 import type { ActorProfileStore, ActorSource } from "./playerTypes";
-import type { TagMergeSuggestion } from "./tagUtils";
+import { normalizeTagKey, type TagInputSuggestion, type TagMergeSuggestion } from "./tagUtils";
 
 type DialogOffset = {
   x: number;
@@ -14,7 +14,7 @@ export type TagDialogMergePrompt = {
   suggestion: TagMergeSuggestion;
 };
 
-const COMMON_TAG_LIMIT = 30;
+const COMMON_TAG_LIMIT = 20;
 
 type TagDialogProps = {
   isOpen: boolean;
@@ -32,7 +32,8 @@ type TagDialogProps = {
   isCurrentActorListManual: boolean;
   isTagInputActor: boolean;
   tagInput: string;
-  tagInputSuggestions: string[];
+  tagInputSuggestions: TagInputSuggestion[];
+  tagQuery: string;
   resolvedActiveTagSuggestionIndex: number;
   activeTagSuggestionId?: string;
   isTagSuggestionLoading: boolean;
@@ -75,6 +76,7 @@ export function TagDialog({
   isTagInputActor,
   tagInput,
   tagInputSuggestions,
+  tagQuery,
   resolvedActiveTagSuggestionIndex,
   activeTagSuggestionId,
   isTagSuggestionLoading,
@@ -123,6 +125,8 @@ export function TagDialog({
   const matchingSelectedActorCount = matchingActors.length - filteredOtherActors.length;
   const newActorNameToSave = normalizedActorQuery && !matchingActors.length ? actorQuery.trim() : undefined;
   const visibleCommonTags = areCommonTagsExpanded ? commonTags : commonTags.slice(0, COMMON_TAG_LIMIT);
+  const normalizedTagQuery = normalizeTagKey(tagQuery);
+  const hasExactTagSuggestion = tagInputSuggestions.some((tag) => tag.key === normalizedTagQuery);
   const systemTagKeys = new Set(systemTags.map((tag) => tag.normalize("NFKC").trim().toLocaleLowerCase()));
   const visibleCurrentVideoTags = currentVideoTags.filter(
     (tag) => !systemTagKeys.has(tag.normalize("NFKC").trim().toLocaleLowerCase()),
@@ -220,38 +224,6 @@ export function TagDialog({
           </div>
         </details>
 
-        {commonTags.length ? (
-          <section className="common-tag-picker" aria-labelledby="common-tag-picker-title">
-            <strong id="common-tag-picker-title">常用标签</strong>
-            <div className={`common-tag-list custom-scrollbar${areCommonTagsExpanded ? " expanded" : ""}`}>
-              {visibleCommonTags.map((tag) => (
-                <button
-                  className="tag-editor-chip"
-                  key={tag.label}
-                  type="button"
-                  disabled={!hasCurrentVideo || isTagSuggestionLoading}
-                  title={`${tag.label}：关联 ${tag.count} 部影片`}
-                  onClick={() => onQuickAddTag(tag.label)}
-                >
-                  <span>{tag.label}</span>
-                  <small>{tag.count} 部</small>
-                </button>
-              ))}
-            </div>
-            {commonTags.length > COMMON_TAG_LIMIT ? (
-              <button
-                aria-expanded={areCommonTagsExpanded}
-                className="tag-editor-chip common-tag-toggle"
-                type="button"
-                onClick={() => setAreCommonTagsExpanded((current) => !current)}
-              >
-                <span>{areCommonTagsExpanded ? "收起" : `展开更多（${commonTags.length - COMMON_TAG_LIMIT}）`}</span>
-                <ChevronDown aria-hidden="true" size={15} />
-              </button>
-            ) : null}
-          </section>
-        ) : null}
-
         <form
           className="tag-editor-form"
           onSubmit={(event) => {
@@ -278,37 +250,27 @@ export function TagDialog({
                 }
                 if (tagInputSuggestions.length && event.key === "Enter") {
                   event.preventDefault();
-                  onSelectTagSuggestion(tagInputSuggestions[resolvedActiveTagSuggestionIndex] ?? tagInputSuggestions[0]);
+                  onSelectTagSuggestion(
+                    (tagInputSuggestions[resolvedActiveTagSuggestionIndex] ?? tagInputSuggestions[0]).label,
+                  );
                   return;
                 }
-                if (event.key === "Escape") onClose();
+                if (event.key === "Escape") {
+                  if (tagInput) {
+                    event.preventDefault();
+                    onTagInputChange("");
+                  } else {
+                    onClose();
+                  }
+                }
               }}
               disabled={!hasCurrentVideo}
               role="combobox"
               aria-autocomplete="list"
-              aria-expanded={Boolean(tagInputSuggestions.length)}
-              aria-controls={tagInputSuggestions.length ? "tag-input-suggestions" : undefined}
+              aria-expanded={Boolean(tagQuery)}
+              aria-controls={tagQuery ? "tag-input-suggestions" : undefined}
               aria-activedescendant={activeTagSuggestionId}
             />
-            {tagInputSuggestions.length ? (
-              <div className="tag-input-suggestions" id="tag-input-suggestions" role="listbox" aria-label="已有标签候选">
-                {tagInputSuggestions.map((tag, index) => (
-                  <button
-                    className={index === resolvedActiveTagSuggestionIndex ? "active" : ""}
-                    id={`tag-input-suggestion-${index}`}
-                    key={tag}
-                    type="button"
-                    role="option"
-                    aria-selected={index === resolvedActiveTagSuggestionIndex}
-                    onMouseDown={(event) => event.preventDefault()}
-                    onMouseEnter={() => onActiveTagSuggestionIndexChange(() => index)}
-                    onClick={() => onSelectTagSuggestion(tag)}
-                  >
-                    {tag}
-                  </button>
-                ))}
-              </div>
-            ) : null}
           </div>
           <button
             className={`primary-button tag-query-button${isTagSuggestionLoading ? " loading" : ""}`}
@@ -319,6 +281,69 @@ export function TagDialog({
             {isTagSuggestionLoading ? "查询中" : "添加"}
           </button>
         </form>
+        {tagQuery ? (
+          <section className="tag-search-results" aria-labelledby="tag-search-results-title">
+            <strong id="tag-search-results-title">搜索结果</strong>
+            <div className="tag-input-suggestions custom-scrollbar" id="tag-input-suggestions" role="listbox" aria-label="已有标签候选">
+              {tagInputSuggestions.map((tag, index) => (
+                <button
+                  className={index === resolvedActiveTagSuggestionIndex ? "active" : ""}
+                  id={`tag-input-suggestion-${index}`}
+                  key={tag.key}
+                  type="button"
+                  role="option"
+                  aria-selected={index === resolvedActiveTagSuggestionIndex}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onMouseEnter={() => onActiveTagSuggestionIndexChange(() => index)}
+                  onClick={() => onSelectTagSuggestion(tag.label)}
+                >
+                  <span>{tag.label}</span>
+                  <small>{tag.count} 部</small>
+                </button>
+              ))}
+              {!hasExactTagSuggestion ? (
+                <button
+                  className="tag-create-option"
+                  type="button"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={onSubmitTagInput}
+                >
+                  <span>新建标签“{tagQuery}”</span>
+                </button>
+              ) : null}
+            </div>
+          </section>
+        ) : commonTags.length ? (
+          <section className="common-tag-picker" aria-labelledby="common-tag-picker-title">
+            <strong id="common-tag-picker-title">常用标签</strong>
+            <div className={`common-tag-list custom-scrollbar${areCommonTagsExpanded ? " expanded" : ""}`}>
+              {visibleCommonTags.map((tag) => (
+                <button
+                  className="tag-editor-chip"
+                  key={tag.label}
+                  type="button"
+                  disabled={!hasCurrentVideo || isTagSuggestionLoading}
+                  title={`${tag.label}：关联 ${tag.count} 部影片`}
+                  onClick={() => onQuickAddTag(tag.label)}
+                >
+                  <span>{tag.label}</span>
+                  <small>{tag.count} 部</small>
+                </button>
+              ))}
+            </div>
+            {commonTags.length > COMMON_TAG_LIMIT ? (
+              <button
+                aria-expanded={areCommonTagsExpanded}
+                className="tag-editor-chip common-tag-toggle"
+                type="button"
+                onClick={() => setAreCommonTagsExpanded((current) => !current)}
+              >
+                <span>{areCommonTagsExpanded ? "收起" : `展开全部（${commonTags.length - COMMON_TAG_LIMIT}）`}</span>
+                <ChevronDown aria-hidden="true" size={15} />
+              </button>
+            ) : null}
+          </section>
+        ) : null}
         <label className="tag-actor-toggle">
           <input type="checkbox" checked={isTagInputActor} onChange={(event) => onTagInputActorChange(event.target.checked)} />
           <span aria-hidden="true" className="tag-actor-toggle-box" />

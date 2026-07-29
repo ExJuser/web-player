@@ -80,7 +80,30 @@ test("creates tag input suggestions from existing video tags", () => {
       },
       currentTags: ["美女"],
     }),
-    ["腿玩年", "美腿"],
+    [
+      { key: "腿玩年", label: "腿玩年", count: 1 },
+      { key: "美腿", label: "美腿", count: 2 },
+    ],
+  );
+});
+
+test("sorts tag input suggestions by match quality, usage, and label", () => {
+  assert.deepEqual(
+    tagUtils.createTagInputSuggestions({
+      query: "黑",
+      allVideoTags: {
+        a: ["黑", "黑丝", "黑裙"],
+        b: ["黑丝", "黑裙"],
+        c: ["黑丝", "黑色"],
+      },
+      currentTags: ["黑色"],
+      limit: 3,
+    }),
+    [
+      { key: "黑", label: "黑", count: 1 },
+      { key: "黑丝", label: "黑丝", count: 3 },
+      { key: "黑裙", label: "黑裙", count: 2 },
+    ],
   );
 });
 

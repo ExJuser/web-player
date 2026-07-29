@@ -12,6 +12,14 @@ test("tag editor input and add button use the same control height", () => {
   assert.match(buttonRule?.groups?.body ?? "", /height:\s*38px;/);
 });
 
+test("tag search results stay in normal flow and use a bounded custom list", () => {
+  const listRule = styles.match(/\.tag-input-suggestions\s*\{(?<body>[^}]+)\}/);
+
+  assert.doesNotMatch(listRule?.groups?.body ?? "", /position:\s*absolute;/);
+  assert.match(listRule?.groups?.body ?? "", /max-height:\s*188px;/);
+  assert.match(listRule?.groups?.body ?? "", /overflow:\s*auto;/);
+});
+
 test("tag chips have explicit light theme colors in app and root theme scopes", () => {
   const appShellRule = styles.match(
     /\.app-shell\.theme-light \.tag-chip,\s*\.app-shell\.theme-light \.tag-editor-chip\s*\{(?<body>[^}]+)\}/,

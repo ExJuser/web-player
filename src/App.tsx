@@ -1373,6 +1373,7 @@ export default function App() {
     setTagMessage("已恢复自动识别演员。");
   }, [actorProfilesRef, actorTagDefinitionsRef, currentVideo, persistActorState, videoActorOverridesRef]);
   const {
+    activeTagInputSegment,
     activeTagSuggestionId,
     addTagsToCurrentVideo,
     applyTagMergeSuggestion,
@@ -6666,6 +6667,7 @@ export default function App() {
       isTagInputActor={isTagInputActor}
       tagInput={tagInput}
       tagInputSuggestions={tagInputSuggestions}
+      tagQuery={activeTagInputSegment}
       resolvedActiveTagSuggestionIndex={resolvedActiveTagSuggestionIndex}
       activeTagSuggestionId={activeTagSuggestionId}
       isTagSuggestionLoading={isTagSuggestionLoading}
