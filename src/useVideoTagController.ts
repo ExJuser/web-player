@@ -111,10 +111,12 @@ export function useVideoTagController({
     return { allTags, commonTags, recentTags };
   }, [currentVideo, currentVideoTags, isTagDialogOpen, playerPreferencesRef, tagUsageVideoTags]);
   const { allTags, commonTags, recentTags } = tagViews;
-  const resolvedActiveTagSuggestionIndex = tagInputSuggestions.length
-    ? Math.min(activeTagSuggestionIndex, tagInputSuggestions.length - 1)
+  const isTagQueryActorName = Boolean(activeTagInputSegment && isKnownActorName(activeTagInputSegment));
+  const tagInputOptionCount = isTagQueryActorName ? 2 : tagInputSuggestions.length;
+  const resolvedActiveTagSuggestionIndex = tagInputOptionCount
+    ? Math.min(activeTagSuggestionIndex, tagInputOptionCount - 1)
     : 0;
-  const activeTagSuggestionId = tagInputSuggestions.length
+  const activeTagSuggestionId = tagInputOptionCount
     ? `tag-input-suggestion-${resolvedActiveTagSuggestionIndex}`
     : undefined;
 
@@ -179,7 +181,10 @@ export function useVideoTagController({
     return tags;
   }, [videoTagsRef]);
 
-  const addTagsToCurrentVideo = useCallback(async (tags: string[], options?: { skipPrompt?: boolean; markAsActor?: boolean }) => {
+  const addTagsToCurrentVideo = useCallback(async (
+    tags: string[],
+    options?: { skipActorMatch?: boolean; skipPrompt?: boolean; markAsActor?: boolean },
+  ) => {
     if (!currentVideo) return;
     const existingVideoTags = videoTagsRef.current[currentVideo.id] ?? [];
     const allTags = getAllLibraryTags();
@@ -241,7 +246,7 @@ export function useVideoTagController({
     const didSave = await replaceVideoTags(nextVideoTags, `已保存 ${nextTags.length} 个标签。`);
     if (!didSave) return;
     recordRecentVideoTags(addedTags);
-    onMarkActorTags(resolvedTags, options?.markAsActor);
+    if (!options?.skipActorMatch) onMarkActorTags(resolvedTags, options?.markAsActor);
     setTagInput("");
     setTagMergePrompt(null);
   }, [
@@ -271,9 +276,30 @@ export function useVideoTagController({
     void addTagsToCurrentVideo(parseTagInput(resolvedInput), { markAsActor: isTagInputActor });
   }, [addTagsToCurrentVideo, isTagInputActor, isTagSuggestionLoading, tagInput]);
 
+  const submitActorNameInput = useCallback(() => {
+    if (isTagSuggestionLoading || !activeTagInputSegment || !isKnownActorName(activeTagInputSegment)) return;
+    onMarkActorTags([activeTagInputSegment]);
+    setTagInput("");
+    setTagMergePrompt(null);
+    setTagMessage("影片演员已添加。");
+  }, [
+    activeTagInputSegment,
+    isKnownActorName,
+    isTagSuggestionLoading,
+    onMarkActorTags,
+    setTagInput,
+    setTagMergePrompt,
+    setTagMessage,
+  ]);
+
+  const submitActorNameAsNewTag = useCallback(() => {
+    if (isTagSuggestionLoading) return;
+    void addTagsToCurrentVideo(parseTagInput(tagInput), { skipActorMatch: true, skipPrompt: true });
+  }, [addTagsToCurrentVideo, isTagSuggestionLoading, tagInput]);
+
   useEffect(() => {
     setActiveTagSuggestionIndex(0);
-  }, [activeTagInputSegment, setActiveTagSuggestionIndex, tagInputSuggestions.length]);
+  }, [activeTagInputSegment, setActiveTagSuggestionIndex, tagInputOptionCount]);
 
   const removeTagFromCurrentVideo = useCallback((tag: string) => {
     if (!currentVideo) return;
@@ -334,11 +360,14 @@ export function useVideoTagController({
     applyTagMergeSuggestion,
     commonTags,
     getAllLibraryTags,
+    isTagQueryActorName,
     keepTagMergeSuggestion,
     recentTags,
     removeTagFromCurrentVideo,
     replaceVideoTags,
     resolvedActiveTagSuggestionIndex,
+    submitActorNameAsNewTag,
+    submitActorNameInput,
     submitTagInput,
     submitTagInputSuggestion,
     tagInputSuggestions,

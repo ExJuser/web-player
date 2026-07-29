@@ -49,6 +49,8 @@ type TagDialogProps = {
   onQuickAddTag: (tag: string) => void;
   onSaveActors: (actorIds: string[], newActorName?: string) => void;
   onRestoreAutomaticActors: () => void;
+  onSubmitActorName: () => void;
+  onSubmitActorNameAsNewTag: () => void;
   onSubmitTagInput: () => void;
   onTagInputChange: (value: string) => void;
   onTagInputActorChange: (value: boolean) => void;
@@ -95,6 +97,8 @@ export function TagDialog({
   onQuickAddTag,
   onSaveActors,
   onRestoreAutomaticActors,
+  onSubmitActorName,
+  onSubmitActorNameAsNewTag,
   onSubmitTagInput,
   onTagInputChange,
   onTagInputActorChange,
@@ -141,6 +145,7 @@ export function TagDialog({
     || tagInputSuggestions.some((tag) => tag.key === normalizedTagQuery);
   const shouldOfferCreateTag = !hasExactTagSuggestion && !isTagQueryActorName;
   const hasTagSearchResults = tagInputSuggestions.length > 0 || shouldOfferCreateTag;
+  const tagInputOptionCount = isTagQueryActorName ? 2 : tagInputSuggestions.length;
   const systemTagKeys = new Set(systemTags.map((tag) => tag.normalize("NFKC").trim().toLocaleLowerCase()));
   const visibleCurrentVideoTags = currentVideoTags.filter(
     (tag) => !systemTagKeys.has(tag.normalize("NFKC").trim().toLocaleLowerCase()),
@@ -252,14 +257,20 @@ export function TagDialog({
               placeholder="输入标签，可用空格、逗号、顿号分隔"
               onChange={(event) => onTagInputChange(event.target.value)}
               onKeyDown={(event) => {
-                if (tagInputSuggestions.length && event.key === "ArrowDown") {
+                if (tagInputOptionCount && event.key === "ArrowDown") {
                   event.preventDefault();
-                  onActiveTagSuggestionIndexChange((index) => (index + 1) % tagInputSuggestions.length);
+                  onActiveTagSuggestionIndexChange((index) => (index + 1) % tagInputOptionCount);
                   return;
                 }
-                if (tagInputSuggestions.length && event.key === "ArrowUp") {
+                if (tagInputOptionCount && event.key === "ArrowUp") {
                   event.preventDefault();
-                  onActiveTagSuggestionIndexChange((index) => (index - 1 + tagInputSuggestions.length) % tagInputSuggestions.length);
+                  onActiveTagSuggestionIndexChange((index) => (index - 1 + tagInputOptionCount) % tagInputOptionCount);
+                  return;
+                }
+                if (isTagQueryActorName && event.key === "Enter") {
+                  event.preventDefault();
+                  if (resolvedActiveTagSuggestionIndex === 0) onSubmitActorName();
+                  else onSubmitActorNameAsNewTag();
                   return;
                 }
                 if (tagInputSuggestions.length && event.key === "Enter") {
@@ -295,7 +306,39 @@ export function TagDialog({
             {isTagSuggestionLoading ? "查询中" : "添加"}
           </button>
         </form>
-        {tagQuery ? (hasTagSearchResults ? (
+        {tagQuery ? (isTagQueryActorName ? (
+          <section className="tag-search-results" aria-labelledby="tag-search-results-title">
+            <strong id="tag-search-results-title">搜索结果</strong>
+            <div className="tag-input-suggestions custom-scrollbar" id="tag-input-suggestions" role="listbox" aria-label="演员或标签候选">
+              <button
+                className={resolvedActiveTagSuggestionIndex === 0 ? "active" : ""}
+                id="tag-input-suggestion-0"
+                type="button"
+                role="option"
+                aria-selected={resolvedActiveTagSuggestionIndex === 0}
+                onMouseDown={(event) => event.preventDefault()}
+                onMouseEnter={() => onActiveTagSuggestionIndexChange(() => 0)}
+                onClick={onSubmitActorName}
+              >
+                <span>命中演员名“{tagQuery}”</span>
+                <small>添加为影片演员</small>
+              </button>
+              <button
+                className={`tag-create-option${resolvedActiveTagSuggestionIndex === 1 ? " active" : ""}`}
+                id="tag-input-suggestion-1"
+                type="button"
+                role="option"
+                aria-selected={resolvedActiveTagSuggestionIndex === 1}
+                onMouseDown={(event) => event.preventDefault()}
+                onMouseEnter={() => onActiveTagSuggestionIndexChange(() => 1)}
+                onClick={onSubmitActorNameAsNewTag}
+              >
+                <span>新建标签“{tagQuery}”</span>
+                <small>仅作为普通标签</small>
+              </button>
+            </div>
+          </section>
+        ) : hasTagSearchResults ? (
           <section className="tag-search-results" aria-labelledby="tag-search-results-title">
             <strong id="tag-search-results-title">搜索结果</strong>
             <div className="tag-input-suggestions custom-scrollbar" id="tag-input-suggestions" role="listbox" aria-label="已有标签候选">

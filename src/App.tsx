@@ -1395,6 +1395,8 @@ export default function App() {
     recentTags,
     removeTagFromCurrentVideo,
     resolvedActiveTagSuggestionIndex,
+    submitActorNameAsNewTag,
+    submitActorNameInput,
     submitTagInput,
     submitTagInputSuggestion,
     tagInputSuggestions,
@@ -6689,7 +6691,7 @@ export default function App() {
       resolvedActiveTagSuggestionIndex={resolvedActiveTagSuggestionIndex}
       activeTagSuggestionId={activeTagSuggestionId}
       isTagSuggestionLoading={isTagSuggestionLoading}
-      isTagQueryActorName={isKnownActorName(activeTagInputSegment)}
+      isTagQueryActorName={isTagQueryActorName}
       tagMergePrompt={tagMergePrompt}
       tagMessage={tagMessage}
       hasCurrentVideo={Boolean(currentVideo)}
@@ -6698,8 +6700,17 @@ export default function App() {
       onQuickAddTag={(tag) => void addTagsToCurrentVideo([tag])}
       onSaveActors={saveCurrentVideoActorOverride}
       onRestoreAutomaticActors={restoreCurrentVideoActors}
+      onSubmitActorName={() => {
+        submitActorNameInput();
+        setIsTagInputActor(false);
+      }}
+      onSubmitActorNameAsNewTag={() => {
+        submitActorNameAsNewTag();
+        setIsTagInputActor(false);
+      }}
       onSubmitTagInput={() => {
-        submitTagInput();
+        if (isTagQueryActorName) submitActorNameInput();
+        else submitTagInput();
         setIsTagInputActor(false);
       }}
       onTagInputChange={setTagInput}
