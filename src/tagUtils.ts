@@ -1,3 +1,5 @@
+import { pinyin } from "pinyin-pro";
+
 export type TagMergeDecision = {
   from: string;
   to: string;
@@ -25,6 +27,11 @@ export type TagInputSuggestion = {
   key: string;
   label: string;
   count: number;
+};
+
+export type TagSearchIndexEntry = TagInputSuggestion & {
+  fullPinyin: string;
+  initials: string;
 };
 
 const tagSeparators = /[\s,，、;；|]+/u;
@@ -258,9 +265,42 @@ export function getTagSearchScore(query: string, tags: string[]) {
   return bestScore;
 }
 
+function createPinyinSearchText(label: string, pattern: "pinyin" | "first") {
+  return normalizeTagKey(pinyin(label, {
+    nonZh: "consecutive",
+    pattern,
+    separator: "",
+    toneType: "none",
+    v: true,
+  }));
+}
+
+export function createTagSearchIndex(allVideoTags: Record<string, string[] | undefined>): TagSearchIndexEntry[] {
+  const candidatesByKey = new Map<string, TagInputSuggestion>();
+  Object.values(allVideoTags).forEach((tags) => {
+    const seenVideoTagKeys = new Set<string>();
+    tags?.forEach((tag) => {
+      const key = normalizeTagKey(tag);
+      if (!key || seenVideoTagKeys.has(key)) return;
+      seenVideoTagKeys.add(key);
+      const existing = candidatesByKey.get(key);
+      candidatesByKey.set(key, {
+        key,
+        label: existing?.label ?? tag,
+        count: (existing?.count ?? 0) + 1,
+      });
+    });
+  });
+  return Array.from(candidatesByKey.values()).map((candidate) => ({
+    ...candidate,
+    fullPinyin: createPinyinSearchText(candidate.label, "pinyin"),
+    initials: createPinyinSearchText(candidate.label, "first"),
+  }));
+}
+
 export function createTagInputSuggestions(input: {
   query: string;
-  allVideoTags: Record<string, string[] | undefined>;
+  tagIndex: TagSearchIndexEntry[];
   currentTags: string[];
   limit?: number;
 }) {
@@ -270,29 +310,27 @@ export function createTagInputSuggestions(input: {
   const currentTagKeys = new Set(input.currentTags.map(normalizeTagKey).filter(Boolean));
   const querySynonymGroup = getSynonymGroupKey(input.query);
   const candidatesByKey = new Map<string, TagInputSuggestion & { matchRank: number }>();
-  Object.values(input.allVideoTags).forEach((tags) => {
-    const seenVideoTagKeys = new Set<string>();
-    tags?.forEach((tag) => {
-      const key = normalizeTagKey(tag);
-      if (!key || seenVideoTagKeys.has(key) || currentTagKeys.has(key)) return;
-      seenVideoTagKeys.add(key);
-      const matchScore = getSingleTagSearchScore(queryKey, querySynonymGroup, tag, key);
-      if (matchScore <= 0) return;
-      const matchRank = key === queryKey
-        ? 0
-        : key.startsWith(queryKey)
-          ? 1
-          : key.includes(queryKey) || queryKey.includes(key)
-            ? 2
-            : 3;
-      const existing = candidatesByKey.get(key);
-      candidatesByKey.set(key, {
-        key,
-        label: existing?.label ?? tag,
-        count: (existing?.count ?? 0) + 1,
-        matchRank: Math.min(existing?.matchRank ?? matchRank, matchRank),
-      });
-    });
+  input.tagIndex.forEach((candidate) => {
+    const { count, fullPinyin, initials, key, label } = candidate;
+    if (currentTagKeys.has(key)) return;
+    const matchScore = getSingleTagSearchScore(queryKey, querySynonymGroup, label, key);
+    const matchRank = key === queryKey
+      ? 0
+      : key.startsWith(queryKey)
+        ? 1
+        : key.includes(queryKey) || queryKey.includes(key)
+          ? 2
+          : fullPinyin.startsWith(queryKey)
+            ? 3
+            : initials.startsWith(queryKey)
+              ? 4
+              : fullPinyin.includes(queryKey)
+                ? 5
+                : matchScore > 0
+                  ? 6
+                  : -1;
+    if (matchRank < 0) return;
+    candidatesByKey.set(key, { key, label, count, matchRank });
   });
   return Array.from(candidatesByKey.values())
     .sort((a, b) =>

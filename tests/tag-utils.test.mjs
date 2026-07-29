@@ -73,11 +73,11 @@ test("creates tag input suggestions from existing video tags", () => {
   assert.deepEqual(
     tagUtils.createTagInputSuggestions({
       query: "腿玩年",
-      allVideoTags: {
+      tagIndex: tagUtils.createTagSearchIndex({
         a: ["美腿", "剧情"],
         b: ["美女", "美腿", "腿玩年"],
         c: ["AI-字幕"],
-      },
+      }),
       currentTags: ["美女"],
     }),
     [
@@ -91,11 +91,11 @@ test("sorts tag input suggestions by match quality, usage, and label", () => {
   assert.deepEqual(
     tagUtils.createTagInputSuggestions({
       query: "黑",
-      allVideoTags: {
+      tagIndex: tagUtils.createTagSearchIndex({
         a: ["黑", "黑丝", "黑裙"],
         b: ["黑丝", "黑裙"],
         c: ["黑丝", "黑色"],
-      },
+      }),
       currentTags: ["黑色"],
       limit: 3,
     }),
@@ -105,6 +105,35 @@ test("sorts tag input suggestions by match quality, usage, and label", () => {
       { key: "黑裙", label: "黑裙", count: 2 },
     ],
   );
+});
+
+test("finds Chinese tags by full pinyin, spaced pinyin, and initials", () => {
+  const tagIndex = tagUtils.createTagSearchIndex({
+    a: ["黑丝", "黑色", "护士", "AI-字幕"],
+    b: ["黑丝"],
+    c: ["黑丝"],
+  });
+
+  assert.equal(tagUtils.createTagInputSuggestions({
+    query: "heisi",
+    tagIndex,
+    currentTags: [],
+  })[0]?.label, "黑丝");
+  assert.equal(tagUtils.createTagInputSuggestions({
+    query: "hei si",
+    tagIndex,
+    currentTags: [],
+  })[0]?.label, "黑丝");
+  assert.equal(tagUtils.createTagInputSuggestions({
+    query: "hs",
+    tagIndex,
+    currentTags: [],
+  })[0]?.label, "黑丝");
+  assert.equal(tagUtils.createTagInputSuggestions({
+    query: "AI",
+    tagIndex,
+    currentTags: [],
+  })[0]?.label, "AI-字幕");
 });
 
 test("requires every selected tag filter to match by normalized key", () => {

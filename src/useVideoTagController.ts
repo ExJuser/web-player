@@ -7,6 +7,7 @@ import { savePlayerPreference, savePlayerVideoTags, saveTagMergeDecisions } from
 import type { PlayerPreferences, TagMergeDecisionStore, VideoItem, VideoTagStore } from "./playerTypes";
 import {
   createTagInputSuggestions,
+  createTagSearchIndex,
   createTagPairKey,
   findTagMergeSuggestion,
   getActiveTagInputSegment,
@@ -67,14 +68,15 @@ export function useVideoTagController({
   videoTagsRef,
 }: UseVideoTagControllerOptions) {
   const activeTagInputSegment = useMemo(() => getActiveTagInputSegment(tagInput), [tagInput]);
+  const tagSearchIndex = useMemo(() => createTagSearchIndex(videoTags), [videoTags]);
   const tagInputSuggestions = useMemo(() => {
     if (!isTagDialogOpen || !currentVideo || !activeTagInputSegment) return [];
     return createTagInputSuggestions({
       query: activeTagInputSegment,
-      allVideoTags: videoTags,
+      tagIndex: tagSearchIndex,
       currentTags: currentVideoTags,
     });
-  }, [activeTagInputSegment, currentVideo, currentVideoTags, isTagDialogOpen, videoTags]);
+  }, [activeTagInputSegment, currentVideo, currentVideoTags, isTagDialogOpen, tagSearchIndex]);
   const tagViews = useMemo(() => {
     if (!isTagDialogOpen || !currentVideo) return { allTags: [], commonTags: [], recentTags: [] };
     const currentTagKeys = new Set(currentVideoTags.map(normalizeTagKey));
