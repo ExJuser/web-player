@@ -51,6 +51,28 @@ export type MediaRootsScanResponse = {
   metadata: PlayerGlobalMetadata;
 };
 
+export type MediaScanTaskSnapshot = {
+  runId?: string;
+  status: "idle" | "running" | "completed" | "error";
+  rootsTotal: number;
+  rootsCompleted: number;
+  visitedFiles: number;
+  reusedFiles: number;
+  changedFiles: number;
+  startedAt?: number;
+  completedAt?: number;
+  error?: string;
+  roots?: Array<{
+    id: string;
+    label: string;
+    status: "pending" | "running" | "ready" | "needsAccess" | "error";
+    visitedDirectories: number;
+    reusedDirectories: number;
+    changedDirectories: number;
+    error?: string;
+  }>;
+};
+
 export type UpsertMediaRootResponse = LocalConfig & {
   mediaRoot: LocalMediaRoot;
 };

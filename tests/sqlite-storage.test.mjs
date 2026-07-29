@@ -82,7 +82,7 @@ test("sqlite player data patch updates selected fields without clearing deferred
     assert.equal(stored.items.video1.currentTime, 5);
     assert.deepEqual(stored.videoTags.video1, ["new"]);
     assert.equal(stored.embeddedSubtitles[0].id, "subtitle1");
-    assert.deepEqual(stored.duplicateDetections.all.pairs, []);
+    assert.deepEqual(stored.duplicateDetections.anime.pairs, []);
   } finally {
     context.store.close();
     await rm(context.root, { recursive: true, force: true });
@@ -657,7 +657,7 @@ test("sqlite initialization migrates the legacy photo album scan json", async ()
   try {
     await context.store.initialize();
     assert.equal(context.store.hasTable("photo_album_scan_caches"), false);
-    assert.equal(context.store.getMeta("schema_version"), "3");
+    assert.equal(context.store.getMeta("schema_version"), "4");
     assert.deepEqual(context.store.loadPhotoAlbumScanCacheImages("legacy-album"), [legacyImage]);
   } finally {
     context.store.close();

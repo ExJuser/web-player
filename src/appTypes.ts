@@ -112,6 +112,30 @@ export type LadaRestorationResult = {
 
 export type MediaProcessingTaskRunState = "running" | "cancelling" | "completed" | "failed" | "cancelled";
 
+export type AppTaskKind =
+  | "media-scan"
+  | "photo-scan"
+  | "duplicate-detection"
+  | "remux"
+  | "montage"
+  | "lada"
+  | "mosaic";
+
+export type AppTask = {
+  id: string;
+  kind: AppTaskKind;
+  title: string;
+  status: string;
+  state: "pending" | "running" | "cancelling" | "completed" | "failed" | "cancelled";
+  progress: number;
+  startedAt: number;
+  completedAt?: number;
+  error?: string | null;
+  result?: unknown;
+  canCancel?: boolean;
+  canRetry?: boolean;
+};
+
 type MediaProcessingTaskSnapshotBase = {
   id: string;
   videoName: string;

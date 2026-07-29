@@ -3,7 +3,7 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { readJsonFile } from "./jsonFiles.mjs";
 
-const schemaVersion = 3;
+const schemaVersion = 4;
 const playerStoreVersion = 6;
 const photoAlbumStoreVersion = 1;
 
@@ -397,6 +397,46 @@ export class LocalDataSqliteStore {
         scan_json TEXT NOT NULL,
         updated_at INTEGER NOT NULL
       );
+
+      CREATE TABLE IF NOT EXISTS media_scan_directories (
+        root_id TEXT NOT NULL,
+        relative_directory TEXT NOT NULL,
+        directory_fingerprint TEXT NOT NULL,
+        record_json TEXT NOT NULL,
+        last_scan_run TEXT NOT NULL,
+        updated_at INTEGER NOT NULL,
+        PRIMARY KEY (root_id, relative_directory)
+      ) WITHOUT ROWID;
+
+      CREATE INDEX IF NOT EXISTS media_scan_directories_run_idx
+      ON media_scan_directories(last_scan_run);
+
+      CREATE TABLE IF NOT EXISTS media_scan_entries (
+        root_id TEXT NOT NULL,
+        relative_path TEXT NOT NULL,
+        entry_type TEXT NOT NULL,
+        size INTEGER NOT NULL,
+        mtime INTEGER NOT NULL,
+        scan_record_json TEXT NOT NULL,
+        last_scan_run TEXT NOT NULL,
+        updated_at INTEGER NOT NULL,
+        PRIMARY KEY (root_id, relative_path)
+      ) WITHOUT ROWID;
+
+      CREATE INDEX IF NOT EXISTS media_scan_entries_run_idx
+      ON media_scan_entries(last_scan_run);
+
+      CREATE TABLE IF NOT EXISTS media_scan_runs (
+        run_id TEXT PRIMARY KEY,
+        status TEXT NOT NULL,
+        stats_json TEXT NOT NULL,
+        started_at INTEGER NOT NULL,
+        completed_at INTEGER,
+        error TEXT
+      );
+
+      CREATE INDEX IF NOT EXISTS media_scan_runs_started_at_idx
+      ON media_scan_runs(started_at DESC);
 
       CREATE TABLE IF NOT EXISTS cache_entries (
         kind TEXT NOT NULL,
@@ -1616,6 +1656,109 @@ export class LocalDataSqliteStore {
   loadMediaRootScanCache() {
     const row = this.db.prepare("SELECT scan_json FROM media_root_scan_caches WHERE cache_id = 'global'").get();
     return row ? parseJson(row.scan_json, null) : null;
+  }
+
+  startMediaScanRun(snapshot) {
+    const runId = String(snapshot?.runId ?? "").trim();
+    if (!runId) throw new Error("Media scan run id is required.");
+    const startedAt = Number(snapshot?.startedAt) || now();
+    this.db
+      .prepare("INSERT INTO media_scan_runs (run_id, status, stats_json, started_at, completed_at, error) VALUES (?, ?, ?, ?, NULL, NULL)")
+      .run(runId, snapshot?.status || "running", stringifyJson(snapshot), startedAt);
+  }
+
+  updateMediaScanRun(snapshot) {
+    const runId = String(snapshot?.runId ?? "").trim();
+    if (!runId) return false;
+    const completedAt = Number(snapshot?.completedAt) || null;
+    const result = this.db
+      .prepare("UPDATE media_scan_runs SET status = ?, stats_json = ?, completed_at = ?, error = ? WHERE run_id = ?")
+      .run(
+        snapshot?.status || "running",
+        stringifyJson(snapshot),
+        completedAt,
+        typeof snapshot?.error === "string" ? snapshot.error : null,
+        runId,
+      );
+    return result.changes > 0;
+  }
+
+  loadMediaScanTaskSnapshot(runId = "") {
+    const row = runId
+      ? this.db.prepare("SELECT stats_json FROM media_scan_runs WHERE run_id = ?").get(runId)
+      : this.db.prepare("SELECT stats_json FROM media_scan_runs ORDER BY started_at DESC LIMIT 1").get();
+    return row ? parseJson(row.stats_json, null) : null;
+  }
+
+  loadMediaScanDirectoryCache(rootId) {
+    const records = new Map();
+    for (const row of allRows(
+      this.db.prepare("SELECT relative_directory, directory_fingerprint, record_json FROM media_scan_directories WHERE root_id = ?"),
+      rootId,
+    )) {
+      const record = parseJson(row.record_json, null);
+      if (!record) continue;
+      records.set(row.relative_directory, {
+        ...record,
+        fingerprint: row.directory_fingerprint,
+      });
+    }
+    return records;
+  }
+
+  commitMediaScanRoot({ runId, rootId, directories }) {
+    if (!runId || !rootId) throw new Error("Media scan root commit requires run and root ids.");
+    const updatedAt = now();
+    return this.transaction(() => {
+      const saveDirectory = this.db.prepare(`
+        INSERT INTO media_scan_directories (
+          root_id, relative_directory, directory_fingerprint, record_json, last_scan_run, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?)
+        ON CONFLICT(root_id, relative_directory) DO UPDATE SET
+          directory_fingerprint = excluded.directory_fingerprint,
+          record_json = excluded.record_json,
+          last_scan_run = excluded.last_scan_run,
+          updated_at = excluded.updated_at
+      `);
+      const saveEntry = this.db.prepare(`
+        INSERT INTO media_scan_entries (
+          root_id, relative_path, entry_type, size, mtime, scan_record_json, last_scan_run, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(root_id, relative_path) DO UPDATE SET
+          entry_type = excluded.entry_type,
+          size = excluded.size,
+          mtime = excluded.mtime,
+          scan_record_json = excluded.scan_record_json,
+          last_scan_run = excluded.last_scan_run,
+          updated_at = excluded.updated_at
+      `);
+      for (const directory of Array.isArray(directories) ? directories : []) {
+        saveDirectory.run(
+          rootId,
+          directory.relativeDirectory || "",
+          directory.fingerprint || "",
+          stringifyJson(directory),
+          runId,
+          updatedAt,
+        );
+        for (const [entryType, entries] of [["video", directory.videos], ["subtitle", directory.subtitles]]) {
+          for (const entry of Array.isArray(entries) ? entries : []) {
+            saveEntry.run(
+              rootId,
+              entry.relativePath,
+              entryType,
+              Number(entry.size) || 0,
+              Number(entry.lastModified) || 0,
+              stringifyJson(entry),
+              runId,
+              updatedAt,
+            );
+          }
+        }
+      }
+      this.db.prepare("DELETE FROM media_scan_directories WHERE root_id = ? AND last_scan_run <> ?").run(rootId, runId);
+      this.db.prepare("DELETE FROM media_scan_entries WHERE root_id = ? AND last_scan_run <> ?").run(rootId, runId);
+    });
   }
 
   recordCacheEntry(kind, cacheId, filePath, contentType = null, bytes = null) {

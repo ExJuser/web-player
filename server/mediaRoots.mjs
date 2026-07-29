@@ -1,4 +1,5 @@
 import { access, readFile, readdir, stat } from "node:fs/promises";
+import { availableParallelism } from "node:os";
 import path from "node:path";
 import { createMatchingNfoNameLookup, maxActorNfoBytes, parseActorNfoBytes } from "../src/actorNfoCore.mjs";
 import { hashValue } from "./hashUtils.mjs";
@@ -9,7 +10,9 @@ const subtitleExtensions = new Set([".srt", ".vtt"]);
 const photoExtensions = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif", ".bmp"]);
 const mediaExtensions = new Set([...videoExtensions, ...subtitleExtensions, ...photoExtensions]);
 const smallVideoFileThresholdBytes = 50 * 1024 * 1024;
-const fileStatConcurrency = 16;
+const fileOperationConcurrency = Math.min(8, Math.max(2, availableParallelism()));
+let activeFileOperations = 0;
+const pendingFileOperations = [];
 const ignoredVideoBasenames = new Set(["theme_video", "trailer"]);
 const fixedPhotoAlbumsRoot = {
   id: "photo-albums-local",
@@ -18,6 +21,23 @@ const fixedPhotoAlbumsRoot = {
   basename: "写真集",
   source: "local",
 };
+
+function runWithFileOperationSlot(operation) {
+  return new Promise((resolve, reject) => {
+    const run = () => {
+      activeFileOperations += 1;
+      Promise.resolve()
+        .then(operation)
+        .then(resolve, reject)
+        .finally(() => {
+          activeFileOperations -= 1;
+          pendingFileOperations.shift()?.();
+        });
+    };
+    if (activeFileOperations < fileOperationConcurrency) run();
+    else pendingFileOperations.push(run);
+  });
+}
 
 function compareRelativePath(a, b) {
   return a.relativePath.localeCompare(b.relativePath, undefined, { numeric: true, sensitivity: "base" });
@@ -45,24 +65,32 @@ function findVideoArtworkName(videoName, fileNames, suffix) {
 
 async function statSupportedFiles(entries, directory, isSupported) {
   const supportedEntries = entries.filter((entry) => entry.isFile() && isSupported(entry.name));
-  const results = new Array(supportedEntries.length);
-  let nextIndex = 0;
-
-  const worker = async () => {
-    while (nextIndex < supportedEntries.length) {
-      const index = nextIndex;
-      nextIndex += 1;
-      try {
-        results[index] = { value: await stat(path.join(directory, supportedEntries[index].name)) };
-      } catch (error) {
-        results[index] = { error };
-      }
+  const results = await Promise.all(supportedEntries.map(async (entry) => {
+    try {
+      return { value: await runWithFileOperationSlot(() => stat(path.join(directory, entry.name))) };
+    } catch (error) {
+      return { error };
     }
-  };
-
-  const workerCount = Math.min(fileStatConcurrency, supportedEntries.length);
-  await Promise.all(Array.from({ length: workerCount }, () => worker()));
+  }));
   return new Map(supportedEntries.map((entry, index) => [entry.name, results[index]]));
+}
+
+function isDirectoryFingerprintFile(fileName) {
+  const extension = path.extname(fileName).toLowerCase();
+  if (videoExtensions.has(extension) || subtitleExtensions.has(extension) || extension === ".nfo") return true;
+  if (!photoExtensions.has(extension)) return false;
+  const baseName = path.basename(fileName, extension).toLowerCase();
+  return /-(?:poster|fanart|thumb)$/u.test(baseName);
+}
+
+function createDirectoryFingerprint(fileStatsByName) {
+  return hashValue(Array.from(fileStatsByName.entries())
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([name, result]) => {
+      if (result?.error) return `${name}|error`;
+      return `${name}|${result?.value?.size ?? 0}|${Math.round(result?.value?.mtimeMs ?? 0)}`;
+    })
+    .join("\n"));
 }
 
 function normalizeAbsolutePath(value) {
@@ -247,7 +275,7 @@ function createLegacyVideoId(relativePath, size, lastModified) {
 export async function scanMediaRoot(root, options = {}) {
   const rootPath = serverPathForRoot(root);
   if (!rootPath || !path.isAbsolute(rootPath)) {
-    return {
+    const result = {
       root,
       status: createRootStatus(root, "needsAccess", {
         error: "需要配置本机绝对路径或重新授权浏览器目录。",
@@ -256,6 +284,8 @@ export async function scanMediaRoot(root, options = {}) {
       subtitles: [],
       filteredSmallVideos: 0,
     };
+    await options.onRootComplete?.(result, []);
+    return result;
   }
 
   const resolvedRoot = path.resolve(rootPath);
@@ -263,18 +293,44 @@ export async function scanMediaRoot(root, options = {}) {
   const subtitles = [];
   let scannedFiles = 0;
   let filteredSmallVideos = 0;
+  let reusedDirectories = 0;
+  let changedDirectories = 0;
+  const directoryRecords = [];
 
   async function walk(directory, segments) {
     const entries = await readdir(directory, { withFileTypes: true });
+    const relativeDirectory = segments.join("/");
     const fileEntryNames = [];
     for (const entry of entries) {
       if (entry.isFile()) fileEntryNames.push(entry.name);
     }
+    const fingerprintStatsByName = await statSupportedFiles(entries, directory, isDirectoryFingerprintFile);
+    const fingerprint = createDirectoryFingerprint(fingerprintStatsByName);
+    const cachedDirectory = options.getDirectoryRecord?.(root.id, relativeDirectory);
+    if (cachedDirectory?.fingerprint === fingerprint) {
+      const cachedVideos = Array.isArray(cachedDirectory.videos) ? cachedDirectory.videos : [];
+      const cachedSubtitles = Array.isArray(cachedDirectory.subtitles) ? cachedDirectory.subtitles : [];
+      videos.push(...cachedVideos);
+      subtitles.push(...cachedSubtitles);
+      scannedFiles += Number(cachedDirectory.scannedFiles) || cachedVideos.length + cachedSubtitles.length;
+      filteredSmallVideos += Number(cachedDirectory.filteredSmallVideos) || 0;
+      reusedDirectories += 1;
+      const record = { ...cachedDirectory, rootId: root.id, relativeDirectory, fingerprint };
+      directoryRecords.push(record);
+      options.onDirectoryScanned?.({ rootId: root.id, relativeDirectory, reused: true, record });
+      for (const entry of entries) {
+        if (entry.isDirectory()) await walk(path.join(directory, entry.name), [...segments, entry.name]);
+      }
+      return;
+    }
+
+    changedDirectories += 1;
+    const directoryVideoStart = videos.length;
+    const directorySubtitleStart = subtitles.length;
+    const directoryScannedFilesStart = scannedFiles;
+    const directoryFilteredStart = filteredSmallVideos;
     const findMatchingNfoName = createMatchingNfoNameLookup(fileEntryNames);
-    const fileStatsByName = await statSupportedFiles(entries, directory, (fileName) => {
-      const extension = path.extname(fileName).toLowerCase();
-      return videoExtensions.has(extension) || subtitleExtensions.has(extension);
-    });
+    const fileStatsByName = fingerprintStatsByName;
     for (const entry of entries) {
       const nextSegments = [...segments, entry.name];
       const entryPath = path.join(directory, entry.name);
@@ -326,10 +382,11 @@ export async function scanMediaRoot(root, options = {}) {
         if (nfoName) {
           try {
             const nfoPath = path.join(directory, nfoName);
-            const nfoStat = await stat(nfoPath);
+            const nfoStat = fingerprintStatsByName.get(nfoName)?.value
+              ?? await runWithFileOperationSlot(() => stat(nfoPath));
             video.actorHints = nfoStat.size > maxActorNfoBytes
               ? { fileName: nfoName, names: [], status: "tooLarge" }
-              : parseActorNfoBytes(await readFile(nfoPath), nfoName);
+              : parseActorNfoBytes(await runWithFileOperationSlot(() => readFile(nfoPath)), nfoName);
           } catch {
             video.actorHints = { fileName: nfoName, names: [], status: "invalid" };
           }
@@ -351,33 +408,52 @@ export async function scanMediaRoot(root, options = {}) {
         });
       }
     }
+    const record = {
+      rootId: root.id,
+      relativeDirectory,
+      fingerprint,
+      videos: videos.slice(directoryVideoStart),
+      subtitles: subtitles.slice(directorySubtitleStart),
+      scannedFiles: scannedFiles - directoryScannedFilesStart,
+      filteredSmallVideos: filteredSmallVideos - directoryFilteredStart,
+    };
+    directoryRecords.push(record);
+    options.onDirectoryScanned?.({ rootId: root.id, relativeDirectory, reused: false, record });
   }
 
   try {
     await walk(resolvedRoot, []);
     videos.sort(compareRelativePath);
     subtitles.sort(compareRelativePath);
-    return {
+    const result = {
       root,
       status: createRootStatus(root, "ready", {
         videoCount: videos.length,
         scannedFiles,
+        reusedDirectories,
+        changedDirectories,
       }),
       videos,
       subtitles,
       filteredSmallVideos,
     };
+    await options.onRootComplete?.(result, directoryRecords);
+    return result;
   } catch (error) {
-    return {
+    const result = {
       root,
       status: createRootStatus(root, "error", {
         scannedFiles,
+        reusedDirectories,
+        changedDirectories,
         error: error instanceof Error ? error.message : "扫描媒体根失败。",
       }),
       videos,
       subtitles,
       filteredSmallVideos,
     };
+    await options.onRootComplete?.(result, directoryRecords);
+    return result;
   }
 }
 

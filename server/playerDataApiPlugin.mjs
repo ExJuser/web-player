@@ -1,4 +1,5 @@
 import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import path from "node:path";
 import {
   classifyMediaProbe,
@@ -768,6 +769,7 @@ export function playerDataApiPlugin({ projectRoot, env }) {
   let toolsPromise = null;
   let ladaAvailablePromise = null;
   let mediaRootsScanPromise = null;
+  let mediaScanTaskSnapshot = null;
   let photoAlbumsScanPromise = null;
   let localDataStoreReadyPromise = null;
   const getLocalDataStore = async () => {
@@ -787,7 +789,88 @@ export function playerDataApiPlugin({ projectRoot, env }) {
   const mediaProcessingTaskApi = createMediaProcessingTaskApi(createMediaProcessingTaskManager());
   const scanMediaRootsOnce = async () => {
     if (!mediaRootsScanPromise) {
-      mediaRootsScanPromise = (async () => scanConfiguredMediaRoots(await loadAppConfig()))().finally(() => {
+      mediaRootsScanPromise = (async () => {
+        const store = await getLocalDataStore();
+        const config = await loadAppConfig();
+        const roots = normalizeMediaRootsFromConfig(config);
+        const directoryCaches = new Map(
+          roots.map((root) => [root.id, store.loadMediaScanDirectoryCache(root.id)]),
+        );
+        const runId = randomUUID();
+        const rootProgress = Object.fromEntries(roots.map((root) => [root.id, {
+          id: root.id,
+          label: root.label,
+          status: "pending",
+          visitedDirectories: 0,
+          reusedDirectories: 0,
+          changedDirectories: 0,
+        }]));
+        mediaScanTaskSnapshot = {
+          runId,
+          status: "running",
+          rootsTotal: roots.length,
+          rootsCompleted: 0,
+          visitedFiles: 0,
+          reusedFiles: 0,
+          changedFiles: 0,
+          startedAt: Date.now(),
+          roots: Object.values(rootProgress),
+        };
+        store.startMediaScanRun(mediaScanTaskSnapshot);
+        try {
+          const result = await scanConfiguredMediaRoots(config, {
+            getDirectoryRecord(rootId, relativeDirectory) {
+              return directoryCaches.get(rootId)?.get(relativeDirectory);
+            },
+            onDirectoryScanned({ rootId, reused, record }) {
+              const progress = rootProgress[rootId];
+              if (!progress) return;
+              const fileCount = Number(record?.scannedFiles) || 0;
+              progress.status = "running";
+              progress.visitedDirectories += 1;
+              progress[reused ? "reusedDirectories" : "changedDirectories"] += 1;
+              mediaScanTaskSnapshot.visitedFiles += fileCount;
+              mediaScanTaskSnapshot[reused ? "reusedFiles" : "changedFiles"] += fileCount;
+              mediaScanTaskSnapshot.roots = Object.values(rootProgress);
+            },
+            onRootComplete(rootResult, directories) {
+              const progress = rootProgress[rootResult.root.id];
+              if (progress) {
+                progress.status = rootResult.status.status;
+                progress.error = rootResult.status.error;
+              }
+              mediaScanTaskSnapshot.rootsCompleted += 1;
+              mediaScanTaskSnapshot.roots = Object.values(rootProgress);
+              if (rootResult.status.status === "ready") {
+                store.commitMediaScanRoot({
+                  runId,
+                  rootId: rootResult.root.id,
+                  directories,
+                });
+              }
+              store.updateMediaScanRun(mediaScanTaskSnapshot);
+            },
+          });
+          const failedRoots = result.roots.filter((item) => item.status.status === "error");
+          mediaScanTaskSnapshot = {
+            ...mediaScanTaskSnapshot,
+            status: failedRoots.length ? "error" : "completed",
+            completedAt: Date.now(),
+            ...(failedRoots.length ? { error: `${failedRoots.length} 个媒体库扫描失败。` } : {}),
+          };
+          store.updateMediaScanRun(mediaScanTaskSnapshot);
+          return result;
+        } catch (error) {
+          mediaScanTaskSnapshot = {
+            ...mediaScanTaskSnapshot,
+            status: "error",
+            completedAt: Date.now(),
+            error: error instanceof Error ? error.message : "媒体库扫描失败。",
+          };
+          store.updateMediaScanRun(mediaScanTaskSnapshot);
+          throw error;
+        }
+      })().finally(() => {
         mediaRootsScanPromise = null;
       });
     }
@@ -946,6 +1029,18 @@ export function playerDataApiPlugin({ projectRoot, env }) {
 
       if (url.pathname === "/api/media-roots/scan" && request.method === "GET") {
         sendJson(response, 200, await scanMediaRootsOnce());
+        return;
+      }
+
+      if (url.pathname === "/api/media-roots/scan-status" && request.method === "GET") {
+        sendJson(response, 200, mediaScanTaskSnapshot ?? store.loadMediaScanTaskSnapshot() ?? {
+          status: "idle",
+          rootsTotal: 0,
+          rootsCompleted: 0,
+          visitedFiles: 0,
+          reusedFiles: 0,
+          changedFiles: 0,
+        });
         return;
       }
 
