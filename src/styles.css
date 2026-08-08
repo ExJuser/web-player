@@ -131,6 +131,14 @@ button {
   display: none;
 }
 
+.app-shell.photo-immersive .player-column {
+  gap: 0;
+}
+
+.app-shell.photo-immersive .top-bar {
+  display: none;
+}
+
 .app-shell.cinema-mode .current-video-title {
   color: rgba(245, 247, 251, 0.72);
 }
