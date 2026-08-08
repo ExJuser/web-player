@@ -617,6 +617,7 @@ export default function App() {
     initialAppRoute.kind === "photoViewer" ? initialAppRoute.returnTo : "photos",
   );
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
+  const [isPhotoImmersive, setIsPhotoImmersive] = useState(false);
   const [photoObjectUrls, setPhotoObjectUrls] = useState<Record<string, string>>({});
   const [photoAlbumProgress, setPhotoAlbumProgress] = useState<Record<string, PhotoAlbumProgress>>({});
   const [photoAlbumCoverPreferences, setPhotoAlbumCoverPreferences] = useState<Record<string, string>>({});
@@ -693,6 +694,7 @@ export default function App() {
       photoViewerReturnRef.current = "photos";
       setSelectedPhotoAlbumId(null);
     }
+    if (appRoute.kind !== "photoViewer") setIsPhotoImmersive(false);
   }, [appRoute]);
 
   const [actorCoverVersions, setActorCoverVersions] = useState<Record<string, number>>({});
@@ -5653,6 +5655,10 @@ export default function App() {
       if (activeView === "photoViewer" && selectedPhotoAlbum && !isFormControl(event.target)) {
         if (event.key === "Escape") {
           event.preventDefault();
+          if (isPhotoImmersive) {
+            setIsPhotoImmersive(false);
+            return;
+          }
           showPhotoAlbumList();
           return;
         }
@@ -5849,6 +5855,7 @@ export default function App() {
     isCinemaMode,
     isClearCacheConfirmOpen,
     isPrivacyMode,
+    isPhotoImmersive,
     isShortcutDialogOpen,
     movePhoto,
     playNext,
@@ -6421,11 +6428,13 @@ export default function App() {
               currentPhotoUrl={currentPhotoUrl}
               isCoverCurrent={Boolean(currentPhoto && photoAlbumCoverPreferences[selectedPhotoAlbum.id] === currentPhoto.id)}
               isFavorite={favoritePhotoAlbumIds.has(selectedPhotoAlbum.id)}
+              isImmersive={isPhotoImmersive}
               thumbnails={visiblePhotoThumbnails}
               getImageUrl={getPhotoImageUrl}
               onBack={returnFromPhotoViewer}
               onDeleteCurrentPhoto={requestDeleteCurrentPhoto}
               onEditTags={openPhotoAlbumTagEditor}
+              onImmersiveChange={setIsPhotoImmersive}
               onMarkCompleted={markSelectedPhotoAlbumCompleted}
               onMove={movePhoto}
               onResetProgress={resetSelectedPhotoAlbumProgress}

@@ -1,3 +1,5 @@
+import { Minimize2 } from "lucide-react";
+
 import { PhotoViewerFilmstrip } from "./PhotoViewerFilmstrip";
 import { PhotoViewerHeader } from "./PhotoViewerHeader";
 import { PhotoViewerStage } from "./PhotoViewerStage";
@@ -10,11 +12,13 @@ type PhotoViewerSectionProps = {
   currentPhotoUrl: string;
   isCoverCurrent: boolean;
   isFavorite: boolean;
+  isImmersive: boolean;
   thumbnails: PhotoAlbumImage[];
   getImageUrl: (image: PhotoAlbumImage) => string;
   onBack: () => void;
   onDeleteCurrentPhoto: () => void;
   onEditTags: (album: PhotoAlbum) => void;
+  onImmersiveChange: (isImmersive: boolean) => void;
   onMarkCompleted: () => void;
   onMove: (delta: number) => void;
   onResetProgress: () => void;
@@ -30,11 +34,13 @@ export function PhotoViewerSection({
   currentPhotoUrl,
   isCoverCurrent,
   isFavorite,
+  isImmersive,
   thumbnails,
   getImageUrl,
   onBack,
   onDeleteCurrentPhoto,
   onEditTags,
+  onImmersiveChange,
   onMarkCompleted,
   onMove,
   onResetProgress,
@@ -43,20 +49,23 @@ export function PhotoViewerSection({
   onToggleFavorite,
 }: PhotoViewerSectionProps) {
   return (
-    <section className="photo-viewer" aria-label={`阅读 ${album.title}`}>
-      <PhotoViewerHeader
-        album={album}
-        currentPhoto={currentPhoto}
-        isCoverCurrent={isCoverCurrent}
-        isFavorite={isFavorite}
-        onBack={onBack}
-        onDeleteCurrentPhoto={onDeleteCurrentPhoto}
-        onEditTags={onEditTags}
-        onMarkCompleted={onMarkCompleted}
-        onResetProgress={onResetProgress}
-        onSetCover={onSetCover}
-        onToggleFavorite={onToggleFavorite}
-      />
+    <section className={`photo-viewer ${isImmersive ? "immersive" : ""}`} aria-label={`阅读 ${album.title}`}>
+      {!isImmersive ? (
+        <PhotoViewerHeader
+          album={album}
+          currentPhoto={currentPhoto}
+          isCoverCurrent={isCoverCurrent}
+          isFavorite={isFavorite}
+          onBack={onBack}
+          onDeleteCurrentPhoto={onDeleteCurrentPhoto}
+          onEditTags={onEditTags}
+          onEnterImmersive={() => onImmersiveChange(true)}
+          onMarkCompleted={onMarkCompleted}
+          onResetProgress={onResetProgress}
+          onSetCover={onSetCover}
+          onToggleFavorite={onToggleFavorite}
+        />
+      ) : null}
       <PhotoViewerStage
         currentIndex={currentIndex}
         currentPhoto={currentPhoto}
@@ -64,14 +73,26 @@ export function PhotoViewerSection({
         imageCount={album.images.length}
         onMove={onMove}
       />
-      <PhotoViewerFilmstrip
-        currentIndex={currentIndex}
-        currentPhotoName={currentPhoto?.name ?? album.title}
-        getImageUrl={getImageUrl}
-        imageCount={album.imageCount}
-        thumbnails={thumbnails}
-        onSelectImage={onSelectImage}
-      />
+      {isImmersive ? (
+        <button
+          className="photo-immersive-exit"
+          type="button"
+          onClick={() => onImmersiveChange(false)}
+          title="退出沉浸阅读（Esc）"
+          aria-label="退出沉浸阅读"
+        >
+          <Minimize2 size={18} />
+        </button>
+      ) : (
+        <PhotoViewerFilmstrip
+          currentIndex={currentIndex}
+          currentPhotoName={currentPhoto?.name ?? album.title}
+          getImageUrl={getImageUrl}
+          imageCount={album.imageCount}
+          thumbnails={thumbnails}
+          onSelectImage={onSelectImage}
+        />
+      )}
     </section>
   );
 }

@@ -1,4 +1,4 @@
-import { ArrowLeft, CheckCircle2, Images, RotateCcw, Star, Tags, Trash2 } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Images, Maximize2, RotateCcw, Star, Tags, Trash2 } from "lucide-react";
 
 import type { PhotoAlbum, PhotoAlbumImage } from "./playerTypes";
 
@@ -10,6 +10,7 @@ type PhotoViewerHeaderProps = {
   onBack: () => void;
   onDeleteCurrentPhoto: () => void;
   onEditTags: (album: PhotoAlbum) => void;
+  onEnterImmersive: () => void;
   onMarkCompleted: () => void;
   onResetProgress: () => void;
   onSetCover: (album: PhotoAlbum, image: PhotoAlbumImage) => void;
@@ -24,6 +25,7 @@ export function PhotoViewerHeader({
   onBack,
   onDeleteCurrentPhoto,
   onEditTags,
+  onEnterImmersive,
   onMarkCompleted,
   onResetProgress,
   onSetCover,
@@ -36,6 +38,10 @@ export function PhotoViewerHeader({
         返回
       </button>
       <div className="photo-viewer-actions">
+        <button className="secondary-button" type="button" onClick={onEnterImmersive}>
+          <Maximize2 size={16} />
+          沉浸阅读
+        </button>
         <button
           className={`secondary-button ${isFavorite ? "active" : ""}`}
           type="button"
