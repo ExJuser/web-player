@@ -104,7 +104,7 @@ export function PhotoContinuousReader({
       if (!container) return;
       event.preventDefault();
       container.scrollBy({
-        top: container.clientHeight * (event.key === "ArrowDown" ? 0.35 : -0.35),
+        top: container.clientHeight * (event.key === "ArrowDown" ? 0.05 : -0.05),
         behavior: event.repeat ? "auto" : "smooth",
       });
     };
