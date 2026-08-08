@@ -13,6 +13,9 @@ type PhotoContinuousReaderProps = {
 const minContinuousZoom = 0.5;
 const maxContinuousZoom = 2;
 const continuousZoomStep = 0.1;
+const continuousKeyboardStep = 0.05;
+const continuousKeyboardHoldDelayMs = 180;
+const continuousKeyboardScrollSpeed = 0.75;
 
 export function PhotoContinuousReader({
   album,
@@ -97,19 +100,64 @@ export function PhotoContinuousReader({
   }, [album]);
 
   useEffect(() => {
+    let heldKey: "ArrowUp" | "ArrowDown" | null = null;
+    let holdTimer: number | null = null;
+    let animationFrame: number | null = null;
+    let lastFrameTime = 0;
+
+    const stopKeyboardScroll = () => {
+      heldKey = null;
+      if (holdTimer !== null) window.clearTimeout(holdTimer);
+      if (animationFrame !== null) cancelAnimationFrame(animationFrame);
+      holdTimer = null;
+      animationFrame = null;
+      lastFrameTime = 0;
+    };
+
+    const animateKeyboardScroll = (timestamp: number) => {
+      const container = containerRef.current;
+      if (!heldKey || !container) return;
+      const elapsedSeconds = lastFrameTime ? Math.min((timestamp - lastFrameTime) / 1000, 0.05) : 0;
+      lastFrameTime = timestamp;
+      container.scrollTop += container.clientHeight
+        * continuousKeyboardScrollSpeed
+        * elapsedSeconds
+        * (heldKey === "ArrowDown" ? 1 : -1);
+      animationFrame = requestAnimationFrame(animateKeyboardScroll);
+    };
+
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented || (event.key !== "ArrowUp" && event.key !== "ArrowDown")) return;
       if (event.target instanceof Element && event.target.closest("input, textarea, select, [contenteditable='true']")) return;
       const container = containerRef.current;
       if (!container) return;
       event.preventDefault();
+      if (event.repeat || heldKey === event.key) return;
+      stopKeyboardScroll();
+      heldKey = event.key;
       container.scrollBy({
-        top: container.clientHeight * (event.key === "ArrowDown" ? 0.05 : -0.05),
-        behavior: event.repeat ? "auto" : "smooth",
+        top: container.clientHeight * continuousKeyboardStep * (event.key === "ArrowDown" ? 1 : -1),
+        behavior: "smooth",
       });
+      holdTimer = window.setTimeout(() => {
+        lastFrameTime = performance.now();
+        animationFrame = requestAnimationFrame(animateKeyboardScroll);
+      }, continuousKeyboardHoldDelayMs);
     };
+
+    const handleKeyUp = (event: KeyboardEvent) => {
+      if (event.key === heldKey) stopKeyboardScroll();
+    };
+
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+    window.addEventListener("blur", stopKeyboardScroll);
+    return () => {
+      stopKeyboardScroll();
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+      window.removeEventListener("blur", stopKeyboardScroll);
+    };
   }, []);
 
   return (
