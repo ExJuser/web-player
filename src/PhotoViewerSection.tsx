@@ -74,6 +74,7 @@ export function PhotoViewerSection({
           album={album}
           currentIndex={currentIndex}
           getImageUrl={getImageUrl}
+          key={album.id}
           onCurrentImageChange={onSelectImage}
         />
       ) : (

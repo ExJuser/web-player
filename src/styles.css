@@ -2469,9 +2469,16 @@ button {
   transition: none;
 }
 
-.photo-continuous-reader {
+.photo-continuous-shell {
+  position: relative;
   min-height: 0;
-  overflow: hidden auto;
+  overflow: hidden;
+}
+
+.photo-continuous-reader {
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
   overscroll-behavior: contain;
   border: 1px solid #242a31;
   border-radius: 8px;
@@ -2482,6 +2489,7 @@ button {
 
 .photo-continuous-reader::-webkit-scrollbar {
   width: 8px;
+  height: 8px;
 }
 
 .photo-continuous-reader::-webkit-scrollbar-track {
@@ -2494,8 +2502,49 @@ button {
 }
 
 .photo-continuous-pages {
-  width: min(100%, 1200px);
   margin: 0 auto;
+}
+
+.photo-continuous-zoom-controls {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 4;
+  display: flex;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  background: rgba(12, 15, 20, 0.78);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.22);
+}
+
+.photo-continuous-zoom-controls button {
+  display: grid;
+  min-width: 36px;
+  height: 34px;
+  place-items: center;
+  border: 0;
+  border-right: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 0;
+  padding: 0 8px;
+  background: transparent;
+  color: #f5f7fb;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.photo-continuous-zoom-controls button:last-child {
+  border-right: 0;
+}
+
+.photo-continuous-zoom-controls button:hover:not(:disabled),
+.photo-continuous-zoom-controls button:focus-visible {
+  background: rgba(0, 161, 214, 0.42);
+}
+
+.photo-continuous-zoom-controls button:disabled {
+  cursor: default;
+  opacity: 0.42;
 }
 
 .photo-continuous-page {
@@ -8691,6 +8740,19 @@ button {
 .app-shell.theme-light .photo-continuous-reader::-webkit-scrollbar-thumb,
 :root[data-theme="light"] .photo-continuous-reader::-webkit-scrollbar-thumb {
   background: rgba(100, 116, 139, 0.52);
+}
+
+.app-shell.theme-light .photo-continuous-zoom-controls,
+:root[data-theme="light"] .photo-continuous-zoom-controls {
+  border-color: rgba(15, 23, 42, 0.14);
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.16);
+}
+
+.app-shell.theme-light .photo-continuous-zoom-controls button,
+:root[data-theme="light"] .photo-continuous-zoom-controls button {
+  border-color: rgba(15, 23, 42, 0.1);
+  color: #172033;
 }
 
 .app-shell.theme-light .photo-nav-button {
