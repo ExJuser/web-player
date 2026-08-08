@@ -1,5 +1,6 @@
 import { Minimize2 } from "lucide-react";
 
+import { PhotoContinuousReader } from "./PhotoContinuousReader";
 import { PhotoViewerFilmstrip } from "./PhotoViewerFilmstrip";
 import { PhotoViewerHeader } from "./PhotoViewerHeader";
 import { PhotoViewerStage } from "./PhotoViewerStage";
@@ -12,6 +13,7 @@ type PhotoViewerSectionProps = {
   currentPhotoUrl: string;
   isCoverCurrent: boolean;
   isFavorite: boolean;
+  isContinuousReading: boolean;
   isImmersive: boolean;
   thumbnails: PhotoAlbumImage[];
   getImageUrl: (image: PhotoAlbumImage) => string;
@@ -34,6 +36,7 @@ export function PhotoViewerSection({
   currentPhotoUrl,
   isCoverCurrent,
   isFavorite,
+  isContinuousReading,
   isImmersive,
   thumbnails,
   getImageUrl,
@@ -66,13 +69,22 @@ export function PhotoViewerSection({
           onToggleFavorite={onToggleFavorite}
         />
       ) : null}
-      <PhotoViewerStage
-        currentIndex={currentIndex}
-        currentPhoto={currentPhoto}
-        currentPhotoUrl={currentPhotoUrl}
-        imageCount={album.images.length}
-        onMove={onMove}
-      />
+      {isContinuousReading ? (
+        <PhotoContinuousReader
+          album={album}
+          currentIndex={currentIndex}
+          getImageUrl={getImageUrl}
+          onCurrentImageChange={onSelectImage}
+        />
+      ) : (
+        <PhotoViewerStage
+          currentIndex={currentIndex}
+          currentPhoto={currentPhoto}
+          currentPhotoUrl={currentPhotoUrl}
+          imageCount={album.images.length}
+          onMove={onMove}
+        />
+      )}
       {isImmersive ? (
         <button
           className="photo-immersive-exit"
@@ -83,7 +95,7 @@ export function PhotoViewerSection({
         >
           <Minimize2 size={18} />
         </button>
-      ) : (
+      ) : !isContinuousReading ? (
         <PhotoViewerFilmstrip
           currentIndex={currentIndex}
           currentPhotoName={currentPhoto?.name ?? album.title}
@@ -92,7 +104,7 @@ export function PhotoViewerSection({
           thumbnails={thumbnails}
           onSelectImage={onSelectImage}
         />
-      )}
+      ) : null}
     </section>
   );
 }

@@ -15,6 +15,12 @@ export const defaultPhotoAlbumPreferences: PhotoAlbumPreferences = {
   favoritesOnly: false,
 };
 
+const continuousPhotoReaderTagKeys = new Set(["本子", "漫画"].map(normalizeTagKey));
+
+export function shouldUseContinuousPhotoReader(tags: string[]) {
+  return tags.some((tag) => continuousPhotoReaderTagKeys.has(normalizeTagKey(tag)));
+}
+
 export function formatPhotoAlbumProgress(album: PhotoAlbum, progressStore: Record<string, PhotoAlbumProgress>) {
   const progress = progressStore[album.id];
   if (progress?.completed) return "已读完";

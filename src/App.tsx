@@ -149,6 +149,7 @@ import {
   photoAlbumSortOptions,
   replaceCachedPhotoAlbumScanAlbum,
   saveCachedPhotoAlbumScan,
+  shouldUseContinuousPhotoReader,
 } from "./photoAlbumStorage";
 import {
   PROGRESS_FILE_NAME,
@@ -2139,6 +2140,9 @@ export default function App() {
   const selectedPhotoAlbum = useMemo(
     () => photoAlbums.find((album) => album.id === selectedPhotoAlbumId) ?? null,
     [photoAlbums, selectedPhotoAlbumId],
+  );
+  const isPhotoContinuousReading = Boolean(
+    selectedPhotoAlbum && shouldUseContinuousPhotoReader(photoAlbumTags[selectedPhotoAlbum.id] ?? []),
   );
   const {
     addTags: addTagsToPhotoAlbum,
@@ -5662,12 +5666,12 @@ export default function App() {
           showPhotoAlbumList();
           return;
         }
-        if (event.key === "ArrowLeft") {
+        if (!isPhotoContinuousReading && event.key === "ArrowLeft") {
           event.preventDefault();
           movePhoto(-1);
           return;
         }
-        if (event.key === "ArrowRight") {
+        if (!isPhotoContinuousReading && event.key === "ArrowRight") {
           event.preventDefault();
           movePhoto(1);
           return;
@@ -5855,6 +5859,7 @@ export default function App() {
     isCinemaMode,
     isClearCacheConfirmOpen,
     isPrivacyMode,
+    isPhotoContinuousReading,
     isPhotoImmersive,
     isShortcutDialogOpen,
     movePhoto,
@@ -6427,6 +6432,7 @@ export default function App() {
               currentPhoto={currentPhoto}
               currentPhotoUrl={currentPhotoUrl}
               isCoverCurrent={Boolean(currentPhoto && photoAlbumCoverPreferences[selectedPhotoAlbum.id] === currentPhoto.id)}
+              isContinuousReading={isPhotoContinuousReading}
               isFavorite={favoritePhotoAlbumIds.has(selectedPhotoAlbum.id)}
               isImmersive={isPhotoImmersive}
               thumbnails={visiblePhotoThumbnails}

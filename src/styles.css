@@ -2469,6 +2469,60 @@ button {
   transition: none;
 }
 
+.photo-continuous-reader {
+  min-height: 0;
+  overflow: hidden auto;
+  overscroll-behavior: contain;
+  border: 1px solid #242a31;
+  border-radius: 8px;
+  background: #090b10;
+  scrollbar-color: rgba(142, 151, 165, 0.58) rgba(20, 22, 26, 0.35);
+  scrollbar-width: thin;
+}
+
+.photo-continuous-reader::-webkit-scrollbar {
+  width: 8px;
+}
+
+.photo-continuous-reader::-webkit-scrollbar-track {
+  background: rgba(20, 22, 26, 0.35);
+}
+
+.photo-continuous-reader::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(142, 151, 165, 0.58);
+}
+
+.photo-continuous-pages {
+  width: min(100%, 1200px);
+  margin: 0 auto;
+}
+
+.photo-continuous-page {
+  position: relative;
+  display: grid;
+  width: 100%;
+  place-items: center;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 900px;
+}
+
+.photo-continuous-page.loading {
+  min-height: min(80vh, 900px);
+  color: #8e97a5;
+}
+
+.photo-continuous-page.loading img {
+  position: absolute;
+  opacity: 0;
+}
+
+.photo-continuous-page img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
 .photo-zoom-indicator {
   position: absolute;
   top: 12px;
@@ -8620,6 +8674,23 @@ button {
 .app-shell.theme-light .photo-stage {
   border-color: #d7e0ea;
   background: #f8fafc;
+}
+
+.app-shell.theme-light .photo-continuous-reader,
+:root[data-theme="light"] .photo-continuous-reader {
+  border-color: #d7e0ea;
+  background: #f8fafc;
+  scrollbar-color: rgba(100, 116, 139, 0.52) rgba(226, 232, 240, 0.72);
+}
+
+.app-shell.theme-light .photo-continuous-reader::-webkit-scrollbar-track,
+:root[data-theme="light"] .photo-continuous-reader::-webkit-scrollbar-track {
+  background: rgba(226, 232, 240, 0.72);
+}
+
+.app-shell.theme-light .photo-continuous-reader::-webkit-scrollbar-thumb,
+:root[data-theme="light"] .photo-continuous-reader::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.52);
 }
 
 .app-shell.theme-light .photo-nav-button {
