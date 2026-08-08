@@ -105,7 +105,6 @@ export function PhotoViewerStage({
       onPointerMove={handlePointerMove}
       onPointerUp={stopDragging}
       onWheel={handleWheel}
-      title="滚动鼠标滚轮缩放图片，放大后按住鼠标拖动"
     >
       <button
         className="photo-nav-button previous"
