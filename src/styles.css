@@ -2456,6 +2456,19 @@ button {
   will-change: transform;
 }
 
+.photo-stage.can-pan {
+  cursor: grab;
+  touch-action: none;
+}
+
+.photo-stage.dragging {
+  cursor: grabbing;
+}
+
+.photo-stage.dragging > img {
+  transition: none;
+}
+
 .photo-zoom-indicator {
   position: absolute;
   top: 12px;
