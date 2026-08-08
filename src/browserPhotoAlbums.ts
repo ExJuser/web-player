@@ -62,6 +62,7 @@ export function collectPhotoAlbumsFromBrowserFiles(
       imageCount: indexedImages.length,
       totalSize,
       updatedAt,
+      folderModifiedAt: updatedAt,
       images: indexedImages,
     };
   });

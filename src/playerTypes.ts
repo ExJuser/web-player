@@ -468,6 +468,7 @@ export type PhotoAlbum = {
   imageCount: number;
   totalSize: number;
   updatedAt: number;
+  folderModifiedAt?: number;
   images: PhotoAlbumImage[];
 };
 
@@ -477,7 +478,7 @@ export type PhotoAlbumProgress = {
   completed: boolean;
 };
 
-export type PhotoAlbumSortMode = "updated" | "name" | "count";
+export type PhotoAlbumSortMode = "updated" | "folderModified" | "name" | "count";
 
 export type PhotoAlbumPreferences = {
   sortMode: PhotoAlbumSortMode;

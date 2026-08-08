@@ -592,12 +592,14 @@ test("sqlite photo album scan cache loads summaries and album images separately"
         imageCount: images.length,
         totalSize: images.reduce((sum, image) => sum + image.size, 0),
         updatedAt: 202,
+        folderModifiedAt: 150,
         images,
       }],
     });
 
     const summary = context.store.loadLatestPhotoAlbumScanCache({ includeImages: false });
     assert.equal(summary.albums[0].imageCount, 3);
+    assert.equal(summary.albums[0].folderModifiedAt, 150);
     assert.deepEqual(summary.albums[0].images, [images[0]]);
     assert.deepEqual(context.store.loadPhotoAlbumScanCacheImages("album"), images);
     assert.equal(context.store.loadPhotoAlbumScanCacheImages("missing"), null);
@@ -657,7 +659,7 @@ test("sqlite initialization migrates the legacy photo album scan json", async ()
   try {
     await context.store.initialize();
     assert.equal(context.store.hasTable("photo_album_scan_caches"), false);
-    assert.equal(context.store.getMeta("schema_version"), "4");
+    assert.equal(context.store.getMeta("schema_version"), "5");
     assert.deepEqual(context.store.loadPhotoAlbumScanCacheImages("legacy-album"), [legacyImage]);
   } finally {
     context.store.close();

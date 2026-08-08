@@ -16,6 +16,7 @@ function createAlbum(overrides = {}) {
     imageCount: overrides.imageCount ?? 5,
     totalSize: overrides.totalSize ?? 100,
     updatedAt: overrides.updatedAt ?? 1,
+    folderModifiedAt: overrides.folderModifiedAt ?? overrides.updatedAt ?? 1,
     images: overrides.images ?? [{ id: `${overrides.id ?? "photos|Set"}|001`, name: "001.jpg" }],
   };
 }
@@ -80,6 +81,7 @@ test("photo album display helpers keep sort labels and progress text", () => {
 
   assert.deepEqual(storage.photoAlbumSortOptions.map((option) => [option.value, option.label]), [
     ["updated", "最近更新"],
+    ["folderModified", "文件夹修改时间"],
     ["name", "名称"],
     ["count", "图片数"],
   ]);
@@ -91,8 +93,8 @@ test("photo album display helpers keep sort labels and progress text", () => {
 
 test("photo album display helpers filter sort paginate and summarize albums", () => {
   const first = createAlbum({ id: "photos|A", title: "Alpha", relativePath: "旅行/Alpha", imageCount: 2, updatedAt: 20, images: [{ id: "a1", name: "cover-a.jpg" }] });
-  const second = createAlbum({ id: "photos|B", title: "Beta", relativePath: "人像/Beta", imageCount: 5, updatedAt: 30, images: [{ id: "b1", name: "cover-b.jpg" }] });
-  const third = createAlbum({ id: "photos|C", title: "Gamma", relativePath: "风景/Gamma", imageCount: 1, updatedAt: 10, images: [{ id: "c1", name: "cover-c.jpg" }] });
+  const second = createAlbum({ id: "photos|B", title: "Beta", relativePath: "人像/Beta", imageCount: 5, updatedAt: 30, folderModifiedAt: 5, images: [{ id: "b1", name: "cover-b.jpg" }] });
+  const third = createAlbum({ id: "photos|C", title: "Gamma", relativePath: "风景/Gamma", imageCount: 1, updatedAt: 10, folderModifiedAt: 40, images: [{ id: "c1", name: "cover-c.jpg" }] });
   const albums = [first, second, third];
   const favorites = new Set([second.id]);
   const albumTags = {
@@ -112,6 +114,10 @@ test("photo album display helpers filter sort paginate and summarize albums", ()
   assert.deepEqual(
     storage.getVisiblePhotoAlbums({ albums, favoriteAlbumIds: new Set(), filter: "all", searchQuery: "", sortMode: "count", albumTags }).map((album) => album.id),
     [second.id, first.id, third.id],
+  );
+  assert.deepEqual(
+    storage.getVisiblePhotoAlbums({ albums, favoriteAlbumIds: new Set(), filter: "all", searchQuery: "", sortMode: "folderModified", albumTags }).map((album) => album.id),
+    [third.id, first.id, second.id],
   );
   assert.deepEqual(storage.getPagedPhotoAlbums(albums, 2, 2).map((album) => album.id), [third.id]);
   assert.deepEqual(storage.getPhotoAlbumPageBounds(3, 2, 2), { pageCount: 2, start: 3, end: 3 });

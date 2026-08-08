@@ -3,7 +3,7 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { readJsonFile } from "./jsonFiles.mjs";
 
-const schemaVersion = 4;
+const schemaVersion = 5;
 const playerStoreVersion = 6;
 const photoAlbumStoreVersion = 1;
 
@@ -365,6 +365,7 @@ export class LocalDataSqliteStore {
         image_count INTEGER NOT NULL,
         total_size INTEGER NOT NULL,
         updated_at INTEGER NOT NULL,
+        folder_modified_at INTEGER,
         first_image_json TEXT,
         PRIMARY KEY (root_id, album_id),
         FOREIGN KEY (root_id) REFERENCES photo_album_scan_roots(root_id) ON DELETE CASCADE
@@ -460,6 +461,7 @@ export class LocalDataSqliteStore {
     `);
     this.migrateLegacyPhotoAlbumScanCache();
     this.ensureColumn("video_highlights", "tag_label", "TEXT");
+    this.ensureColumn("photo_album_scan_albums", "folder_modified_at", "INTEGER");
     this.setMeta("schema_version", String(schemaVersion));
   }
 
@@ -1511,8 +1513,8 @@ export class LocalDataSqliteStore {
     const albumInsert = this.db.prepare(`
       INSERT INTO photo_album_scan_albums (
         root_id, album_id, position, title, relative_path, media_root_id, media_root_label,
-        cover_image_url, image_count, total_size, updated_at, first_image_json
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        cover_image_url, image_count, total_size, updated_at, folder_modified_at, first_image_json
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     const imageInsert = this.db.prepare(`
       INSERT INTO photo_album_scan_images (
@@ -1535,6 +1537,7 @@ export class LocalDataSqliteStore {
         Number(album.imageCount) || images.length,
         Number(album.totalSize) || 0,
         Number(album.updatedAt) || 0,
+        Number(album.folderModifiedAt) || null,
         images[0] ? stringifyJson(images[0]) : null,
       );
       images.forEach((image, imagePosition) => {
@@ -1599,6 +1602,7 @@ export class LocalDataSqliteStore {
       imageCount: album.image_count,
       totalSize: album.total_size,
       updatedAt: album.updated_at,
+      folderModifiedAt: album.folder_modified_at ?? album.updated_at,
       images: includeImages
         ? imagesByAlbumId.get(album.album_id) ?? []
         : [parseJson(album.first_image_json, null)].filter(Boolean),

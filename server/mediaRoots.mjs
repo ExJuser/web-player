@@ -512,6 +512,7 @@ async function scanPhotoAlbumsRoot(root) {
   let scannedFiles = 0;
 
   async function walk(directory, segments) {
+    const directoryStat = await stat(directory);
     const entries = await readdir(directory, { withFileTypes: true });
     const images = [];
     let totalSize = 0;
@@ -564,6 +565,7 @@ async function scanPhotoAlbumsRoot(root) {
       imageCount: images.length,
       totalSize,
       updatedAt,
+      folderModifiedAt: Math.round(directoryStat.mtimeMs),
       images: images.map((image, index) => ({ ...image, index })),
     });
   }

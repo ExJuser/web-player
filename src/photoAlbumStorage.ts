@@ -5,6 +5,7 @@ export const photoAlbumScanCacheVersion = 1;
 
 export const photoAlbumSortOptions: Array<{ value: PhotoAlbumSortMode; label: string }> = [
   { value: "updated", label: "最近更新" },
+  { value: "folderModified", label: "文件夹修改时间" },
   { value: "name", label: "名称" },
   { value: "count", label: "图片数" },
 ];
@@ -56,6 +57,9 @@ export function getVisiblePhotoAlbums(input: {
     }
     if (input.sortMode === "count") {
       return b.imageCount - a.imageCount || collator.compare(a.title, b.title);
+    }
+    if (input.sortMode === "folderModified") {
+      return (b.folderModifiedAt ?? b.updatedAt) - (a.folderModifiedAt ?? a.updatedAt) || collator.compare(a.title, b.title);
     }
     return b.updatedAt - a.updatedAt || collator.compare(a.title, b.title);
   });
@@ -161,7 +165,7 @@ export function parsePhotoAlbumPreferences(source: unknown): PhotoAlbumPreferenc
   const preferences = source as Partial<PhotoAlbumPreferences>;
   return {
     sortMode:
-      preferences.sortMode === "name" || preferences.sortMode === "count"
+      preferences.sortMode === "name" || preferences.sortMode === "count" || preferences.sortMode === "folderModified"
         ? preferences.sortMode
         : defaultPhotoAlbumPreferences.sortMode,
     favoritesOnly:
@@ -257,6 +261,7 @@ function parseCachedPhotoAlbum(source: unknown): PhotoAlbum | null {
     .map((image, index) => parseCachedPhotoAlbumImage(image, index))
     .filter((image): image is PhotoAlbumImage => Boolean(image));
   if (!images.length) return null;
+  const updatedAt = parseFiniteNumber(album.updatedAt, images.reduce((latest, image) => Math.max(latest, image.lastModified), 0));
 
   return {
     id: album.id,
@@ -267,7 +272,8 @@ function parseCachedPhotoAlbum(source: unknown): PhotoAlbum | null {
     coverImageUrl: typeof album.coverImageUrl === "string" ? album.coverImageUrl : "",
     imageCount: Math.max(parseFiniteNumber(album.imageCount, images.length), images.length),
     totalSize: parseFiniteNumber(album.totalSize, images.reduce((sum, image) => sum + image.size, 0)),
-    updatedAt: parseFiniteNumber(album.updatedAt, images.reduce((latest, image) => Math.max(latest, image.lastModified), 0)),
+    updatedAt,
+    folderModifiedAt: parseFiniteNumber(album.folderModifiedAt, updatedAt),
     images,
   };
 }
