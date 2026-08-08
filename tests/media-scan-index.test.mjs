@@ -55,6 +55,34 @@ test("media scan reuses unchanged directory records and invalidates changed file
   }
 });
 
+test("media scan directory cache does not duplicate nested entries", async () => {
+  const rootPath = await mkdtemp(path.join(os.tmpdir(), "web-player-media-scan-nested-"));
+  const root = { id: "root", label: "Root", path: rootPath, source: "local" };
+  try {
+    await mkdir(path.join(rootPath, "season"), { recursive: true });
+    await writeFile(path.join(rootPath, "season", "episode.srt"), "subtitle", "utf8");
+
+    let firstDirectories = [];
+    const first = await scanMediaRoot(root, {
+      onRootComplete(_result, directories) {
+        firstDirectories = directories;
+      },
+    });
+    assert.equal(first.subtitles.length, 1);
+
+    const cache = new Map(firstDirectories.map((directory) => [directory.relativeDirectory, directory]));
+    const second = await scanMediaRoot(root, {
+      getDirectoryRecord(_rootId, relativeDirectory) {
+        return cache.get(relativeDirectory);
+      },
+    });
+    assert.equal(second.status.reusedDirectories, 2);
+    assert.equal(second.subtitles.length, 1);
+  } finally {
+    await rm(rootPath, { recursive: true, force: true });
+  }
+});
+
 test("sqlite media scan index commits successful roots and keeps task snapshots", async () => {
   const rootPath = await mkdtemp(path.join(os.tmpdir(), "web-player-media-index-"));
   const store = createStore(rootPath);

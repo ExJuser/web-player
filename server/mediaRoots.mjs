@@ -14,6 +14,7 @@ const fileOperationConcurrency = Math.min(8, Math.max(2, availableParallelism())
 let activeFileOperations = 0;
 const pendingFileOperations = [];
 const ignoredVideoBasenames = new Set(["theme_video", "trailer"]);
+const mediaScanDirectoryCacheVersion = 2;
 const fixedPhotoAlbumsRoot = {
   id: "photo-albums-local",
   label: "写真集",
@@ -307,7 +308,10 @@ export async function scanMediaRoot(root, options = {}) {
     const fingerprintStatsByName = await statSupportedFiles(entries, directory, isDirectoryFingerprintFile);
     const fingerprint = createDirectoryFingerprint(fingerprintStatsByName);
     const cachedDirectory = options.getDirectoryRecord?.(root.id, relativeDirectory);
-    if (cachedDirectory?.fingerprint === fingerprint) {
+    if (
+      cachedDirectory?.cacheVersion === mediaScanDirectoryCacheVersion
+      && cachedDirectory.fingerprint === fingerprint
+    ) {
       const cachedVideos = Array.isArray(cachedDirectory.videos) ? cachedDirectory.videos : [];
       const cachedSubtitles = Array.isArray(cachedDirectory.subtitles) ? cachedDirectory.subtitles : [];
       videos.push(...cachedVideos);
@@ -325,8 +329,8 @@ export async function scanMediaRoot(root, options = {}) {
     }
 
     changedDirectories += 1;
-    const directoryVideoStart = videos.length;
-    const directorySubtitleStart = subtitles.length;
+    const directoryVideos = [];
+    const directorySubtitles = [];
     const directoryScannedFilesStart = scannedFiles;
     const directoryFilteredStart = filteredSmallVideos;
     const findMatchingNfoName = createMatchingNfoNameLookup(fileEntryNames);
@@ -395,8 +399,9 @@ export async function scanMediaRoot(root, options = {}) {
           video.playability = await options.createVideoPlayability(root, video, entryPath);
         }
         videos.push(video);
+        directoryVideos.push(video);
       } else if (subtitleExtensions.has(extension)) {
-        subtitles.push({
+        const subtitle = {
           id: createGlobalMediaId(root.id, relativePath, fileStat.size, lastModified),
           legacyId: createLegacyVideoId(relativePath, fileStat.size, lastModified),
           name: entry.name,
@@ -405,15 +410,18 @@ export async function scanMediaRoot(root, options = {}) {
           size: fileStat.size,
           lastModified,
           mediaRootId: root.id,
-        });
+        };
+        subtitles.push(subtitle);
+        directorySubtitles.push(subtitle);
       }
     }
     const record = {
+      cacheVersion: mediaScanDirectoryCacheVersion,
       rootId: root.id,
       relativeDirectory,
       fingerprint,
-      videos: videos.slice(directoryVideoStart),
-      subtitles: subtitles.slice(directorySubtitleStart),
+      videos: directoryVideos,
+      subtitles: directorySubtitles,
       scannedFiles: scannedFiles - directoryScannedFilesStart,
       filteredSmallVideos: filteredSmallVideos - directoryFilteredStart,
     };
