@@ -135,7 +135,8 @@ button {
   gap: 0;
 }
 
-.app-shell.photo-immersive .top-bar {
+.app-shell.photo-immersive .top-bar,
+.app-shell.home-view.photo-immersive .top-bar {
   display: none;
 }
 
