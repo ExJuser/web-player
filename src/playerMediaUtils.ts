@@ -812,16 +812,50 @@ export function calculateDuplicateDetectionPercent(
   return Math.min(100, Math.max(0, phasePercent));
 }
 
+type DuplicateMetadataScanOptions = {
+  context: DuplicateDetectionContext;
+  signal?: AbortSignal;
+  yieldEveryPairs: number;
+  onProgress: (processedPairs: number) => void;
+};
+
+async function scanDuplicateMetadataCandidates(
+  candidates: ReturnType<typeof createDuplicatePairCandidates>,
+  options: DuplicateMetadataScanOptions,
+) {
+  const pairScores = new Map<string, DuplicateVideoPair>();
+  const nameSimilarityCandidates: DuplicateNameSimilarityCandidate[] = [];
+  const fingerprintCandidatePairs: DuplicateFingerprintCandidate[] = [];
+  let processedPairs = 0;
+
+  for (const candidate of candidates) {
+    if (options.signal?.aborted) throw new DOMException("Duplicate detection aborted.", "AbortError");
+    const isSuppressedAnimePair = isAnimeDifferentEpisodePair(candidate.a, candidate.b, options.context);
+    const pair = scoreDuplicatePair(candidate.a, candidate.b, options.context);
+    processedPairs += 1;
+    mergeDuplicatePairScore(pairScores, candidate.a, candidate.b, pair);
+    if (!isSuppressedAnimePair && pair.score >= duplicateFingerprintCandidateThreshold) {
+      fingerprintCandidatePairs.push({ a: candidate.a, b: candidate.b, pair });
+    }
+    if (!isSuppressedAnimePair && pair.score >= duplicateAiNameCandidateThreshold) {
+      nameSimilarityCandidates.push({ a: candidate.a, b: candidate.b, pair, pairKey: candidate.key });
+    }
+    if (processedPairs % options.yieldEveryPairs === 0) {
+      options.onProgress(processedPairs);
+      await yieldToBrowser();
+    }
+  }
+
+  return { pairScores, nameSimilarityCandidates, fingerprintCandidatePairs, processedPairs };
+}
+
 export async function detectDuplicateVideosWithProgress(
   videos: VideoItem[],
   options: DuplicateDetectionOptions = {},
 ): Promise<DuplicateVideoGroup[]> {
-  const pairScores = new Map<string, DuplicateVideoPair>();
   const candidates = createDuplicatePairCandidates(videos);
   const totalPairs = candidates.length;
   const yieldEveryPairs = Math.max(1, options.yieldEveryPairs ?? 5000);
-  const nameSimilarityCandidates: DuplicateNameSimilarityCandidate[] = [];
-  const fingerprintCandidatePairs: DuplicateFingerprintCandidate[] = [];
   let processedPairs = 0;
   let processedFingerprints = 0;
   let totalFingerprints = 0;
@@ -846,23 +880,17 @@ export async function detectDuplicateVideosWithProgress(
   };
 
   reportProgress();
-  for (const candidate of candidates) {
-    if (options.signal?.aborted) throw new DOMException("Duplicate detection aborted.", "AbortError");
-    const isSuppressedAnimePair = isAnimeDifferentEpisodePair(candidate.a, candidate.b, options);
-    const pair = scoreDuplicatePair(candidate.a, candidate.b, options);
-    processedPairs += 1;
-    mergeDuplicatePairScore(pairScores, candidate.a, candidate.b, pair);
-    if (!isSuppressedAnimePair && pair.score >= duplicateFingerprintCandidateThreshold) {
-      fingerprintCandidatePairs.push({ a: candidate.a, b: candidate.b, pair });
-    }
-    if (!isSuppressedAnimePair && pair.score >= duplicateAiNameCandidateThreshold) {
-      nameSimilarityCandidates.push({ a: candidate.a, b: candidate.b, pair, pairKey: candidate.key });
-    }
-    if (processedPairs % yieldEveryPairs === 0) {
+  const metadataScan = await scanDuplicateMetadataCandidates(candidates, {
+    context: options,
+    signal: options.signal,
+    yieldEveryPairs,
+    onProgress: (nextProcessedPairs) => {
+      processedPairs = nextProcessedPairs;
       reportProgress();
-      await yieldToBrowser();
-    }
-  }
+    },
+  });
+  const { pairScores, nameSimilarityCandidates, fingerprintCandidatePairs } = metadataScan;
+  processedPairs = metadataScan.processedPairs;
   reportProgress(50);
 
   if (options.getContentFingerprint) {

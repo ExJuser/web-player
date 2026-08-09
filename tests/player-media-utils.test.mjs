@@ -494,6 +494,27 @@ test("detects duplicate videos incrementally with progress updates", async () =>
   assert.equal(updates.at(-1).percent, 100);
 });
 
+test("reports initial duplicate progress before an aborted metadata scan", async () => {
+  const controller = new AbortController();
+  const updates = [];
+  controller.abort();
+
+  await assert.rejects(
+    mediaUtils.detectDuplicateVideosWithProgress([
+      createVideo({ id: "first", relativePath: "A/first.mp4" }),
+      createVideo({ id: "second", relativePath: "B/second.mp4" }),
+    ], {
+      signal: controller.signal,
+      onProgress: (progress) => updates.push(progress),
+    }),
+    (error) => error?.name === "AbortError",
+  );
+
+  assert.equal(updates.length, 1);
+  assert.equal(updates[0].processedPairs, 0);
+  assert.equal(updates[0].phase, "metadata");
+});
+
 test("detects content-identical videos with different names from fingerprints", async () => {
   const first = createVideo({
     id: "root-a|Movies/Alpha.mkv|2048|1",
