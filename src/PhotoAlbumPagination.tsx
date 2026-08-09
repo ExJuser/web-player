@@ -31,11 +31,14 @@ export function PhotoAlbumPagination({
     setPageInput(String(nextPage));
     onPageChange(nextPage);
   };
-  const submitPage = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const commitPageInput = () => {
     const page = Number.parseInt(pageInput, 10);
     if (Number.isFinite(page)) changePage(page);
     else setPageInput(String(currentPage));
+  };
+  const submitPage = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    commitPageInput();
   };
 
   return (
@@ -64,7 +67,21 @@ export function PhotoAlbumPagination({
         >
           <ChevronLeft size={16} />
         </button>
-        <strong>{currentPage} / {pageCount}</strong>
+        <form className="photo-page-jump" onSubmit={submitPage}>
+          <input
+            type="number"
+            min={1}
+            max={pageCount}
+            step={1}
+            inputMode="numeric"
+            value={pageInput}
+            onChange={(event) => setPageInput(event.target.value)}
+            onBlur={commitPageInput}
+            aria-label={`输入页码跳转，范围 1 到 ${pageCount}`}
+            title="输入页码后按 Enter 跳转"
+          />
+          <span>/ {pageCount}</span>
+        </form>
         <button
           className="icon-button"
           type="button"
@@ -86,19 +103,6 @@ export function PhotoAlbumPagination({
           <ChevronsRight size={17} />
         </button>
       </div>
-      <form className="photo-page-jump" onSubmit={submitPage}>
-        <label htmlFor="photo-page-input">跳至</label>
-        <input
-          id="photo-page-input"
-          type="number"
-          min={1}
-          max={pageCount}
-          value={pageInput}
-          onChange={(event) => setPageInput(event.target.value)}
-          aria-label={`输入页码，范围 1 到 ${pageCount}`}
-        />
-        <button className="secondary-button" type="submit">跳转</button>
-      </form>
     </nav>
   );
 }

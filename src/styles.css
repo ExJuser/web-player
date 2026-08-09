@@ -2189,43 +2189,53 @@ button {
   height: 32px;
 }
 
-.photo-pagination strong {
-  min-width: 68px;
-  color: #f5f7fb;
-  font-size: 13px;
-  text-align: center;
-}
-
 .photo-page-jump {
   display: flex;
   align-items: center;
-  justify-self: end;
-  gap: 6px;
+  gap: 4px;
   white-space: nowrap;
 }
 
 .photo-page-jump input {
-  width: 58px;
+  width: 40px;
   height: 32px;
-  border: 1px solid #343b46;
+  border: 1px solid transparent;
   border-radius: 6px;
-  background: #171b21;
+  background: transparent;
   color: #f5f7fb;
+  font: inherit;
+  font-weight: 700;
   text-align: center;
 }
 
-.photo-page-jump .secondary-button {
-  width: auto;
-  min-width: auto;
-  height: 32px;
-  padding: 0 10px;
+.photo-page-jump input:hover,
+.photo-page-jump input:focus {
+  border-color: #343b46;
+  background: #171b21;
+  outline: none;
+}
+
+.photo-page-jump input::-webkit-inner-spin-button,
+.photo-page-jump input::-webkit-outer-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
+}
+
+.photo-page-jump input[type="number"] {
+  -moz-appearance: textfield;
 }
 
 .app-shell.theme-light .photo-page-jump input,
 :root[data-theme="light"] .photo-page-jump input {
+  color: #18212f;
+}
+
+.app-shell.theme-light .photo-page-jump input:hover,
+.app-shell.theme-light .photo-page-jump input:focus,
+:root[data-theme="light"] .photo-page-jump input:hover,
+:root[data-theme="light"] .photo-page-jump input:focus {
   border-color: #d7e0ea;
   background: #ffffff;
-  color: #18212f;
 }
 
 .photo-album-card {
@@ -11631,8 +11641,7 @@ button {
     gap: 8px;
   }
 
-  .photo-pagination > span,
-  .photo-page-jump {
+  .photo-pagination > span {
     justify-self: center;
   }
 
