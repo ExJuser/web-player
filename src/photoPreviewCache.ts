@@ -5,9 +5,49 @@ const photoPreviewForcedSize = 20 * 1024 * 1024;
 const photoPreviewPixelCount = 16_000_000;
 const photoPreviewMaxDimension = 1600;
 const photoPreviewCacheLimit = 24;
+const photoPreviewDefaultByteLimit = 32 * 1024 * 1024;
+const photoPreviewLowMemoryByteLimit = 16 * 1024 * 1024;
 const supportedPreviewExtensions = new Set([".bmp", ".jpeg", ".jpg", ".png"]);
 
-const previewCache = new Map<string, Promise<Blob | null>>();
+type PhotoPreviewCacheEntry = {
+  blobBytes: number;
+  createdAt: number;
+  lastAccessedAt: number;
+  promise: Promise<Blob | null>;
+};
+
+const photoPreviewCacheByteLimit = (() => {
+  const deviceMemory = typeof navigator === "undefined"
+    ? undefined
+    : (navigator as Navigator & { deviceMemory?: number }).deviceMemory;
+  return deviceMemory && deviceMemory <= 4
+    ? photoPreviewLowMemoryByteLimit
+    : photoPreviewDefaultByteLimit;
+})();
+const previewCache = new Map<string, PhotoPreviewCacheEntry>();
+
+function prunePhotoPreviewCache() {
+  let cachedBytes = Array.from(previewCache.values()).reduce((sum, entry) => sum + entry.blobBytes, 0);
+  while ((previewCache.size > photoPreviewCacheLimit || cachedBytes > photoPreviewCacheByteLimit) && previewCache.size) {
+    const oldestKey = previewCache.keys().next().value;
+    if (!oldestKey) break;
+    cachedBytes -= previewCache.get(oldestKey)?.blobBytes ?? 0;
+    previewCache.delete(oldestKey);
+  }
+}
+
+export function getPhotoPreviewCacheStatus() {
+  const entries = Array.from(previewCache.values());
+  return {
+    bytes: entries.reduce((sum, entry) => sum + entry.blobBytes, 0),
+    entries: entries.length,
+    updatedAt: entries.reduce((latest, entry) => Math.max(latest, entry.lastAccessedAt), 0) || null,
+  };
+}
+
+export function clearPhotoPreviewCache() {
+  previewCache.clear();
+}
 
 function getExtension(name: string) {
   const extensionIndex = name.lastIndexOf(".");
@@ -85,17 +125,29 @@ export function loadPhotoPreview(image: PhotoAlbumImage, sourceUrl: string) {
   const cacheKey = `${image.id}:${image.lastModified}`;
   const cached = previewCache.get(cacheKey);
   if (cached) {
+    cached.lastAccessedAt = Date.now();
     previewCache.delete(cacheKey);
     previewCache.set(cacheKey, cached);
-    return cached;
+    return cached.promise;
   }
 
-  const preview = createPreviewBlob(sourceUrl, image).catch(() => null);
-  previewCache.set(cacheKey, preview);
-  while (previewCache.size > photoPreviewCacheLimit) {
-    const oldestKey = previewCache.keys().next().value;
-    if (!oldestKey) break;
-    previewCache.delete(oldestKey);
-  }
-  return preview;
+  const createdAt = Date.now();
+  const entry: PhotoPreviewCacheEntry = {
+    blobBytes: 0,
+    createdAt,
+    lastAccessedAt: createdAt,
+    promise: Promise.resolve(null),
+  };
+  entry.promise = createPreviewBlob(sourceUrl, image)
+    .catch(() => null)
+    .then((blob) => {
+      if (previewCache.get(cacheKey) === entry) {
+        entry.blobBytes = blob?.size ?? 0;
+        prunePhotoPreviewCache();
+      }
+      return blob;
+    });
+  previewCache.set(cacheKey, entry);
+  prunePhotoPreviewCache();
+  return entry.promise;
 }

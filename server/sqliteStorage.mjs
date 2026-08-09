@@ -1642,6 +1642,37 @@ export class LocalDataSqliteStore {
     ).map((image) => this.mapPhotoAlbumScanImage(image));
   }
 
+  getPhotoAlbumScanCacheStats() {
+    const root = this.db.prepare(`
+      SELECT COUNT(*) AS entries,
+        COALESCE(SUM(LENGTH(root_id) + LENGTH(root_name) + 16), 0) AS bytes,
+        MAX(updated_at) AS updated_at
+      FROM photo_album_scan_roots
+    `).get();
+    const albums = this.db.prepare(`
+      SELECT COUNT(*) AS entries,
+        COALESCE(SUM(
+          LENGTH(root_id) + LENGTH(album_id) + LENGTH(title) + LENGTH(relative_path)
+          + LENGTH(media_root_id) + LENGTH(media_root_label) + LENGTH(cover_image_url)
+          + LENGTH(COALESCE(first_image_json, '')) + 48
+        ), 0) AS bytes
+      FROM photo_album_scan_albums
+    `).get();
+    const images = this.db.prepare(`
+      SELECT COUNT(*) AS entries,
+        COALESCE(SUM(
+          LENGTH(root_id) + LENGTH(album_id) + LENGTH(image_id) + LENGTH(name)
+          + LENGTH(relative_path) + LENGTH(url) + LENGTH(media_root_id) + 32
+        ), 0) AS bytes
+      FROM photo_album_scan_images
+    `).get();
+    return {
+      bytes: Number(root?.bytes ?? 0) + Number(albums?.bytes ?? 0) + Number(images?.bytes ?? 0),
+      files: Number(root?.entries ?? 0) + Number(albums?.entries ?? 0) + Number(images?.entries ?? 0),
+      updatedAt: Number(root?.updated_at) || null,
+    };
+  }
+
   clearPhotoAlbumScanCache() {
     return this.transaction(() => {
       this.db.prepare("DELETE FROM photo_album_scan_roots").run();

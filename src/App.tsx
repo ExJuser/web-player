@@ -54,6 +54,9 @@ import { usePhotoAlbumRuntime } from "./usePhotoAlbumRuntime";
 import { usePhotoAlbumTagEditor } from "./usePhotoAlbumTagEditor";
 import { usePlayerVolumeController } from "./usePlayerVolumeController";
 import { usePhotoObjectUrls } from "./usePhotoObjectUrls";
+import { type PhotoObjectUrlCacheMetadata } from "./photoObjectUrlCache";
+import { clearPhotoPreviewCache, getPhotoPreviewCacheStatus } from "./photoPreviewCache";
+import type { CacheStatusItem } from "./cacheStatusUtils";
 import { useProgressFavoritesController } from "./useProgressFavoritesController";
 import { useRatingDialog } from "./useRatingDialog";
 import { useShortcutSettings } from "./useShortcutSettings";
@@ -518,6 +521,7 @@ export default function App() {
   const playbackActivitySessionRef = useRef<{ videoId: string; lastTime: number | null; hasCountedPlay: boolean } | null>(null);
   const photoObjectUrlsRef = useRef<Record<string, string>>({});
   const photoObjectUrlAccessRef = useRef<Record<string, number>>({});
+  const photoObjectUrlMetadataRef = useRef<PhotoObjectUrlCacheMetadata>({});
   const decodedPhotoImageIdsRef = useRef(new Set<string>());
   const photoImageFilePromisesRef = useRef<Record<string, Promise<File | null>>>({});
   const photoViewerScrollDirectionRef = useRef<-1 | 0 | 1>(0);
@@ -1009,6 +1013,7 @@ export default function App() {
     revokeObjectUrls(Object.values(photoObjectUrlsRef.current));
     photoObjectUrlsRef.current = {};
     photoObjectUrlAccessRef.current = {};
+    photoObjectUrlMetadataRef.current = {};
     photoImageFilePromisesRef.current = {};
     decodedPhotoImageIdsRef.current.clear();
     setPhotoObjectUrls({});
@@ -1146,6 +1151,7 @@ export default function App() {
         revokeObjectUrls(Object.values(photoObjectUrlsRef.current));
         photoObjectUrlsRef.current = {};
         photoObjectUrlAccessRef.current = {};
+        photoObjectUrlMetadataRef.current = {};
         decodedPhotoImageIdsRef.current.clear();
         setPhotoObjectUrls({});
         const cachedScan = createCachedPhotoAlbumScan(scan);
@@ -2330,6 +2336,7 @@ export default function App() {
     photoAlbumDirectoryRef,
     photoImageFilePromisesRef,
     photoObjectUrlAccessRef,
+    photoObjectUrlMetadataRef,
     photoObjectUrls,
     photoObjectUrlsRef,
     selectedPhotoAlbum,
@@ -4134,6 +4141,7 @@ export default function App() {
     photoAlbumsRef.current = [];
     photoObjectUrlsRef.current = {};
     photoObjectUrlAccessRef.current = {};
+    photoObjectUrlMetadataRef.current = {};
     decodedPhotoImageIdsRef.current.clear();
     setPhotoAlbums([]);
     setPhotoRootStatuses([]);
@@ -4271,6 +4279,7 @@ export default function App() {
       const nextPhotoObjectUrls = { ...photoObjectUrlsRef.current };
       delete nextPhotoObjectUrls[photo.id];
       delete photoObjectUrlAccessRef.current[photo.id];
+      delete photoObjectUrlMetadataRef.current[photo.id];
       delete photoImageFilePromisesRef.current[photo.id];
       decodedPhotoImageIdsRef.current.delete(photo.id);
       photoObjectUrlsRef.current = nextPhotoObjectUrls;
@@ -4441,6 +4450,7 @@ export default function App() {
         revokeObjectUrl(image.url);
         delete nextPhotoObjectUrls[image.id];
         delete photoObjectUrlAccessRef.current[image.id];
+        delete photoObjectUrlMetadataRef.current[image.id];
         delete photoImageFilePromisesRef.current[image.id];
         decodedPhotoImageIdsRef.current.delete(image.id);
       });
@@ -5504,6 +5514,49 @@ export default function App() {
     updateAppRoute({ kind: "home" }, { replace: true });
   }, [clearLoadedMedia, updateAppRoute]);
 
+  const getPhotoRuntimeCacheItems = useCallback((): CacheStatusItem[] => {
+    const objectUrlIds = Object.keys(photoObjectUrlsRef.current);
+    const objectUrlBytes = objectUrlIds.reduce(
+      (sum, id) => sum + (photoObjectUrlMetadataRef.current[id]?.bytes ?? 0),
+      0,
+    );
+    const objectUrlUpdatedAt = objectUrlIds.reduce(
+      (latest, id) => Math.max(latest, photoObjectUrlMetadataRef.current[id]?.lastAccessedAt ?? 0),
+      0,
+    ) || null;
+    const previewStatus = getPhotoPreviewCacheStatus();
+    return [
+      {
+        id: "photo-runtime-object-urls",
+        label: "看图原图内存",
+        path: "浏览器内存 · 对象 URL",
+        bytes: objectUrlBytes,
+        files: objectUrlIds.length,
+        updatedAt: objectUrlUpdatedAt,
+      },
+      {
+        id: "photo-runtime-previews",
+        label: "看图预览缓存",
+        path: "浏览器内存 · 缩放预览图",
+        bytes: previewStatus.bytes,
+        files: previewStatus.entries,
+        updatedAt: previewStatus.updatedAt,
+      },
+    ].filter((item) => item.bytes > 0 || item.files > 0);
+  }, []);
+
+  const clearPhotoRuntimeCache = useCallback((ids: string[]) => {
+    if (ids.includes("photo-runtime-object-urls")) {
+      revokeObjectUrls(Object.values(photoObjectUrlsRef.current));
+      photoObjectUrlsRef.current = {};
+      photoObjectUrlAccessRef.current = {};
+      photoObjectUrlMetadataRef.current = {};
+      decodedPhotoImageIdsRef.current.clear();
+      setPhotoObjectUrls({});
+    }
+    if (ids.includes("photo-runtime-previews")) clearPhotoPreviewCache();
+  }, []);
+
   const {
     cacheStatus,
     cacheStatusItems,
@@ -5532,8 +5585,10 @@ export default function App() {
     toggleCacheItemSelection,
     visibleCacheStatusPage,
   } = useCacheStatusDialog({
+    getClientCacheItems: getPhotoRuntimeCacheItems,
     isHomeViewVisible,
     onClearAllCache: clearAllCacheRuntimeData,
+    onClearClientCache: clearPhotoRuntimeCache,
     onClearRuntimeCache: clearCurrentLibraryRuntimeData,
   });
 

@@ -5,7 +5,7 @@ import {
   photoViewerWarmRadius,
 } from "./appConfig";
 import { getPhotoImageFileFromDirectory } from "./photoAlbumScan";
-import { prunePhotoObjectUrlCache } from "./photoObjectUrlCache";
+import { prunePhotoObjectUrlCache, type PhotoObjectUrlCacheMetadata } from "./photoObjectUrlCache";
 import type { ActiveView, FileSystemDirectoryHandle, PhotoAlbum, PhotoAlbumImage } from "./playerTypes";
 
 const photoViewerIdleWarmRadius = 2;
@@ -51,6 +51,7 @@ type UsePhotoObjectUrlsParams = {
   photoAlbumDirectoryRef: MutableRef<FileSystemDirectoryHandle | null>;
   photoImageFilePromisesRef: MutableRef<Record<string, Promise<File | null>>>;
   photoObjectUrlAccessRef: MutableRef<Record<string, number>>;
+  photoObjectUrlMetadataRef: MutableRef<PhotoObjectUrlCacheMetadata>;
   photoObjectUrls: Record<string, string>;
   photoObjectUrlsRef: MutableRef<Record<string, string>>;
   selectedPhotoAlbum: PhotoAlbum | null;
@@ -67,6 +68,7 @@ export function usePhotoObjectUrls({
   photoAlbumDirectoryRef,
   photoImageFilePromisesRef,
   photoObjectUrlAccessRef,
+  photoObjectUrlMetadataRef,
   photoObjectUrls,
   photoObjectUrlsRef,
   selectedPhotoAlbum,
@@ -154,6 +156,7 @@ export function usePhotoObjectUrls({
         URL.revokeObjectURL(nextUrls[id]);
         delete nextUrls[id];
         delete photoObjectUrlAccessRef.current[id];
+        delete photoObjectUrlMetadataRef.current[id];
         decodedPhotoImageIdsRef.current.delete(id);
         didChange = true;
       });
@@ -170,12 +173,19 @@ export function usePhotoObjectUrls({
 
     neededImages.forEach((image, id) => {
       if (nextUrls[id]) {
-        photoObjectUrlAccessRef.current[id] = Date.now();
+        const now = Date.now();
+        photoObjectUrlAccessRef.current[id] = now;
+        const previousMetadata = photoObjectUrlMetadataRef.current[id];
+        photoObjectUrlMetadataRef.current[id] = previousMetadata
+          ? { ...previousMetadata, lastAccessedAt: now }
+          : { bytes: image.file?.size ?? image.size, createdAt: now, decoded: false, lastAccessedAt: now };
         return;
       }
       if (image.file) {
         nextUrls[id] = URL.createObjectURL(image.file);
-        photoObjectUrlAccessRef.current[id] = Date.now();
+        const now = Date.now();
+        photoObjectUrlAccessRef.current[id] = now;
+        photoObjectUrlMetadataRef.current[id] = { bytes: image.file.size, createdAt: now, decoded: false, lastAccessedAt: now };
         didChange = true;
       } else if (directory) {
         missingImages.push(image);
@@ -185,6 +195,7 @@ export function usePhotoObjectUrls({
     const prunedUrls = prunePhotoObjectUrlCache(
       nextUrls,
       photoObjectUrlAccessRef.current,
+      photoObjectUrlMetadataRef.current,
       new Set(neededImages.keys()),
       decodedPhotoImageIdsRef.current,
     );
@@ -215,13 +226,16 @@ export function usePhotoObjectUrls({
         URL.revokeObjectURL(url);
         return;
       }
-      photoObjectUrlAccessRef.current[image.id] = Date.now();
+      const now = Date.now();
+      photoObjectUrlAccessRef.current[image.id] = now;
+      photoObjectUrlMetadataRef.current[image.id] = { bytes: file.size, createdAt: now, decoded: false, lastAccessedAt: now };
       const cachedUrls = prunePhotoObjectUrlCache(
         {
           ...photoObjectUrlsRef.current,
           [image.id]: url,
         },
         photoObjectUrlAccessRef.current,
+        photoObjectUrlMetadataRef.current,
         new Set(neededImages.keys()),
         decodedPhotoImageIdsRef.current,
       );
@@ -256,6 +270,7 @@ export function usePhotoObjectUrls({
     photoAlbumDirectoryRef,
     photoImageFilePromisesRef,
     photoObjectUrlAccessRef,
+    photoObjectUrlMetadataRef,
     photoObjectUrlsRef,
     isPageVisible,
     selectedPhotoAlbum,
@@ -283,22 +298,27 @@ export function usePhotoObjectUrls({
         void preloadImage.decode()
           .then(() => {
             decodedPhotoImageIdsRef.current.add(image.id);
+            const metadata = photoObjectUrlMetadataRef.current[image.id];
+            if (metadata) metadata.decoded = true;
           })
           .catch(() => undefined);
       } else {
         preloadImage.onload = () => {
           decodedPhotoImageIdsRef.current.add(image.id);
+          const metadata = photoObjectUrlMetadataRef.current[image.id];
+          if (metadata) metadata.decoded = true;
         };
       }
     }
-  }, [activeView, currentPhotoIndex, decodedPhotoImageIdsRef, isPageVisible, photoObjectUrls, selectedPhotoAlbum]);
+  }, [activeView, currentPhotoIndex, decodedPhotoImageIdsRef, isPageVisible, photoObjectUrlMetadataRef, photoObjectUrls, selectedPhotoAlbum]);
 
   useEffect(() => {
     return () => {
       Object.values(photoObjectUrlsRef.current).forEach((url) => URL.revokeObjectURL(url));
       photoObjectUrlsRef.current = {};
       photoObjectUrlAccessRef.current = {};
+      photoObjectUrlMetadataRef.current = {};
       decodedPhotoImageIdsRef.current.clear();
     };
-  }, [decodedPhotoImageIdsRef, photoObjectUrlAccessRef, photoObjectUrlsRef]);
+  }, [decodedPhotoImageIdsRef, photoObjectUrlAccessRef, photoObjectUrlMetadataRef, photoObjectUrlsRef]);
 }

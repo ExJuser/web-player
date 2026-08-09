@@ -169,6 +169,12 @@ function createCacheStatusDefinitions(thumbnailMemoryStats = { entries: 0, bytes
     { id: "actor-covers", label: "演员封面", path: actorCoversRoot },
     { id: "mosaics", label: "千图作品", path: mosaicsRoot },
     { id: "photo-albums", label: "看图数据", path: photoAlbumsRoot },
+    {
+      id: "photo-scan-cache",
+      label: "看图扫描缓存",
+      path: path.join(photoAlbumsRoot, "scan-cache"),
+      getStats: () => store.getPhotoAlbumScanCacheStats(),
+    },
     { id: "subtitles", label: "内封字幕", path: embeddedSubtitlesRoot },
     { id: "compatible-media", label: "兼容播放缓存", path: compatibleMediaRoot },
     { id: "danmaku-sources", label: "弹幕源", path: danmakuSourcesRoot, getStats: () => createDanmakuSourcesStats(danmakuSourcesRoot) },
@@ -188,11 +194,22 @@ async function createCacheStatus(thumbnailMemoryStats) {
 }
 
 async function clearCacheItems(payload, thumbnailMemoryStats) {
-  return clearLocalCacheItems(payload, {
-    dataRoot,
-    createStatus: () => createCacheStatus(thumbnailMemoryStats),
-    clearCacheEntriesByKinds: (kinds) => localDataStore.clearCacheEntriesByKinds(kinds),
-  });
+  const ids = Array.isArray(payload?.ids) ? Array.from(new Set(payload.ids.filter((id) => typeof id === "string"))) : [];
+  if (!ids.length) throw new Error("No cache items selected.");
+  const shouldClearPhotoScanCache = ids.includes("photo-scan-cache");
+  const fileCacheIds = ids.filter((id) => id !== "photo-scan-cache");
+  const result = fileCacheIds.length
+    ? await clearLocalCacheItems({ ids: fileCacheIds }, {
+        dataRoot,
+        createStatus: () => createCacheStatus(thumbnailMemoryStats),
+        clearCacheEntriesByKinds: (kinds) => localDataStore.clearCacheEntriesByKinds(kinds),
+      })
+    : { cleared: [] };
+  if (shouldClearPhotoScanCache) store.clearPhotoAlbumScanCache();
+  return {
+    cleared: shouldClearPhotoScanCache ? ["photo-scan-cache", ...result.cleared] : result.cleared,
+    status: await createCacheStatus(thumbnailMemoryStats),
+  };
 }
 
 async function upsertMediaRoot(payload) {

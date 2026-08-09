@@ -11,18 +11,23 @@ import {
   toggleAllCacheItemSelection,
   toggleCacheItemSelection as toggleCacheStatusItemSelection,
   type CacheStatus,
+  type CacheStatusItem,
   type ClearCacheResponse,
 } from "./cacheStatusUtils";
 
 type UseCacheStatusDialogParams = {
   isHomeViewVisible: boolean;
+  getClientCacheItems: () => CacheStatusItem[];
   onClearAllCache: () => Promise<void>;
+  onClearClientCache: (ids: string[]) => void;
   onClearRuntimeCache: () => void;
 };
 
 export function useCacheStatusDialog({
   isHomeViewVisible,
+  getClientCacheItems,
   onClearAllCache,
+  onClearClientCache,
   onClearRuntimeCache,
 }: UseCacheStatusDialogParams) {
   const [cacheStatus, setCacheStatus] = useState<CacheStatus | null>(null);
@@ -40,14 +45,21 @@ export function useCacheStatusDialog({
     setCacheStatusMessage("");
     try {
       const status = await fetchJson<CacheStatus>("/api/cache-status");
-      setCacheStatus(status);
+      const clientItems = getClientCacheItems();
+      setCacheStatus({
+        ...status,
+        totalBytes: status.totalBytes + clientItems.reduce((sum, item) => sum + item.bytes, 0),
+        totalFiles: status.totalFiles + clientItems.reduce((sum, item) => sum + item.files, 0),
+        updatedAt: Math.max(status.updatedAt ?? 0, ...clientItems.map((item) => item.updatedAt ?? 0)) || null,
+        items: [...status.items, ...clientItems],
+      });
     } catch (error) {
       setCacheStatusMessage(error instanceof Error ? error.message : "读取缓存状态失败。");
     } finally {
       setHasLoadedCacheStatus(true);
       setIsCacheStatusLoading(false);
     }
-  }, []);
+  }, [getClientCacheItems]);
 
   const cacheStatusItems = cacheStatus?.items ?? [];
   const clearableCacheStatusItems = useMemo(() => getClearableCacheStatusItems(cacheStatusItems), [cacheStatusItems]);
@@ -106,20 +118,27 @@ export function useCacheStatusDialog({
     setIsClearingCache(true);
     setCacheStatusMessage("");
     try {
-      const response = await fetchJson<ClearCacheResponse>("/api/cache-status/clear", {
-        method: "POST",
-        body: JSON.stringify({ ids: selectedCacheItemIdsList }),
-      });
-      setCacheStatus(response.status);
+      const clientIds = selectedCacheItemIdsList.filter((id) => id.startsWith("photo-runtime-"));
+      const serverIds = selectedCacheItemIdsList.filter((id) => !id.startsWith("photo-runtime-"));
+      let clearedServerIds: string[] = [];
+      if (serverIds.length) {
+        const response = await fetchJson<ClearCacheResponse>("/api/cache-status/clear", {
+          method: "POST",
+          body: JSON.stringify({ ids: serverIds }),
+        });
+        clearedServerIds = response.cleared;
+      }
+      onClearClientCache(clientIds);
       setSelectedCacheItemIds(new Set());
       setIsClearCacheConfirmOpen(false);
-      if (response.cleared.some((id) => id === "global" || id === "libraries" || id === "index")) {
+      if (clearedServerIds.some((id) => id === "global" || id === "libraries" || id === "index")) {
         onClearRuntimeCache();
       }
       if (shouldClearAllCache) {
         await onClearAllCache();
       }
-      setCacheStatusMessage(`已清除 ${response.cleared.length} 项缓存。`);
+      await loadCacheStatus();
+      setCacheStatusMessage(`已清除 ${clearedServerIds.length + clientIds.length} 项缓存。`);
     } catch (error) {
       setCacheStatusMessage(error instanceof Error ? error.message : "清除缓存失败。");
     } finally {
@@ -127,7 +146,9 @@ export function useCacheStatusDialog({
     }
   }, [
     isAllCacheSelected,
+    loadCacheStatus,
     onClearAllCache,
+    onClearClientCache,
     onClearRuntimeCache,
     selectedCacheItemIdsList,
     selectedCacheItems.length,
