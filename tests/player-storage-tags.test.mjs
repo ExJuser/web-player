@@ -571,6 +571,48 @@ test("player data stores persist duplicate detection results per media mode", ()
   assert.equal(parsed.duplicateDetections.all, undefined);
 });
 
+test("duplicate detection parsing keeps valid pairs while normalizing bounded metadata", () => {
+  const message = `  ${"完成".repeat(120)}  `;
+  const parsed = storage.parseDuplicateDetectionResult({
+    mode: "anime",
+    scopeKey: "   ",
+    updatedAt: -2.6,
+    message,
+    pairs: [
+      null,
+      [],
+      {
+        key: "a\u0000b",
+        aId: "a",
+        bId: "b",
+        score: -4.6,
+        severity: "suspicious",
+        reasons: ["  名称一致  ", "名称一致", 42],
+      },
+      {
+        key: "bad-score",
+        aId: "a",
+        bId: "c",
+        score: Number.POSITIVE_INFINITY,
+        severity: "duplicate",
+      },
+    ],
+  });
+
+  assert.equal(parsed.mode, "anime");
+  assert.equal(parsed.scopeKey, "anime");
+  assert.equal(parsed.updatedAt, 0);
+  assert.equal(parsed.message.length, 200);
+  assert.deepEqual(parsed.pairs, [{
+    key: "a\u0000b",
+    aId: "a",
+    bId: "b",
+    score: 0,
+    severity: "suspicious",
+    reasons: ["名称一致"],
+  }]);
+});
+
 test("player data stores parse valid high energy highlight segments", () => {
   const parsed = storage.parsePlayerDataStore(JSON.stringify({
     version: 5,

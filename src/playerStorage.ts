@@ -379,54 +379,73 @@ function inferDuplicateDetectionMode(result: { mode?: unknown; scopeKey?: unknow
   return null;
 }
 
-export function parseDuplicateDetectionResult(source: unknown, fallbackMode?: HomeMediaMode): PlayerDataStore["duplicateDetection"] {
+type PersistedDuplicateDetectionSource = {
+  mode?: unknown;
+  scopeKey?: unknown;
+  pairs?: unknown;
+  updatedAt?: unknown;
+  message?: unknown;
+};
+
+function readPersistedDuplicateDetectionSource(
+  source: unknown,
+  fallbackMode?: HomeMediaMode,
+) {
   if (!source || typeof source !== "object" || Array.isArray(source)) return null;
-  const result = source as {
-    mode?: unknown;
-    scopeKey?: unknown;
-    pairs?: unknown;
-    updatedAt?: unknown;
-    message?: unknown;
-  };
+  const result = source as PersistedDuplicateDetectionSource;
   const mode = inferDuplicateDetectionMode(result, fallbackMode);
-  if (!mode || !Array.isArray(result.pairs)) return null;
+  return mode && Array.isArray(result.pairs) ? { result, mode, pairs: result.pairs } : null;
+}
 
-  const pairs: PersistedDuplicateVideoPair[] = result.pairs.flatMap((item) => {
-    if (!item || typeof item !== "object" || Array.isArray(item)) return [];
-    const pair = item as {
-      key?: unknown;
-      aId?: unknown;
-      bId?: unknown;
-      score?: unknown;
-      severity?: unknown;
-      reasons?: unknown;
-    };
-    const severity: PersistedDuplicateVideoPair["severity"] | null =
-      pair.severity === "duplicate" || pair.severity === "suspicious" ? pair.severity : null;
-    if (
-      typeof pair.key !== "string" ||
-      typeof pair.aId !== "string" ||
-      typeof pair.bId !== "string" ||
-      typeof pair.score !== "number" ||
-      !Number.isFinite(pair.score) ||
-      !severity
-    ) {
-      return [];
-    }
+function parsePersistedDuplicatePair(source: unknown): PersistedDuplicateVideoPair | null {
+  if (!source || typeof source !== "object" || Array.isArray(source)) return null;
+  const pair = source as {
+    key?: unknown;
+    aId?: unknown;
+    bId?: unknown;
+    score?: unknown;
+    severity?: unknown;
+    reasons?: unknown;
+  };
+  const severity: PersistedDuplicateVideoPair["severity"] | null =
+    pair.severity === "duplicate" || pair.severity === "suspicious" ? pair.severity : null;
+  if (
+    typeof pair.key !== "string" ||
+    typeof pair.aId !== "string" ||
+    typeof pair.bId !== "string" ||
+    typeof pair.score !== "number" ||
+    !Number.isFinite(pair.score) ||
+    !severity
+  ) {
+    return null;
+  }
 
-    return [{
-      key: pair.key,
-      aId: pair.aId,
-      bId: pair.bId,
-      score: Math.max(0, Math.round(pair.score)),
-      severity,
-      reasons: Array.isArray(pair.reasons)
-        ? Array.from(new Set(pair.reasons.filter((reason): reason is string => typeof reason === "string" && Boolean(reason.trim())).map((reason) => reason.trim())))
-        : [],
-    }];
+  return {
+    key: pair.key,
+    aId: pair.aId,
+    bId: pair.bId,
+    score: Math.max(0, Math.round(pair.score)),
+    severity,
+    reasons: Array.isArray(pair.reasons)
+      ? Array.from(new Set(
+          pair.reasons
+            .filter((reason): reason is string => typeof reason === "string" && Boolean(reason.trim()))
+            .map((reason) => reason.trim()),
+        ))
+      : [],
+  };
+}
+
+export function parseDuplicateDetectionResult(source: unknown, fallbackMode?: HomeMediaMode): PlayerDataStore["duplicateDetection"] {
+  const parsed = readPersistedDuplicateDetectionSource(source, fallbackMode);
+  if (!parsed) return null;
+  const pairs = parsed.pairs.flatMap((item) => {
+    const pair = parsePersistedDuplicatePair(item);
+    return pair ? [pair] : [];
   });
 
   if (!pairs.length) return null;
+  const { result, mode } = parsed;
   return {
     mode,
     scopeKey: typeof result.scopeKey === "string" && result.scopeKey.trim() ? result.scopeKey : mode,
