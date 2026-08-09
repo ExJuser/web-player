@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, CheckCircle2, ChevronDown, Images, Maximize2, RotateCcw, Star, Tags, Trash2 } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Images, Maximize2, MoreHorizontal, RotateCcw, Star, Tags, Trash2 } from "lucide-react";
 
 import type { PhotoAlbum, PhotoAlbumImage } from "./playerTypes";
 
@@ -34,17 +34,17 @@ export function PhotoViewerHeader({
   onSetCover,
   onToggleFavorite,
 }: PhotoViewerHeaderProps) {
-  const [isDeleteMenuOpen, setIsDeleteMenuOpen] = useState(false);
-  const deleteMenuRef = useRef<HTMLDivElement>(null);
+  const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
+  const actionMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!isDeleteMenuOpen) return;
+    if (!isActionMenuOpen) return;
 
     const closeOnOutsideClick = (event: PointerEvent) => {
-      if (!deleteMenuRef.current?.contains(event.target as Node)) setIsDeleteMenuOpen(false);
+      if (!actionMenuRef.current?.contains(event.target as Node)) setIsActionMenuOpen(false);
     };
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setIsDeleteMenuOpen(false);
+      if (event.key === "Escape") setIsActionMenuOpen(false);
     };
 
     document.addEventListener("pointerdown", closeOnOutsideClick);
@@ -53,19 +53,21 @@ export function PhotoViewerHeader({
       document.removeEventListener("pointerdown", closeOnOutsideClick);
       document.removeEventListener("keydown", closeOnEscape);
     };
-  }, [isDeleteMenuOpen]);
+  }, [isActionMenuOpen]);
 
   return (
     <header className="photo-viewer-header">
-      <button className="secondary-button" type="button" onClick={onBack}>
-        <ArrowLeft size={17} />
-        返回
-      </button>
-      <div className="photo-viewer-actions">
+      <div className="photo-viewer-navigation">
+        <button className="secondary-button" type="button" onClick={onBack}>
+          <ArrowLeft size={17} />
+          返回
+        </button>
         <button className="secondary-button" type="button" onClick={onEnterImmersive}>
           <Maximize2 size={16} />
           沉浸阅读
         </button>
+      </div>
+      <div className="photo-viewer-actions">
         <button
           className={`secondary-button ${isFavorite ? "active" : ""}`}
           type="button"
@@ -82,41 +84,50 @@ export function PhotoViewerHeader({
           <RotateCcw size={16} />
           重读
         </button>
-        <button className="secondary-button" type="button" onClick={() => onEditTags(album)}>
-          <Tags size={16} />
-          标签
-        </button>
-        {currentPhoto ? (
+        <div className="photo-action-menu" ref={actionMenuRef}>
           <button
-            className={`secondary-button ${isCoverCurrent ? "active" : ""}`}
-            type="button"
-            onClick={() => onSetCover(album, currentPhoto)}
-          >
-            <Images size={16} />
-            {isCoverCurrent ? "当前封面" : "设为封面"}
-          </button>
-        ) : null}
-        <div className="photo-delete-menu" ref={deleteMenuRef}>
-          <button
-            aria-expanded={isDeleteMenuOpen}
+            aria-expanded={isActionMenuOpen}
             aria-haspopup="menu"
-            className="danger-button photo-delete-button"
+            className="secondary-button photo-more-button"
             type="button"
-            onClick={() => setIsDeleteMenuOpen((isOpen) => !isOpen)}
-            title="删除当前图片或整个图集"
+            onClick={() => setIsActionMenuOpen((isOpen) => !isOpen)}
+            title="更多图集操作"
           >
-            <Trash2 size={16} />
-            删除
-            <ChevronDown className="photo-delete-chevron" size={14} />
+            <MoreHorizontal size={17} />
+            更多
           </button>
-          {isDeleteMenuOpen ? (
-            <div className="photo-delete-options" role="menu">
+          {isActionMenuOpen ? (
+            <div className="photo-action-options" role="menu">
               <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setIsActionMenuOpen(false);
+                  onEditTags(album);
+                }}
+              >
+                <Tags size={15} />
+                编辑标签
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                disabled={!currentPhoto || isCoverCurrent}
+                onClick={() => {
+                  setIsActionMenuOpen(false);
+                  if (currentPhoto) onSetCover(album, currentPhoto);
+                }}
+              >
+                <Images size={15} />
+                {isCoverCurrent ? "已是当前封面" : "设为封面"}
+              </button>
+              <button
+                className="danger-option"
                 type="button"
                 role="menuitem"
                 disabled={!currentPhoto}
                 onClick={() => {
-                  setIsDeleteMenuOpen(false);
+                  setIsActionMenuOpen(false);
                   onDeleteCurrentPhoto();
                 }}
               >
@@ -124,11 +135,11 @@ export function PhotoViewerHeader({
                 删除当前图片
               </button>
               <button
-                className="delete-album-option"
+                className="danger-option"
                 type="button"
                 role="menuitem"
                 onClick={() => {
-                  setIsDeleteMenuOpen(false);
+                  setIsActionMenuOpen(false);
                   onDeleteAlbum(album);
                 }}
               >

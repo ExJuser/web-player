@@ -2523,11 +2523,12 @@ button {
   background: #1a1e24;
 }
 
-.photo-viewer-header > div:not(.photo-viewer-actions) {
+.photo-viewer-header > .photo-viewer-navigation {
   display: flex;
   min-width: 0;
-  flex-direction: column;
-  gap: 3px;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
 }
 
 .photo-viewer-header .secondary-button {
@@ -2564,32 +2565,17 @@ button {
   gap: 8px;
 }
 
+.photo-viewer-navigation .secondary-button,
 .photo-viewer-actions .secondary-button {
   flex: 0 0 auto;
 }
 
-.photo-viewer-actions .photo-delete-button {
-  flex: 0 0 auto;
-  width: auto;
-  min-width: auto;
-  height: 34px;
-  padding: 0 10px;
-}
-
-.photo-delete-menu {
+.photo-action-menu {
   position: relative;
   flex: 0 0 auto;
 }
 
-.photo-delete-chevron {
-  transition: transform 150ms ease;
-}
-
-.photo-delete-menu:has(.photo-delete-options) .photo-delete-chevron {
-  transform: rotate(180deg);
-}
-
-.photo-delete-options {
+.photo-action-options {
   position: absolute;
   z-index: 20;
   top: calc(100% + 6px);
@@ -2603,7 +2589,7 @@ button {
   box-shadow: 0 14px 34px rgba(0, 0, 0, 0.34);
 }
 
-.photo-delete-options button {
+.photo-action-options button {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -2617,58 +2603,58 @@ button {
   white-space: nowrap;
 }
 
-.photo-delete-options button:hover:not(:disabled) {
+.photo-action-options button:hover:not(:disabled) {
   background: #2a303a;
 }
 
-.photo-delete-options button:disabled {
+.photo-action-options button:disabled {
   cursor: not-allowed;
   opacity: 0.45;
 }
 
-.photo-delete-options .delete-album-option {
+.photo-action-options .danger-option {
   color: #ff8585;
 }
 
-.app-shell.theme-light .photo-delete-options,
-:root[data-theme="light"] .photo-delete-options {
+.app-shell.theme-light .photo-action-options,
+:root[data-theme="light"] .photo-action-options {
   border-color: #d7e0ea;
   background: #ffffff;
   box-shadow: 0 14px 34px rgba(15, 23, 42, 0.16);
 }
 
-.app-shell.theme-light .photo-delete-options button,
-:root[data-theme="light"] .photo-delete-options button {
+.app-shell.theme-light .photo-action-options button,
+:root[data-theme="light"] .photo-action-options button {
   background: transparent;
   color: #344054;
 }
 
-.app-shell.theme-light .photo-delete-options button:hover:not(:disabled),
-:root[data-theme="light"] .photo-delete-options button:hover:not(:disabled) {
+.app-shell.theme-light .photo-action-options button:hover:not(:disabled),
+:root[data-theme="light"] .photo-action-options button:hover:not(:disabled) {
   background: #f2f4f7;
 }
 
-.app-shell.theme-light .photo-delete-options .delete-album-option,
-:root[data-theme="light"] .photo-delete-options .delete-album-option {
+.app-shell.theme-light .photo-action-options .danger-option,
+:root[data-theme="light"] .photo-action-options .danger-option {
   color: #c62828;
 }
 
-.app-shell.theme-dark .photo-delete-options {
+.app-shell.theme-dark .photo-action-options {
   border-color: #343b46;
   background: #20252d;
   box-shadow: 0 14px 34px rgba(0, 0, 0, 0.34);
 }
 
-.app-shell.theme-dark .photo-delete-options button {
+.app-shell.theme-dark .photo-action-options button {
   background: transparent;
   color: #e6e9ef;
 }
 
-.app-shell.theme-dark .photo-delete-options button:hover:not(:disabled) {
+.app-shell.theme-dark .photo-action-options button:hover:not(:disabled) {
   background: #2a303a;
 }
 
-.app-shell.theme-dark .photo-delete-options .delete-album-option {
+.app-shell.theme-dark .photo-action-options .danger-option {
   color: #ff8585;
 }
 
