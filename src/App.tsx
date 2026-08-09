@@ -159,6 +159,7 @@ import {
   replaceCachedPhotoAlbumScanAlbum,
   saveCachedPhotoAlbumScan,
 } from "./photoAlbumStorage";
+import { removePhotoFromAlbumState } from "./photoAlbumDeletionState";
 import {
   PROGRESS_FILE_NAME,
   createPlaybackRateOptions,
@@ -4231,48 +4232,25 @@ export default function App() {
 
       setPhotoDeleteCandidate(null);
 
-      const previousProgress = photoAlbumProgressRef.current[album.id];
-      const remainingImages = album.images
-        .filter((image) => image.id !== photo.id)
-        .map((image, index) => ({ ...image, index }));
-      const nextPhotoIndex = Math.min(Math.max(photoDeleteCandidate.imageIndex, 0), Math.max(remainingImages.length - 1, 0));
-      const nextProgress = { ...photoAlbumProgressRef.current };
-      const nextCoverPreferences = { ...photoAlbumCoverPreferencesRef.current };
-      const nextAlbumTags = { ...photoAlbumTagsRef.current };
-      let nextFavorites = favoritePhotoAlbumIdsRef.current;
-      let nextSelectedAlbumId: string | null = album.id;
-
-      let nextAlbums: PhotoAlbum[];
-      if (remainingImages.length) {
-        const nextAlbum: PhotoAlbum = {
-          ...album,
-          coverImageUrl: album.coverImageUrl === photo.url ? remainingImages[0]?.url || "" : album.coverImageUrl,
-          imageCount: remainingImages.length,
-          totalSize: remainingImages.reduce((sum, image) => sum + image.size, 0),
-          updatedAt: remainingImages.reduce((latest, image) => Math.max(latest, image.lastModified), 0),
-          images: remainingImages,
-        };
-        nextAlbums = photoAlbumsRef.current.map((item) => (item.id === album.id ? nextAlbum : item));
-        nextProgress[album.id] = {
-          imageIndex: nextPhotoIndex,
-          updatedAt: Date.now(),
-          completed: Boolean(previousProgress?.completed && nextPhotoIndex === remainingImages.length - 1),
-        };
-        if (nextCoverPreferences[album.id] === photo.id) {
-          const nextCoverImage = remainingImages[nextPhotoIndex] ?? remainingImages[0];
-          if (nextCoverImage) nextCoverPreferences[album.id] = nextCoverImage.id;
-        }
-      } else {
-        nextAlbums = photoAlbumsRef.current.filter((item) => item.id !== album.id);
-        delete nextProgress[album.id];
-        delete nextCoverPreferences[album.id];
-        delete nextAlbumTags[album.id];
-        if (favoritePhotoAlbumIdsRef.current.has(album.id)) {
-          nextFavorites = new Set(favoritePhotoAlbumIdsRef.current);
-          nextFavorites.delete(album.id);
-        }
-        nextSelectedAlbumId = null;
-      }
+      const {
+        nextAlbums,
+        nextAlbumTags,
+        nextCoverPreferences,
+        nextFavorites,
+        nextPhotoIndex,
+        nextProgress,
+        nextSelectedAlbumId,
+        remainingImages,
+      } = removePhotoFromAlbumState({
+        album,
+        albums: photoAlbumsRef.current,
+        albumTags: photoAlbumTagsRef.current,
+        coverPreferences: photoAlbumCoverPreferencesRef.current,
+        favoriteAlbumIds: favoritePhotoAlbumIdsRef.current,
+        photo,
+        photoIndex: photoDeleteCandidate.imageIndex,
+        progress: photoAlbumProgressRef.current,
+      });
 
       const nextPhotoObjectUrls = removePhotoObjectUrlCacheEntries({
         accessTimes: photoObjectUrlAccessRef.current,
