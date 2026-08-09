@@ -358,7 +358,7 @@ async function createProgressivePreview(input: {
   return canvasToBlob(canvas, "image/webp", 0.72);
 }
 
-export async function renderMosaic(input: {
+type MosaicRenderInput = {
   sources: MosaicRuntimeSource[];
   assignments: string[];
   target: { file?: Blob; url?: string };
@@ -374,15 +374,19 @@ export async function renderMosaic(input: {
   signal?: AbortSignal;
   onProgress?: (completed: number, total: number) => void;
   onPreview?: (preview: Blob, completed: number, total: number) => void;
-}) {
-  const aspect = input.columns / input.rows;
-  const width = aspect >= 1 ? input.longestEdge : Math.max(1, Math.round(input.longestEdge * aspect));
-  const height = aspect >= 1 ? Math.max(1, Math.round(input.longestEdge / aspect)) : input.longestEdge;
-  const canvas = createRenderCanvas(width, height);
-  const context = canvas.getContext("2d");
-  if (!context || !("drawImage" in context)) throw new Error("浏览器无法创建导出画布。");
-  context.fillStyle = "#09090f";
-  context.fillRect(0, 0, width, height);
+};
+
+type MosaicRenderEntry = [sourceId: string, cells: number[]];
+
+function getMosaicRenderDimensions(columns: number, rows: number, longestEdge: number) {
+  const aspect = columns / rows;
+  return {
+    width: aspect >= 1 ? longestEdge : Math.max(1, Math.round(longestEdge * aspect)),
+    height: aspect >= 1 ? Math.max(1, Math.round(longestEdge / aspect)) : longestEdge,
+  };
+}
+
+function groupMosaicRenderEntries(input: Pick<MosaicRenderInput, "sources" | "assignments">) {
   const sourceById = new Map(input.sources.map((source) => [source.id, source]));
   const cellsBySource = new Map<string, number[]>();
   input.assignments.forEach((sourceId, cellIndex) => {
@@ -391,57 +395,112 @@ export async function renderMosaic(input: {
     cells.push(cellIndex);
     cellsBySource.set(sourceId, cells);
   });
-  const entries = Array.from(cellsBySource.entries());
-  const cellWidth = width / input.columns;
-  const cellHeight = height / input.rows;
+  return { sourceById, entries: Array.from(cellsBySource.entries()) as MosaicRenderEntry[] };
+}
+
+async function loadMosaicRenderBatch(
+  entries: readonly MosaicRenderEntry[],
+  sourceById: ReadonlyMap<string, MosaicRuntimeSource>,
+) {
+  return Promise.all(entries.map(async ([sourceId, cells]) => {
+    const source = sourceById.get(sourceId);
+    if (!source) return { cells, lease: null };
+    try {
+      return { cells, lease: await acquireMosaicBitmap(source, 128) };
+    } catch {
+      return { cells, lease: null };
+    }
+  }));
+}
+
+function drawMosaicRenderEntry(input: {
+  context: OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D;
+  lease: MosaicBitmapLease | null;
+  cells: readonly number[];
+  columns: number;
+  cellWidth: number;
+  cellHeight: number;
+  tileFit?: MosaicTileFit;
+}) {
+  const lease = input.lease;
+  if (!lease) return;
+  try {
+    const drawTile = input.tileFit === "contain" ? drawContain : drawCover;
+    input.cells.forEach((cellIndex) => drawTile(
+      input.context,
+      lease.bitmap,
+      (cellIndex % input.columns) * input.cellWidth,
+      Math.floor(cellIndex / input.columns) * input.cellHeight,
+      Math.ceil(input.cellWidth + 0.5),
+      Math.ceil(input.cellHeight + 0.5),
+    ));
+  } finally {
+    lease.release();
+  }
+}
+
+function shouldCreateMosaicPreview(input: {
+  hasPreviewHandler: boolean;
+  completed: number;
+  total: number;
+  previewStep: number;
+  now: number;
+  lastPreviewAt: number;
+}) {
+  return input.hasPreviewHandler
+    && input.completed < input.total
+    && input.completed % input.previewStep === 0
+    && input.now - input.lastPreviewAt >= 700;
+}
+
+async function renderMosaicTiles(input: {
+  render: MosaicRenderInput;
+  canvas: OffscreenCanvas | HTMLCanvasElement;
+  context: OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D;
+  width: number;
+  height: number;
+  targetBitmap: ImageBitmap | null;
+  sourceById: ReadonlyMap<string, MosaicRuntimeSource>;
+  entries: MosaicRenderEntry[];
+}) {
+  const { render, entries } = input;
+  const cellWidth = input.width / render.columns;
+  const cellHeight = input.height / render.rows;
   const previewStep = Math.max(1, Math.ceil(entries.length / 8));
   let lastPreviewAt = Number.NEGATIVE_INFINITY;
+  const renderConcurrency = 6;
+  for (let offset = 0; offset < entries.length; offset += renderConcurrency) {
+    if (render.signal?.aborted) throw new DOMException("生成已取消。", "AbortError");
+    const loaded = await loadMosaicRenderBatch(entries.slice(offset, offset + renderConcurrency), input.sourceById);
+    for (let batchIndex = 0; batchIndex < loaded.length; batchIndex++) {
+      const { cells, lease } = loaded[batchIndex];
+      drawMosaicRenderEntry({ context: input.context, lease, cells, columns: render.columns, cellWidth, cellHeight, tileFit: render.tileFit });
+      const completed = offset + batchIndex + 1;
+      render.onProgress?.(completed, entries.length);
+      const now = performance.now();
+      if (shouldCreateMosaicPreview({ hasPreviewHandler: Boolean(render.onPreview), completed, total: entries.length, previewStep, now, lastPreviewAt })) {
+        const progressivePreview = await createProgressivePreview({ ...render, canvas: input.canvas, width: input.width, height: input.height, targetBitmap: input.targetBitmap });
+        if (render.signal?.aborted) throw new DOMException("生成已取消。", "AbortError");
+        render.onPreview?.(progressivePreview, completed, entries.length);
+        lastPreviewAt = performance.now();
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+}
+
+export async function renderMosaic(input: MosaicRenderInput) {
+  const { width, height } = getMosaicRenderDimensions(input.columns, input.rows, input.longestEdge);
+  const canvas = createRenderCanvas(width, height);
+  const context = canvas.getContext("2d");
+  if (!context || !("drawImage" in context)) throw new Error("浏览器无法创建导出画布。");
+  context.fillStyle = "#09090f";
+  context.fillRect(0, 0, width, height);
+  const { sourceById, entries } = groupMosaicRenderEntries(input);
   const overlayOpacity = Math.max(0, Math.min(0.65, input.targetClarity * 0.65));
   const targetBitmap = overlayOpacity > 0 ? await loadMosaicBitmap(input.target) : null;
   try {
-    const renderConcurrency = 6;
-    for (let offset = 0; offset < entries.length; offset += renderConcurrency) {
-      if (input.signal?.aborted) throw new DOMException("生成已取消。", "AbortError");
-      const batch = entries.slice(offset, offset + renderConcurrency);
-      const loaded = await Promise.all(batch.map(async ([sourceId, cells]) => {
-        const source = sourceById.get(sourceId);
-        if (!source) return { cells, lease: null };
-        try {
-          return { cells, lease: await acquireMosaicBitmap(source, 128) };
-        } catch {
-          return { cells, lease: null };
-        }
-      }));
-      for (let batchIndex = 0; batchIndex < loaded.length; batchIndex++) {
-        const { cells, lease } = loaded[batchIndex];
-        if (lease) {
-          try {
-            const drawTile = input.tileFit === "contain" ? drawContain : drawCover;
-            cells.forEach((cellIndex) => drawTile(
-              context,
-              lease.bitmap,
-              (cellIndex % input.columns) * cellWidth,
-              Math.floor(cellIndex / input.columns) * cellHeight,
-              Math.ceil(cellWidth + 0.5),
-              Math.ceil(cellHeight + 0.5),
-            ));
-          } finally {
-            lease.release();
-          }
-        }
-        const completed = offset + batchIndex + 1;
-        input.onProgress?.(completed, entries.length);
-        const now = performance.now();
-        if (input.onPreview && completed < entries.length && completed % previewStep === 0 && now - lastPreviewAt >= 700) {
-          const progressivePreview = await createProgressivePreview({ ...input, canvas, width, height, targetBitmap });
-          if (input.signal?.aborted) throw new DOMException("生成已取消。", "AbortError");
-          input.onPreview(progressivePreview, completed, entries.length);
-          lastPreviewAt = performance.now();
-        }
-      }
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    }
-
+    await renderMosaicTiles({ render: input, canvas, context, width, height, targetBitmap, sourceById, entries });
     applyMosaicEffects({ ...input, context, width, height, targetBitmap });
     const result = await canvasToBlob(canvas, input.type, input.type === "image/webp" ? 0.88 : undefined);
     input.onPreview?.(result, entries.length, entries.length);
