@@ -235,6 +235,7 @@ import {
   resolvePhotoParentDirectory,
 } from "./photoAlbumScan";
 import {
+  deleteServerPhotoAlbum,
   deleteServerPhotoImage,
   hasReadyPhotoAlbumRoot,
   loadServerPhotoAlbumScan,
@@ -4291,12 +4292,19 @@ export default function App() {
       return;
     }
 
+    let deletingServerAlbum = album.images.every(isServerPhotoImage);
     try {
-      const isServerAlbum = album.images.every(isServerPhotoImage);
+      const resolvedAlbum = await resolveCachedPhotoAlbum(album);
+      const isServerAlbum = resolvedAlbum.images.every(isServerPhotoImage);
+      deletingServerAlbum = isServerAlbum;
+      let deletedImageCount = resolvedAlbum.images.length;
+      let directoryRemoved = false;
+      let directoryRetainedReason: "not-empty" | "root-directory" | undefined;
       if (isServerAlbum) {
-        for (const image of album.images) {
-          await deleteServerPhotoImage(fetchJson, image);
-        }
+        const result = await deleteServerPhotoAlbum(fetchJson, resolvedAlbum);
+        deletedImageCount = result.deletedImages;
+        directoryRemoved = result.directoryRemoved;
+        directoryRetainedReason = result.directoryRetainedReason;
       } else {
         const rootDirectory = photoAlbumDirectoryRef.current ?? (await readPhotoAlbumFolderHandle().catch(() => null));
         if (!rootDirectory?.removeEntry) {
@@ -4318,7 +4326,7 @@ export default function App() {
           return;
         }
 
-        for (const image of album.images) {
+        for (const image of resolvedAlbum.images) {
           await albumDirectory.removeEntry(image.name);
           if (await photoFileExists(albumDirectory, image.name)) {
             setPhotoDeleteError("浏览器没有删除这个图集中的部分图片，请确认文件未被占用，并重新选择看图文件夹授予写入权限。");
@@ -4331,10 +4339,27 @@ export default function App() {
         if (albumPathParts.length) {
           try {
             const parentDirectory = await resolvePhotoAlbumDirectory(rootDirectory, albumPathParts.slice(0, -1).join("/"));
-            await parentDirectory.removeEntry?.(albumPathParts[albumPathParts.length - 1]);
-          } catch {
-            // The album folder may contain non-photo files; removing the images is the required destructive action.
+            const albumDirectoryName = albumPathParts[albumPathParts.length - 1];
+            await parentDirectory.removeEntry?.(albumDirectoryName);
+            let directoryStillExists = true;
+            try {
+              await parentDirectory.getDirectoryHandle(albumDirectoryName);
+            } catch {
+              directoryStillExists = false;
+            }
+            if (directoryStillExists) throw new Error("Photo album directory still exists after deletion.");
+            directoryRemoved = true;
+          } catch (error) {
+            let hasRemainingEntries = false;
+            for await (const _entry of albumDirectory.values()) {
+              hasRemainingEntries = true;
+              break;
+            }
+            if (!hasRemainingEntries) throw error;
+            directoryRetainedReason = "not-empty";
           }
+        } else {
+          directoryRetainedReason = "root-directory";
         }
       }
 
@@ -4352,7 +4377,7 @@ export default function App() {
       }
 
       const nextPhotoObjectUrls = { ...photoObjectUrlsRef.current };
-      album.images.forEach((image) => {
+      resolvedAlbum.images.forEach((image) => {
         const objectUrl = photoObjectUrlsRef.current[image.id];
         revokeObjectUrl(objectUrl);
         revokeObjectUrl(image.url);
@@ -4375,7 +4400,7 @@ export default function App() {
             ? {
                 ...status,
                 videoCount: nextAlbums.filter((item) => item.mediaRootId === album.mediaRootId).length,
-                scannedFiles: Math.max(status.scannedFiles - album.imageCount, 0),
+                scannedFiles: Math.max(status.scannedFiles - deletedImageCount, 0),
                 updatedAt: Date.now(),
               }
             : status,
@@ -4402,15 +4427,21 @@ export default function App() {
         albumTags: nextAlbumTags,
       });
 
-      void replaceCachedPhotoAlbumScanAlbum(album.id, null, -album.imageCount)
+      void replaceCachedPhotoAlbumScanAlbum(album.id, null, -deletedImageCount)
         .catch(() => {
           setPhotoAlbumMessage("图集已删除，但扫描缓存更新失败，下次刷新会修正。");
         });
 
-      setPhotoAlbumMessage(`已删除《${album.title}》及其中 ${album.imageCount} 张图片`);
+      setPhotoAlbumMessage(
+        directoryRemoved
+          ? `已删除《${album.title}》、其中 ${deletedImageCount} 张图片及空文件夹`
+          : directoryRetainedReason === "not-empty"
+            ? `已删除《${album.title}》中的 ${deletedImageCount} 张图片；文件夹内还有其他文件，已保留`
+            : `已删除《${album.title}》中的 ${deletedImageCount} 张图片；看图根目录已保留`,
+      );
     } catch {
       setPhotoDeleteError(
-        album.images.every(isServerPhotoImage)
+        deletingServerAlbum
           ? "删除服务端图集失败，请确认媒体库路径仍可访问。"
           : "删除整个图集失败，请确认浏览器仍有文件夹写入权限，或重新选择看图文件夹。",
       );
@@ -4421,6 +4452,7 @@ export default function App() {
     clearPhotoAlbumAccessAfterWritePermissionDenied,
     isPhotoDeletePending,
     photoAlbumDeleteCandidate,
+    resolveCachedPhotoAlbum,
     saveCurrentPhotoAlbumStore,
     selectedPhotoAlbumId,
     updateAppRoute,
@@ -6911,7 +6943,7 @@ export default function App() {
         isOpen: Boolean(photoAlbumDeleteCandidate),
         titleId: "delete-photo-album-title",
         title: "删除整个图集？",
-        description: "这个操作会直接从本地磁盘删除这个图集中的图片文件，删除后无法在播放器内恢复。",
+        description: "这个操作会直接从本地磁盘删除图集中的图片，并同时清理空文件夹；其他文件不会被删除。删除后无法在播放器内恢复。",
         primaryText: "删除整本",
         pendingText: "删除中",
         isPending: isPhotoDeletePending,

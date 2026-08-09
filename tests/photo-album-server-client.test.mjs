@@ -57,3 +57,22 @@ test("deleteServerPhotoImage sends root and relative path", async () => {
     relativePath: "Set/001.jpg",
   });
 });
+
+test("deleteServerPhotoAlbum sends the album directory", async () => {
+  const calls = [];
+  const result = await client.deleteServerPhotoAlbum(async (url, options) => {
+    calls.push({ url, options });
+    return { deletedImages: 2, directoryRemoved: true };
+  }, {
+    mediaRootId: "photos",
+    relativePath: "Set",
+  });
+
+  assert.deepEqual(result, { deletedImages: 2, directoryRemoved: true });
+  assert.equal(calls[0].url, "/api/photo-albums/album");
+  assert.equal(calls[0].options.method, "DELETE");
+  assert.deepEqual(JSON.parse(calls[0].options.body), {
+    rootId: "photos",
+    relativePath: "Set",
+  });
+});

@@ -18,6 +18,7 @@ import {
 } from "./ladaRestoration.mjs";
 import {
   ensureFileExists,
+  deleteConfiguredPhotoAlbum,
   findTranslatedSubtitle,
   normalizeMediaRoots as normalizeMediaRootsFromConfig,
   resolveMediaPath as resolveMediaPathFromConfig,
@@ -1250,6 +1251,16 @@ export function playerDataApiPlugin({ projectRoot, env }) {
       if (url.pathname === "/api/photo-albums/photo" && request.method === "DELETE") {
         const payload = await parseJsonBody(request);
         sendJson(response, 200, await deletePhotoImage(await loadAppConfig(), payload));
+        return;
+      }
+
+      if (url.pathname === "/api/photo-albums/album" && request.method === "DELETE") {
+        const payload = await parseJsonBody(request);
+        sendJson(response, 200, await deleteConfiguredPhotoAlbum(
+          await loadAppConfig(),
+          payload?.rootId,
+          payload?.relativePath,
+        ));
         return;
       }
 

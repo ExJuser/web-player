@@ -1,4 +1,4 @@
-import { access, readFile, readdir, stat } from "node:fs/promises";
+import { access, readFile, readdir, realpath, rm, rmdir, stat } from "node:fs/promises";
 import { availableParallelism } from "node:os";
 import path from "node:path";
 import { createMatchingNfoNameLookup, maxActorNfoBytes, parseActorNfoBytes } from "../src/actorNfoCore.mjs";
@@ -692,6 +692,61 @@ export function resolvePhotoPath(config, rootId, relativePath) {
   } catch (error) {
     if (error instanceof Error && error.message === "Unsupported media file.") {
       throw new Error("Unsupported photo file.");
+    }
+    throw error;
+  }
+}
+
+export async function deleteConfiguredPhotoAlbum(config, rootId, relativePath) {
+  const root = mediaRootsForPathResolution(config).find((item) => item.id === rootId);
+  if (!root) throw new Error("Unknown media root.");
+  const rootPath = serverPathForRoot(root);
+  if (!rootPath || !path.isAbsolute(rootPath)) {
+    throw new Error("Browser media libraries need a configured local absolute path before server file access.");
+  }
+
+  if (typeof relativePath !== "string") throw new Error("Invalid relative path.");
+  const normalizedRelativePath = relativePath.replace(/\\/g, "/");
+  const pathParts = normalizedRelativePath.split("/").filter(Boolean);
+  if (path.isAbsolute(normalizedRelativePath) || pathParts.some((part) => part === "." || part === "..")) {
+    throw new Error("Invalid relative path.");
+  }
+
+  const resolvedRoot = path.resolve(rootPath);
+  const resolvedAlbumDirectory = path.resolve(resolvedRoot, ...pathParts);
+  const rootWithSeparator = resolvedRoot.endsWith(path.sep) ? resolvedRoot : `${resolvedRoot}${path.sep}`;
+  if (resolvedAlbumDirectory !== resolvedRoot && !resolvedAlbumDirectory.startsWith(rootWithSeparator)) {
+    throw new Error("Resolved photo album path is outside the configured media root.");
+  }
+
+  const realRoot = await realpath(resolvedRoot);
+  const albumDirectory = await realpath(resolvedAlbumDirectory);
+  const realRootWithSeparator = realRoot.endsWith(path.sep) ? realRoot : `${realRoot}${path.sep}`;
+  if (albumDirectory !== realRoot && !albumDirectory.startsWith(realRootWithSeparator)) {
+    throw new Error("Resolved photo album path is outside the configured media root.");
+  }
+
+  const albumStat = await stat(albumDirectory);
+  if (!albumStat.isDirectory()) throw new Error("Photo album path is not a directory.");
+  const entries = await readdir(albumDirectory, { withFileTypes: true });
+  const photoEntries = entries.filter((entry) => entry.isFile() && photoExtensions.has(path.extname(entry.name).toLowerCase()));
+  for (const entry of photoEntries) {
+    await rm(path.join(albumDirectory, entry.name), { force: false });
+  }
+
+  if (albumDirectory === realRoot) {
+    return { deletedImages: photoEntries.length, directoryRemoved: false, directoryRetainedReason: "root-directory" };
+  }
+
+  try {
+    await rmdir(albumDirectory);
+    return { deletedImages: photoEntries.length, directoryRemoved: true };
+  } catch (error) {
+    if (error?.code === "ENOTEMPTY" || error?.code === "EEXIST") {
+      return { deletedImages: photoEntries.length, directoryRemoved: false, directoryRetainedReason: "not-empty" };
+    }
+    if (error?.code === "ENOENT") {
+      return { deletedImages: photoEntries.length, directoryRemoved: true };
     }
     throw error;
   }

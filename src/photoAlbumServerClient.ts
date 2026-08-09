@@ -23,6 +23,12 @@ export type PhotoAlbumScanResponse = {
 
 type FetchJson = <T>(url: string, options?: RequestInit) => Promise<T>;
 
+export type DeletePhotoAlbumResult = {
+  deletedImages: number;
+  directoryRemoved: boolean;
+  directoryRetainedReason?: "not-empty" | "root-directory";
+};
+
 export function hasReadyPhotoAlbumRoot(scan: PhotoAlbumScanResponse) {
   return scan.metadata.mediaRoots.some((status) => status.status === "ready");
 }
@@ -44,6 +50,23 @@ export async function deleteServerPhotoImage(
     body: JSON.stringify({
       rootId: image.mediaRootId,
       relativePath: image.relativePath,
+    }),
+  });
+}
+
+export async function deleteServerPhotoAlbum(
+  fetchJson: FetchJson,
+  album: { mediaRootId: string; relativePath: string },
+) {
+  return fetchJson<DeletePhotoAlbumResult>("/api/photo-albums/album", {
+    method: "DELETE",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify({
+      rootId: album.mediaRootId,
+      relativePath: album.relativePath,
     }),
   });
 }
