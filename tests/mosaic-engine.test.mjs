@@ -5,6 +5,14 @@ import { importTsModule } from "./importTsModule.mjs";
 
 const engine = await importTsModule(new URL("../src/mosaicEngine.ts", import.meta.url));
 
+function replaceProperty(target, property, value) {
+  const descriptor = Object.getOwnPropertyDescriptor(target, property);
+  Object.defineProperty(target, property, { configurable: true, value });
+  return () => descriptor
+    ? Object.defineProperty(target, property, descriptor)
+    : delete target[property];
+}
+
 test("mosaic descriptor values are quantized to the shared byte format", () => {
   const descriptor = engine.quantizeMosaicDescriptor(0, 128.4, 255, 12.8);
   assert.equal(descriptor.length, 32);
@@ -102,4 +110,55 @@ test("GPU candidate matching selects the Worker fallback when WebGPU is unavaila
   );
   assert.equal(result.backend, "worker");
   assert.equal(result.candidates, undefined);
+});
+
+test("GPU candidate matching decodes candidates and releases buffers", async () => {
+  const output = new Uint32Array([2, 1, 0xffffffff, 0xffffffff, 0, 0xffffffff, 0xffffffff, 0xffffffff]);
+  const calls = { dispatches: [], destroyed: 0, unmapped: 0 };
+  let bufferIndex = 0;
+  const device = {
+    queue: { writeBuffer() {}, submit() {} },
+    createBuffer() {
+      const index = bufferIndex++;
+      return {
+        async mapAsync() {},
+        getMappedRange: () => index === 3 ? output.buffer : new ArrayBuffer(0),
+        unmap() { calls.unmapped++; },
+        destroy() { calls.destroyed++; },
+      };
+    },
+    createShaderModule: () => ({}),
+    createComputePipeline: () => ({ getBindGroupLayout: () => ({}) }),
+    createBindGroup: () => ({}),
+    createCommandEncoder: () => ({
+      beginComputePass: () => ({
+        setPipeline() {},
+        setBindGroup() {},
+        dispatchWorkgroups(count) { calls.dispatches.push(count); },
+        end() {},
+      }),
+      copyBufferToBuffer() {},
+      finish: () => ({}),
+    }),
+  };
+  const restoreGpu = replaceProperty(globalThis.navigator, "gpu", {
+    requestAdapter: async () => ({ requestDevice: async () => device }),
+  });
+  const restoreUsage = replaceProperty(globalThis, "GPUBufferUsage", { STORAGE: 1, COPY_DST: 2, COPY_SRC: 4, MAP_READ: 8 });
+  const restoreMapMode = replaceProperty(globalThis, "GPUMapMode", { READ: 1 });
+
+  try {
+    const result = await engine.findGpuCandidates(
+      [[10, 20, 30], [40, 50, 60]],
+      ["a", "b", "c"].map((sourceId) => ({ version: 1, sourceId, signature: "1", values: [10, 20, 30] })),
+    );
+    assert.deepEqual(result, { backend: "webgpu", candidates: [[2, 1], [0]] });
+    assert.deepEqual(calls.dispatches, [1]);
+    assert.equal(calls.unmapped, 1);
+    assert.equal(calls.destroyed, 4);
+  } finally {
+    restoreMapMode();
+    restoreUsage();
+    restoreGpu();
+  }
 });

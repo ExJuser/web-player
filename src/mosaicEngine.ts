@@ -196,6 +196,68 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
   }
 }`;
 
+function normalizeMosaicGpuValues(values: readonly number[]) {
+  return Array.from({ length: 32 }, (_, index) => values[index] ?? 0);
+}
+
+function createMosaicGpuResources(
+  device: any,
+  targets: readonly (readonly number[])[],
+  sources: readonly MosaicFeatureDescriptor[],
+) {
+  const targetValues = new Float32Array(targets.flatMap(normalizeMosaicGpuValues));
+  const sourceValues = new Float32Array(sources.flatMap((source) => normalizeMosaicGpuValues(source.values)));
+  const outputBytes = targets.length * mosaicCandidateCount * Uint32Array.BYTES_PER_ELEMENT;
+  const usage = (globalThis as any).GPUBufferUsage;
+  const targetBuffer = device.createBuffer({ size: targetValues.byteLength, usage: usage.STORAGE | usage.COPY_DST });
+  const sourceBuffer = device.createBuffer({ size: sourceValues.byteLength, usage: usage.STORAGE | usage.COPY_DST });
+  const outputBuffer = device.createBuffer({ size: outputBytes, usage: usage.STORAGE | usage.COPY_SRC });
+  const readBuffer = device.createBuffer({ size: outputBytes, usage: usage.COPY_DST | usage.MAP_READ });
+  device.queue.writeBuffer(targetBuffer, 0, targetValues);
+  device.queue.writeBuffer(sourceBuffer, 0, sourceValues);
+  return { targetBuffer, sourceBuffer, outputBuffer, readBuffer, outputBytes };
+}
+
+function dispatchMosaicGpuSearch(
+  device: any,
+  resources: ReturnType<typeof createMosaicGpuResources>,
+  targetCount: number,
+) {
+  const module = device.createShaderModule({ code: webGpuShader });
+  const pipeline = device.createComputePipeline({ layout: "auto", compute: { module, entryPoint: "main" } });
+  const bindGroup = device.createBindGroup({
+    layout: pipeline.getBindGroupLayout(0),
+    entries: [
+      { binding: 0, resource: { buffer: resources.targetBuffer } },
+      { binding: 1, resource: { buffer: resources.sourceBuffer } },
+      { binding: 2, resource: { buffer: resources.outputBuffer } },
+    ],
+  });
+  const encoder = device.createCommandEncoder();
+  const pass = encoder.beginComputePass();
+  pass.setPipeline(pipeline);
+  pass.setBindGroup(0, bindGroup);
+  pass.dispatchWorkgroups(Math.ceil(targetCount / 64));
+  pass.end();
+  encoder.copyBufferToBuffer(resources.outputBuffer, 0, resources.readBuffer, 0, resources.outputBytes);
+  device.queue.submit([encoder.finish()]);
+}
+
+async function readMosaicGpuCandidates(readBuffer: any, targetCount: number) {
+  await readBuffer.mapAsync((globalThis as any).GPUMapMode.READ);
+  const values = new Uint32Array(readBuffer.getMappedRange().slice(0));
+  const candidates = Array.from({ length: targetCount }, (_, index) => Array.from(
+    values.slice(index * mosaicCandidateCount, (index + 1) * mosaicCandidateCount),
+  ).filter((value) => value !== 0xffffffff));
+  readBuffer.unmap();
+  return candidates;
+}
+
+function destroyMosaicGpuResources(resources: ReturnType<typeof createMosaicGpuResources>) {
+  [resources.targetBuffer, resources.sourceBuffer, resources.outputBuffer, resources.readBuffer]
+    .forEach((buffer) => buffer.destroy());
+}
+
 export async function findGpuCandidates(
   targets: readonly (readonly number[])[],
   sources: readonly MosaicFeatureDescriptor[],
@@ -209,40 +271,10 @@ export async function findGpuCandidates(
     const adapter = await gpu.requestAdapter({ powerPreference: "high-performance" });
     device = await adapter?.requestDevice();
     if (!device) throw new Error("WebGPU adapter unavailable");
-    const normalizeValues = (values: readonly number[]) => Array.from({ length: 32 }, (_, index) => values[index] ?? 0);
-    const targetValues = new Float32Array(targets.flatMap(normalizeValues));
-    const sourceValues = new Float32Array(sources.flatMap((value) => normalizeValues(value.values)));
-    const outputBytes = targets.length * mosaicCandidateCount * Uint32Array.BYTES_PER_ELEMENT;
-    const usage = (globalThis as any).GPUBufferUsage;
-    const targetBuffer = device.createBuffer({ size: targetValues.byteLength, usage: usage.STORAGE | usage.COPY_DST });
-    const sourceBuffer = device.createBuffer({ size: sourceValues.byteLength, usage: usage.STORAGE | usage.COPY_DST });
-    const outputBuffer = device.createBuffer({ size: outputBytes, usage: usage.STORAGE | usage.COPY_SRC });
-    const readBuffer = device.createBuffer({ size: outputBytes, usage: usage.COPY_DST | usage.MAP_READ });
-    device.queue.writeBuffer(targetBuffer, 0, targetValues);
-    device.queue.writeBuffer(sourceBuffer, 0, sourceValues);
-    const module = device.createShaderModule({ code: webGpuShader });
-    const pipeline = device.createComputePipeline({ layout: "auto", compute: { module, entryPoint: "main" } });
-    const bindGroup = device.createBindGroup({
-      layout: pipeline.getBindGroupLayout(0),
-      entries: [
-        { binding: 0, resource: { buffer: targetBuffer } },
-        { binding: 1, resource: { buffer: sourceBuffer } },
-        { binding: 2, resource: { buffer: outputBuffer } },
-      ],
-    });
-    const encoder = device.createCommandEncoder();
-    const pass = encoder.beginComputePass();
-    pass.setPipeline(pipeline);
-    pass.setBindGroup(0, bindGroup);
-    pass.dispatchWorkgroups(Math.ceil(targets.length / 64));
-    pass.end();
-    encoder.copyBufferToBuffer(outputBuffer, 0, readBuffer, 0, outputBytes);
-    device.queue.submit([encoder.finish()]);
-    await readBuffer.mapAsync((globalThis as any).GPUMapMode.READ);
-    const values = new Uint32Array(readBuffer.getMappedRange().slice(0));
-    const candidates = targets.map((_, index) => Array.from(values.slice(index * 4, index * 4 + 4)).filter((value) => value !== 0xffffffff));
-    readBuffer.unmap();
-    [targetBuffer, sourceBuffer, outputBuffer, readBuffer].forEach((buffer) => buffer.destroy());
+    const resources = createMosaicGpuResources(device, targets, sources);
+    dispatchMosaicGpuSearch(device, resources, targets.length);
+    const candidates = await readMosaicGpuCandidates(resources.readBuffer, targets.length);
+    destroyMosaicGpuResources(resources);
     return { backend: "webgpu", candidates };
   } catch {
     device?.destroy?.();
