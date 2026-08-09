@@ -796,6 +796,22 @@ export function applyDuplicateNameSimilarityScores(
   }
 }
 
+export function calculateDuplicateDetectionPercent(
+  progress: Required<Omit<DuplicateDetectionProgress, "percent">>,
+  explicitPercent?: number,
+) {
+  const phasePercent =
+    explicitPercent ??
+    (progress.phase === "fingerprint"
+      ? 50 + (progress.totalFingerprints ? Math.round((progress.processedFingerprints / progress.totalFingerprints) * 30) : 30)
+      : progress.phase === "aiName"
+        ? 80 + (progress.totalNamePairs ? Math.round((progress.processedNamePairs / progress.totalNamePairs) * 20) : 20)
+        : progress.totalPairs
+          ? Math.round((progress.processedPairs / progress.totalPairs) * 50)
+          : 50);
+  return Math.min(100, Math.max(0, phasePercent));
+}
+
 export async function detectDuplicateVideosWithProgress(
   videos: VideoItem[],
   options: DuplicateDetectionOptions = {},
@@ -811,19 +827,10 @@ export async function detectDuplicateVideosWithProgress(
   let totalFingerprints = 0;
   let processedNamePairs = 0;
   let totalNamePairs = 0;
-  let phase: DuplicateDetectionProgress["phase"] = "metadata";
+  let phase: NonNullable<DuplicateDetectionProgress["phase"]> = "metadata";
 
   const reportProgress = (explicitPercent?: number) => {
-    const phasePercent =
-      explicitPercent ??
-      (phase === "fingerprint"
-        ? 50 + (totalFingerprints ? Math.round((processedFingerprints / totalFingerprints) * 30) : 30)
-        : phase === "aiName"
-          ? 80 + (totalNamePairs ? Math.round((processedNamePairs / totalNamePairs) * 20) : 20)
-          : totalPairs
-            ? Math.round((processedPairs / totalPairs) * 50)
-            : 50);
-    options.onProgress?.({
+    const progress = {
       processedPairs,
       totalPairs,
       processedFingerprints,
@@ -831,7 +838,10 @@ export async function detectDuplicateVideosWithProgress(
       processedNamePairs,
       totalNamePairs,
       phase,
-      percent: Math.min(100, Math.max(0, phasePercent)),
+    };
+    options.onProgress?.({
+      ...progress,
+      percent: calculateDuplicateDetectionPercent(progress, explicitPercent),
     });
   };
 

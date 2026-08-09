@@ -439,6 +439,26 @@ test("applies valid AI name scores while keeping short-number pairs below duplic
   assert.ok(result.reasons.includes("AI 名称相似度 100%"));
 });
 
+test("calculates duplicate detection progress across phases and clamps explicit values", () => {
+  const progress = {
+    processedPairs: 5,
+    totalPairs: 10,
+    processedFingerprints: 1,
+    totalFingerprints: 4,
+    processedNamePairs: 1,
+    totalNamePairs: 4,
+    phase: "metadata",
+  };
+
+  assert.equal(mediaUtils.calculateDuplicateDetectionPercent(progress), 25);
+  assert.equal(mediaUtils.calculateDuplicateDetectionPercent({ ...progress, phase: "fingerprint" }), 58);
+  assert.equal(mediaUtils.calculateDuplicateDetectionPercent({ ...progress, phase: "aiName" }), 85);
+  assert.equal(mediaUtils.calculateDuplicateDetectionPercent({ ...progress, totalFingerprints: 0, phase: "fingerprint" }), 80);
+  assert.equal(mediaUtils.calculateDuplicateDetectionPercent({ ...progress, totalNamePairs: 0, phase: "aiName" }), 100);
+  assert.equal(mediaUtils.calculateDuplicateDetectionPercent(progress, -10), 0);
+  assert.equal(mediaUtils.calculateDuplicateDetectionPercent(progress, 140), 100);
+});
+
 test("detects duplicate videos incrementally with progress updates", async () => {
   const videos = [
     createVideo({
