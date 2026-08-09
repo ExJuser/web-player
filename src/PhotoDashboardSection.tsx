@@ -7,7 +7,7 @@ import { PhotoAlbumStats } from "./PhotoAlbumStats";
 import { PhotoTagStats } from "./PhotoTagStats";
 import { PhotoAlbumToolbar, type PhotoAlbumViewFilter } from "./PhotoAlbumToolbar";
 import { PhotoRootStatusCard } from "./PhotoRootStatusCard";
-import type { PhotoAlbum, PhotoAlbumSortMode, PlayerMediaRootStatus } from "./playerTypes";
+import type { PhotoAlbum, PhotoAlbumSortDirection, PhotoAlbumSortMode, PlayerMediaRootStatus } from "./playerTypes";
 
 type PhotoDashboardSectionProps = {
   currentPage: number;
@@ -22,6 +22,8 @@ type PhotoDashboardSectionProps = {
   searchQuery: string;
   searchResultCount: number;
   searchResults: PhotoAlbumSearchResult[];
+  sortDirection: PhotoAlbumSortDirection;
+  sortDirectionOptions: Array<{ value: PhotoAlbumSortDirection; label: string }>;
   sortMode: PhotoAlbumSortMode;
   sortOptions: Array<{ value: PhotoAlbumSortMode; label: string }>;
   start: number;
@@ -40,8 +42,7 @@ type PhotoDashboardSectionProps = {
   totalVisibleAlbums: number;
   onChooseDirectory: () => void;
   onFilterChange: (filter: PhotoAlbumViewFilter) => void;
-  onNextPage: () => void;
-  onPreviousPage: () => void;
+  onPageChange: (page: number) => void;
   onRandomAlbum: () => void;
   onRefresh: () => void;
   onRenderAlbum: (album: PhotoAlbum) => ReactNode;
@@ -49,6 +50,7 @@ type PhotoDashboardSectionProps = {
   onSearchClear: () => void;
   onSelectSearchResult: (album: PhotoAlbum) => void;
   onSelectTag: (label: string) => void;
+  onSortDirectionChange: (sortDirection: PhotoAlbumSortDirection) => void;
   onSortModeChange: (sortMode: PhotoAlbumSortMode) => void;
 };
 
@@ -65,6 +67,8 @@ export function PhotoDashboardSection({
   searchQuery,
   searchResultCount,
   searchResults,
+  sortDirection,
+  sortDirectionOptions,
   sortMode,
   sortOptions,
   start,
@@ -73,8 +77,7 @@ export function PhotoDashboardSection({
   totalVisibleAlbums,
   onChooseDirectory,
   onFilterChange,
-  onNextPage,
-  onPreviousPage,
+  onPageChange,
   onRandomAlbum,
   onRefresh,
   onRenderAlbum,
@@ -82,6 +85,7 @@ export function PhotoDashboardSection({
   onSearchClear,
   onSelectSearchResult,
   onSelectTag,
+  onSortDirectionChange,
   onSortModeChange,
 }: PhotoDashboardSectionProps) {
   return (
@@ -90,11 +94,14 @@ export function PhotoDashboardSection({
         filter={filter}
         isLoading={isLoading}
         message={message}
+        sortDirection={sortDirection}
+        sortDirectionOptions={sortDirectionOptions}
         sortMode={sortMode}
         sortOptions={sortOptions}
         onFilterChange={onFilterChange}
         onRandomAlbum={onRandomAlbum}
         onRefresh={onRefresh}
+        onSortDirectionChange={onSortDirectionChange}
         onSortModeChange={onSortModeChange}
         randomDisabled={isLoading || !totalVisibleAlbums}
       />
@@ -118,8 +125,7 @@ export function PhotoDashboardSection({
             pageCount={pageCount}
             start={start}
             total={totalVisibleAlbums}
-            onNext={onNextPage}
-            onPrevious={onPreviousPage}
+            onPageChange={onPageChange}
           />
         </>
       ) : (

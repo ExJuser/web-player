@@ -2089,7 +2089,12 @@ button {
   min-width: 126px;
 }
 
-.photo-sort-control .control-select-list {
+.photo-sort-direction-control .control-select {
+  min-width: 76px;
+}
+
+.photo-sort-control .control-select-list,
+.photo-sort-direction-control .control-select-list {
   top: calc(100% + 6px);
   bottom: auto;
 }
@@ -2159,20 +2164,29 @@ button {
 }
 
 .photo-pagination {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
   color: #8e97a5;
   font-size: 13px;
 }
 
-.photo-pagination > div {
+.photo-pagination > span {
+  justify-self: start;
+}
+
+.photo-pagination-controls {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: 10px;
+  justify-content: center;
+  gap: 6px;
   min-width: 0;
+}
+
+.photo-pagination-controls .icon-button {
+  width: 32px;
+  height: 32px;
 }
 
 .photo-pagination strong {
@@ -2180,6 +2194,38 @@ button {
   color: #f5f7fb;
   font-size: 13px;
   text-align: center;
+}
+
+.photo-page-jump {
+  display: flex;
+  align-items: center;
+  justify-self: end;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.photo-page-jump input {
+  width: 58px;
+  height: 32px;
+  border: 1px solid #343b46;
+  border-radius: 6px;
+  background: #171b21;
+  color: #f5f7fb;
+  text-align: center;
+}
+
+.photo-page-jump .secondary-button {
+  width: auto;
+  min-width: auto;
+  height: 32px;
+  padding: 0 10px;
+}
+
+.app-shell.theme-light .photo-page-jump input,
+:root[data-theme="light"] .photo-page-jump input {
+  border-color: #d7e0ea;
+  background: #ffffff;
+  color: #18212f;
 }
 
 .photo-album-card {
@@ -11540,17 +11586,25 @@ button {
     gap: 10px;
   }
 
-  .photo-pagination,
-  .photo-pagination > div,
   .cache-status-pagination,
   .cache-status-pagination > div {
     align-items: stretch;
     flex-direction: column;
   }
 
-  .photo-pagination .secondary-button,
   .cache-status-pagination .secondary-button {
     width: 100%;
+  }
+
+  .photo-pagination {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    gap: 8px;
+  }
+
+  .photo-pagination > span,
+  .photo-page-jump {
+    justify-self: center;
   }
 
   .photo-album-card {

@@ -1,4 +1,4 @@
-import type { CachedPhotoAlbumScan, PhotoAlbum, PhotoAlbumImage, PhotoAlbumPreferences, PhotoAlbumProgress, PhotoAlbumSortMode, PhotoAlbumStore } from "./playerTypes";
+import type { CachedPhotoAlbumScan, PhotoAlbum, PhotoAlbumImage, PhotoAlbumPreferences, PhotoAlbumProgress, PhotoAlbumSortDirection, PhotoAlbumSortMode, PhotoAlbumStore } from "./playerTypes";
 import { collator } from "./playerConstants";
 import { getTagSearchScore, normalizeTagKey, parseTagInput } from "./tagUtils";
 export const photoAlbumScanCacheVersion = 1;
@@ -10,8 +10,14 @@ export const photoAlbumSortOptions: Array<{ value: PhotoAlbumSortMode; label: st
   { value: "count", label: "图片数" },
 ];
 
+export const photoAlbumSortDirectionOptions: Array<{ value: PhotoAlbumSortDirection; label: string }> = [
+  { value: "asc", label: "正序" },
+  { value: "desc", label: "倒序" },
+];
+
 export const defaultPhotoAlbumPreferences: PhotoAlbumPreferences = {
   sortMode: "updated",
+  sortDirection: "desc",
   favoritesOnly: false,
   recentTags: [],
   tagMergeDecisions: {},
@@ -35,6 +41,7 @@ export function getVisiblePhotoAlbums(input: {
   favoriteAlbumIds: ReadonlySet<string>;
   filter: "all" | "favorites";
   searchQuery: string;
+  sortDirection: PhotoAlbumSortDirection;
   sortMode: PhotoAlbumSortMode;
   albumTags: Record<string, string[] | undefined>;
 }) {
@@ -60,16 +67,17 @@ export function getVisiblePhotoAlbums(input: {
     : source;
 
   return [...filteredSource].sort((a, b) => {
+    let comparison: number;
     if (input.sortMode === "name") {
-      return collator.compare(a.title || a.relativePath, b.title || b.relativePath);
+      comparison = collator.compare(a.title || a.relativePath, b.title || b.relativePath);
+    } else if (input.sortMode === "count") {
+      comparison = a.imageCount - b.imageCount || collator.compare(a.title, b.title);
+    } else if (input.sortMode === "folderModified") {
+      comparison = (a.folderModifiedAt ?? a.updatedAt) - (b.folderModifiedAt ?? b.updatedAt) || collator.compare(a.title, b.title);
+    } else {
+      comparison = a.updatedAt - b.updatedAt || collator.compare(a.title, b.title);
     }
-    if (input.sortMode === "count") {
-      return b.imageCount - a.imageCount || collator.compare(a.title, b.title);
-    }
-    if (input.sortMode === "folderModified") {
-      return (b.folderModifiedAt ?? b.updatedAt) - (a.folderModifiedAt ?? a.updatedAt) || collator.compare(a.title, b.title);
-    }
-    return b.updatedAt - a.updatedAt || collator.compare(a.title, b.title);
+    return input.sortDirection === "asc" ? comparison : -comparison;
   });
 }
 
@@ -176,6 +184,10 @@ export function parsePhotoAlbumPreferences(source: unknown): PhotoAlbumPreferenc
       preferences.sortMode === "name" || preferences.sortMode === "count" || preferences.sortMode === "folderModified"
         ? preferences.sortMode
         : defaultPhotoAlbumPreferences.sortMode,
+    sortDirection:
+      preferences.sortDirection === "asc" || preferences.sortDirection === "desc"
+        ? preferences.sortDirection
+        : defaultPhotoAlbumPreferences.sortDirection,
     favoritesOnly:
       typeof preferences.favoritesOnly === "boolean"
         ? preferences.favoritesOnly

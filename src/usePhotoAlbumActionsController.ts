@@ -12,6 +12,7 @@ import type {
   PhotoAlbumImage,
   PhotoAlbumPreferences,
   PhotoAlbumProgress,
+  PhotoAlbumSortDirection,
   PhotoAlbumSortMode,
   PhotoAlbumStore,
 } from "./playerTypes";
@@ -34,6 +35,7 @@ type UsePhotoAlbumActionsControllerOptions = {
   setPhotoAlbumMessage: Dispatch<SetStateAction<string>>;
   setPhotoAlbumPage: Dispatch<SetStateAction<number>>;
   setPhotoAlbumProgress: Dispatch<SetStateAction<Record<string, PhotoAlbumProgress>>>;
+  setPhotoAlbumSortDirection: Dispatch<SetStateAction<PhotoAlbumSortDirection>>;
   setPhotoAlbumSortMode: Dispatch<SetStateAction<PhotoAlbumSortMode>>;
   setSelectedPhotoAlbumId: Dispatch<SetStateAction<string | null>>;
   visiblePhotoAlbums: PhotoAlbum[];
@@ -57,6 +59,7 @@ export function usePhotoAlbumActionsController({
   setPhotoAlbumMessage,
   setPhotoAlbumPage,
   setPhotoAlbumProgress,
+  setPhotoAlbumSortDirection,
   setPhotoAlbumSortMode,
   setSelectedPhotoAlbumId,
   visiblePhotoAlbums,
@@ -206,6 +209,22 @@ export function usePhotoAlbumActionsController({
     [photoAlbumPreferencesRef, setPhotoAlbumMessage, setPhotoAlbumPage, setPhotoAlbumSortMode],
   );
 
+  const updatePhotoAlbumSortDirection = useCallback(
+    (nextSortDirection: PhotoAlbumSortDirection) => {
+      const nextPreferences = {
+        ...photoAlbumPreferencesRef.current,
+        sortDirection: nextSortDirection,
+      };
+      photoAlbumPreferencesRef.current = nextPreferences;
+      setPhotoAlbumSortDirection(nextSortDirection);
+      setPhotoAlbumPage(1);
+      void savePhotoAlbumPreferences(nextPreferences).catch(() => {
+        setPhotoAlbumMessage("看图偏好保存失败。");
+      });
+    },
+    [photoAlbumPreferencesRef, setPhotoAlbumMessage, setPhotoAlbumPage, setPhotoAlbumSortDirection],
+  );
+
   const updatePhotoAlbumFilter = useCallback(
     (nextFilter: PhotoAlbumViewFilter) => {
       const nextPreferences = {
@@ -233,6 +252,7 @@ export function usePhotoAlbumActionsController({
     showPhotoAlbumList,
     togglePhotoAlbumFavorite,
     updatePhotoAlbumFilter,
+    updatePhotoAlbumSortDirection,
     updatePhotoAlbumSortMode,
   };
 }

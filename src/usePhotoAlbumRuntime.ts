@@ -5,6 +5,7 @@ import type {
   FileSystemDirectoryHandle,
   PhotoAlbum,
   PhotoAlbumProgress,
+  PhotoAlbumSortDirection,
   PhotoAlbumSortMode,
   PhotoAlbumStore,
 } from "./playerTypes";
@@ -17,12 +18,14 @@ type UsePhotoAlbumRuntimeOptions = {
   photoAlbumFilter: PhotoAlbumViewFilterValue;
   photoAlbumProgress: Record<string, PhotoAlbumProgress>;
   photoAlbums: PhotoAlbum[];
+  photoAlbumSortDirection: PhotoAlbumSortDirection;
   photoAlbumSortMode: PhotoAlbumSortMode;
   photoAlbumTags: Record<string, string[]>;
   setFavoritePhotoAlbumIds: Dispatch<SetStateAction<Set<string>>>;
   setPhotoAlbumCoverPreferences: Dispatch<SetStateAction<Record<string, string>>>;
   setPhotoAlbumFilter: Dispatch<SetStateAction<PhotoAlbumViewFilterValue>>;
   setPhotoAlbumProgress: Dispatch<SetStateAction<Record<string, PhotoAlbumProgress>>>;
+  setPhotoAlbumSortDirection: Dispatch<SetStateAction<PhotoAlbumSortDirection>>;
   setPhotoAlbumSortMode: Dispatch<SetStateAction<PhotoAlbumSortMode>>;
   setPhotoAlbumTags: Dispatch<SetStateAction<Record<string, string[]>>>;
 };
@@ -33,12 +36,14 @@ export function usePhotoAlbumRuntime({
   photoAlbumFilter,
   photoAlbumProgress,
   photoAlbums,
+  photoAlbumSortDirection,
   photoAlbumSortMode,
   photoAlbumTags,
   setFavoritePhotoAlbumIds,
   setPhotoAlbumCoverPreferences,
   setPhotoAlbumFilter,
   setPhotoAlbumProgress,
+  setPhotoAlbumSortDirection,
   setPhotoAlbumSortMode,
   setPhotoAlbumTags,
 }: UsePhotoAlbumRuntimeOptions) {
@@ -57,6 +62,7 @@ export function usePhotoAlbumRuntime({
   favoritePhotoAlbumIdsRef.current = favoritePhotoAlbumIds;
   photoAlbumPreferencesRef.current = {
     sortMode: photoAlbumSortMode,
+    sortDirection: photoAlbumSortDirection,
     favoritesOnly: photoAlbumFilter === "favorites",
     recentTags: photoAlbumPreferencesRef.current.recentTags,
     tagMergeDecisions: photoAlbumPreferencesRef.current.tagMergeDecisions,
@@ -93,6 +99,7 @@ export function usePhotoAlbumRuntime({
     setPhotoAlbumProgress(store.progress);
     setPhotoAlbumCoverPreferences(store.coverImageByAlbumId);
     setPhotoAlbumTags(store.albumTags);
+    setPhotoAlbumSortDirection(store.preferences.sortDirection);
     setPhotoAlbumSortMode(store.preferences.sortMode);
     setPhotoAlbumFilter(store.preferences.favoritesOnly ? "favorites" : "all");
   }, [
@@ -100,6 +107,7 @@ export function usePhotoAlbumRuntime({
     setPhotoAlbumCoverPreferences,
     setPhotoAlbumFilter,
     setPhotoAlbumProgress,
+    setPhotoAlbumSortDirection,
     setPhotoAlbumSortMode,
     setPhotoAlbumTags,
   ]);

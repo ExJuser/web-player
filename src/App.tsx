@@ -108,6 +108,7 @@ import type {
   PhotoAlbum,
   PhotoAlbumImage,
   PhotoAlbumProgress,
+  PhotoAlbumSortDirection,
   PhotoAlbumSortMode,
   PlaylistFilter,
   PlaylistSortMode,
@@ -146,6 +147,7 @@ import {
   loadCachedPhotoAlbumImages,
   loadCachedPhotoAlbumScan,
   loadPhotoAlbumStore,
+  photoAlbumSortDirectionOptions,
   photoAlbumSortOptions,
   replaceCachedPhotoAlbumScanAlbum,
   saveCachedPhotoAlbumScan,
@@ -624,6 +626,7 @@ export default function App() {
   const [photoAlbumCoverPreferences, setPhotoAlbumCoverPreferences] = useState<Record<string, string>>({});
   const [photoAlbumTags, setPhotoAlbumTags] = useState<Record<string, string[]>>({});
   const [favoritePhotoAlbumIds, setFavoritePhotoAlbumIds] = useState<Set<string>>(() => new Set());
+  const [photoAlbumSortDirection, setPhotoAlbumSortDirection] = useState<PhotoAlbumSortDirection>(defaultPhotoAlbumPreferences.sortDirection);
   const [photoAlbumSortMode, setPhotoAlbumSortMode] = useState<PhotoAlbumSortMode>(defaultPhotoAlbumPreferences.sortMode);
   const [photoAlbumFilter, setPhotoAlbumFilter] = useState<PhotoAlbumViewFilter>(
     defaultPhotoAlbumPreferences.favoritesOnly ? "favorites" : "all",
@@ -649,12 +652,14 @@ export default function App() {
     photoAlbumFilter,
     photoAlbumProgress,
     photoAlbums,
+    photoAlbumSortDirection,
     photoAlbumSortMode,
     photoAlbumTags,
     setFavoritePhotoAlbumIds,
     setPhotoAlbumCoverPreferences,
     setPhotoAlbumFilter,
     setPhotoAlbumProgress,
+    setPhotoAlbumSortDirection,
     setPhotoAlbumSortMode,
     setPhotoAlbumTags,
   });
@@ -2173,8 +2178,8 @@ export default function App() {
     setPhotoAlbumTags,
   });
   const visiblePhotoAlbums = useMemo(
-    () => getVisiblePhotoAlbums({ albums: photoAlbums, favoriteAlbumIds: favoritePhotoAlbumIds, filter: photoAlbumFilter, searchQuery: "", sortMode: photoAlbumSortMode, albumTags: photoAlbumTags }),
-    [favoritePhotoAlbumIds, photoAlbumFilter, photoAlbumSortMode, photoAlbumTags, photoAlbums],
+    () => getVisiblePhotoAlbums({ albums: photoAlbums, favoriteAlbumIds: favoritePhotoAlbumIds, filter: photoAlbumFilter, searchQuery: "", sortDirection: photoAlbumSortDirection, sortMode: photoAlbumSortMode, albumTags: photoAlbumTags }),
+    [favoritePhotoAlbumIds, photoAlbumFilter, photoAlbumSortDirection, photoAlbumSortMode, photoAlbumTags, photoAlbums],
   );
   const { pageCount: photoAlbumPageCount, start: photoAlbumPageStart, end: photoAlbumPageEnd } = getPhotoAlbumPageBounds(visiblePhotoAlbums.length, photoAlbumPage, photoAlbumPageSize);
   const pagedPhotoAlbums = useMemo(
@@ -2183,9 +2188,9 @@ export default function App() {
   );
   const matchedPhotoAlbums = useMemo(
     () => photoAlbumSearchQuery.trim()
-      ? getVisiblePhotoAlbums({ albums: photoAlbums, favoriteAlbumIds: favoritePhotoAlbumIds, filter: photoAlbumFilter, searchQuery: photoAlbumSearchQuery, sortMode: photoAlbumSortMode, albumTags: photoAlbumTags })
+      ? getVisiblePhotoAlbums({ albums: photoAlbums, favoriteAlbumIds: favoritePhotoAlbumIds, filter: photoAlbumFilter, searchQuery: photoAlbumSearchQuery, sortDirection: photoAlbumSortDirection, sortMode: photoAlbumSortMode, albumTags: photoAlbumTags })
       : [],
-    [favoritePhotoAlbumIds, photoAlbumFilter, photoAlbumSearchQuery, photoAlbumSortMode, photoAlbumTags, photoAlbums],
+    [favoritePhotoAlbumIds, photoAlbumFilter, photoAlbumSearchQuery, photoAlbumSortDirection, photoAlbumSortMode, photoAlbumTags, photoAlbums],
   );
   const photoAlbumSearchResults = useMemo(() => matchedPhotoAlbums.slice(0, 8), [matchedPhotoAlbums]);
   const photoAlbumCoverAlbums = useMemo(
@@ -3933,6 +3938,7 @@ export default function App() {
     showPhotoAlbumList,
     togglePhotoAlbumFavorite,
     updatePhotoAlbumFilter,
+    updatePhotoAlbumSortDirection,
     updatePhotoAlbumSortMode,
   } = usePhotoAlbumActionsController({
     currentPhotoIndex,
@@ -3952,6 +3958,7 @@ export default function App() {
     setPhotoAlbumMessage,
     setPhotoAlbumPage,
     setPhotoAlbumProgress,
+    setPhotoAlbumSortDirection,
     setPhotoAlbumSortMode,
     setSelectedPhotoAlbumId,
     visiblePhotoAlbums,
@@ -6460,6 +6467,8 @@ export default function App() {
                   tags: photoAlbumTags[album.id] ?? [],
                 };
               })}
+              sortDirection={photoAlbumSortDirection}
+              sortDirectionOptions={photoAlbumSortDirectionOptions}
               sortMode={photoAlbumSortMode}
               sortOptions={photoAlbumSortOptions}
               start={photoAlbumPageStart}
@@ -6468,8 +6477,7 @@ export default function App() {
               totalVisibleAlbums={visiblePhotoAlbums.length}
               onChooseDirectory={() => void choosePhotoAlbumDirectory()}
               onFilterChange={updatePhotoAlbumFilter}
-              onNextPage={() => setPhotoAlbumPage((page) => Math.min(page + 1, photoAlbumPageCount))}
-              onPreviousPage={() => setPhotoAlbumPage((page) => Math.max(page - 1, 1))}
+              onPageChange={setPhotoAlbumPage}
               onRandomAlbum={openRandomPhotoAlbum}
               onRefresh={() => void refreshPhotoAlbumDirectory()}
               onRenderAlbum={renderPhotoAlbumCard}
@@ -6477,6 +6485,7 @@ export default function App() {
               onSearchClear={() => setPhotoAlbumSearchQuery("")}
               onSelectSearchResult={openPhotoAlbum}
               onSelectTag={(label) => { setPhotoAlbumPage(1); setPhotoAlbumSearchQuery(label); }}
+              onSortDirectionChange={updatePhotoAlbumSortDirection}
               onSortModeChange={updatePhotoAlbumSortMode}
             />
           </LazyFeatureBoundary>

@@ -479,9 +479,11 @@ export type PhotoAlbumProgress = {
 };
 
 export type PhotoAlbumSortMode = "updated" | "folderModified" | "name" | "count";
+export type PhotoAlbumSortDirection = "asc" | "desc";
 
 export type PhotoAlbumPreferences = {
   sortMode: PhotoAlbumSortMode;
+  sortDirection: PhotoAlbumSortDirection;
   favoritesOnly: boolean;
   recentTags: RecentVideoTag[];
   tagMergeDecisions: TagMergeDecisionStore;

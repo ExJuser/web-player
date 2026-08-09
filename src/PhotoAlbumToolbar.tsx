@@ -1,7 +1,7 @@
 import { RefreshCw, Shuffle } from "lucide-react";
 
 import { ControlSelect } from "./ControlSelect";
-import type { PhotoAlbumSortMode } from "./playerTypes";
+import type { PhotoAlbumSortDirection, PhotoAlbumSortMode } from "./playerTypes";
 
 export type PhotoAlbumViewFilter = "all" | "favorites";
 
@@ -9,11 +9,14 @@ type PhotoAlbumToolbarProps = {
   filter: PhotoAlbumViewFilter;
   isLoading: boolean;
   message: string;
+  sortDirection: PhotoAlbumSortDirection;
+  sortDirectionOptions: Array<{ value: PhotoAlbumSortDirection; label: string }>;
   sortMode: PhotoAlbumSortMode;
   sortOptions: Array<{ value: PhotoAlbumSortMode; label: string }>;
   onFilterChange: (filter: PhotoAlbumViewFilter) => void;
   onRandomAlbum: () => void;
   onRefresh: () => void;
+  onSortDirectionChange: (sortDirection: PhotoAlbumSortDirection) => void;
   onSortModeChange: (sortMode: PhotoAlbumSortMode) => void;
   randomDisabled: boolean;
 };
@@ -22,11 +25,14 @@ export function PhotoAlbumToolbar({
   filter,
   isLoading,
   message,
+  sortDirection,
+  sortDirectionOptions,
   sortMode,
   sortOptions,
   onFilterChange,
   onRandomAlbum,
   onRefresh,
+  onSortDirectionChange,
   onSortModeChange,
   randomDisabled,
 }: PhotoAlbumToolbarProps) {
@@ -60,6 +66,14 @@ export function PhotoAlbumToolbar({
           options={sortOptions}
           onChange={onSortModeChange}
           className="photo-sort-control"
+        />
+        <ControlSelect
+          label="顺序"
+          ariaLabel="看图排序顺序"
+          value={sortDirection}
+          options={sortDirectionOptions}
+          onChange={onSortDirectionChange}
+          className="photo-sort-direction-control"
         />
         <button className="secondary-button" type="button" onClick={onRandomAlbum} disabled={randomDisabled}>
           <Shuffle size={16} />

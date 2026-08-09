@@ -28,7 +28,10 @@ test("missing photo album store fields fall back to defaults", () => {
   assert.deepEqual(parsed.progress, {});
   assert.deepEqual(parsed.preferences, {
     sortMode: "updated",
+    sortDirection: "desc",
     favoritesOnly: false,
+    recentTags: [],
+    tagMergeDecisions: {},
   });
   assert.deepEqual(parsed.coverImageByAlbumId, {});
   assert.deepEqual(parsed.albumTags, {});
@@ -55,6 +58,7 @@ test("photo album store keeps valid favorites, progress, preferences, and tags",
     },
     preferences: {
       sortMode: "count",
+      sortDirection: "asc",
       favoritesOnly: true,
     },
   }));
@@ -66,7 +70,10 @@ test("photo album store keeps valid favorites, progress, preferences, and tags",
   });
   assert.deepEqual(parsed.preferences, {
     sortMode: "count",
+    sortDirection: "asc",
     favoritesOnly: true,
+    recentTags: [],
+    tagMergeDecisions: {},
   });
   assert.deepEqual(parsed.coverImageByAlbumId, {
     "root|A": "img-1",
@@ -84,6 +91,10 @@ test("photo album display helpers keep sort labels and progress text", () => {
     ["folderModified", "文件夹修改时间"],
     ["name", "名称"],
     ["count", "图片数"],
+  ]);
+  assert.deepEqual(storage.photoAlbumSortDirectionOptions.map((option) => [option.value, option.label]), [
+    ["asc", "正序"],
+    ["desc", "倒序"],
   ]);
   assert.equal(storage.formatPhotoAlbumProgress(album, {}), "未开始");
   assert.equal(storage.formatPhotoAlbumProgress(album, { [album.id]: { imageIndex: 2, updatedAt: 10, completed: false } }), "看到 3 / 5");
@@ -107,19 +118,23 @@ test("photo album display helpers filter sort paginate and summarize albums", ()
   };
 
   assert.deepEqual(
-    storage.getVisiblePhotoAlbums({ albums, favoriteAlbumIds: favorites, filter: "favorites", searchQuery: "", sortMode: "updated", albumTags }).map((album) => album.id),
+    storage.getVisiblePhotoAlbums({ albums, favoriteAlbumIds: favorites, filter: "favorites", searchQuery: "", sortDirection: "desc", sortMode: "updated", albumTags }).map((album) => album.id),
     [second.id],
   );
   assert.deepEqual(
-    storage.getVisiblePhotoAlbums({ albums, favoriteAlbumIds: new Set(), filter: "all", searchQuery: "人像", sortMode: "updated", albumTags }).map((album) => album.id),
+    storage.getVisiblePhotoAlbums({ albums, favoriteAlbumIds: new Set(), filter: "all", searchQuery: "人像", sortDirection: "desc", sortMode: "updated", albumTags }).map((album) => album.id),
     [second.id],
   );
   assert.deepEqual(
-    storage.getVisiblePhotoAlbums({ albums, favoriteAlbumIds: new Set(), filter: "all", searchQuery: "", sortMode: "count", albumTags }).map((album) => album.id),
+    storage.getVisiblePhotoAlbums({ albums, favoriteAlbumIds: new Set(), filter: "all", searchQuery: "", sortDirection: "desc", sortMode: "count", albumTags }).map((album) => album.id),
     [second.id, first.id, third.id],
   );
   assert.deepEqual(
-    storage.getVisiblePhotoAlbums({ albums, favoriteAlbumIds: new Set(), filter: "all", searchQuery: "", sortMode: "folderModified", albumTags }).map((album) => album.id),
+    storage.getVisiblePhotoAlbums({ albums, favoriteAlbumIds: new Set(), filter: "all", searchQuery: "", sortDirection: "desc", sortMode: "folderModified", albumTags }).map((album) => album.id),
+    [third.id, first.id, second.id],
+  );
+  assert.deepEqual(
+    storage.getVisiblePhotoAlbums({ albums, favoriteAlbumIds: new Set(), filter: "all", searchQuery: "", sortDirection: "asc", sortMode: "updated", albumTags }).map((album) => album.id),
     [third.id, first.id, second.id],
   );
   assert.deepEqual(storage.getPagedPhotoAlbums(albums, 2, 2).map((album) => album.id), [third.id]);
