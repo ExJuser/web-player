@@ -705,6 +705,60 @@ function yieldToBrowser() {
   });
 }
 
+type DuplicateFingerprintCandidate = {
+  a: VideoItem;
+  b: VideoItem;
+  pair: { score: number; reasons: string[] };
+};
+
+export function selectDuplicateFingerprintCandidates(
+  candidatePairs: DuplicateFingerprintCandidate[],
+  maxFingerprintVideos: number,
+) {
+  const candidatesById = new Map<string, VideoItem>();
+  candidatePairs
+    .slice()
+    .sort((a, b) => b.pair.score - a.pair.score || compareNaturalRelativePath(a.a.relativePath, b.a.relativePath))
+    .forEach((candidate) => {
+      if (candidatesById.size >= maxFingerprintVideos) return;
+      candidatesById.set(candidate.a.id, candidate.a);
+      if (candidatesById.size >= maxFingerprintVideos) return;
+      candidatesById.set(candidate.b.id, candidate.b);
+    });
+  return Array.from(candidatesById.values());
+}
+
+function mergeContentFingerprintMatches(
+  fingerprintCandidates: VideoItem[],
+  fingerprintByVideoId: Map<string, string>,
+  pairScores: Map<string, DuplicateVideoPair>,
+  context: DuplicateDetectionContext,
+) {
+  const videosByFingerprint = new Map<string, VideoItem[]>();
+  for (const video of fingerprintCandidates) {
+    const fingerprint = fingerprintByVideoId.get(video.id);
+    if (!fingerprint) continue;
+    const fingerprintVideos = videosByFingerprint.get(fingerprint) ?? [];
+    fingerprintVideos.push(video);
+    videosByFingerprint.set(fingerprint, fingerprintVideos);
+  }
+  for (const fingerprintVideos of videosByFingerprint.values()) {
+    if (fingerprintVideos.length <= 1) continue;
+    for (let aIndex = 0; aIndex < fingerprintVideos.length; aIndex += 1) {
+      for (let bIndex = aIndex + 1; bIndex < fingerprintVideos.length; bIndex += 1) {
+        const a = fingerprintVideos[aIndex];
+        const b = fingerprintVideos[bIndex];
+        if (isAnimeDifferentEpisodePair(a, b, context)) continue;
+        const metadataPair = scoreDuplicatePair(a, b, context);
+        mergeDuplicatePairScore(pairScores, a, b, {
+          score: Math.max(metadataPair.score, duplicateHighConfidenceThreshold),
+          reasons: ["内容指纹一致", ...metadataPair.reasons],
+        });
+      }
+    }
+  }
+}
+
 export async function detectDuplicateVideosWithProgress(
   videos: VideoItem[],
   options: DuplicateDetectionOptions = {},
@@ -719,11 +773,7 @@ export async function detectDuplicateVideosWithProgress(
     pair: { score: number; reasons: string[] };
     pairKey: string;
   }> = [];
-  const fingerprintCandidatePairs: Array<{
-    a: VideoItem;
-    b: VideoItem;
-    pair: { score: number; reasons: string[] };
-  }> = [];
+  const fingerprintCandidatePairs: DuplicateFingerprintCandidate[] = [];
   let processedPairs = 0;
   let processedFingerprints = 0;
   let totalFingerprints = 0;
@@ -775,16 +825,7 @@ export async function detectDuplicateVideosWithProgress(
 
   if (options.getContentFingerprint) {
     const maxFingerprintVideos = Math.max(0, options.maxFingerprintVideos ?? defaultMaxFingerprintVideos);
-    const fingerprintCandidatesById = new Map<string, VideoItem>();
-    fingerprintCandidatePairs
-      .sort((a, b) => b.pair.score - a.pair.score || compareNaturalRelativePath(a.a.relativePath, b.a.relativePath))
-      .forEach((candidate) => {
-        if (fingerprintCandidatesById.size >= maxFingerprintVideos) return;
-        fingerprintCandidatesById.set(candidate.a.id, candidate.a);
-        if (fingerprintCandidatesById.size >= maxFingerprintVideos) return;
-        fingerprintCandidatesById.set(candidate.b.id, candidate.b);
-      });
-    const fingerprintCandidates = Array.from(fingerprintCandidatesById.values());
+    const fingerprintCandidates = selectDuplicateFingerprintCandidates(fingerprintCandidatePairs, maxFingerprintVideos);
     if (fingerprintCandidates.length > 1) {
       const fingerprintByVideoId = new Map<string, string>();
       phase = "fingerprint";
@@ -803,29 +844,7 @@ export async function detectDuplicateVideosWithProgress(
         }
       }
 
-      const videosByFingerprint = new Map<string, VideoItem[]>();
-      for (const video of fingerprintCandidates) {
-        const fingerprint = fingerprintByVideoId.get(video.id);
-        if (!fingerprint) continue;
-        const fingerprintVideos = videosByFingerprint.get(fingerprint) ?? [];
-        fingerprintVideos.push(video);
-        videosByFingerprint.set(fingerprint, fingerprintVideos);
-      }
-      for (const fingerprintVideos of videosByFingerprint.values()) {
-        if (fingerprintVideos.length <= 1) continue;
-        for (let aIndex = 0; aIndex < fingerprintVideos.length; aIndex += 1) {
-          for (let bIndex = aIndex + 1; bIndex < fingerprintVideos.length; bIndex += 1) {
-            const a = fingerprintVideos[aIndex];
-            const b = fingerprintVideos[bIndex];
-            if (isAnimeDifferentEpisodePair(a, b, options)) continue;
-            const metadataPair = scoreDuplicatePair(a, b, options);
-            mergeDuplicatePairScore(pairScores, a, b, {
-              score: Math.max(metadataPair.score, duplicateHighConfidenceThreshold),
-              reasons: ["内容指纹一致", ...metadataPair.reasons],
-            });
-          }
-        }
-      }
+      mergeContentFingerprintMatches(fingerprintCandidates, fingerprintByVideoId, pairScores, options);
     }
   }
 

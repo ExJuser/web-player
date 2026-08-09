@@ -476,6 +476,26 @@ test("detects content-identical videos with different names from fingerprints", 
   assert.ok(groups[0].reasons.includes("内容指纹一致"));
 });
 
+test("selects fingerprint candidates by pair score and distinct-video limit", () => {
+  const lowA = createVideo({ id: "low-a", relativePath: "Z/low-a.mp4" });
+  const lowB = createVideo({ id: "low-b", relativePath: "Z/low-b.mp4" });
+  const highA = createVideo({ id: "high-a", relativePath: "A/high-a.mp4" });
+  const highB = createVideo({ id: "high-b", relativePath: "A/high-b.mp4" });
+  const bridge = createVideo({ id: "bridge", relativePath: "B/bridge.mp4" });
+  const pairs = [
+    { a: lowA, b: lowB, pair: { score: 50, reasons: [] } },
+    { a: highA, b: highB, pair: { score: 90, reasons: [] } },
+    { a: highB, b: bridge, pair: { score: 80, reasons: [] } },
+  ];
+
+  assert.deepEqual(
+    mediaUtils.selectDuplicateFingerprintCandidates(pairs, 3).map((video) => video.id),
+    ["high-a", "high-b", "bridge"],
+  );
+  assert.deepEqual(mediaUtils.selectDuplicateFingerprintCandidates(pairs, 0), []);
+  assert.deepEqual(pairs.map((pair) => pair.a.id), ["low-a", "high-a", "high-b"]);
+});
+
 test("skips AI name scoring for pairs already matched by content fingerprints", async () => {
   const first = createVideo({
     id: "first",
