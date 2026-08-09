@@ -39,6 +39,7 @@ type PhotoDashboardSectionProps = {
     tags: Array<{ key: string; label: string; albumCount: number }>;
     totalTags: number;
   };
+  tagFilterKey: string | null;
   totalVisibleAlbums: number;
   onChooseDirectory: () => void;
   onFilterChange: (filter: PhotoAlbumViewFilter) => void;
@@ -49,7 +50,7 @@ type PhotoDashboardSectionProps = {
   onSearchChange: (query: string) => void;
   onSearchClear: () => void;
   onSelectSearchResult: (album: PhotoAlbum) => void;
-  onSelectTag: (label: string) => void;
+  onSelectTag: (key: string | null) => void;
   onSortDirectionChange: (sortDirection: PhotoAlbumSortDirection) => void;
   onSortModeChange: (sortMode: PhotoAlbumSortMode) => void;
 };
@@ -74,6 +75,7 @@ export function PhotoDashboardSection({
   start,
   stats,
   tagStats,
+  tagFilterKey,
   totalVisibleAlbums,
   onChooseDirectory,
   onFilterChange,
@@ -110,7 +112,7 @@ export function PhotoDashboardSection({
 
       <PhotoAlbumStats stats={stats} />
 
-      <PhotoTagStats {...tagStats} onSelectTag={onSelectTag} />
+      <PhotoTagStats {...tagStats} selectedTagKey={tagFilterKey} onSelectTag={onSelectTag} />
 
       <PhotoRootStatusCard statuses={photoRootStatuses} />
 

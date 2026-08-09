@@ -633,6 +633,7 @@ export default function App() {
   );
   const [photoAlbumPage, setPhotoAlbumPage] = useState(1);
   const [photoAlbumSearchQuery, setPhotoAlbumSearchQuery] = useState("");
+  const [photoAlbumTagFilter, setPhotoAlbumTagFilter] = useState<string | null>(null);
   const [photoAlbumMessage, setPhotoAlbumMessage] = useState("选择一个看图文件夹后开始扫描图片。");
   const [isPhotoAlbumsLoading, setIsPhotoAlbumsLoading] = useState(false);
   const [hasLoadedPhotoAlbums, setHasLoadedPhotoAlbums] = useState(false);
@@ -2178,8 +2179,8 @@ export default function App() {
     setPhotoAlbumTags,
   });
   const visiblePhotoAlbums = useMemo(
-    () => getVisiblePhotoAlbums({ albums: photoAlbums, favoriteAlbumIds: favoritePhotoAlbumIds, filter: photoAlbumFilter, searchQuery: "", sortDirection: photoAlbumSortDirection, sortMode: photoAlbumSortMode, albumTags: photoAlbumTags }),
-    [favoritePhotoAlbumIds, photoAlbumFilter, photoAlbumSortDirection, photoAlbumSortMode, photoAlbumTags, photoAlbums],
+    () => getVisiblePhotoAlbums({ albums: photoAlbums, favoriteAlbumIds: favoritePhotoAlbumIds, filter: photoAlbumFilter, searchQuery: "", tagFilterKey: photoAlbumTagFilter ?? undefined, sortDirection: photoAlbumSortDirection, sortMode: photoAlbumSortMode, albumTags: photoAlbumTags }),
+    [favoritePhotoAlbumIds, photoAlbumFilter, photoAlbumSortDirection, photoAlbumSortMode, photoAlbumTagFilter, photoAlbumTags, photoAlbums],
   );
   const { pageCount: photoAlbumPageCount, start: photoAlbumPageStart, end: photoAlbumPageEnd } = getPhotoAlbumPageBounds(visiblePhotoAlbums.length, photoAlbumPage, photoAlbumPageSize);
   const pagedPhotoAlbums = useMemo(
@@ -2188,9 +2189,9 @@ export default function App() {
   );
   const matchedPhotoAlbums = useMemo(
     () => photoAlbumSearchQuery.trim()
-      ? getVisiblePhotoAlbums({ albums: photoAlbums, favoriteAlbumIds: favoritePhotoAlbumIds, filter: photoAlbumFilter, searchQuery: photoAlbumSearchQuery, sortDirection: photoAlbumSortDirection, sortMode: photoAlbumSortMode, albumTags: photoAlbumTags })
+      ? getVisiblePhotoAlbums({ albums: photoAlbums, favoriteAlbumIds: favoritePhotoAlbumIds, filter: photoAlbumFilter, searchQuery: photoAlbumSearchQuery, tagFilterKey: photoAlbumTagFilter ?? undefined, sortDirection: photoAlbumSortDirection, sortMode: photoAlbumSortMode, albumTags: photoAlbumTags })
       : [],
-    [favoritePhotoAlbumIds, photoAlbumFilter, photoAlbumSearchQuery, photoAlbumSortDirection, photoAlbumSortMode, photoAlbumTags, photoAlbums],
+    [favoritePhotoAlbumIds, photoAlbumFilter, photoAlbumSearchQuery, photoAlbumSortDirection, photoAlbumSortMode, photoAlbumTagFilter, photoAlbumTags, photoAlbums],
   );
   const photoAlbumSearchResults = useMemo(() => matchedPhotoAlbums.slice(0, 8), [matchedPhotoAlbums]);
   const photoAlbumCoverAlbums = useMemo(
@@ -6130,7 +6131,7 @@ export default function App() {
       : isPhotoAlbumViewVisible
         ? activeView === "photoViewer" && selectedPhotoAlbum
           ? selectedPhotoAlbum.title
-          : "看图"
+          : ""
         : currentVideo
           ? currentVideo.relativePath
           : message;
@@ -6474,6 +6475,7 @@ export default function App() {
               start={photoAlbumPageStart}
               stats={photoAlbumStats}
               tagStats={photoAlbumTagStats}
+              tagFilterKey={photoAlbumTagFilter}
               totalVisibleAlbums={visiblePhotoAlbums.length}
               onChooseDirectory={() => void choosePhotoAlbumDirectory()}
               onFilterChange={updatePhotoAlbumFilter}
@@ -6484,7 +6486,7 @@ export default function App() {
               onSearchChange={setPhotoAlbumSearchQuery}
               onSearchClear={() => setPhotoAlbumSearchQuery("")}
               onSelectSearchResult={openPhotoAlbum}
-              onSelectTag={(label) => { setPhotoAlbumPage(1); setPhotoAlbumSearchQuery(label); }}
+              onSelectTag={(key) => { setPhotoAlbumPage(1); setPhotoAlbumTagFilter(key); }}
               onSortDirectionChange={updatePhotoAlbumSortDirection}
               onSortModeChange={updatePhotoAlbumSortMode}
             />

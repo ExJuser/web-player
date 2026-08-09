@@ -137,6 +137,10 @@ test("photo album display helpers filter sort paginate and summarize albums", ()
     storage.getVisiblePhotoAlbums({ albums, favoriteAlbumIds: new Set(), filter: "all", searchQuery: "", sortDirection: "asc", sortMode: "updated", albumTags }).map((album) => album.id),
     [third.id, first.id, second.id],
   );
+  assert.deepEqual(
+    storage.getVisiblePhotoAlbums({ albums, favoriteAlbumIds: new Set(), filter: "all", searchQuery: "", tagFilterKey: "人像", sortDirection: "desc", sortMode: "updated", albumTags }).map((album) => album.id),
+    [second.id],
+  );
   assert.deepEqual(storage.getPagedPhotoAlbums(albums, 2, 2).map((album) => album.id), [third.id]);
   assert.deepEqual(storage.getPhotoAlbumPageBounds(3, 2, 2), { pageCount: 2, start: 3, end: 3 });
   assert.deepEqual(storage.getPhotoAlbumPageBounds(0, 1, 2), { pageCount: 1, start: 0, end: 0 });

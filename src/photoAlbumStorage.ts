@@ -41,6 +41,7 @@ export function getVisiblePhotoAlbums(input: {
   favoriteAlbumIds: ReadonlySet<string>;
   filter: "all" | "favorites";
   searchQuery: string;
+  tagFilterKey?: string;
   sortDirection: PhotoAlbumSortDirection;
   sortMode: PhotoAlbumSortMode;
   albumTags: Record<string, string[] | undefined>;
@@ -49,9 +50,12 @@ export function getVisiblePhotoAlbums(input: {
     input.filter === "favorites"
       ? input.albums.filter((album) => input.favoriteAlbumIds.has(album.id))
       : input.albums;
+  const tagFilteredSource = input.tagFilterKey
+    ? source.filter((album) => (input.albumTags[album.id] ?? []).some((tag) => normalizeTagKey(tag) === input.tagFilterKey))
+    : source;
   const queryTokens = parseTagInput(input.searchQuery);
   const filteredSource = queryTokens.length
-    ? source.filter((album) => {
+    ? tagFilteredSource.filter((album) => {
         const tags = input.albumTags[album.id] ?? [];
         const searchableText = normalizeTagKey([
           album.title,
@@ -64,7 +68,7 @@ export function getVisiblePhotoAlbums(input: {
           return Boolean(tokenKey && (searchableText.includes(tokenKey) || getTagSearchScore(token, tags) > 0));
         });
       })
-    : source;
+    : tagFilteredSource;
 
   return [...filteredSource].sort((a, b) => {
     let comparison: number;

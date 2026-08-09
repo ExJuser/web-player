@@ -2510,11 +2510,21 @@ button {
   margin: 0;
 }
 
+.photo-tag-stats .home-section-header h2 {
+  font-size: 18px;
+}
+
+.photo-tag-stats .home-section-header > span {
+  font-size: 14px;
+}
+
 .photo-tag-ranking button {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  padding: 5px 10px;
   cursor: pointer;
+  font-size: 14px;
 }
 
 .photo-tag-ranking button:hover,
@@ -2524,8 +2534,15 @@ button {
   outline: none;
 }
 
+.photo-tag-ranking button.active {
+  border-color: rgba(56, 199, 238, 0.58);
+  background: rgba(0, 161, 214, 0.18);
+  color: #79dfff;
+}
+
 .photo-tag-ranking small {
   color: #7f8a99;
+  font-size: 12px;
 }
 
 .photo-viewer.immersive {
@@ -8964,6 +8981,12 @@ button {
   background: #eef4fa;
 }
 
+.app-shell.theme-light .photo-tag-ranking button.active {
+  border-color: #47b9df;
+  background: #e4f5fb;
+  color: #006f99;
+}
+
 .app-shell.theme-light .photo-search-row input::placeholder {
   color: #98a2b3;
 }
@@ -10180,6 +10203,12 @@ button {
 :root[data-theme="light"] .photo-search-result:hover,
 :root[data-theme="light"] .photo-search-result:focus-visible {
   background: #eef4fa;
+}
+
+:root[data-theme="light"] .photo-tag-ranking button.active {
+  border-color: #47b9df;
+  background: #e4f5fb;
+  color: #006f99;
 }
 
 :root[data-theme="light"] .photo-search-row input::placeholder {

@@ -231,9 +231,9 @@ export const PlayerTopBar = forwardRef<HTMLElement, PlayerTopBarProps>(function 
               </div>
             ) : null}
           </form>
-        ) : (
+        ) : summaryFallbackText ? (
           <p className="current-video-title">{summaryFallbackText}</p>
-        )}
+        ) : null}
       </div>
       <div className="top-actions">
         {mediaProcessingTask ? (
