@@ -8,6 +8,13 @@ import {
 } from "react";
 import { ChevronLeft, ChevronRight, LoaderCircle } from "lucide-react";
 
+import {
+  cachePhotoDecodeFailure,
+  formatPhotoFileSize,
+  getPhotoDecodeFailureMessage,
+  hasCachedPhotoDecodeFailure,
+  isLargePhotoFile,
+} from "./photoFileStatus";
 import { loadPhotoPreview, shouldCreatePhotoPreview } from "./photoPreviewCache";
 import type { PhotoAlbumImage, PhotoSingleFitMode } from "./playerTypes";
 
@@ -68,7 +75,7 @@ export function PhotoViewerStage({
     let nextPreviewUrl = "";
     setPreviewUrl("");
     setIsOriginalReady(false);
-    setOriginalLoadFailed(false);
+    setOriginalLoadFailed(currentPhoto ? hasCachedPhotoDecodeFailure(currentPhoto) : false);
 
     if (!currentPhoto || !currentPhotoUrl || !shouldCreatePhotoPreview(currentPhoto)) {
       setIsPreviewPending(false);
@@ -94,6 +101,9 @@ export function PhotoViewerStage({
       if (nextPreviewUrl) URL.revokeObjectURL(nextPreviewUrl);
     };
   }, [currentPhoto, currentPhotoUrl]);
+
+  const isLargeFile = Boolean(currentPhoto && isLargePhotoFile(currentPhoto));
+  const decodeFailureMessage = currentPhoto ? getPhotoDecodeFailureMessage(currentPhoto) : "";
 
   useEffect(() => {
     if (!previewUrl || shouldLoadOriginal) return;
@@ -268,7 +278,7 @@ export function PhotoViewerStage({
               style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}
             />
           ) : null}
-          {shouldLoadOriginal ? (
+          {shouldLoadOriginal && !originalLoadFailed ? (
             <img
               ref={imageRef}
               className={`photo-stage-original ${isOriginalReady ? "ready" : ""}`}
@@ -282,16 +292,27 @@ export function PhotoViewerStage({
                 setIsOriginalReady(true);
                 applyFitMode(event.currentTarget);
               }}
-              onError={() => setOriginalLoadFailed(true)}
+              onError={() => {
+                cachePhotoDecodeFailure(currentPhoto);
+                setOriginalLoadFailed(true);
+              }}
               style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}
             />
           ) : null}
           {isPreviewPending ? (
-            <span className="photo-load-status"><LoaderCircle size={15} className="spin-icon" />正在生成预览</span>
+            <span className="photo-load-status"><LoaderCircle size={15} className="spin-icon" />{isLargeFile ? `超大文件（${formatPhotoFileSize(currentPhoto.size)}），正在生成预览` : "正在生成预览"}</span>
           ) : previewUrl && shouldLoadOriginal && !isOriginalReady && !originalLoadFailed ? (
-            <span className="photo-load-status"><LoaderCircle size={15} className="spin-icon" />正在加载高清图</span>
+            <span className="photo-load-status"><LoaderCircle size={15} className="spin-icon" />{isLargeFile ? `超大文件（${formatPhotoFileSize(currentPhoto.size)}），高清图可能需要较长时间` : "正在加载高清图"}</span>
           ) : originalLoadFailed && previewUrl ? (
-            <span className="photo-load-status error">高清图加载失败，已保留预览</span>
+            <span className="photo-load-status error">{decodeFailureMessage}，已保留预览</span>
+          ) : originalLoadFailed ? (
+            <div className="photo-file-error" role="alert">
+              <strong>无法显示图片</strong>
+              <span>{decodeFailureMessage}</span>
+              <small>{currentPhoto.name}</small>
+            </div>
+          ) : isLargeFile && !isOriginalReady ? (
+            <span className="photo-load-status warning"><LoaderCircle size={15} className="spin-icon" />超大文件（{formatPhotoFileSize(currentPhoto.size)}），加载可能需要较长时间</span>
           ) : null}
         </div>
       ) : (

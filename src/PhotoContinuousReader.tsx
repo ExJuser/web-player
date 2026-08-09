@@ -1,6 +1,13 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ZoomIn, ZoomOut } from "lucide-react";
 
+import {
+  cachePhotoDecodeFailure,
+  formatPhotoFileSize,
+  getPhotoDecodeFailureMessage,
+  hasCachedPhotoDecodeFailure,
+  isLargePhotoFile,
+} from "./photoFileStatus";
 import type { PhotoAlbum, PhotoAlbumImage } from "./playerTypes";
 
 type PhotoContinuousReaderProps = {
@@ -46,6 +53,9 @@ export function PhotoContinuousReader({
   const lastScrollTopRef = useRef(0);
   const scrollDirectionRef = useRef<-1 | 0 | 1>(0);
   const [loadedImageIds, setLoadedImageIds] = useState<Set<string>>(() => new Set());
+  const [failedImageIds, setFailedImageIds] = useState<Set<string>>(() => new Set(
+    album.images.filter(hasCachedPhotoDecodeFailure).map((image) => image.id),
+  ));
   const [readingProgress, setReadingProgress] = useState(0);
 
   currentIndexRef.current = currentIndex;
@@ -78,7 +88,10 @@ export function PhotoContinuousReader({
     updateReadingProgress();
   }, [album.id]);
 
-  useEffect(() => setLoadedImageIds(new Set()), [album.id]);
+  useEffect(() => {
+    setLoadedImageIds(new Set());
+    setFailedImageIds(new Set(album.images.filter(hasCachedPhotoDecodeFailure).map((image) => image.id)));
+  }, [album]);
 
   useEffect(() => () => onScrollDirectionChangeRef.current(0), []);
 
@@ -249,9 +262,11 @@ export function PhotoContinuousReader({
           {album.images.map((image) => {
             const imageUrl = getImageUrl(image);
             const isLoaded = loadedImageIds.has(image.id);
+            const hasFailed = failedImageIds.has(image.id);
+            const isLargeFile = isLargePhotoFile(image);
             return (
               <div
-                className={`photo-continuous-page ${isLoaded ? "loaded" : "loading"}`}
+                className={`photo-continuous-page ${isLoaded ? "loaded" : "loading"} ${hasFailed ? "failed" : ""}`}
                 data-index={image.index}
                 key={image.id}
                 ref={(node) => {
@@ -259,7 +274,7 @@ export function PhotoContinuousReader({
                   else pageRefs.current.delete(image.index);
                 }}
               >
-                {imageUrl ? (
+                {imageUrl && !hasFailed ? (
                   <img
                     src={imageUrl}
                     alt={image.name}
@@ -270,8 +285,24 @@ export function PhotoContinuousReader({
                       setLoadedImageIds((ids) => ids.has(image.id) ? ids : new Set(ids).add(image.id));
                       updateReadingProgress();
                     }}
+                    onError={() => {
+                      cachePhotoDecodeFailure(image);
+                      setFailedImageIds((ids) => ids.has(image.id) ? ids : new Set(ids).add(image.id));
+                      updateReadingProgress();
+                    }}
                   />
-                ) : <span>加载中…</span>}
+                ) : null}
+                {hasFailed ? (
+                  <div className="photo-file-error" role="alert">
+                    <strong>无法显示图片</strong>
+                    <span>{getPhotoDecodeFailureMessage(image)}</span>
+                    <small>{image.name}</small>
+                  </div>
+                ) : !imageUrl ? (
+                  <span>加载中…</span>
+                ) : !isLoaded && isLargeFile ? (
+                  <span className="photo-continuous-file-warning">超大文件（{formatPhotoFileSize(image.size)}），加载可能需要较长时间</span>
+                ) : null}
               </div>
             );
           })}

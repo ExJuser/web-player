@@ -2938,6 +2938,39 @@ button {
   color: #ffb4b4;
 }
 
+.photo-load-status.warning {
+  color: #ffd38a;
+}
+
+.photo-file-error {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  z-index: 2;
+  display: grid;
+  width: min(420px, calc(100% - 48px));
+  gap: 8px;
+  transform: translate(-50%, -50%);
+  border: 1px solid rgba(255, 123, 123, 0.38);
+  border-radius: 10px;
+  padding: 18px;
+  background: rgba(12, 15, 20, 0.82);
+  color: #f5f7fb;
+  text-align: center;
+}
+
+.photo-file-error span,
+.photo-file-error small {
+  overflow-wrap: anywhere;
+}
+
+.photo-file-error span {
+  color: #ffb4b4;
+}
+
+.photo-file-error small {
+  color: #aeb6c3;
+}
+
 .photo-continuous-shell {
   position: relative;
   min-height: 0;
@@ -3054,6 +3087,16 @@ button {
 .photo-continuous-page.loading img {
   position: absolute;
   opacity: 0;
+}
+
+.photo-continuous-page.failed {
+  min-height: min(80vh, 900px);
+}
+
+.photo-continuous-file-warning {
+  padding: 16px;
+  color: #ffd38a;
+  text-align: center;
 }
 
 .photo-continuous-page img {
@@ -13466,10 +13509,15 @@ button {
 .photo-viewer[class*="reader-background-"] .photo-immersive-exit,
 .photo-viewer[class*="reader-background-"] .photo-zoom-indicator,
 .photo-viewer[class*="reader-background-"] .photo-load-status,
+.photo-viewer[class*="reader-background-"] .photo-file-error,
 .photo-viewer[class*="reader-background-"] .photo-nav-button {
   border-color: var(--photo-reader-border);
   background: var(--photo-reader-overlay);
   color: var(--photo-reader-foreground);
+}
+
+.photo-viewer[class*="reader-background-"] .photo-file-error small {
+  color: var(--photo-reader-muted);
 }
 
 .photo-viewer[class*="reader-background-"] .photo-immersive-toolbar .photo-action-options,
