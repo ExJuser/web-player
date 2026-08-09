@@ -1,3 +1,6 @@
+import { revokeObjectUrl } from "./appResourceCleanup";
+import type { PhotoAlbumImage } from "./playerTypes";
+
 export const photoObjectUrlCacheLimit = 48;
 const photoObjectUrlDefaultByteLimit = 256 * 1024 * 1024;
 const photoObjectUrlLowMemoryByteLimit = 96 * 1024 * 1024;
@@ -17,6 +20,34 @@ export type PhotoObjectUrlCacheMetadata = Record<string, {
   decoded: boolean;
   lastAccessedAt: number;
 }>;
+
+export function removePhotoObjectUrlCacheEntries({
+  accessTimes,
+  decodedImageIds,
+  filePromises,
+  images,
+  metadata,
+  urls,
+}: {
+  accessTimes: Record<string, number>;
+  decodedImageIds: Set<string>;
+  filePromises: Record<string, unknown>;
+  images: readonly Pick<PhotoAlbumImage, "id" | "url">[];
+  metadata: PhotoObjectUrlCacheMetadata;
+  urls: Record<string, string>;
+}) {
+  const nextUrls = { ...urls };
+  images.forEach((image) => {
+    revokeObjectUrl(urls[image.id]);
+    revokeObjectUrl(image.url);
+    delete nextUrls[image.id];
+    delete accessTimes[image.id];
+    delete metadata[image.id];
+    delete filePromises[image.id];
+    decodedImageIds.delete(image.id);
+  });
+  return nextUrls;
+}
 
 export function prunePhotoObjectUrlCache(
   urls: Record<string, string>,

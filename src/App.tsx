@@ -54,7 +54,7 @@ import { usePhotoAlbumRuntime } from "./usePhotoAlbumRuntime";
 import { usePhotoAlbumTagEditor } from "./usePhotoAlbumTagEditor";
 import { usePlayerVolumeController } from "./usePlayerVolumeController";
 import { usePhotoObjectUrls } from "./usePhotoObjectUrls";
-import { type PhotoObjectUrlCacheMetadata } from "./photoObjectUrlCache";
+import { removePhotoObjectUrlCacheEntries, type PhotoObjectUrlCacheMetadata } from "./photoObjectUrlCache";
 import { clearPhotoPreviewCache, getPhotoPreviewCacheStatus } from "./photoPreviewCache";
 import type { CacheStatusItem } from "./cacheStatusUtils";
 import { useProgressFavoritesController } from "./useProgressFavoritesController";
@@ -4274,15 +4274,14 @@ export default function App() {
         nextSelectedAlbumId = null;
       }
 
-      const objectUrl = photoObjectUrlsRef.current[photo.id];
-      revokeObjectUrl(objectUrl);
-      revokeObjectUrl(photo.url);
-      const nextPhotoObjectUrls = { ...photoObjectUrlsRef.current };
-      delete nextPhotoObjectUrls[photo.id];
-      delete photoObjectUrlAccessRef.current[photo.id];
-      delete photoObjectUrlMetadataRef.current[photo.id];
-      delete photoImageFilePromisesRef.current[photo.id];
-      decodedPhotoImageIdsRef.current.delete(photo.id);
+      const nextPhotoObjectUrls = removePhotoObjectUrlCacheEntries({
+        accessTimes: photoObjectUrlAccessRef.current,
+        decodedImageIds: decodedPhotoImageIdsRef.current,
+        filePromises: photoImageFilePromisesRef.current,
+        images: [photo],
+        metadata: photoObjectUrlMetadataRef.current,
+        urls: photoObjectUrlsRef.current,
+      });
       photoObjectUrlsRef.current = nextPhotoObjectUrls;
 
       photoAlbumsRef.current = nextAlbums;
@@ -4444,16 +4443,13 @@ export default function App() {
         nextFavorites.delete(album.id);
       }
 
-      const nextPhotoObjectUrls = { ...photoObjectUrlsRef.current };
-      resolvedAlbum.images.forEach((image) => {
-        const objectUrl = photoObjectUrlsRef.current[image.id];
-        revokeObjectUrl(objectUrl);
-        revokeObjectUrl(image.url);
-        delete nextPhotoObjectUrls[image.id];
-        delete photoObjectUrlAccessRef.current[image.id];
-        delete photoObjectUrlMetadataRef.current[image.id];
-        delete photoImageFilePromisesRef.current[image.id];
-        decodedPhotoImageIdsRef.current.delete(image.id);
+      const nextPhotoObjectUrls = removePhotoObjectUrlCacheEntries({
+        accessTimes: photoObjectUrlAccessRef.current,
+        decodedImageIds: decodedPhotoImageIdsRef.current,
+        filePromises: photoImageFilePromisesRef.current,
+        images: resolvedAlbum.images,
+        metadata: photoObjectUrlMetadataRef.current,
+        urls: photoObjectUrlsRef.current,
       });
 
       photoAlbumsRef.current = nextAlbums;

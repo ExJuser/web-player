@@ -5,6 +5,46 @@ import { importTsModule } from "./importTsModule.mjs";
 
 const cache = await importTsModule(new URL("../src/photoObjectUrlCache.ts", import.meta.url));
 
+test("removes photo object URL entries from every related cache", () => {
+  const originalRevoke = URL.revokeObjectURL;
+  const revoked = [];
+  URL.revokeObjectURL = (url) => revoked.push(url);
+
+  try {
+    const urls = { first: "blob:cached-first", second: "blob:cached-second", keep: "blob:keep" };
+    const accessTimes = { first: 1, second: 2, keep: 3 };
+    const metadata = {
+      first: { bytes: 10, createdAt: 1, decoded: true, lastAccessedAt: 1 },
+      second: { bytes: 20, createdAt: 2, decoded: true, lastAccessedAt: 2 },
+      keep: { bytes: 30, createdAt: 3, decoded: true, lastAccessedAt: 3 },
+    };
+    const filePromises = { first: Promise.resolve(null), second: Promise.resolve(null), keep: Promise.resolve(null) };
+    const decodedImageIds = new Set(["first", "second", "keep"]);
+
+    const result = cache.removePhotoObjectUrlCacheEntries({
+      accessTimes,
+      decodedImageIds,
+      filePromises,
+      images: [
+        { id: "first", url: "blob:source-first" },
+        { id: "second", url: "https://example.com/second.jpg" },
+      ],
+      metadata,
+      urls,
+    });
+
+    assert.deepEqual(result, { keep: "blob:keep" });
+    assert.deepEqual(urls, { first: "blob:cached-first", second: "blob:cached-second", keep: "blob:keep" });
+    assert.deepEqual(accessTimes, { keep: 3 });
+    assert.deepEqual(metadata, { keep: { bytes: 30, createdAt: 3, decoded: true, lastAccessedAt: 3 } });
+    assert.deepEqual(Object.keys(filePromises), ["keep"]);
+    assert.deepEqual(decodedImageIds, new Set(["keep"]));
+    assert.deepEqual(revoked, ["blob:cached-first", "blob:source-first", "blob:cached-second"]);
+  } finally {
+    URL.revokeObjectURL = originalRevoke;
+  }
+});
+
 test("prunes the least recently used photo object urls", () => {
   const originalRevoke = URL.revokeObjectURL;
   const revoked = [];
