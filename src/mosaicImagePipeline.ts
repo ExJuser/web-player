@@ -90,43 +90,63 @@ async function createMosaicTileBitmap(source: MosaicRuntimeSource, maxEdge: numb
   }
 }
 
+function createMosaicBitmapCacheEntry(
+  key: string,
+  source: MosaicRuntimeSource,
+  maxEdge: number,
+  preferOriginal: boolean,
+) {
+  const entry: MosaicBitmapCacheEntry = { promise: createMosaicTileBitmap(source, maxEdge, preferOriginal), users: 1, bytes: 0 };
+  mosaicBitmapCache.set(key, entry);
+  void entry.promise.then((bitmap) => {
+    if (mosaicBitmapCache.get(key) !== entry) {
+      bitmap.close();
+      return;
+    }
+    entry.bitmap = bitmap;
+    entry.bytes = bitmap.width * bitmap.height * 4;
+    mosaicBitmapCacheBytes += entry.bytes;
+    pruneMosaicBitmapCache();
+  }).catch(() => {
+    if (mosaicBitmapCache.get(key) === entry) mosaicBitmapCache.delete(key);
+  });
+  return entry;
+}
+
+function retainMosaicBitmapCacheEntry(
+  key: string,
+  source: MosaicRuntimeSource,
+  maxEdge: number,
+  preferOriginal: boolean,
+) {
+  const entry = mosaicBitmapCache.get(key);
+  if (!entry) return createMosaicBitmapCacheEntry(key, source, maxEdge, preferOriginal);
+  entry.users += 1;
+  touchMosaicBitmapCache(key, entry);
+  return entry;
+}
+
+function createMosaicBitmapLease(key: string, entry: MosaicBitmapCacheEntry, bitmap: ImageBitmap): MosaicBitmapLease {
+  let released = false;
+  return {
+    bitmap,
+    release: () => {
+      if (released) return;
+      released = true;
+      entry.users = Math.max(0, entry.users - 1);
+      touchMosaicBitmapCache(key, entry);
+      pruneMosaicBitmapCache();
+    },
+  };
+}
+
 export async function acquireMosaicBitmap(source: MosaicRuntimeSource, maxEdge = 128, preferOriginal = false): Promise<MosaicBitmapLease> {
   const normalizedEdge = Math.max(32, Math.round(maxEdge));
   const key = `${source.id}:${createMosaicSignature(source)}:${normalizedEdge}:${preferOriginal ? "original" : "preview"}`;
-  let entry = mosaicBitmapCache.get(key);
-  if (entry) {
-    entry.users += 1;
-    touchMosaicBitmapCache(key, entry);
-  } else {
-    const createdEntry: MosaicBitmapCacheEntry = { promise: createMosaicTileBitmap(source, normalizedEdge, preferOriginal), users: 1, bytes: 0 };
-    entry = createdEntry;
-    mosaicBitmapCache.set(key, createdEntry);
-    void createdEntry.promise.then((bitmap) => {
-      if (mosaicBitmapCache.get(key) !== createdEntry) {
-        bitmap.close();
-        return;
-      }
-      createdEntry.bitmap = bitmap;
-      createdEntry.bytes = bitmap.width * bitmap.height * 4;
-      mosaicBitmapCacheBytes += createdEntry.bytes;
-      pruneMosaicBitmapCache();
-    }).catch(() => {
-      if (mosaicBitmapCache.get(key) === createdEntry) mosaicBitmapCache.delete(key);
-    });
-  }
+  const entry = retainMosaicBitmapCacheEntry(key, source, normalizedEdge, preferOriginal);
   try {
     const bitmap = entry.bitmap ?? await entry.promise;
-    let released = false;
-    return {
-      bitmap,
-      release: () => {
-        if (released) return;
-        released = true;
-        entry.users = Math.max(0, entry.users - 1);
-        touchMosaicBitmapCache(key, entry);
-        pruneMosaicBitmapCache();
-      },
-    };
+    return createMosaicBitmapLease(key, entry, bitmap);
   } catch (error) {
     entry.users = Math.max(0, entry.users - 1);
     throw error;

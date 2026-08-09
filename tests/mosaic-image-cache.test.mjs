@@ -41,6 +41,44 @@ test("mosaic bitmap cache deduplicates concurrent decoding and respects source s
   }
 });
 
+test("mosaic bitmap cache removes failed entries so the same source can retry", async () => {
+  let decodeCount = 0;
+  const restoreBitmap = replaceGlobal("createImageBitmap", async () => {
+    decodeCount += 1;
+    if (decodeCount === 1) throw new Error("decode failed");
+    return { width: 64, height: 48, close() {} };
+  });
+  const source = { id: "photo:retry", size: 100, lastModified: 1, file: {} };
+
+  try {
+    await assert.rejects(pipeline.acquireMosaicBitmap(source, 128), /decode failed/);
+    await Promise.resolve();
+    const lease = await pipeline.acquireMosaicBitmap(source, 128);
+    lease.release();
+    assert.equal(decodeCount, 2);
+  } finally {
+    restoreBitmap();
+  }
+});
+
+test("mosaic bitmap lease prunes an oversized entry only once", async () => {
+  let originalCloseCount = 0;
+  let cachedCloseCount = 0;
+  const restoreBitmap = replaceGlobal("createImageBitmap", async (...args) => args.length === 1
+    ? { width: 4096, height: 4096, close() { originalCloseCount++; } }
+    : { width: 6000, height: 6000, close() { cachedCloseCount++; } });
+
+  try {
+    const lease = await pipeline.acquireMosaicBitmap({ id: "photo:oversized", size: 100, lastModified: 1, file: {} }, 128);
+    lease.release();
+    lease.release();
+    assert.equal(originalCloseCount, 1);
+    assert.equal(cachedCloseCount, 1);
+  } finally {
+    restoreBitmap();
+  }
+});
+
 test("mosaic bitmap cache uses the original media URL for detail viewing", async () => {
   const originalCreateImageBitmap = globalThis.createImageBitmap;
   const originalFetch = globalThis.fetch;
