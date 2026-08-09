@@ -38,7 +38,7 @@ export function PhotoAlbumSearchRow({ query, resultCount, results, onChange, onC
     >
       <Search size={17} />
       <input type="search" value={query} placeholder="搜索图集、路径或标签" onChange={(event) => onChange(event.target.value)} aria-controls="photo-search-results" aria-expanded={isFocused && hasQuery} />
-      {hasQuery ? <div className="photo-search-actions"><span>{resultCount}</span><button className="icon-button" type="button" onClick={onClear} aria-label="清空看图搜索" title="清空搜索"><X size={16} /></button></div> : null}
+      {hasQuery ? <div className="photo-search-actions"><span>{resultCount}</span><button className="icon-button" type="button" onMouseDown={(event) => event.preventDefault()} onClick={onClear} aria-label="清空看图搜索" title="清空搜索"><X size={16} /></button></div> : null}
       {isFocused && hasQuery ? (
         <div className="photo-search-results custom-scrollbar" id="photo-search-results" role="listbox" aria-label="图集搜索结果">
           {results.length ? results.map(({ album, coverImageUrl, tags }) => (
