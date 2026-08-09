@@ -17,7 +17,8 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { analyzeMosaicSources, matchMosaic, readMosaicTargetGrid, renderMosaic } from "./mosaicImagePipeline";
-import { deleteMosaicProject, loadMosaicProjects, saveMosaicProject, writeMosaicPreview, writeMosaicTarget } from "./mosaicStorage";
+import { saveGeneratedMosaicProject } from "./mosaicProjectPersistence";
+import { deleteMosaicProject, loadMosaicProjects, saveMosaicProject } from "./mosaicStorage";
 import { resolveMosaicVideoTarget } from "./mosaicTargetResolver";
 import { normalizeMosaicTargetRotation } from "./mosaicRotation";
 import type {
@@ -138,10 +139,6 @@ function TargetPreview({ target, rotation }: { target: RuntimeTarget; rotation: 
       <strong title={target.ref.label}>{target.ref.label}</strong>
     </div>
   );
-}
-
-function createProjectId() {
-  return `mosaic-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 function downloadBlob(blob: Blob, filename: string) {
@@ -447,26 +444,10 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
           if (previousUrl) URL.revokeObjectURL(previousUrl);
         },
       });
-      const projectId = activeProject?.id ?? createProjectId();
-      let targetRef = target.ref;
-      let targetUrl = target.ref.kind === "upload" ? activeProject?.targetUrl : undefined;
-      if (target.persistFile && target.file) {
-        targetUrl = await writeMosaicTarget(projectId, target.file);
-        if (target.ref.kind === "upload") targetRef = { ...target.ref, assetUrl: targetUrl };
-      }
-      const storedPreviewUrl = await writeMosaicPreview(projectId, preview);
-      const now = Date.now();
-      const project: MosaicProject = {
-        id: projectId,
-        name: activeProject?.name || `千图作品 ${new Date(now).toLocaleString()}`,
-        createdAt: activeProject?.createdAt ?? now,
-        updatedAt: now,
-        previewUrl: storedPreviewUrl,
-        targetUrl,
+      const { project, targetRef, targetUrl } = await saveGeneratedMosaicProject({
+        activeProject,
+        preview,
         recipe: {
-          version: 1,
-          algorithmVersion: 1,
-          target: targetRef,
           sourceFilter,
           sourceLimit,
           columns,
@@ -481,11 +462,11 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
           sourceIds: availableSources.map((source) => source.id),
           assignments: matched.assignments,
         },
-      };
-      await saveMosaicProject(project);
+        target,
+      });
       setProjects((items) => [project, ...items.filter((item) => item.id !== project.id)]);
       setActiveProject(project);
-      setPreviewUrl(storedPreviewUrl);
+      setPreviewUrl(project.previewUrl);
       setTarget(target.persistFile && targetUrl ? { ref: targetRef, url: targetUrl } : target);
       if (target.persistFile) releaseRuntimeTargetUrl();
       setMessage(`作品已保存；使用 ${availableSources.length} 项素材，跳过 ${analyzed.skipped} 项不可解码素材。`);
