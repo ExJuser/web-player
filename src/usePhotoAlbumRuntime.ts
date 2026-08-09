@@ -58,6 +58,8 @@ export function usePhotoAlbumRuntime({
   photoAlbumPreferencesRef.current = {
     sortMode: photoAlbumSortMode,
     favoritesOnly: photoAlbumFilter === "favorites",
+    recentTags: photoAlbumPreferencesRef.current.recentTags,
+    tagMergeDecisions: photoAlbumPreferencesRef.current.tagMergeDecisions,
   };
 
   const buildPhotoAlbumStore = useCallback(

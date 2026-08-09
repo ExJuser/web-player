@@ -13,6 +13,8 @@ export const photoAlbumSortOptions: Array<{ value: PhotoAlbumSortMode; label: st
 export const defaultPhotoAlbumPreferences: PhotoAlbumPreferences = {
   sortMode: "updated",
   favoritesOnly: false,
+  recentTags: [],
+  tagMergeDecisions: {},
 };
 
 const continuousPhotoReaderTagKeys = new Set(["本子", "漫画"].map(normalizeTagKey));
@@ -178,6 +180,19 @@ export function parsePhotoAlbumPreferences(source: unknown): PhotoAlbumPreferenc
       typeof preferences.favoritesOnly === "boolean"
         ? preferences.favoritesOnly
         : defaultPhotoAlbumPreferences.favoritesOnly,
+    recentTags: Array.isArray(preferences.recentTags)
+      ? preferences.recentTags.flatMap((entry) => {
+          if (!entry || typeof entry !== "object" || Array.isArray(entry)) return [];
+          const candidate = entry as { label?: unknown; usedAt?: unknown };
+          if (typeof candidate.label !== "string" || typeof candidate.usedAt !== "number") return [];
+          const label = candidate.label.trim().slice(0, 40);
+          const key = normalizeTagKey(label);
+          return key ? [{ key, label, usedAt: candidate.usedAt }] : [];
+        }).slice(0, 20)
+      : [],
+    tagMergeDecisions: preferences.tagMergeDecisions && typeof preferences.tagMergeDecisions === "object" && !Array.isArray(preferences.tagMergeDecisions)
+      ? preferences.tagMergeDecisions
+      : {},
   };
 }
 

@@ -2145,15 +2145,29 @@ export default function App() {
     selectedPhotoAlbum && shouldUseContinuousPhotoReader(photoAlbumTags[selectedPhotoAlbum.id] ?? []),
   );
   const {
+    activeSuggestionIndex: photoAlbumTagSuggestionIndex,
     addTags: addTagsToPhotoAlbum,
+    allTags: allPhotoAlbumTags,
+    applyMergeSuggestion: applyPhotoAlbumTagMergeSuggestion,
     closeEditor: closePhotoAlbumTagEditor,
+    commonTags: commonPhotoAlbumTags,
     editorAlbum: photoAlbumTagEditorAlbum,
+    isSuggestionLoading: isPhotoAlbumTagSuggestionLoading,
+    keepMergeSuggestion: keepPhotoAlbumTagMergeSuggestion,
+    mergePrompt: photoAlbumTagMergePrompt,
     message: photoAlbumTagMessage,
     openEditor: openPhotoAlbumTagEditor,
+    recentTags: recentPhotoAlbumTags,
     removeTag: removeTagFromPhotoAlbum,
+    selectSuggestion: selectPhotoAlbumTagSuggestion,
+    setActiveSuggestionIndex: setPhotoAlbumTagSuggestionIndex,
+    setMergePrompt: setPhotoAlbumTagMergePrompt,
     setTagInput: setPhotoAlbumTagInput,
     tagInput: photoAlbumTagInput,
+    tagInputSuggestions: photoAlbumTagInputSuggestions,
   } = usePhotoAlbumTagEditor({
+    localConfig,
+    photoAlbumPreferencesRef,
     photoAlbumTagsRef,
     photoAlbums,
     setPhotoAlbumTags,
@@ -2167,8 +2181,37 @@ export default function App() {
     () => getPagedPhotoAlbums(visiblePhotoAlbums, photoAlbumPage, photoAlbumPageSize),
     [photoAlbumPage, visiblePhotoAlbums],
   );
+  const photoAlbumSearchResults = useMemo(
+    () => photoAlbumSearchQuery.trim() ? visiblePhotoAlbums.slice(0, 8) : [],
+    [photoAlbumSearchQuery, visiblePhotoAlbums],
+  );
+  const photoAlbumCoverAlbums = useMemo(
+    () => Array.from(new Map([...pagedPhotoAlbums, ...photoAlbumSearchResults].map((album) => [album.id, album])).values()),
+    [pagedPhotoAlbums, photoAlbumSearchResults],
+  );
   const isPhotoAlbumGridCompact = pagedPhotoAlbums.length <= 5;
   const photoAlbumStats = useMemo(() => createPhotoAlbumStats(photoAlbums, favoritePhotoAlbumIds, photoAlbumProgress), [favoritePhotoAlbumIds, photoAlbumProgress, photoAlbums]);
+  const photoAlbumTagStats = useMemo(() => {
+    const byKey = new Map<string, { key: string; label: string; albumCount: number }>();
+    let taggedAlbums = 0;
+    photoAlbums.forEach((album) => {
+      const seen = new Set<string>();
+      (photoAlbumTags[album.id] ?? []).forEach((tag) => {
+        const key = normalizeTagKey(tag);
+        if (!key || seen.has(key)) return;
+        seen.add(key);
+        const existing = byKey.get(key);
+        byKey.set(key, { key, label: existing?.label ?? tag, albumCount: (existing?.albumCount ?? 0) + 1 });
+      });
+      if (seen.size) taggedAlbums += 1;
+    });
+    return {
+      coverage: photoAlbums.length ? taggedAlbums / photoAlbums.length : 0,
+      taggedAlbums,
+      totalTags: byKey.size,
+      tags: Array.from(byKey.values()).sort((a, b) => b.albumCount - a.albumCount || a.label.localeCompare(b.label, "zh-Hans-CN", { numeric: true })).slice(0, 20),
+    };
+  }, [photoAlbumTags, photoAlbums]);
   const visiblePhotoThumbnails = useMemo(
     () => getVisiblePhotoThumbnails(selectedPhotoAlbum, currentPhotoIndex, photoThumbnailWindowSize),
     [currentPhotoIndex, selectedPhotoAlbum],
@@ -2177,7 +2220,7 @@ export default function App() {
     activeView,
     currentPhotoIndex,
     decodedPhotoImageIdsRef,
-    pagedPhotoAlbums,
+    pagedPhotoAlbums: photoAlbumCoverAlbums,
     photoAlbumCoverPreferences,
     photoAlbumDirectoryRef,
     photoImageFilePromisesRef,
@@ -6405,10 +6448,19 @@ export default function App() {
               pagedPhotoAlbums={pagedPhotoAlbums}
               photoRootStatuses={photoRootStatuses}
               searchQuery={photoAlbumSearchQuery}
+              searchResults={photoAlbumSearchResults.map((album) => {
+                const preferredCover = album.images.find((image) => image.id === photoAlbumCoverPreferences[album.id]) ?? album.images[0];
+                return {
+                  album,
+                  coverImageUrl: getPhotoImageUrl(preferredCover) || album.coverImageUrl,
+                  tags: photoAlbumTags[album.id] ?? [],
+                };
+              })}
               sortMode={photoAlbumSortMode}
               sortOptions={photoAlbumSortOptions}
               start={photoAlbumPageStart}
               stats={photoAlbumStats}
+              tagStats={photoAlbumTagStats}
               totalVisibleAlbums={visiblePhotoAlbums.length}
               onChooseDirectory={() => void choosePhotoAlbumDirectory()}
               onFilterChange={updatePhotoAlbumFilter}
@@ -6419,6 +6471,8 @@ export default function App() {
               onRenderAlbum={renderPhotoAlbumCard}
               onSearchChange={setPhotoAlbumSearchQuery}
               onSearchClear={() => setPhotoAlbumSearchQuery("")}
+              onSelectSearchResult={openPhotoAlbum}
+              onSelectTag={(label) => { setPhotoAlbumPage(1); setPhotoAlbumSearchQuery(label); }}
               onSortModeChange={updatePhotoAlbumSortMode}
             />
           </LazyFeatureBoundary>
@@ -6840,13 +6894,25 @@ export default function App() {
       }}
     />
     <PhotoAlbumTagDialog
+      activeSuggestionIndex={photoAlbumTagSuggestionIndex}
       album={photoAlbumTagEditorAlbum}
+      allTags={allPhotoAlbumTags}
+      commonTags={commonPhotoAlbumTags}
+      isSuggestionLoading={isPhotoAlbumTagSuggestionLoading}
+      mergePrompt={photoAlbumTagMergePrompt}
       tags={photoAlbumTagEditorAlbum ? photoAlbumTags[photoAlbumTagEditorAlbum.id] ?? [] : []}
       tagInput={photoAlbumTagInput}
+      tagInputSuggestions={photoAlbumTagInputSuggestions}
+      recentTags={recentPhotoAlbumTags}
       message={photoAlbumTagMessage}
+      onActiveSuggestionIndexChange={setPhotoAlbumTagSuggestionIndex}
+      onApplyMergeSuggestion={applyPhotoAlbumTagMergeSuggestion}
+      onCancelMergeSuggestion={() => setPhotoAlbumTagMergePrompt(null)}
       onClose={closePhotoAlbumTagEditor}
       onAddTags={addTagsToPhotoAlbum}
+      onKeepMergeSuggestion={keepPhotoAlbumTagMergeSuggestion}
       onRemoveTag={removeTagFromPhotoAlbum}
+      onSelectSuggestion={selectPhotoAlbumTagSuggestion}
       onTagInputChange={setPhotoAlbumTagInput}
     />
     <MediaRootDialogsGroup

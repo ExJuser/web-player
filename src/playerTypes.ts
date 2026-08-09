@@ -483,6 +483,8 @@ export type PhotoAlbumSortMode = "updated" | "folderModified" | "name" | "count"
 export type PhotoAlbumPreferences = {
   sortMode: PhotoAlbumSortMode;
   favoritesOnly: boolean;
+  recentTags: RecentVideoTag[];
+  tagMergeDecisions: TagMergeDecisionStore;
 };
 
 export type PhotoAlbumStore = {

@@ -2,8 +2,9 @@ import type { ReactNode } from "react";
 
 import { PhotoAlbumEmptyState } from "./PhotoAlbumEmptyState";
 import { PhotoAlbumPagination } from "./PhotoAlbumPagination";
-import { PhotoAlbumSearchRow } from "./PhotoAlbumSearchRow";
+import { PhotoAlbumSearchRow, type PhotoAlbumSearchResult } from "./PhotoAlbumSearchRow";
 import { PhotoAlbumStats } from "./PhotoAlbumStats";
+import { PhotoTagStats } from "./PhotoTagStats";
 import { PhotoAlbumToolbar, type PhotoAlbumViewFilter } from "./PhotoAlbumToolbar";
 import { PhotoRootStatusCard } from "./PhotoRootStatusCard";
 import type { PhotoAlbum, PhotoAlbumSortMode, PlayerMediaRootStatus } from "./playerTypes";
@@ -19,6 +20,7 @@ type PhotoDashboardSectionProps = {
   pagedPhotoAlbums: PhotoAlbum[];
   photoRootStatuses: PlayerMediaRootStatus[];
   searchQuery: string;
+  searchResults: PhotoAlbumSearchResult[];
   sortMode: PhotoAlbumSortMode;
   sortOptions: Array<{ value: PhotoAlbumSortMode; label: string }>;
   start: number;
@@ -27,6 +29,12 @@ type PhotoDashboardSectionProps = {
     favorites: number;
     images: number;
     total: number;
+  };
+  tagStats: {
+    coverage: number;
+    taggedAlbums: number;
+    tags: Array<{ key: string; label: string; albumCount: number }>;
+    totalTags: number;
   };
   totalVisibleAlbums: number;
   onChooseDirectory: () => void;
@@ -38,6 +46,8 @@ type PhotoDashboardSectionProps = {
   onRenderAlbum: (album: PhotoAlbum) => ReactNode;
   onSearchChange: (query: string) => void;
   onSearchClear: () => void;
+  onSelectSearchResult: (album: PhotoAlbum) => void;
+  onSelectTag: (label: string) => void;
   onSortModeChange: (sortMode: PhotoAlbumSortMode) => void;
 };
 
@@ -52,10 +62,12 @@ export function PhotoDashboardSection({
   pagedPhotoAlbums,
   photoRootStatuses,
   searchQuery,
+  searchResults,
   sortMode,
   sortOptions,
   start,
   stats,
+  tagStats,
   totalVisibleAlbums,
   onChooseDirectory,
   onFilterChange,
@@ -66,6 +78,8 @@ export function PhotoDashboardSection({
   onRenderAlbum,
   onSearchChange,
   onSearchClear,
+  onSelectSearchResult,
+  onSelectTag,
   onSortModeChange,
 }: PhotoDashboardSectionProps) {
   return (
@@ -83,9 +97,11 @@ export function PhotoDashboardSection({
         randomDisabled={isLoading || !totalVisibleAlbums}
       />
 
-      <PhotoAlbumSearchRow query={searchQuery} onChange={onSearchChange} onClear={onSearchClear} />
+      <PhotoAlbumSearchRow query={searchQuery} resultCount={totalVisibleAlbums} results={searchResults} onChange={onSearchChange} onClear={onSearchClear} onSelect={onSelectSearchResult} />
 
       <PhotoAlbumStats stats={stats} />
+
+      <PhotoTagStats {...tagStats} onSelectTag={onSelectTag} />
 
       <PhotoRootStatusCard statuses={photoRootStatuses} />
 
