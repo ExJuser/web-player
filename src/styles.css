@@ -2611,6 +2611,7 @@ button {
   min-height: 34px;
   padding: 0 10px;
   border-radius: 5px;
+  background: transparent;
   color: #e6e9ef;
   text-align: left;
   white-space: nowrap;
@@ -2638,6 +2639,7 @@ button {
 
 .app-shell.theme-light .photo-delete-options button,
 :root[data-theme="light"] .photo-delete-options button {
+  background: transparent;
   color: #344054;
 }
 
@@ -2658,6 +2660,7 @@ button {
 }
 
 .app-shell.theme-dark .photo-delete-options button {
+  background: transparent;
   color: #e6e9ef;
 }
 
