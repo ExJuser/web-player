@@ -711,6 +711,10 @@ type DuplicateFingerprintCandidate = {
   pair: { score: number; reasons: string[] };
 };
 
+type DuplicateNameSimilarityCandidate = DuplicateFingerprintCandidate & {
+  pairKey: string;
+};
+
 export function selectDuplicateFingerprintCandidates(
   candidatePairs: DuplicateFingerprintCandidate[],
   maxFingerprintVideos: number,
@@ -759,6 +763,39 @@ function mergeContentFingerprintMatches(
   }
 }
 
+export function selectDuplicateNameSimilarityCandidates(
+  candidates: DuplicateNameSimilarityCandidate[],
+  pairScores: Map<string, DuplicateVideoPair>,
+  maxAiNamePairs: number,
+) {
+  return candidates
+    .filter((candidate) => pairScores.get(candidate.pairKey)?.severity !== "duplicate")
+    .sort((a, b) => b.pair.score - a.pair.score || compareNaturalRelativePath(a.a.relativePath, b.a.relativePath))
+    .slice(0, maxAiNamePairs);
+}
+
+export function applyDuplicateNameSimilarityScores(
+  candidates: DuplicateNameSimilarityCandidate[],
+  pairs: DuplicateNameSimilarityPair[],
+  similarityScores: Map<string, number>,
+  pairScores: Map<string, DuplicateVideoPair>,
+) {
+  for (let index = 0; index < candidates.length; index += 1) {
+    const candidate = candidates[index];
+    const similarity = similarityScores.get(pairs[index].id);
+    if (!Number.isFinite(similarity)) continue;
+    const similarityScore = Math.max(0, Math.min(100, Math.round(similarity ?? 0)));
+    const score = candidate.pair.reasons.includes("短编号名称一致")
+      ? Math.min(candidate.pair.score + similarityScore, duplicateHighConfidenceThreshold - 1)
+      : candidate.pair.score + similarityScore;
+    if (score < duplicateSuspiciousThreshold) continue;
+    mergeDuplicatePairScore(pairScores, candidate.a, candidate.b, {
+      score,
+      reasons: [...candidate.pair.reasons, `AI 名称相似度 ${similarityScore}%`],
+    });
+  }
+}
+
 export async function detectDuplicateVideosWithProgress(
   videos: VideoItem[],
   options: DuplicateDetectionOptions = {},
@@ -767,12 +804,7 @@ export async function detectDuplicateVideosWithProgress(
   const candidates = createDuplicatePairCandidates(videos);
   const totalPairs = candidates.length;
   const yieldEveryPairs = Math.max(1, options.yieldEveryPairs ?? 5000);
-  const nameSimilarityCandidates: Array<{
-    a: VideoItem;
-    b: VideoItem;
-    pair: { score: number; reasons: string[] };
-    pairKey: string;
-  }> = [];
+  const nameSimilarityCandidates: DuplicateNameSimilarityCandidate[] = [];
   const fingerprintCandidatePairs: DuplicateFingerprintCandidate[] = [];
   let processedPairs = 0;
   let processedFingerprints = 0;
@@ -851,10 +883,7 @@ export async function detectDuplicateVideosWithProgress(
   if (options.getNameSimilarityScores && nameSimilarityCandidates.length) {
     const maxAiNamePairs = Math.max(0, options.maxAiNamePairs ?? defaultMaxAiNamePairs);
     const aiNameBatchSize = Math.max(1, Math.min(defaultAiNameBatchSize, options.aiNameBatchSize ?? defaultAiNameBatchSize));
-    const selectedCandidates = nameSimilarityCandidates
-      .filter((candidate) => pairScores.get(candidate.pairKey)?.severity !== "duplicate")
-      .sort((a, b) => b.pair.score - a.pair.score || compareNaturalRelativePath(a.a.relativePath, b.a.relativePath))
-      .slice(0, maxAiNamePairs);
+    const selectedCandidates = selectDuplicateNameSimilarityCandidates(nameSimilarityCandidates, pairScores, maxAiNamePairs);
     if (selectedCandidates.length) {
       phase = "aiName";
       totalNamePairs = selectedCandidates.length;
@@ -875,20 +904,7 @@ export async function detectDuplicateVideosWithProgress(
         }
         processedNamePairs += batchCandidates.length;
         reportProgress();
-        for (let index = 0; index < batchCandidates.length; index += 1) {
-          const candidate = batchCandidates[index];
-          const similarity = similarityScores.get(pairs[index].id);
-          if (!Number.isFinite(similarity)) continue;
-          const similarityScore = Math.max(0, Math.min(100, Math.round(similarity ?? 0)));
-          const score = candidate.pair.reasons.includes("短编号名称一致")
-            ? Math.min(candidate.pair.score + similarityScore, duplicateHighConfidenceThreshold - 1)
-            : candidate.pair.score + similarityScore;
-          if (score < duplicateSuspiciousThreshold) continue;
-          mergeDuplicatePairScore(pairScores, candidate.a, candidate.b, {
-            score,
-            reasons: [...candidate.pair.reasons, `AI 名称相似度 ${similarityScore}%`],
-          });
-        }
+        applyDuplicateNameSimilarityScores(batchCandidates, pairs, similarityScores, pairScores);
       }
     }
   }

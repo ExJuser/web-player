@@ -399,6 +399,46 @@ test("only asks AI to score name pairs after the local candidate threshold", asy
   assert.equal(calls[0][0].localScore, 85);
 });
 
+test("selects AI name candidates by local score while excluding fingerprint duplicates", () => {
+  const lowA = createVideo({ id: "low-a", relativePath: "Z/low-a.mp4" });
+  const lowB = createVideo({ id: "low-b", relativePath: "Z/low-b.mp4" });
+  const highA = createVideo({ id: "high-a", relativePath: "A/high-a.mp4" });
+  const highB = createVideo({ id: "high-b", relativePath: "A/high-b.mp4" });
+  const blockedA = createVideo({ id: "blocked-a" });
+  const blockedB = createVideo({ id: "blocked-b" });
+  const candidates = [
+    { a: lowA, b: lowB, pair: { score: 65, reasons: [] }, pairKey: "low" },
+    { a: highA, b: highB, pair: { score: 90, reasons: [] }, pairKey: "high" },
+    { a: blockedA, b: blockedB, pair: { score: 100, reasons: [] }, pairKey: "blocked" },
+  ];
+  const pairScores = new Map([["blocked", { severity: "duplicate" }]]);
+
+  assert.deepEqual(
+    mediaUtils.selectDuplicateNameSimilarityCandidates(candidates, pairScores, 1).map((candidate) => candidate.pairKey),
+    ["high"],
+  );
+});
+
+test("applies valid AI name scores while keeping short-number pairs below duplicate confidence", () => {
+  const first = createVideo({ id: "first" });
+  const second = createVideo({ id: "second" });
+  const candidates = [{
+    a: first,
+    b: second,
+    pair: { score: 85, reasons: ["短编号名称一致"] },
+    pairKey: "first-second",
+  }];
+  const pairs = [{ id: "pair-1" }];
+  const pairScores = new Map();
+
+  mediaUtils.applyDuplicateNameSimilarityScores(candidates, pairs, new Map([["pair-1", 100]]), pairScores);
+
+  const result = Array.from(pairScores.values())[0];
+  assert.equal(result.score, 119);
+  assert.equal(result.severity, "suspicious");
+  assert.ok(result.reasons.includes("AI 名称相似度 100%"));
+});
+
 test("detects duplicate videos incrementally with progress updates", async () => {
   const videos = [
     createVideo({
