@@ -90,6 +90,52 @@ test("player preferences parse playback controls with defaults", () => {
   assert.equal(invalid.holdPlaybackRate, 4);
 });
 
+test("player preferences validate modes, booleans, subtitle style, and legacy series fields", () => {
+  const parsed = storage.parsePlayerPreferences({
+    playlistSortMode: "path",
+    isPlaylistSortReversed: true,
+    homeMediaMode: "special",
+    isSeriesMode: true,
+    selectedSeriesKey: "legacy-series",
+    isCinemaMode: true,
+    startFromHighEnergy: true,
+    subtitleStyle: {
+      fontSize: 32,
+      fontFamily: "monospace",
+      fontWeight: 700,
+    },
+  });
+
+  assert.equal(parsed.playlistSortMode, "path");
+  assert.equal(parsed.isPlaylistSortReversed, true);
+  assert.equal(parsed.homeMediaMode, "special");
+  assert.equal(parsed.isSeriesMode, false);
+  assert.equal(parsed.selectedSeriesKey, "all");
+  assert.equal(parsed.isCinemaMode, true);
+  assert.equal(parsed.startFromHighEnergy, true);
+  assert.deepEqual(parsed.subtitleStyle, { fontSize: 32, fontFamily: "monospace", fontWeight: 700 });
+
+  const invalid = storage.parsePlayerPreferences({
+    playlistSortMode: "invalid",
+    isPlaylistSortReversed: "true",
+    homeMediaMode: "all",
+    isCinemaMode: 1,
+    startFromHighEnergy: "true",
+    subtitleStyle: {
+      fontSize: 13,
+      fontFamily: "fantasy",
+      fontWeight: 500,
+    },
+  });
+
+  assert.equal(invalid.playlistSortMode, "name");
+  assert.equal(invalid.isPlaylistSortReversed, false);
+  assert.equal(invalid.homeMediaMode, "anime");
+  assert.equal(invalid.isCinemaMode, false);
+  assert.equal(invalid.startFromHighEnergy, false);
+  assert.deepEqual(invalid.subtitleStyle, { fontSize: 16, fontFamily: "sans-serif", fontWeight: 600 });
+});
+
 test("media root scan cache keeps valid server entries and drops invalid records", () => {
   const parsed = storage.parseCachedMediaRootScan(JSON.stringify({
     version: storage.mediaRootScanCacheVersion,

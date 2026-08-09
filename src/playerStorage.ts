@@ -57,7 +57,9 @@ import {
   defaultPlayerSettings,
   defaultPlayerPreferences,
   holdRates,
+  playbackModeOptions,
   playlistPageSizeOptions,
+  playlistSortOptions,
   seekSteps,
   defaultShortcuts
 } from "./playerConstants";
@@ -572,74 +574,77 @@ export function parseRecentVideoTags(source: unknown): RecentVideoTag[] {
     .slice(0, 20);
 }
 
+const storedPlaylistSortModes = playlistSortOptions.map((option) => option.value);
+const storedPlaybackModes = playbackModeOptions.map((option) => option.value);
+const storedHomeMediaModes = ["anime", "special"] as const;
+const storedSubtitleFontSizes = [12, 14, 16, 18, 22, 26, 32] as const;
+const storedSubtitleFontFamilies = ["sans-serif", "serif", "monospace"] as const;
+const storedSubtitleFontWeights = [400, 600, 700] as const;
+
+function readStoredPreference<const T extends string | number>(
+  value: unknown,
+  allowedValues: readonly T[],
+  fallback: T,
+): T {
+  return allowedValues.includes(value as T) ? value as T : fallback;
+}
+
+function readStoredBoolean(value: unknown, fallback: boolean) {
+  return typeof value === "boolean" ? value : fallback;
+}
+
+function parseStoredSubtitleStyle(source: Partial<PlayerPreferences["subtitleStyle"]> | undefined) {
+  return {
+    fontSize: readStoredPreference(
+      source?.fontSize,
+      storedSubtitleFontSizes,
+      defaultPlayerPreferences.subtitleStyle.fontSize,
+    ),
+    fontFamily: readStoredPreference(
+      source?.fontFamily,
+      storedSubtitleFontFamilies,
+      defaultPlayerPreferences.subtitleStyle.fontFamily,
+    ),
+    fontWeight: readStoredPreference(
+      source?.fontWeight,
+      storedSubtitleFontWeights,
+      defaultPlayerPreferences.subtitleStyle.fontWeight,
+    ),
+  };
+}
+
 export function parsePlayerPreferences(source: unknown): PlayerPreferences {
   if (!source || typeof source !== "object" || Array.isArray(source)) return defaultPlayerPreferences;
   const preferences = source as Partial<PlayerPreferences>;
   return {
-    playlistSortMode:
-      preferences.playlistSortMode === "path" ||
-      preferences.playlistSortMode === "modified" ||
-      preferences.playlistSortMode === "size" ||
-      preferences.playlistSortMode === "playedDuration" ||
-      preferences.playlistSortMode === "playIntensity" ||
-      preferences.playlistSortMode === "playCount" ||
-      preferences.playlistSortMode === "emissionCount"
-        ? preferences.playlistSortMode
-        : defaultPlayerPreferences.playlistSortMode,
-    isPlaylistSortReversed:
-      typeof preferences.isPlaylistSortReversed === "boolean"
-        ? preferences.isPlaylistSortReversed
-        : defaultPlayerPreferences.isPlaylistSortReversed,
-    playlistPageSize:
-      typeof preferences.playlistPageSize === "number" &&
-      playlistPageSizeOptions.includes(preferences.playlistPageSize as (typeof playlistPageSizeOptions)[number])
-        ? preferences.playlistPageSize
-        : defaultPlayerPreferences.playlistPageSize,
-    playbackMode:
-      preferences.playbackMode === "single-loop" ||
-      preferences.playbackMode === "list-loop" ||
-      preferences.playbackMode === "shuffle" ||
-      preferences.playbackMode === "favorites-only"
-        ? preferences.playbackMode
-        : defaultPlayerPreferences.playbackMode,
-    seekStep:
-      typeof preferences.seekStep === "number" && seekSteps.includes(preferences.seekStep)
-        ? preferences.seekStep
-        : defaultPlayerPreferences.seekStep,
-    holdPlaybackRate:
-      typeof preferences.holdPlaybackRate === "number" && holdRates.includes(preferences.holdPlaybackRate)
-        ? preferences.holdPlaybackRate
-        : defaultPlayerPreferences.holdPlaybackRate,
+    playlistSortMode: readStoredPreference(
+      preferences.playlistSortMode,
+      storedPlaylistSortModes,
+      defaultPlayerPreferences.playlistSortMode,
+    ),
+    isPlaylistSortReversed: readStoredBoolean(
+      preferences.isPlaylistSortReversed,
+      defaultPlayerPreferences.isPlaylistSortReversed,
+    ),
+    playlistPageSize: readStoredPreference(
+      preferences.playlistPageSize,
+      playlistPageSizeOptions,
+      defaultPlayerPreferences.playlistPageSize,
+    ),
+    playbackMode: readStoredPreference(preferences.playbackMode, storedPlaybackModes, defaultPlayerPreferences.playbackMode),
+    seekStep: readStoredPreference(preferences.seekStep, seekSteps, defaultPlayerPreferences.seekStep),
+    holdPlaybackRate: readStoredPreference(preferences.holdPlaybackRate, holdRates, defaultPlayerPreferences.holdPlaybackRate),
     shortcuts: parseShortcuts(preferences.shortcuts),
-    homeMediaMode:
-      preferences.homeMediaMode === "anime" || preferences.homeMediaMode === "special"
-        ? preferences.homeMediaMode
-        : defaultPlayerPreferences.homeMediaMode,
+    homeMediaMode: readStoredPreference(
+      preferences.homeMediaMode,
+      storedHomeMediaModes,
+      defaultPlayerPreferences.homeMediaMode,
+    ),
     isSeriesMode: defaultPlayerPreferences.isSeriesMode,
     selectedSeriesKey: defaultPlayerPreferences.selectedSeriesKey,
-    isCinemaMode:
-      typeof preferences.isCinemaMode === "boolean"
-        ? preferences.isCinemaMode
-        : defaultPlayerPreferences.isCinemaMode,
-    startFromHighEnergy:
-      typeof preferences.startFromHighEnergy === "boolean"
-        ? preferences.startFromHighEnergy
-        : defaultPlayerPreferences.startFromHighEnergy,
-    subtitleStyle: {
-      fontSize:
-        typeof preferences.subtitleStyle?.fontSize === "number" &&
-        [12, 14, 16, 18, 22, 26, 32].includes(preferences.subtitleStyle.fontSize)
-          ? preferences.subtitleStyle.fontSize
-          : defaultPlayerPreferences.subtitleStyle.fontSize,
-      fontFamily:
-        preferences.subtitleStyle?.fontFamily === "serif" || preferences.subtitleStyle?.fontFamily === "monospace"
-          ? preferences.subtitleStyle.fontFamily
-          : defaultPlayerPreferences.subtitleStyle.fontFamily,
-      fontWeight:
-        preferences.subtitleStyle?.fontWeight === 400 || preferences.subtitleStyle?.fontWeight === 700
-          ? preferences.subtitleStyle.fontWeight
-          : defaultPlayerPreferences.subtitleStyle.fontWeight,
-    },
+    isCinemaMode: readStoredBoolean(preferences.isCinemaMode, defaultPlayerPreferences.isCinemaMode),
+    startFromHighEnergy: readStoredBoolean(preferences.startFromHighEnergy, defaultPlayerPreferences.startFromHighEnergy),
+    subtitleStyle: parseStoredSubtitleStyle(preferences.subtitleStyle),
     recentVideoTags: parseRecentVideoTags(preferences.recentVideoTags),
   };
 }
