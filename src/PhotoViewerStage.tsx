@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type WheelEvent } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, LoaderCircle } from "lucide-react";
 
+import { loadPhotoPreview, shouldCreatePhotoPreview } from "./photoPreviewCache";
 import type { PhotoAlbumImage } from "./playerTypes";
 
 type PhotoViewerStageProps = {
@@ -14,6 +15,7 @@ type PhotoViewerStageProps = {
 const minPhotoZoom = 1;
 const maxPhotoZoom = 5;
 const photoZoomStep = 0.25;
+const photoOriginalLoadDelay = 450;
 type PhotoPan = { x: number; y: number };
 
 export function PhotoViewerStage({
@@ -26,6 +28,11 @@ export function PhotoViewerStage({
   const [zoom, setZoom] = useState(minPhotoZoom);
   const [pan, setPan] = useState<PhotoPan>({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState("");
+  const [isPreviewPending, setIsPreviewPending] = useState(false);
+  const [shouldLoadOriginal, setShouldLoadOriginal] = useState(true);
+  const [isOriginalReady, setIsOriginalReady] = useState(false);
+  const [originalLoadFailed, setOriginalLoadFailed] = useState(false);
   const imageRef = useRef<HTMLImageElement | null>(null);
   const dragStartRef = useRef<{ pointerId: number; x: number; y: number; pan: PhotoPan } | null>(null);
 
@@ -35,6 +42,48 @@ export function PhotoViewerStage({
     setIsDragging(false);
     dragStartRef.current = null;
   }, [currentPhoto?.id]);
+
+  useEffect(() => {
+    let isCancelled = false;
+    let nextPreviewUrl = "";
+    setPreviewUrl("");
+    setIsOriginalReady(false);
+    setOriginalLoadFailed(false);
+
+    if (!currentPhoto || !currentPhotoUrl || !shouldCreatePhotoPreview(currentPhoto)) {
+      setIsPreviewPending(false);
+      setShouldLoadOriginal(true);
+      return;
+    }
+
+    setIsPreviewPending(true);
+    setShouldLoadOriginal(false);
+    void loadPhotoPreview(currentPhoto, currentPhotoUrl).then((preview) => {
+      if (isCancelled) return;
+      setIsPreviewPending(false);
+      if (!preview) {
+        setShouldLoadOriginal(true);
+        return;
+      }
+      nextPreviewUrl = URL.createObjectURL(preview);
+      setPreviewUrl(nextPreviewUrl);
+    });
+
+    return () => {
+      isCancelled = true;
+      if (nextPreviewUrl) URL.revokeObjectURL(nextPreviewUrl);
+    };
+  }, [currentPhoto, currentPhotoUrl]);
+
+  useEffect(() => {
+    if (!previewUrl || shouldLoadOriginal) return;
+    const timeout = window.setTimeout(() => setShouldLoadOriginal(true), photoOriginalLoadDelay);
+    return () => window.clearTimeout(timeout);
+  }, [previewUrl, shouldLoadOriginal]);
+
+  useEffect(() => {
+    if (zoom > minPhotoZoom && previewUrl) setShouldLoadOriginal(true);
+  }, [previewUrl, zoom]);
 
   const clampPan = (nextPan: PhotoPan, nextZoom: number, stage: HTMLDivElement): PhotoPan => {
     const image = imageRef.current;
@@ -116,16 +165,41 @@ export function PhotoViewerStage({
         <ChevronLeft size={34} />
       </button>
       {currentPhoto && currentPhotoUrl ? (
-        <img
-          ref={imageRef}
-          key={currentPhoto.id}
-          src={currentPhotoUrl}
-          alt={currentPhoto.name}
-          decoding="async"
-          loading="eager"
-          draggable={false}
-          style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}
-        />
+        <div className="photo-stage-image">
+          {previewUrl ? (
+            <img
+              ref={isOriginalReady ? undefined : imageRef}
+              className="photo-stage-preview"
+              src={previewUrl}
+              alt={currentPhoto.name}
+              decoding="async"
+              draggable={false}
+              style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}
+            />
+          ) : null}
+          {shouldLoadOriginal ? (
+            <img
+              ref={imageRef}
+              className={`photo-stage-original ${isOriginalReady ? "ready" : ""}`}
+              key={currentPhoto.id}
+              src={currentPhotoUrl}
+              alt={currentPhoto.name}
+              decoding="async"
+              loading="eager"
+              draggable={false}
+              onLoad={() => setIsOriginalReady(true)}
+              onError={() => setOriginalLoadFailed(true)}
+              style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}
+            />
+          ) : null}
+          {isPreviewPending ? (
+            <span className="photo-load-status"><LoaderCircle size={15} className="spin-icon" />正在生成预览</span>
+          ) : previewUrl && shouldLoadOriginal && !isOriginalReady && !originalLoadFailed ? (
+            <span className="photo-load-status"><LoaderCircle size={15} className="spin-icon" />正在加载高清图</span>
+          ) : originalLoadFailed && previewUrl ? (
+            <span className="photo-load-status error">高清图加载失败，已保留预览</span>
+          ) : null}
+        </div>
       ) : (
         <div className="photo-empty-state">没有可显示的图片</div>
       )}
