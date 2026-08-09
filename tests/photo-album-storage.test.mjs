@@ -30,6 +30,12 @@ test("missing photo album store fields fall back to defaults", () => {
     sortMode: "updated",
     sortDirection: "desc",
     readingMode: "single",
+    singleReaderBackground: "dark",
+    continuousReaderBackground: "dark",
+    continuousPageGap: "normal",
+    singleFitMode: "fit",
+    singleZoom: 1,
+    continuousZoom: 1,
     favoritesOnly: false,
     recentTags: [],
     tagMergeDecisions: {},
@@ -74,6 +80,12 @@ test("photo album store keeps valid favorites, progress, preferences, and tags",
     sortMode: "count",
     sortDirection: "asc",
     readingMode: "continuous",
+    singleReaderBackground: "dark",
+    continuousReaderBackground: "dark",
+    continuousPageGap: "normal",
+    singleFitMode: "fit",
+    singleZoom: 1,
+    continuousZoom: 1,
     favoritesOnly: true,
     recentTags: [],
     tagMergeDecisions: {},
@@ -84,6 +96,59 @@ test("photo album store keeps valid favorites, progress, preferences, and tags",
   assert.deepEqual(parsed.albumTags, {
     "root|A": ["剧情", "AI-字幕"],
   });
+});
+
+test("photo album preferences validate enum values, zoom bounds, and recent tags", () => {
+  const mergeDecisions = { "ai字幕": "AI字幕" };
+  const parsed = storage.parsePhotoAlbumPreferences({
+    sortMode: "name",
+    sortDirection: "asc",
+    readingMode: "continuous",
+    singleReaderBackground: "sepia",
+    continuousReaderBackground: "light",
+    continuousPageGap: "wide",
+    singleFitMode: "custom",
+    singleZoom: 0,
+    continuousZoom: 3,
+    favoritesOnly: true,
+    recentTags: [
+      { label: "  ＡＩ字幕  ", usedAt: 10 },
+      { label: "", usedAt: 11 },
+      { label: "无效", usedAt: "bad" },
+      null,
+    ],
+    tagMergeDecisions: mergeDecisions,
+  });
+
+  assert.deepEqual(parsed, {
+    sortMode: "name",
+    sortDirection: "asc",
+    readingMode: "continuous",
+    singleReaderBackground: "sepia",
+    continuousReaderBackground: "light",
+    continuousPageGap: "wide",
+    singleFitMode: "custom",
+    singleZoom: 1,
+    continuousZoom: 2,
+    favoritesOnly: true,
+    recentTags: [{ key: "ai字幕", label: "ＡＩ字幕", usedAt: 10 }],
+    tagMergeDecisions: mergeDecisions,
+  });
+
+  assert.deepEqual(storage.parsePhotoAlbumPreferences({
+    sortMode: "bad",
+    sortDirection: "bad",
+    readingMode: "bad",
+    singleReaderBackground: "bad",
+    continuousReaderBackground: "bad",
+    continuousPageGap: "bad",
+    singleFitMode: "bad",
+    singleZoom: Number.NaN,
+    continuousZoom: Number.POSITIVE_INFINITY,
+    favoritesOnly: "yes",
+    recentTags: "bad",
+    tagMergeDecisions: [],
+  }), storage.defaultPhotoAlbumPreferences);
 });
 
 test("photo album display helpers keep sort labels and progress text", () => {

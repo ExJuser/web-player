@@ -30,6 +30,35 @@ export const defaultPhotoAlbumPreferences: PhotoAlbumPreferences = {
   tagMergeDecisions: {},
 };
 
+const photoAlbumSortModes = ["updated", "folderModified", "name", "count"] as const;
+const photoAlbumSortDirections = ["asc", "desc"] as const;
+const photoAlbumReadingModes = ["single", "continuous"] as const;
+const photoReaderBackgrounds = ["black", "dark", "light", "white", "sepia"] as const;
+const photoContinuousPageGaps = ["none", "narrow", "normal", "wide"] as const;
+const photoSingleFitModes = ["fit", "width", "original", "custom"] as const;
+
+function readPreferenceValue<const T extends string>(value: unknown, allowedValues: readonly T[], fallback: T): T {
+  return typeof value === "string" && allowedValues.includes(value as T) ? value as T : fallback;
+}
+
+function readClampedPreference(value: unknown, minimum: number, maximum: number, fallback: number) {
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.min(maximum, Math.max(minimum, value))
+    : fallback;
+}
+
+function parseRecentPhotoAlbumTags(source: unknown) {
+  if (!Array.isArray(source)) return [];
+  return source.flatMap((entry) => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) return [];
+    const candidate = entry as { label?: unknown; usedAt?: unknown };
+    if (typeof candidate.label !== "string" || typeof candidate.usedAt !== "number") return [];
+    const label = candidate.label.trim().slice(0, 40);
+    const key = normalizeTagKey(label);
+    return key ? [{ key, label, usedAt: candidate.usedAt }] : [];
+  }).slice(0, 20);
+}
+
 export function formatPhotoAlbumProgress(album: PhotoAlbum, progressStore: Record<string, PhotoAlbumProgress>) {
   const progress = progressStore[album.id];
   if (progress?.completed) return "已读完";
@@ -185,67 +214,20 @@ export function parsePhotoAlbumPreferences(source: unknown): PhotoAlbumPreferenc
   if (!source || typeof source !== "object" || Array.isArray(source)) return defaultPhotoAlbumPreferences;
   const preferences = source as Partial<PhotoAlbumPreferences>;
   return {
-    sortMode:
-      preferences.sortMode === "name" || preferences.sortMode === "count" || preferences.sortMode === "folderModified"
-        ? preferences.sortMode
-        : defaultPhotoAlbumPreferences.sortMode,
-    sortDirection:
-      preferences.sortDirection === "asc" || preferences.sortDirection === "desc"
-        ? preferences.sortDirection
-        : defaultPhotoAlbumPreferences.sortDirection,
-    readingMode:
-      preferences.readingMode === "continuous" || preferences.readingMode === "single"
-        ? preferences.readingMode
-        : defaultPhotoAlbumPreferences.readingMode,
-    singleReaderBackground:
-      preferences.singleReaderBackground === "black" ||
-      preferences.singleReaderBackground === "light" ||
-      preferences.singleReaderBackground === "white" ||
-      preferences.singleReaderBackground === "sepia" ||
-      preferences.singleReaderBackground === "dark"
-        ? preferences.singleReaderBackground
-        : defaultPhotoAlbumPreferences.singleReaderBackground,
-    continuousReaderBackground:
-      preferences.continuousReaderBackground === "black" ||
-      preferences.continuousReaderBackground === "light" ||
-      preferences.continuousReaderBackground === "white" ||
-      preferences.continuousReaderBackground === "sepia" ||
-      preferences.continuousReaderBackground === "dark"
-        ? preferences.continuousReaderBackground
-        : defaultPhotoAlbumPreferences.continuousReaderBackground,
-    continuousPageGap:
-      preferences.continuousPageGap === "none" ||
-      preferences.continuousPageGap === "narrow" ||
-      preferences.continuousPageGap === "wide" ||
-      preferences.continuousPageGap === "normal"
-        ? preferences.continuousPageGap
-        : defaultPhotoAlbumPreferences.continuousPageGap,
-    singleFitMode:
-      preferences.singleFitMode === "width" || preferences.singleFitMode === "original" || preferences.singleFitMode === "custom" || preferences.singleFitMode === "fit"
-        ? preferences.singleFitMode
-        : defaultPhotoAlbumPreferences.singleFitMode,
-    singleZoom:
-      typeof preferences.singleZoom === "number" && Number.isFinite(preferences.singleZoom)
-        ? Math.min(5, Math.max(1, preferences.singleZoom))
-        : defaultPhotoAlbumPreferences.singleZoom,
-    continuousZoom:
-      typeof preferences.continuousZoom === "number" && Number.isFinite(preferences.continuousZoom)
-        ? Math.min(2, Math.max(0.5, preferences.continuousZoom))
-        : defaultPhotoAlbumPreferences.continuousZoom,
+    sortMode: readPreferenceValue(preferences.sortMode, photoAlbumSortModes, defaultPhotoAlbumPreferences.sortMode),
+    sortDirection: readPreferenceValue(preferences.sortDirection, photoAlbumSortDirections, defaultPhotoAlbumPreferences.sortDirection),
+    readingMode: readPreferenceValue(preferences.readingMode, photoAlbumReadingModes, defaultPhotoAlbumPreferences.readingMode),
+    singleReaderBackground: readPreferenceValue(preferences.singleReaderBackground, photoReaderBackgrounds, defaultPhotoAlbumPreferences.singleReaderBackground),
+    continuousReaderBackground: readPreferenceValue(preferences.continuousReaderBackground, photoReaderBackgrounds, defaultPhotoAlbumPreferences.continuousReaderBackground),
+    continuousPageGap: readPreferenceValue(preferences.continuousPageGap, photoContinuousPageGaps, defaultPhotoAlbumPreferences.continuousPageGap),
+    singleFitMode: readPreferenceValue(preferences.singleFitMode, photoSingleFitModes, defaultPhotoAlbumPreferences.singleFitMode),
+    singleZoom: readClampedPreference(preferences.singleZoom, 1, 5, defaultPhotoAlbumPreferences.singleZoom),
+    continuousZoom: readClampedPreference(preferences.continuousZoom, 0.5, 2, defaultPhotoAlbumPreferences.continuousZoom),
     favoritesOnly:
       typeof preferences.favoritesOnly === "boolean"
         ? preferences.favoritesOnly
         : defaultPhotoAlbumPreferences.favoritesOnly,
-    recentTags: Array.isArray(preferences.recentTags)
-      ? preferences.recentTags.flatMap((entry) => {
-          if (!entry || typeof entry !== "object" || Array.isArray(entry)) return [];
-          const candidate = entry as { label?: unknown; usedAt?: unknown };
-          if (typeof candidate.label !== "string" || typeof candidate.usedAt !== "number") return [];
-          const label = candidate.label.trim().slice(0, 40);
-          const key = normalizeTagKey(label);
-          return key ? [{ key, label, usedAt: candidate.usedAt }] : [];
-        }).slice(0, 20)
-      : [],
+    recentTags: parseRecentPhotoAlbumTags(preferences.recentTags),
     tagMergeDecisions: preferences.tagMergeDecisions && typeof preferences.tagMergeDecisions === "object" && !Array.isArray(preferences.tagMergeDecisions)
       ? preferences.tagMergeDecisions
       : {},
