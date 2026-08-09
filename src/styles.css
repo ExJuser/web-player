@@ -2651,6 +2651,24 @@ button {
   color: #c62828;
 }
 
+.app-shell.theme-dark .photo-delete-options {
+  border-color: #343b46;
+  background: #20252d;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.34);
+}
+
+.app-shell.theme-dark .photo-delete-options button {
+  color: #e6e9ef;
+}
+
+.app-shell.theme-dark .photo-delete-options button:hover:not(:disabled) {
+  background: #2a303a;
+}
+
+.app-shell.theme-dark .photo-delete-options .delete-album-option {
+  color: #ff8585;
+}
+
 .photo-stage {
   position: relative;
   display: flex;
