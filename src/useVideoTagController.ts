@@ -8,6 +8,7 @@ import type { ActorProfileStore, PlayerPreferences, TagMergeDecisionStore, Video
 import {
   createTagInputSuggestions,
   createTagSearchIndex,
+  createAvailableTagViews,
   createTagPairKey,
   findTagMergeSuggestion,
   getActiveTagInputSegment,
@@ -98,34 +99,11 @@ export function useVideoTagController({
   }, [activeTagInputSegment, currentVideo, currentVideoTags, isTagDialogOpen, tagSearchIndex]);
   const tagViews = useMemo(() => {
     if (!isTagDialogOpen || !currentVideo) return { allTags: [], commonTags: [], recentTags: [] };
-    const currentTagKeys = new Set(currentVideoTags.map(normalizeTagKey));
-    const usageByKey = new Map<string, { label: string; count: number }>();
-    Object.values(tagUsageVideoTags).forEach((tags) => {
-      const seenVideoTagKeys = new Set<string>();
-      tags.forEach((tag) => {
-        const key = normalizeTagKey(tag);
-        if (!key || seenVideoTagKeys.has(key)) return;
-        seenVideoTagKeys.add(key);
-        const usage = usageByKey.get(key);
-        usageByKey.set(key, { label: usage?.label ?? tag, count: (usage?.count ?? 0) + 1 });
-      });
+    return createAvailableTagViews({
+      currentTags: currentVideoTags,
+      recentTags: playerPreferencesRef.current.recentVideoTags,
+      videoTags: tagUsageVideoTags,
     });
-    const availableTags = Array.from(usageByKey.entries())
-      .filter(([key]) => !currentTagKeys.has(key))
-      .map(([, usage]) => usage);
-    const commonTags = availableTags
-      .slice()
-      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, "zh-Hans-CN", { numeric: true }));
-    const allTags = availableTags
-      .slice()
-      .sort((a, b) => a.label.localeCompare(b.label, "zh-Hans-CN", { numeric: true }));
-    const recentTags = playerPreferencesRef.current.recentVideoTags
-      .filter((entry) => !currentTagKeys.has(entry.key))
-      .map((entry) => ({
-        label: entry.label,
-        count: usageByKey.get(entry.key)?.count ?? 0,
-      }));
-    return { allTags, commonTags, recentTags };
   }, [currentVideo, currentVideoTags, isTagDialogOpen, playerPreferencesRef, tagUsageVideoTags]);
   const { allTags, commonTags, recentTags } = tagViews;
   const hasActorTagSuggestions = tagInputSuggestions.some((suggestion) => suggestion.kind === "actor");

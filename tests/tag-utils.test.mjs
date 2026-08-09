@@ -216,3 +216,36 @@ test("builds global tag usage stats by tagged video count", () => {
     ],
   );
 });
+
+test("builds available common, alphabetical, and recent tag views", () => {
+  const recentTags = [
+    { key: "ai字幕", label: "AI-字幕", usedAt: 30 },
+    { key: "美腿", label: "美腿", usedAt: 20 },
+    { key: "新标签", label: "新标签", usedAt: 10 },
+  ];
+  const result = tagUtils.createAvailableTagViews({
+    currentTags: ["美 腿"],
+    recentTags,
+    videoTags: {
+      one: ["剧情", "剧情", "AI-字幕"],
+      two: ["剧情", "美腿"],
+      three: ["剧情", "ＡＩ字幕"],
+    },
+  });
+
+  assert.deepEqual(result.commonTags, [
+    { label: "剧情", count: 3 },
+    { label: "AI-字幕", count: 2 },
+  ]);
+  assert.deepEqual(
+    result.allTags,
+    ["剧情", "AI-字幕"]
+      .sort((a, b) => a.localeCompare(b, "zh-Hans-CN", { numeric: true }))
+      .map((label) => ({ label, count: label === "剧情" ? 3 : 2 })),
+  );
+  assert.deepEqual(result.recentTags, [
+    { label: "AI-字幕", count: 2 },
+    { label: "新标签", count: 0 },
+  ]);
+  assert.deepEqual(recentTags.map((entry) => entry.label), ["AI-字幕", "美腿", "新标签"]);
+});

@@ -1,5 +1,8 @@
 import { pinyin } from "pinyin-pro";
 
+import { getSubtitlePathMatchPriority } from "./playerLibraryUtils";
+import type { RecentVideoTag, SubtitleItem, VideoItem, VideoTagStore } from "./playerTypes";
+
 export type TagMergeDecision = {
   from: string;
   to: string;
@@ -35,6 +38,45 @@ export type TagSearchIndexEntry = TagInputSuggestion & {
   fullPinyin: string;
   initials: string;
 };
+
+export function createAvailableTagViews({
+  currentTags,
+  recentTags,
+  videoTags,
+}: {
+  currentTags: string[];
+  recentTags: RecentVideoTag[];
+  videoTags: VideoTagStore;
+}) {
+  const currentTagKeys = new Set(currentTags.map(normalizeTagKey));
+  const usageByKey = new Map<string, { label: string; count: number }>();
+  Object.values(videoTags).forEach((tags) => {
+    const seenVideoTagKeys = new Set<string>();
+    tags.forEach((tag) => {
+      const key = normalizeTagKey(tag);
+      if (!key || seenVideoTagKeys.has(key)) return;
+      seenVideoTagKeys.add(key);
+      const usage = usageByKey.get(key);
+      usageByKey.set(key, { label: usage?.label ?? tag, count: (usage?.count ?? 0) + 1 });
+    });
+  });
+  const availableTags = Array.from(usageByKey.entries())
+    .filter(([key]) => !currentTagKeys.has(key))
+    .map(([, usage]) => usage);
+  const commonTags = availableTags
+    .slice()
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, "zh-Hans-CN", { numeric: true }));
+  const allTags = availableTags
+    .slice()
+    .sort((a, b) => a.label.localeCompare(b.label, "zh-Hans-CN", { numeric: true }));
+  const availableRecentTags = recentTags
+    .filter((entry) => !currentTagKeys.has(entry.key))
+    .map((entry) => ({
+      label: entry.label,
+      count: usageByKey.get(entry.key)?.count ?? 0,
+    }));
+  return { allTags, commonTags, recentTags: availableRecentTags };
+}
 
 const tagSeparators = /[\s,，、;；|]+/u;
 
@@ -360,7 +402,4 @@ export function createTagInputSuggestions(input: {
     .slice(0, input.limit ?? 8)
     .map(({ matchRank: _matchRank, ...candidate }) => candidate);
 }
-import { getSubtitlePathMatchPriority } from "./playerLibraryUtils";
-import type { SubtitleItem, VideoItem, VideoTagStore } from "./playerTypes";
-
 export const CHINESE_SUBTITLE_SYSTEM_TAG = "中文字幕";
