@@ -10,6 +10,7 @@ import { PhotoRootStatusCard } from "./PhotoRootStatusCard";
 import type { PhotoAlbum, PhotoAlbumSortDirection, PhotoAlbumSortMode, PlayerMediaRootStatus } from "./playerTypes";
 
 type PhotoDashboardSectionProps = {
+  appliedSearchQuery: string;
   currentPage: number;
   end: number;
   filter: PhotoAlbumViewFilter;
@@ -49,6 +50,7 @@ type PhotoDashboardSectionProps = {
   onRenderAlbum: (album: PhotoAlbum) => ReactNode;
   onSearchChange: (query: string) => void;
   onSearchClear: () => void;
+  onSearchSubmit: () => void;
   onSelectSearchResult: (album: PhotoAlbum) => void;
   onSelectTag: (key: string | null) => void;
   onSortDirectionChange: (sortDirection: PhotoAlbumSortDirection) => void;
@@ -56,6 +58,7 @@ type PhotoDashboardSectionProps = {
 };
 
 export function PhotoDashboardSection({
+  appliedSearchQuery,
   currentPage,
   end,
   filter,
@@ -85,6 +88,7 @@ export function PhotoDashboardSection({
   onRenderAlbum,
   onSearchChange,
   onSearchClear,
+  onSearchSubmit,
   onSelectSearchResult,
   onSelectTag,
   onSortDirectionChange,
@@ -108,7 +112,7 @@ export function PhotoDashboardSection({
         randomDisabled={isLoading || !totalVisibleAlbums}
       />
 
-      <PhotoAlbumSearchRow query={searchQuery} resultCount={searchResultCount} results={searchResults} onChange={onSearchChange} onClear={onSearchClear} onSelect={onSelectSearchResult} />
+      <PhotoAlbumSearchRow query={searchQuery} resultCount={searchResultCount} results={searchResults} onChange={onSearchChange} onClear={onSearchClear} onSubmit={onSearchSubmit} onSelect={onSelectSearchResult} />
 
       <PhotoAlbumStats stats={stats} />
 
@@ -134,7 +138,7 @@ export function PhotoDashboardSection({
         <PhotoAlbumEmptyState
           filter={filter}
           isLoading={isLoading}
-          searchQuery={searchQuery}
+          searchQuery={appliedSearchQuery}
           onChooseDirectory={onChooseDirectory}
         />
       )}

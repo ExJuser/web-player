@@ -635,6 +635,7 @@ export default function App() {
   );
   const [photoAlbumPage, setPhotoAlbumPage] = useState(1);
   const [photoAlbumSearchQuery, setPhotoAlbumSearchQuery] = useState("");
+  const [photoAlbumAppliedSearchQuery, setPhotoAlbumAppliedSearchQuery] = useState("");
   const [photoAlbumTagFilter, setPhotoAlbumTagFilter] = useState<string | null>(null);
   const [photoAlbumMessage, setPhotoAlbumMessage] = useState("选择一个看图文件夹后开始扫描图片。");
   const [isPhotoAlbumsLoading, setIsPhotoAlbumsLoading] = useState(false);
@@ -2190,8 +2191,8 @@ export default function App() {
     setPhotoAlbumTags,
   });
   const visiblePhotoAlbums = useMemo(
-    () => getVisiblePhotoAlbums({ albums: photoAlbums, favoriteAlbumIds: favoritePhotoAlbumIds, filter: photoAlbumFilter, searchQuery: photoAlbumSearchQuery, tagFilterKey: photoAlbumTagFilter ?? undefined, sortDirection: photoAlbumSortDirection, sortMode: photoAlbumSortMode, albumTags: photoAlbumTags }),
-    [favoritePhotoAlbumIds, photoAlbumFilter, photoAlbumSearchQuery, photoAlbumSortDirection, photoAlbumSortMode, photoAlbumTagFilter, photoAlbumTags, photoAlbums],
+    () => getVisiblePhotoAlbums({ albums: photoAlbums, favoriteAlbumIds: favoritePhotoAlbumIds, filter: photoAlbumFilter, searchQuery: photoAlbumAppliedSearchQuery, tagFilterKey: photoAlbumTagFilter ?? undefined, sortDirection: photoAlbumSortDirection, sortMode: photoAlbumSortMode, albumTags: photoAlbumTags }),
+    [favoritePhotoAlbumIds, photoAlbumAppliedSearchQuery, photoAlbumFilter, photoAlbumSortDirection, photoAlbumSortMode, photoAlbumTagFilter, photoAlbumTags, photoAlbums],
   );
   const selectedVisiblePhotoAlbumIndex = selectedPhotoAlbum
     ? visiblePhotoAlbums.findIndex((album) => album.id === selectedPhotoAlbum.id)
@@ -4460,7 +4461,7 @@ export default function App() {
 
   useEffect(() => {
     setPhotoAlbumPage(1);
-  }, [photoAlbumSearchQuery]);
+  }, [photoAlbumAppliedSearchQuery]);
 
   const togglePhotoFullscreen = useCallback(async () => {
     if (document.fullscreenElement) {
@@ -6504,6 +6505,7 @@ export default function App() {
               pageCount={photoAlbumPageCount}
               pagedPhotoAlbums={pagedPhotoAlbums}
               photoRootStatuses={photoRootStatuses}
+              appliedSearchQuery={photoAlbumAppliedSearchQuery}
               searchQuery={photoAlbumSearchQuery}
               searchResultCount={matchedPhotoAlbums.length}
               searchResults={photoAlbumSearchResults.map((album) => {
@@ -6530,7 +6532,8 @@ export default function App() {
               onRefresh={() => void refreshPhotoAlbumDirectory()}
               onRenderAlbum={renderPhotoAlbumCard}
               onSearchChange={setPhotoAlbumSearchQuery}
-              onSearchClear={() => setPhotoAlbumSearchQuery("")}
+              onSearchClear={() => { setPhotoAlbumSearchQuery(""); setPhotoAlbumAppliedSearchQuery(""); }}
+              onSearchSubmit={() => setPhotoAlbumAppliedSearchQuery(photoAlbumSearchQuery.trim())}
               onSelectSearchResult={openPhotoAlbum}
               onSelectTag={(key) => { setPhotoAlbumPage(1); setPhotoAlbumTagFilter(key); }}
               onSortDirectionChange={updatePhotoAlbumSortDirection}

@@ -15,10 +15,11 @@ type PhotoAlbumSearchRowProps = {
   results: PhotoAlbumSearchResult[];
   onChange: (query: string) => void;
   onClear: () => void;
+  onSubmit: () => void;
   onSelect: (album: PhotoAlbum) => void;
 };
 
-export function PhotoAlbumSearchRow({ query, resultCount, results, onChange, onClear, onSelect }: PhotoAlbumSearchRowProps) {
+export function PhotoAlbumSearchRow({ query, resultCount, results, onChange, onClear, onSubmit, onSelect }: PhotoAlbumSearchRowProps) {
   const [isFocused, setIsFocused] = useState(false);
   const hasQuery = Boolean(query.trim());
   return (
@@ -28,7 +29,12 @@ export function PhotoAlbumSearchRow({ query, resultCount, results, onChange, onC
       aria-label="搜索图集"
       onFocus={() => setIsFocused(true)}
       onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setIsFocused(false); }}
-      onSubmit={(event) => { event.preventDefault(); }}
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSubmit();
+        setIsFocused(false);
+        event.currentTarget.querySelector("input")?.blur();
+      }}
     >
       <Search size={17} />
       <input type="search" value={query} placeholder="搜索图集、路径或标签" onChange={(event) => onChange(event.target.value)} aria-controls="photo-search-results" aria-expanded={isFocused && hasQuery} />
