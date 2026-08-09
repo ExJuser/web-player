@@ -68,8 +68,8 @@ test("persists the highest duplicate pair score per key", () => {
 test("prunes persisted duplicate pairs for deleted videos", () => {
   const result = duplicateRuntime.pruneDuplicateDetectionsForVideos(
     {
-      all: {
-        mode: "all",
+      special: {
+        mode: "special",
         pairs: [
           { key: "a:b", aId: "a", bId: "b", score: 20, severity: "duplicate", reasons: [] },
           { key: "a:c", aId: "a", bId: "c", score: 20, severity: "duplicate", reasons: [] },
@@ -85,6 +85,6 @@ test("prunes persisted duplicate pairs for deleted videos", () => {
     [createVideo({ id: "a" }), createVideo({ id: "b" })],
   );
 
-  assert.deepEqual(Object.keys(result), ["all"]);
-  assert.deepEqual(result.all.pairs.map((pair) => pair.key), ["a:b"]);
+  assert.deepEqual(Object.keys(result), ["special"]);
+  assert.deepEqual(result.special.pairs.map((pair) => pair.key), ["a:b"]);
 });

@@ -4,6 +4,7 @@ import test from "node:test";
 import { importTsModule } from "./importTsModule.mjs";
 
 const cacheUtils = await importTsModule(new URL("../src/mediaRootScanCache.ts", import.meta.url));
+const storage = await importTsModule(new URL("../src/playerStorage.ts", import.meta.url));
 
 const createVideo = (id, mediaRootId) => ({
   id,
@@ -43,7 +44,7 @@ test("creates cached media root scan with external subtitles only", () => {
     [createSubtitle("external", "root-a"), createSubtitle("embedded", "root-a", "embedded")],
   );
 
-  assert.equal(cached.version, 1);
+  assert.equal(cached.version, storage.mediaRootScanCacheVersion);
   assert.equal(cached.scannedFiles, 4);
   assert.deepEqual(cached.subtitles.map((subtitle) => subtitle.id), ["external"]);
   assert.equal(cached.metadata.updatedAt, cached.updatedAt);
