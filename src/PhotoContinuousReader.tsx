@@ -16,6 +16,13 @@ const continuousZoomStep = 0.1;
 const continuousKeyboardStep = 0.05;
 const continuousKeyboardHoldDelayMs = 180;
 const continuousKeyboardScrollSpeed = 0.75;
+type ContinuousViewportAnchor = {
+  viewportX: number;
+  viewportY: number;
+} & (
+  | { pageIndex: number; pageX: number; pageY: number }
+  | { contentX: number; contentY: number }
+);
 
 export function PhotoContinuousReader({
   album,
@@ -28,7 +35,7 @@ export function PhotoContinuousReader({
   const visibleRatiosRef = useRef(new Map<number, number>());
   const currentIndexRef = useRef(currentIndex);
   const onCurrentImageChangeRef = useRef(onCurrentImageChange);
-  const viewportAnchorRef = useRef<{ x: number; y: number } | null>(null);
+  const viewportAnchorRef = useRef<ContinuousViewportAnchor | null>(null);
   const [loadedImageIds, setLoadedImageIds] = useState<Set<string>>(() => new Set());
   const [readingProgress, setReadingProgress] = useState(0);
   const [zoom, setZoom] = useState(1);
@@ -58,20 +65,50 @@ export function PhotoContinuousReader({
     const container = containerRef.current;
     const anchor = viewportAnchorRef.current;
     if (!container || !anchor) return;
-    container.scrollLeft = anchor.x * container.scrollWidth - container.clientWidth / 2;
-    container.scrollTop = anchor.y * container.scrollHeight - container.clientHeight / 2;
+    if ("pageIndex" in anchor) {
+      const page = pageRefs.current.get(anchor.pageIndex);
+      if (page) {
+        const containerBounds = container.getBoundingClientRect();
+        const pageBounds = page.getBoundingClientRect();
+        container.scrollLeft += pageBounds.left - containerBounds.left + anchor.pageX * pageBounds.width - anchor.viewportX;
+        container.scrollTop += pageBounds.top - containerBounds.top + anchor.pageY * pageBounds.height - anchor.viewportY;
+      }
+    } else {
+      container.scrollLeft = anchor.contentX * container.scrollWidth - anchor.viewportX;
+      container.scrollTop = anchor.contentY * container.scrollHeight - anchor.viewportY;
+    }
     viewportAnchorRef.current = null;
   }, [zoom]);
 
-  const changeZoom = (nextZoom: number) => {
+  const changeZoom = (nextZoom: number, clientPoint?: { x: number; y: number }) => {
     const normalizedZoom = Math.min(maxContinuousZoom, Math.max(minContinuousZoom, Number(nextZoom.toFixed(1))));
     if (normalizedZoom === zoom) return;
     const container = containerRef.current;
     if (container) {
-      viewportAnchorRef.current = {
-        x: (container.scrollLeft + container.clientWidth / 2) / Math.max(container.scrollWidth, 1),
-        y: (container.scrollTop + container.clientHeight / 2) / Math.max(container.scrollHeight, 1),
-      };
+      const bounds = container.getBoundingClientRect();
+      const viewportX = clientPoint ? clientPoint.x - bounds.left : container.clientWidth / 2;
+      const viewportY = clientPoint ? clientPoint.y - bounds.top : container.clientHeight / 2;
+      const page = clientPoint
+        ? document.elementFromPoint(clientPoint.x, clientPoint.y)?.closest<HTMLElement>(".photo-continuous-page")
+        : null;
+      const pageIndex = Number(page?.dataset.index);
+      if (page && container.contains(page) && Number.isInteger(pageIndex)) {
+        const pageBounds = page.getBoundingClientRect();
+        viewportAnchorRef.current = {
+          pageIndex,
+          pageX: pageBounds.width ? (clientPoint!.x - pageBounds.left) / pageBounds.width : 0.5,
+          pageY: pageBounds.height ? (clientPoint!.y - pageBounds.top) / pageBounds.height : 0.5,
+          viewportX,
+          viewportY,
+        };
+      } else {
+        viewportAnchorRef.current = {
+          contentX: (container.scrollLeft + viewportX) / Math.max(container.scrollWidth, 1),
+          contentY: (container.scrollTop + viewportY) / Math.max(container.scrollHeight, 1),
+          viewportX,
+          viewportY,
+        };
+      }
     }
     setZoom(normalizedZoom);
   };
@@ -82,7 +119,10 @@ export function PhotoContinuousReader({
     const handleWheel = (event: WheelEvent) => {
       if ((!event.ctrlKey && !event.metaKey) || event.deltaY === 0) return;
       event.preventDefault();
-      changeZoom(zoom + (event.deltaY < 0 ? continuousZoomStep : -continuousZoomStep));
+      changeZoom(
+        zoom + (event.deltaY < 0 ? continuousZoomStep : -continuousZoomStep),
+        { x: event.clientX, y: event.clientY },
+      );
     };
     container.addEventListener("wheel", handleWheel, { passive: false });
     return () => container.removeEventListener("wheel", handleWheel);

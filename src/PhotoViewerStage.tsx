@@ -33,6 +33,7 @@ export function PhotoViewerStage({
   const [shouldLoadOriginal, setShouldLoadOriginal] = useState(true);
   const [isOriginalReady, setIsOriginalReady] = useState(false);
   const [originalLoadFailed, setOriginalLoadFailed] = useState(false);
+  const stageRef = useRef<HTMLDivElement | null>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
   const dragStartRef = useRef<{ pointerId: number; x: number; y: number; pan: PhotoPan } | null>(null);
 
@@ -100,6 +101,17 @@ export function PhotoViewerStage({
     };
   };
 
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => {
+      const nextPan = clampPan(pan, zoom, stage);
+      if (nextPan.x !== pan.x || nextPan.y !== pan.y) setPan(nextPan);
+    });
+    observer.observe(stage);
+    return () => observer.disconnect();
+  }, [pan, zoom]);
+
   const handleWheel = (event: WheelEvent<HTMLDivElement>) => {
     if (!currentPhotoUrl || event.deltaY === 0) return;
     event.preventDefault();
@@ -148,6 +160,7 @@ export function PhotoViewerStage({
 
   return (
     <div
+      ref={stageRef}
       className={`photo-stage ${zoom > minPhotoZoom ? "can-pan" : ""} ${isDragging ? "dragging" : ""}`}
       onPointerCancel={stopDragging}
       onPointerDown={handlePointerDown}
