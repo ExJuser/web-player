@@ -1,7 +1,6 @@
 import type {
   FileSystemDirectoryHandle,
   FileSystemFileHandle,
-  MediaCollection,
   MediaScanBatch,
   SubtitleItem,
   VideoItem,
@@ -15,12 +14,10 @@ import {
   isVideoFile,
   shouldFilterLocalVideoFile,
 } from "./playerLibraryUtils";
-import {
-  createEmptyMediaCollection,
-  shouldFlushMediaScan,
-  sortMediaCollection,
-} from "./playerMediaUtils";
+import { shouldFlushMediaScan } from "./playerMediaUtils";
 import { createMatchingNfoNameLookup, maxActorNfoBytes, parseActorNfoBytes } from "./actorNfoCore.mjs";
+
+export { collectVideosFromFiles } from "./browserFileMedia";
 
 export async function ensureDirectoryReadPermission(directory: FileSystemDirectoryHandle) {
   const descriptor = { mode: "read" as const };
@@ -205,65 +202,4 @@ export async function* collectVideos(
   if (pendingVideos.length || pendingSubtitles.length || scannedFiles || filteredSmallVideos) {
     yield createBatch();
   }
-}
-
-export function collectVideosFromFiles(files: FileList | File[]): MediaCollection {
-  const collection = createEmptyMediaCollection();
-  const filesByRelativePath = new Map<string, File>();
-  const fileNamesByDirectoryPath = new Map<string, string[]>();
-  for (const file of Array.from(files)) {
-    const browserRelativePath = (file as File & { webkitRelativePath?: string }).webkitRelativePath;
-    const relativePath = (browserRelativePath || file.name).replace(/\\/g, "/");
-    const separatorIndex = relativePath.lastIndexOf("/");
-    const directoryPath = separatorIndex >= 0 ? relativePath.slice(0, separatorIndex + 1) : "";
-    filesByRelativePath.set(relativePath.toLowerCase(), file);
-    const directoryFileNames = fileNamesByDirectoryPath.get(directoryPath.toLowerCase()) ?? [];
-    directoryFileNames.push(relativePath.slice(separatorIndex + 1));
-    fileNamesByDirectoryPath.set(directoryPath.toLowerCase(), directoryFileNames);
-  }
-
-  for (const file of Array.from(files)) {
-    const browserRelativePath = (file as File & { webkitRelativePath?: string }).webkitRelativePath;
-    const relativePath = (browserRelativePath || file.name).replace(/\\/g, "/");
-    const name = relativePath.split("/").pop() || file.name;
-
-    if (isVideoFile(name)) {
-      collection.scannedFiles += 1;
-      if (shouldFilterLocalVideoFile(name, file.size)) {
-        collection.filteredSmallVideos += 1;
-        continue;
-      }
-      const directoryPath = relativePath.includes("/") ? relativePath.slice(0, relativePath.lastIndexOf("/") + 1) : "";
-      const posterName = findVideoPosterName(name, fileNamesByDirectoryPath.get(directoryPath.toLowerCase()) ?? []);
-      const fanartName = findVideoArtworkName(name, fileNamesByDirectoryPath.get(directoryPath.toLowerCase()) ?? [], "fanart");
-      const thumbName = findVideoArtworkName(name, fileNamesByDirectoryPath.get(directoryPath.toLowerCase()) ?? [], "thumb");
-      const posterFile = posterName ? filesByRelativePath.get(`${directoryPath}${posterName}`.toLowerCase()) : undefined;
-      const fanartFile = fanartName ? filesByRelativePath.get(`${directoryPath}${fanartName}`.toLowerCase()) : undefined;
-      const thumbFile = thumbName ? filesByRelativePath.get(`${directoryPath}${thumbName}`.toLowerCase()) : undefined;
-      collection.videos.push({
-        id: createLegacyVideoId(relativePath, file),
-        name,
-        relativePath,
-        file,
-        url: URL.createObjectURL(file),
-        size: file.size,
-        lastModified: file.lastModified,
-        playbackSource: "browser",
-        posterFile,
-        fanartFile,
-        thumbFile,
-      });
-    } else if (isSubtitleFile(name)) {
-      collection.scannedFiles += 1;
-      collection.subtitles.push({
-        id: createLegacyVideoId(relativePath, file),
-        name,
-        relativePath,
-        file,
-        url: "",
-      });
-    }
-  }
-
-  return sortMediaCollection(collection);
 }

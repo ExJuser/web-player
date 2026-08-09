@@ -4,6 +4,7 @@ import test from "node:test";
 import { importTsModule } from "./importTsModule.mjs";
 
 const browserMediaScan = await importTsModule(new URL("../src/browserMediaScan.ts", import.meta.url));
+const browserFileMedia = await importTsModule(new URL("../src/browserFileMedia.ts", import.meta.url));
 
 const createFile = (overrides = {}) => ({
   name: overrides.name ?? "movie.mp4",
@@ -55,6 +56,20 @@ test("collects dropped browser videos and subtitles", () => {
   } finally {
     URL.createObjectURL = originalCreateObjectUrl;
   }
+});
+
+test("browser media scan re-export matches the canonical dropped-file collector", () => {
+  const files = [
+    createFile({ name: "episode.mp4", webkitRelativePath: "Show/episode.mp4" }),
+    createFile({ name: "episode.srt", size: 200, webkitRelativePath: "Show/episode.srt" }),
+    createFile({ name: "episode-poster.jpg", size: 1024, webkitRelativePath: "Show/episode-poster.jpg" }),
+  ];
+  const options = { createObjectUrl: (file) => `blob:${file.name}` };
+
+  assert.deepEqual(
+    browserMediaScan.collectVideosFromFiles(files, options),
+    browserFileMedia.collectVideosFromFiles(files, options),
+  );
 });
 
 test("resolves browser video parent directories", async () => {

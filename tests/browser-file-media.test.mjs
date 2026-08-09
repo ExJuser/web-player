@@ -21,6 +21,9 @@ test("collectVideosFromFiles classifies videos and subtitles from dropped files"
       createFile("Episode 02.mkv", { webkitRelativePath: "Show\\Episode 02.mkv", lastModified: 2 }),
       createFile("Episode 01.mp4", { webkitRelativePath: "Show/Episode 01.mp4", lastModified: 1 }),
       createFile("Episode 01.srt", { webkitRelativePath: "Show/Episode 01.srt", size: 1024, lastModified: 3 }),
+      createFile("episode 01-poster.jpg", { webkitRelativePath: "Show/episode 01-poster.jpg", size: 1024 }),
+      createFile("episode 01-fanart.webp", { webkitRelativePath: "Show/episode 01-fanart.webp", size: 1024 }),
+      createFile("episode 01-thumb.png", { webkitRelativePath: "Show/episode 01-thumb.png", size: 1024 }),
       createFile("notes.txt", { size: 512 }),
     ],
     {
@@ -71,6 +74,9 @@ test("collectVideosFromFiles classifies videos and subtitles from dropped files"
       url: "",
     },
   ]);
+  assert.equal(media.videos[0].posterFile?.name, "episode 01-poster.jpg");
+  assert.equal(media.videos[0].fanartFile?.name, "episode 01-fanart.webp");
+  assert.equal(media.videos[0].thumbFile?.name, "episode 01-thumb.png");
   assert.deepEqual(createdUrls, ["Episode 02.mkv", "Episode 01.mp4"]);
 });
 
