@@ -133,6 +133,18 @@ export function usePhotoAlbumActionsController({
     [currentPhotoIndex, persistPhotoAlbumProgress, selectedPhotoAlbum, setCurrentPhotoIndex],
   );
 
+  const movePhotoAlbum = useCallback(
+    (delta: number) => {
+      if (!selectedPhotoAlbum) return;
+      const currentAlbumIndex = visiblePhotoAlbums.findIndex((album) => album.id === selectedPhotoAlbum.id);
+      if (currentAlbumIndex < 0) return;
+      const nextAlbum = visiblePhotoAlbums[currentAlbumIndex + delta];
+      if (!nextAlbum) return;
+      openPhotoAlbum(nextAlbum);
+    },
+    [openPhotoAlbum, selectedPhotoAlbum, visiblePhotoAlbums],
+  );
+
   const togglePhotoAlbumFavorite = useCallback(
     (album: PhotoAlbum) => {
       const nextFavorites = new Set(favoritePhotoAlbumIdsRef.current);
@@ -244,6 +256,7 @@ export function usePhotoAlbumActionsController({
   return {
     markSelectedPhotoAlbumCompleted,
     movePhoto,
+    movePhotoAlbum,
     openPhotoAlbum,
     openRandomPhotoAlbum,
     persistPhotoAlbumProgress,

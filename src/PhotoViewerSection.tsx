@@ -15,6 +15,8 @@ type PhotoViewerSectionProps = {
   isFavorite: boolean;
   isContinuousReading: boolean;
   isImmersive: boolean;
+  hasNextAlbum: boolean;
+  hasPreviousAlbum: boolean;
   thumbnails: PhotoAlbumImage[];
   getImageUrl: (image: PhotoAlbumImage) => string;
   onBack: () => void;
@@ -23,6 +25,7 @@ type PhotoViewerSectionProps = {
   onEditTags: (album: PhotoAlbum) => void;
   onImmersiveChange: (isImmersive: boolean) => void;
   onMarkCompleted: () => void;
+  onMoveAlbum: (delta: number) => void;
   onMove: (delta: number) => void;
   onReadingModeChange: (isContinuous: boolean) => void;
   onResetProgress: () => void;
@@ -40,6 +43,8 @@ export function PhotoViewerSection({
   isFavorite,
   isContinuousReading,
   isImmersive,
+  hasNextAlbum,
+  hasPreviousAlbum,
   thumbnails,
   getImageUrl,
   onBack,
@@ -48,6 +53,7 @@ export function PhotoViewerSection({
   onEditTags,
   onImmersiveChange,
   onMarkCompleted,
+  onMoveAlbum,
   onMove,
   onReadingModeChange,
   onResetProgress,
@@ -64,12 +70,15 @@ export function PhotoViewerSection({
           isCoverCurrent={isCoverCurrent}
           isContinuousReading={isContinuousReading}
           isFavorite={isFavorite}
+          hasNextAlbum={hasNextAlbum}
+          hasPreviousAlbum={hasPreviousAlbum}
           onBack={onBack}
           onDeleteAlbum={onDeleteAlbum}
           onDeleteCurrentPhoto={onDeleteCurrentPhoto}
           onEditTags={onEditTags}
           onEnterImmersive={() => onImmersiveChange(true)}
           onMarkCompleted={onMarkCompleted}
+          onMoveAlbum={onMoveAlbum}
           onReadingModeChange={onReadingModeChange}
           onResetProgress={onResetProgress}
           onSetCover={onSetCover}

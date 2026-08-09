@@ -2192,6 +2192,9 @@ export default function App() {
     () => getVisiblePhotoAlbums({ albums: photoAlbums, favoriteAlbumIds: favoritePhotoAlbumIds, filter: photoAlbumFilter, searchQuery: "", tagFilterKey: photoAlbumTagFilter ?? undefined, sortDirection: photoAlbumSortDirection, sortMode: photoAlbumSortMode, albumTags: photoAlbumTags }),
     [favoritePhotoAlbumIds, photoAlbumFilter, photoAlbumSortDirection, photoAlbumSortMode, photoAlbumTagFilter, photoAlbumTags, photoAlbums],
   );
+  const selectedVisiblePhotoAlbumIndex = selectedPhotoAlbum
+    ? visiblePhotoAlbums.findIndex((album) => album.id === selectedPhotoAlbum.id)
+    : -1;
   const { pageCount: photoAlbumPageCount, start: photoAlbumPageStart, end: photoAlbumPageEnd } = getPhotoAlbumPageBounds(visiblePhotoAlbums.length, photoAlbumPage, photoAlbumPageSize);
   const pagedPhotoAlbums = useMemo(
     () => getPagedPhotoAlbums(visiblePhotoAlbums, photoAlbumPage, photoAlbumPageSize),
@@ -3941,6 +3944,7 @@ export default function App() {
   const {
     markSelectedPhotoAlbumCompleted,
     movePhoto,
+    movePhotoAlbum,
     openPhotoAlbum,
     openRandomPhotoAlbum,
     persistPhotoAlbumProgress,
@@ -6514,6 +6518,8 @@ export default function App() {
               isContinuousReading={isPhotoContinuousReading}
               isFavorite={favoritePhotoAlbumIds.has(selectedPhotoAlbum.id)}
               isImmersive={isPhotoImmersive}
+              hasNextAlbum={selectedVisiblePhotoAlbumIndex >= 0 && selectedVisiblePhotoAlbumIndex < visiblePhotoAlbums.length - 1}
+              hasPreviousAlbum={selectedVisiblePhotoAlbumIndex > 0}
               thumbnails={visiblePhotoThumbnails}
               getImageUrl={getPhotoImageUrl}
               onBack={returnFromPhotoViewer}
@@ -6522,6 +6528,7 @@ export default function App() {
               onEditTags={openPhotoAlbumTagEditor}
               onImmersiveChange={setIsPhotoImmersive}
               onMarkCompleted={markSelectedPhotoAlbumCompleted}
+              onMoveAlbum={movePhotoAlbum}
               onMove={movePhoto}
               onReadingModeChange={updatePhotoAlbumReadingMode}
               onResetProgress={resetSelectedPhotoAlbumProgress}

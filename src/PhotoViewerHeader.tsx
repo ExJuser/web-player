@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, CheckCircle2, Images, Maximize2, MoreHorizontal, RotateCcw, Star, Tags, Trash2 } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Images, Maximize2, MoreHorizontal, RotateCcw, SkipBack, SkipForward, Star, Tags, Trash2 } from "lucide-react";
 
 import type { PhotoAlbum, PhotoAlbumImage } from "./playerTypes";
 
@@ -9,12 +9,15 @@ type PhotoViewerHeaderProps = {
   isCoverCurrent: boolean;
   isContinuousReading: boolean;
   isFavorite: boolean;
+  hasNextAlbum: boolean;
+  hasPreviousAlbum: boolean;
   onBack: () => void;
   onDeleteAlbum: (album: PhotoAlbum) => void;
   onDeleteCurrentPhoto: () => void;
   onEditTags: (album: PhotoAlbum) => void;
   onEnterImmersive: () => void;
   onMarkCompleted: () => void;
+  onMoveAlbum: (delta: number) => void;
   onReadingModeChange: (isContinuous: boolean) => void;
   onResetProgress: () => void;
   onSetCover: (album: PhotoAlbum, image: PhotoAlbumImage) => void;
@@ -27,12 +30,15 @@ export function PhotoViewerHeader({
   isCoverCurrent,
   isContinuousReading,
   isFavorite,
+  hasNextAlbum,
+  hasPreviousAlbum,
   onBack,
   onDeleteAlbum,
   onDeleteCurrentPhoto,
   onEditTags,
   onEnterImmersive,
   onMarkCompleted,
+  onMoveAlbum,
   onReadingModeChange,
   onResetProgress,
   onSetCover,
@@ -65,6 +71,26 @@ export function PhotoViewerHeader({
         <button className="secondary-button" type="button" onClick={onBack}>
           <ArrowLeft size={17} />
           返回
+        </button>
+        <button
+          aria-label="上一个图集"
+          className="secondary-button"
+          type="button"
+          disabled={!hasPreviousAlbum}
+          onClick={() => onMoveAlbum(-1)}
+          title="上一个图集"
+        >
+          <SkipBack size={16} />
+        </button>
+        <button
+          aria-label="下一个图集"
+          className="secondary-button"
+          type="button"
+          disabled={!hasNextAlbum}
+          onClick={() => onMoveAlbum(1)}
+          title="下一个图集"
+        >
+          <SkipForward size={16} />
         </button>
         <button className="secondary-button" type="button" onClick={onEnterImmersive}>
           <Maximize2 size={16} />
