@@ -77,7 +77,10 @@ export function PhotoViewerHeader({
           className="secondary-button"
           type="button"
           disabled={!hasPreviousAlbum}
-          onClick={() => onMoveAlbum(-1)}
+          onClick={(event) => {
+            event.currentTarget.blur();
+            onMoveAlbum(-1);
+          }}
           title="上一个图集"
         >
           <SkipBack size={16} />
@@ -87,7 +90,10 @@ export function PhotoViewerHeader({
           className="secondary-button"
           type="button"
           disabled={!hasNextAlbum}
-          onClick={() => onMoveAlbum(1)}
+          onClick={(event) => {
+            event.currentTarget.blur();
+            onMoveAlbum(1);
+          }}
           title="下一个图集"
         >
           <SkipForward size={16} />
