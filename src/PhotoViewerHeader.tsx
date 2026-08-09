@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, CheckCircle2, Images, Maximize2, MoreHorizontal, RotateCcw, Settings2, SkipBack, SkipForward, Star, Tags, Trash2 } from "lucide-react";
 
-import type { PhotoAlbum, PhotoAlbumImage, PhotoContinuousPageGap, PhotoReaderBackground } from "./playerTypes";
+import type { PhotoAlbum, PhotoAlbumImage, PhotoContinuousPageGap, PhotoReaderBackground, PhotoSingleFitMode } from "./playerTypes";
 
 const readerBackgroundOptions: Array<{ value: PhotoReaderBackground; label: string }> = [
   { value: "black", label: "纯黑" },
@@ -26,6 +26,7 @@ type PhotoViewerHeaderProps = {
   isFavorite: boolean;
   pageGap: PhotoContinuousPageGap;
   readerBackground: PhotoReaderBackground;
+  singleFitMode: PhotoSingleFitMode;
   hasNextAlbum: boolean;
   hasPreviousAlbum: boolean;
   onBack: () => void;
@@ -39,6 +40,8 @@ type PhotoViewerHeaderProps = {
   onPageGapChange: (pageGap: PhotoContinuousPageGap) => void;
   onReaderBackgroundChange: (background: PhotoReaderBackground) => void;
   onResetProgress: () => void;
+  onResetDisplaySettings: () => void;
+  onSingleFitModeChange: (fitMode: PhotoSingleFitMode) => void;
   onSetCover: (album: PhotoAlbum, image: PhotoAlbumImage) => void;
   onToggleFavorite: (album: PhotoAlbum) => void;
 };
@@ -51,6 +54,7 @@ export function PhotoViewerHeader({
   isFavorite,
   pageGap,
   readerBackground,
+  singleFitMode,
   hasNextAlbum,
   hasPreviousAlbum,
   onBack,
@@ -64,6 +68,8 @@ export function PhotoViewerHeader({
   onPageGapChange,
   onReaderBackgroundChange,
   onResetProgress,
+  onResetDisplaySettings,
+  onSingleFitModeChange,
   onSetCover,
   onToggleFavorite,
 }: PhotoViewerHeaderProps) {
@@ -186,7 +192,22 @@ export function PhotoViewerHeader({
                     ))}
                   </div>
                 </>
-              ) : null}
+              ) : (
+                <>
+                  <span>单页显示</span>
+                  <div className="photo-reader-setting-options">
+                    {([ ["fit", "适应窗口"], ["width", "适应宽度"], ["original", "原始大小"] ] as Array<[PhotoSingleFitMode, string]>).map(([value, label]) => (
+                      <button className={singleFitMode === value ? "active" : ""} key={value} type="button" onClick={() => onSingleFitModeChange(value)}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+              <button className="photo-reader-reset" type="button" role="menuitem" onClick={onResetDisplaySettings}>
+                <RotateCcw size={14} />
+                恢复显示默认值
+              </button>
             </div>
           ) : null}
         </div>

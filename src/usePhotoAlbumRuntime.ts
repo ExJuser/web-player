@@ -8,6 +8,7 @@ import type {
   PhotoAlbumReadingMode,
   PhotoContinuousPageGap,
   PhotoReaderBackground,
+  PhotoSingleFitMode,
   PhotoAlbumSortDirection,
   PhotoAlbumSortMode,
   PhotoAlbumStore,
@@ -23,6 +24,9 @@ type UsePhotoAlbumRuntimeOptions = {
   photoAlbums: PhotoAlbum[];
   photoAlbumReadingMode: PhotoAlbumReadingMode;
   photoContinuousPageGap: PhotoContinuousPageGap;
+  photoSingleZoom: number;
+  photoSingleFitMode: PhotoSingleFitMode;
+  photoContinuousZoom: number;
   photoContinuousReaderBackground: PhotoReaderBackground;
   photoSingleReaderBackground: PhotoReaderBackground;
   photoAlbumSortDirection: PhotoAlbumSortDirection;
@@ -34,6 +38,9 @@ type UsePhotoAlbumRuntimeOptions = {
   setPhotoAlbumProgress: Dispatch<SetStateAction<Record<string, PhotoAlbumProgress>>>;
   setPhotoAlbumReadingMode: Dispatch<SetStateAction<PhotoAlbumReadingMode>>;
   setPhotoContinuousPageGap: Dispatch<SetStateAction<PhotoContinuousPageGap>>;
+  setPhotoSingleZoom: Dispatch<SetStateAction<number>>;
+  setPhotoSingleFitMode: Dispatch<SetStateAction<PhotoSingleFitMode>>;
+  setPhotoContinuousZoom: Dispatch<SetStateAction<number>>;
   setPhotoContinuousReaderBackground: Dispatch<SetStateAction<PhotoReaderBackground>>;
   setPhotoSingleReaderBackground: Dispatch<SetStateAction<PhotoReaderBackground>>;
   setPhotoAlbumSortDirection: Dispatch<SetStateAction<PhotoAlbumSortDirection>>;
@@ -49,6 +56,9 @@ export function usePhotoAlbumRuntime({
   photoAlbums,
   photoAlbumReadingMode,
   photoContinuousPageGap,
+  photoSingleZoom,
+  photoSingleFitMode,
+  photoContinuousZoom,
   photoContinuousReaderBackground,
   photoSingleReaderBackground,
   photoAlbumSortDirection,
@@ -60,6 +70,9 @@ export function usePhotoAlbumRuntime({
   setPhotoAlbumProgress,
   setPhotoAlbumReadingMode,
   setPhotoContinuousPageGap,
+  setPhotoSingleZoom,
+  setPhotoSingleFitMode,
+  setPhotoContinuousZoom,
   setPhotoContinuousReaderBackground,
   setPhotoSingleReaderBackground,
   setPhotoAlbumSortDirection,
@@ -86,6 +99,9 @@ export function usePhotoAlbumRuntime({
     singleReaderBackground: photoSingleReaderBackground,
     continuousReaderBackground: photoContinuousReaderBackground,
     continuousPageGap: photoContinuousPageGap,
+    singleZoom: photoSingleZoom,
+    singleFitMode: photoSingleFitMode,
+    continuousZoom: photoContinuousZoom,
     favoritesOnly: photoAlbumFilter === "favorites",
     recentTags: photoAlbumPreferencesRef.current.recentTags,
     tagMergeDecisions: photoAlbumPreferencesRef.current.tagMergeDecisions,
@@ -126,6 +142,9 @@ export function usePhotoAlbumRuntime({
     setPhotoSingleReaderBackground(store.preferences.singleReaderBackground);
     setPhotoContinuousReaderBackground(store.preferences.continuousReaderBackground);
     setPhotoContinuousPageGap(store.preferences.continuousPageGap);
+    setPhotoSingleZoom(store.preferences.singleZoom);
+    setPhotoSingleFitMode(store.preferences.singleFitMode);
+    setPhotoContinuousZoom(store.preferences.continuousZoom);
     setPhotoAlbumSortDirection(store.preferences.sortDirection);
     setPhotoAlbumSortMode(store.preferences.sortMode);
     setPhotoAlbumFilter(store.preferences.favoritesOnly ? "favorites" : "all");
@@ -136,6 +155,9 @@ export function usePhotoAlbumRuntime({
     setPhotoAlbumProgress,
     setPhotoAlbumReadingMode,
     setPhotoContinuousPageGap,
+    setPhotoSingleZoom,
+    setPhotoSingleFitMode,
+    setPhotoContinuousZoom,
     setPhotoContinuousReaderBackground,
     setPhotoSingleReaderBackground,
     setPhotoAlbumSortDirection,

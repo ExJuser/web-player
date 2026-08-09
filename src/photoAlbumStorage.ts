@@ -22,6 +22,9 @@ export const defaultPhotoAlbumPreferences: PhotoAlbumPreferences = {
   singleReaderBackground: "dark",
   continuousReaderBackground: "dark",
   continuousPageGap: "normal",
+  singleFitMode: "fit",
+  singleZoom: 1,
+  continuousZoom: 1,
   favoritesOnly: false,
   recentTags: [],
   tagMergeDecisions: {},
@@ -217,6 +220,18 @@ export function parsePhotoAlbumPreferences(source: unknown): PhotoAlbumPreferenc
       preferences.continuousPageGap === "normal"
         ? preferences.continuousPageGap
         : defaultPhotoAlbumPreferences.continuousPageGap,
+    singleFitMode:
+      preferences.singleFitMode === "width" || preferences.singleFitMode === "original" || preferences.singleFitMode === "custom" || preferences.singleFitMode === "fit"
+        ? preferences.singleFitMode
+        : defaultPhotoAlbumPreferences.singleFitMode,
+    singleZoom:
+      typeof preferences.singleZoom === "number" && Number.isFinite(preferences.singleZoom)
+        ? Math.min(5, Math.max(1, preferences.singleZoom))
+        : defaultPhotoAlbumPreferences.singleZoom,
+    continuousZoom:
+      typeof preferences.continuousZoom === "number" && Number.isFinite(preferences.continuousZoom)
+        ? Math.min(2, Math.max(0.5, preferences.continuousZoom))
+        : defaultPhotoAlbumPreferences.continuousZoom,
     favoritesOnly:
       typeof preferences.favoritesOnly === "boolean"
         ? preferences.favoritesOnly

@@ -9,13 +9,17 @@ import {
 import { ChevronLeft, ChevronRight, LoaderCircle } from "lucide-react";
 
 import { loadPhotoPreview, shouldCreatePhotoPreview } from "./photoPreviewCache";
-import type { PhotoAlbumImage } from "./playerTypes";
+import type { PhotoAlbumImage, PhotoSingleFitMode } from "./playerTypes";
 
 type PhotoViewerStageProps = {
   currentIndex: number;
   currentPhoto: PhotoAlbumImage | null;
   currentPhotoUrl: string;
   imageCount: number;
+  zoom: number;
+  fitMode: PhotoSingleFitMode;
+  onZoomChange: (zoom: number) => void;
+  onFitModeChange: (fitMode: PhotoSingleFitMode) => void;
   onMove: (delta: number) => void;
 };
 
@@ -33,9 +37,12 @@ export function PhotoViewerStage({
   currentPhoto,
   currentPhotoUrl,
   imageCount,
+  zoom,
+  fitMode,
+  onZoomChange,
+  onFitModeChange,
   onMove,
 }: PhotoViewerStageProps) {
-  const [zoom, setZoom] = useState(minPhotoZoom);
   const [pan, setPan] = useState<PhotoPan>({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [previewUrl, setPreviewUrl] = useState("");
@@ -51,7 +58,6 @@ export function PhotoViewerStage({
   const lastTouchZoomTimeRef = useRef(0);
 
   useEffect(() => {
-    setZoom(minPhotoZoom);
     setPan({ x: 0, y: 0 });
     setIsDragging(false);
     dragStartRef.current = null;
@@ -114,6 +120,27 @@ export function PhotoViewerStage({
     };
   };
 
+  const applyFitMode = (image: HTMLImageElement) => {
+    if (fitMode === "custom") return;
+    const stage = stageRef.current;
+    if (!stage || !image.naturalWidth || !image.naturalHeight) return;
+    const bounds = stage.getBoundingClientRect();
+    const containedScale = Math.min(bounds.width / image.naturalWidth, bounds.height / image.naturalHeight);
+    const nextZoom = fitMode === "width"
+      ? bounds.width / (image.naturalWidth * containedScale)
+      : fitMode === "original"
+        ? 1 / containedScale
+        : minPhotoZoom;
+    const normalizedZoom = Math.min(maxPhotoZoom, Math.max(minPhotoZoom, Number(nextZoom.toFixed(2))));
+    setPan({ x: 0, y: 0 });
+    onZoomChange(normalizedZoom);
+  };
+
+  useEffect(() => {
+    const image = imageRef.current;
+    if (image?.complete) applyFitMode(image);
+  }, [fitMode, currentPhoto?.id]);
+
   useEffect(() => {
     const stage = stageRef.current;
     if (!stage || typeof ResizeObserver === "undefined") return;
@@ -138,7 +165,8 @@ export function PhotoViewerStage({
           y: pointerY - (pointerY - pan.y) * zoomRatio,
         };
     setPan(clampPan(nextPan, nextZoom, stage));
-    setZoom(nextZoom);
+    onFitModeChange("custom");
+    onZoomChange(nextZoom);
   };
 
   const handleWheel = (event: WheelEvent<HTMLDivElement>) => {
@@ -250,7 +278,10 @@ export function PhotoViewerStage({
               decoding="async"
               loading="eager"
               draggable={false}
-              onLoad={() => setIsOriginalReady(true)}
+              onLoad={(event) => {
+                setIsOriginalReady(true);
+                applyFitMode(event.currentTarget);
+              }}
               onError={() => setOriginalLoadFailed(true)}
               style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}
             />

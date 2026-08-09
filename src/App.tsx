@@ -111,6 +111,7 @@ import type {
   PhotoAlbumReadingMode,
   PhotoContinuousPageGap,
   PhotoReaderBackground,
+  PhotoSingleFitMode,
   PhotoAlbumSortDirection,
   PhotoAlbumSortMode,
   PlaylistFilter,
@@ -633,6 +634,9 @@ export default function App() {
   const [photoSingleReaderBackground, setPhotoSingleReaderBackground] = useState<PhotoReaderBackground>(defaultPhotoAlbumPreferences.singleReaderBackground);
   const [photoContinuousReaderBackground, setPhotoContinuousReaderBackground] = useState<PhotoReaderBackground>(defaultPhotoAlbumPreferences.continuousReaderBackground);
   const [photoContinuousPageGap, setPhotoContinuousPageGap] = useState<PhotoContinuousPageGap>(defaultPhotoAlbumPreferences.continuousPageGap);
+  const [photoSingleZoom, setPhotoSingleZoom] = useState(defaultPhotoAlbumPreferences.singleZoom);
+  const [photoSingleFitMode, setPhotoSingleFitMode] = useState<PhotoSingleFitMode>(defaultPhotoAlbumPreferences.singleFitMode);
+  const [photoContinuousZoom, setPhotoContinuousZoom] = useState(defaultPhotoAlbumPreferences.continuousZoom);
   const [photoAlbumSortDirection, setPhotoAlbumSortDirection] = useState<PhotoAlbumSortDirection>(defaultPhotoAlbumPreferences.sortDirection);
   const [photoAlbumSortMode, setPhotoAlbumSortMode] = useState<PhotoAlbumSortMode>(defaultPhotoAlbumPreferences.sortMode);
   const [photoAlbumFilter, setPhotoAlbumFilter] = useState<PhotoAlbumViewFilter>(
@@ -663,6 +667,9 @@ export default function App() {
     photoAlbums,
     photoAlbumReadingMode,
     photoContinuousPageGap,
+    photoSingleZoom,
+    photoSingleFitMode,
+    photoContinuousZoom,
     photoContinuousReaderBackground,
     photoSingleReaderBackground,
     photoAlbumSortDirection,
@@ -674,6 +681,9 @@ export default function App() {
     setPhotoAlbumProgress,
     setPhotoAlbumReadingMode,
     setPhotoContinuousPageGap,
+    setPhotoSingleZoom,
+    setPhotoSingleFitMode,
+    setPhotoContinuousZoom,
     setPhotoContinuousReaderBackground,
     setPhotoSingleReaderBackground,
     setPhotoAlbumSortDirection,
@@ -2186,6 +2196,50 @@ export default function App() {
     setPhotoContinuousPageGap(pageGap);
     void saveCurrentPhotoAlbumStore({ preferences: nextPreferences }).catch(() => {
       setPhotoAlbumMessage("图片间距保存失败。");
+    });
+  }, [photoAlbumPreferencesRef, saveCurrentPhotoAlbumStore]);
+  const photoDisplayPreferenceSaveTimerRef = useRef<number | null>(null);
+  const updatePhotoReaderZoom = useCallback((zoom: number) => {
+    const zoomKey = photoAlbumReadingMode === "continuous" ? "continuousZoom" : "singleZoom";
+    const nextPreferences = { ...photoAlbumPreferencesRef.current, [zoomKey]: zoom };
+    photoAlbumPreferencesRef.current = nextPreferences;
+    if (photoAlbumReadingMode === "continuous") setPhotoContinuousZoom(zoom);
+    else setPhotoSingleZoom(zoom);
+    if (photoDisplayPreferenceSaveTimerRef.current !== null) window.clearTimeout(photoDisplayPreferenceSaveTimerRef.current);
+    photoDisplayPreferenceSaveTimerRef.current = window.setTimeout(() => {
+      photoDisplayPreferenceSaveTimerRef.current = null;
+      void saveCurrentPhotoAlbumStore({ preferences: photoAlbumPreferencesRef.current }).catch(() => {
+        setPhotoAlbumMessage("阅读缩放保存失败。");
+      });
+    }, 300);
+  }, [photoAlbumPreferencesRef, photoAlbumReadingMode, saveCurrentPhotoAlbumStore]);
+  const updatePhotoSingleFitMode = useCallback((singleFitMode: PhotoSingleFitMode) => {
+    const nextPreferences = { ...photoAlbumPreferencesRef.current, singleFitMode };
+    photoAlbumPreferencesRef.current = nextPreferences;
+    setPhotoSingleFitMode(singleFitMode);
+    void saveCurrentPhotoAlbumStore({ preferences: nextPreferences }).catch(() => {
+      setPhotoAlbumMessage("单页显示方式保存失败。");
+    });
+  }, [photoAlbumPreferencesRef, saveCurrentPhotoAlbumStore]);
+  const resetPhotoReaderDisplaySettings = useCallback(() => {
+    const nextPreferences = {
+      ...photoAlbumPreferencesRef.current,
+      singleReaderBackground: defaultPhotoAlbumPreferences.singleReaderBackground,
+      continuousReaderBackground: defaultPhotoAlbumPreferences.continuousReaderBackground,
+      continuousPageGap: defaultPhotoAlbumPreferences.continuousPageGap,
+      singleFitMode: defaultPhotoAlbumPreferences.singleFitMode,
+      singleZoom: defaultPhotoAlbumPreferences.singleZoom,
+      continuousZoom: defaultPhotoAlbumPreferences.continuousZoom,
+    };
+    photoAlbumPreferencesRef.current = nextPreferences;
+    setPhotoSingleReaderBackground(nextPreferences.singleReaderBackground);
+    setPhotoContinuousReaderBackground(nextPreferences.continuousReaderBackground);
+    setPhotoContinuousPageGap(nextPreferences.continuousPageGap);
+    setPhotoSingleFitMode(nextPreferences.singleFitMode);
+    setPhotoSingleZoom(nextPreferences.singleZoom);
+    setPhotoContinuousZoom(nextPreferences.continuousZoom);
+    void saveCurrentPhotoAlbumStore({ preferences: nextPreferences }).catch(() => {
+      setPhotoAlbumMessage("阅读显示设置保存失败。");
     });
   }, [photoAlbumPreferencesRef, saveCurrentPhotoAlbumStore]);
   const {
@@ -6559,6 +6613,8 @@ export default function App() {
               isImmersive={isPhotoImmersive}
               pageGap={photoContinuousPageGap}
               readerBackground={isPhotoContinuousReading ? photoContinuousReaderBackground : photoSingleReaderBackground}
+              zoom={isPhotoContinuousReading ? photoContinuousZoom : photoSingleZoom}
+              singleFitMode={photoSingleFitMode}
               hasNextAlbum={selectedVisiblePhotoAlbumIndex >= 0 && selectedVisiblePhotoAlbumIndex < visiblePhotoAlbums.length - 1}
               hasPreviousAlbum={selectedVisiblePhotoAlbumIndex > 0}
               thumbnails={visiblePhotoThumbnails}
@@ -6574,6 +6630,9 @@ export default function App() {
               onReadingModeChange={updatePhotoAlbumReadingMode}
               onPageGapChange={updatePhotoContinuousPageGap}
               onReaderBackgroundChange={updatePhotoReaderBackground}
+              onZoomChange={updatePhotoReaderZoom}
+              onSingleFitModeChange={updatePhotoSingleFitMode}
+              onResetDisplaySettings={resetPhotoReaderDisplaySettings}
               onResetProgress={resetSelectedPhotoAlbumProgress}
               onSelectImage={(image) => {
                 setCurrentPhotoIndex(image.index);

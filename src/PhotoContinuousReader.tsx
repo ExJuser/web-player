@@ -8,6 +8,8 @@ type PhotoContinuousReaderProps = {
   currentIndex: number;
   getImageUrl: (image: PhotoAlbumImage) => string;
   onCurrentImageChange: (image: PhotoAlbumImage) => void;
+  zoom: number;
+  onZoomChange: (zoom: number) => void;
 };
 
 const minContinuousZoom = 0.5;
@@ -29,6 +31,8 @@ export function PhotoContinuousReader({
   currentIndex,
   getImageUrl,
   onCurrentImageChange,
+  zoom,
+  onZoomChange,
 }: PhotoContinuousReaderProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const pageRefs = useRef(new Map<number, HTMLDivElement>());
@@ -38,7 +42,6 @@ export function PhotoContinuousReader({
   const viewportAnchorRef = useRef<ContinuousViewportAnchor | null>(null);
   const [loadedImageIds, setLoadedImageIds] = useState<Set<string>>(() => new Set());
   const [readingProgress, setReadingProgress] = useState(0);
-  const [zoom, setZoom] = useState(1);
 
   currentIndexRef.current = currentIndex;
   onCurrentImageChangeRef.current = onCurrentImageChange;
@@ -110,7 +113,7 @@ export function PhotoContinuousReader({
         };
       }
     }
-    setZoom(normalizedZoom);
+    onZoomChange(normalizedZoom);
   };
 
   useEffect(() => {

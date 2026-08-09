@@ -483,6 +483,7 @@ export type PhotoAlbumSortDirection = "asc" | "desc";
 export type PhotoAlbumReadingMode = "single" | "continuous";
 export type PhotoReaderBackground = "black" | "dark" | "light" | "white" | "sepia";
 export type PhotoContinuousPageGap = "none" | "narrow" | "normal" | "wide";
+export type PhotoSingleFitMode = "fit" | "width" | "original" | "custom";
 
 export type PhotoAlbumPreferences = {
   sortMode: PhotoAlbumSortMode;
@@ -491,6 +492,9 @@ export type PhotoAlbumPreferences = {
   singleReaderBackground: PhotoReaderBackground;
   continuousReaderBackground: PhotoReaderBackground;
   continuousPageGap: PhotoContinuousPageGap;
+  singleFitMode: PhotoSingleFitMode;
+  singleZoom: number;
+  continuousZoom: number;
   favoritesOnly: boolean;
   recentTags: RecentVideoTag[];
   tagMergeDecisions: TagMergeDecisionStore;
