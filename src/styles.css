@@ -1482,7 +1482,8 @@ button {
   min-height: 0;
   flex-direction: column;
   gap: 14px;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   padding-right: 4px;
   scrollbar-color: rgba(142, 151, 165, 0.58) rgba(20, 22, 26, 0.35);
   scrollbar-width: thin;
@@ -1491,6 +1492,7 @@ button {
 .home-primary-column {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: max-content;
   align-content: stretch;
 }
 
@@ -1511,6 +1513,10 @@ button {
 
 .home-side-column {
   padding-right: 0;
+}
+
+.home-side-column > * {
+  flex: 0 0 auto;
 }
 
 .home-resume-card,
@@ -2019,7 +2025,8 @@ button {
   flex: 1;
   flex-direction: column;
   gap: 10px;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   padding-right: 4px;
   scrollbar-color: rgba(142, 151, 165, 0.58) rgba(20, 22, 26, 0.35);
   scrollbar-width: thin;
@@ -2160,9 +2167,9 @@ button {
 
 .photo-album-grid {
   display: grid;
-  flex: 1;
+  flex: 1 0 auto;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  grid-auto-rows: minmax(0, 1fr);
+  grid-auto-rows: minmax(180px, 1fr);
   gap: 8px;
   min-height: 0;
 }
