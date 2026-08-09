@@ -1,42 +1,15 @@
 import { useEffect, useRef, useState } from "react";
-
-import {
-  photoViewerDecodeRadius,
-  photoViewerWarmRadius,
-} from "./appConfig";
 import { getPhotoImageFileFromDirectory } from "./photoAlbumScan";
 import { prunePhotoObjectUrlCache, type PhotoObjectUrlCacheMetadata } from "./photoObjectUrlCache";
+import {
+  buildPhotoViewerLoadPlan,
+  getPhotoViewerDecodeIndexes,
+  isPhotoViewerFastNavigation,
+  type PhotoViewerPosition,
+} from "./photoViewerPrefetch";
 import type { ActiveView, FileSystemDirectoryHandle, PhotoAlbum, PhotoAlbumImage } from "./playerTypes";
 
-const photoViewerIdleWarmRadius = 2;
-const photoViewerDirectionalWarmBehind = 1;
 const photoViewerFileLoadConcurrency = 2;
-const photoViewerFastNavigationThresholdMs = 300;
-const photoViewerFastWarmExtra = 2;
-
-function getPhotoViewerWarmIndexes(currentIndex: number, imageCount: number, direction: -1 | 0 | 1, isFastNavigation: boolean) {
-  const directionalWarmRadius = photoViewerWarmRadius + (isFastNavigation ? photoViewerFastWarmExtra : 0);
-  const offsets = direction === 0
-    ? Array.from({ length: photoViewerIdleWarmRadius }, (_, index) => index + 1).flatMap((offset) => [-offset, offset])
-    : [
-        ...Array.from({ length: directionalWarmRadius }, (_, index) => (index + 1) * direction),
-        ...Array.from({ length: photoViewerDirectionalWarmBehind }, (_, index) => -(index + 1) * direction),
-      ];
-  return [0, ...offsets]
-    .map((offset) => currentIndex + offset)
-    .filter((index) => index >= 0 && index < imageCount);
-}
-
-function getPhotoViewerDecodeIndexes(currentIndex: number, imageCount: number, direction: -1 | 0 | 1, isFastNavigation: boolean) {
-  const offsets = direction === 0
-    ? Array.from({ length: photoViewerDecodeRadius }, (_, index) => index + 1).flatMap((offset) => [-offset, offset])
-    : isFastNavigation
-      ? [direction]
-      : [direction, direction * 2, -direction];
-  return [0, ...offsets]
-    .map((offset) => currentIndex + offset)
-    .filter((index) => index >= 0 && index < imageCount);
-}
 
 type MutableRef<T> = {
   current: T;
@@ -75,13 +48,7 @@ export function usePhotoObjectUrls({
   setPhotoObjectUrls,
   viewerScrollDirectionRef,
 }: UsePhotoObjectUrlsParams) {
-  const viewerPositionRef = useRef<{
-    albumId: string;
-    averageStepMs: number;
-    direction: -1 | 0 | 1;
-    index: number;
-    timestamp: number;
-  } | null>(null);
+  const viewerPositionRef = useRef<PhotoViewerPosition | null>(null);
   const viewerObjectUrlIdsRef = useRef<{ albumId: string; imageIds: Set<string> } | null>(null);
   const loadRunIdRef = useRef(0);
   const [isPageVisible, setIsPageVisible] = useState(() => document.visibilityState !== "hidden");
@@ -107,37 +74,17 @@ export function usePhotoObjectUrls({
         });
       }
     } else if (activeView === "photoViewer" && selectedPhotoAlbum) {
-      const previousPosition = viewerPositionRef.current;
-      const indexDelta = previousPosition?.albumId === selectedPhotoAlbum.id
-        ? currentPhotoIndex - previousPosition.index
-        : 0;
-      const now = performance.now();
-      const stepMs = previousPosition?.albumId === selectedPhotoAlbum.id && indexDelta
-        ? (now - previousPosition.timestamp) / Math.abs(indexDelta)
-        : 0;
-      const averageStepMs = stepMs
-        ? previousPosition?.averageStepMs
-          ? previousPosition.averageStepMs * 0.65 + stepMs * 0.35
-          : stepMs
-        : previousPosition?.averageStepMs ?? 0;
-      const indexDirection: -1 | 0 | 1 = indexDelta > 0 ? 1 : indexDelta < 0 ? -1 : 0;
-      const direction: -1 | 0 | 1 = viewerScrollDirectionRef.current
-        || indexDirection
-        || (previousPosition?.albumId === selectedPhotoAlbum.id ? previousPosition.direction : 0);
-      const isFastNavigation = averageStepMs > 0 && averageStepMs < photoViewerFastNavigationThresholdMs;
-      viewerPositionRef.current = {
+      const loadPlan = buildPhotoViewerLoadPlan({
         albumId: selectedPhotoAlbum.id,
-        averageStepMs,
-        direction,
-        index: currentPhotoIndex,
-        timestamp: indexDelta || previousPosition?.albumId !== selectedPhotoAlbum.id
-          ? now
-          : previousPosition.timestamp,
-      };
-      const warmIndexes = isPageVisible
-        ? getPhotoViewerWarmIndexes(currentPhotoIndex, selectedPhotoAlbum.images.length, direction, isFastNavigation)
-        : [currentPhotoIndex];
-      for (const index of warmIndexes) {
+        currentIndex: currentPhotoIndex,
+        imageCount: selectedPhotoAlbum.images.length,
+        isPageVisible,
+        now: performance.now(),
+        previousPosition: viewerPositionRef.current,
+        scrollDirection: viewerScrollDirectionRef.current,
+      });
+      viewerPositionRef.current = loadPlan.position;
+      for (const index of loadPlan.warmIndexes) {
         rememberNeededImage(selectedPhotoAlbum.images[index]);
       }
     } else {
@@ -285,7 +232,7 @@ export function usePhotoObjectUrls({
       ? viewerPositionRef.current
       : null;
     const direction = position?.direction ?? 0;
-    const isFastNavigation = Boolean(position?.averageStepMs && position.averageStepMs < photoViewerFastNavigationThresholdMs);
+    const isFastNavigation = isPhotoViewerFastNavigation(position?.averageStepMs ?? 0);
     for (const index of getPhotoViewerDecodeIndexes(currentPhotoIndex, selectedPhotoAlbum.images.length, direction, isFastNavigation)) {
       const image = selectedPhotoAlbum.images[index];
       const url = image?.url || photoObjectUrls[image?.id ?? ""];
