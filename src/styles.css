@@ -231,6 +231,11 @@ button {
   overflow: visible;
 }
 
+.app-shell.home-view.photo-viewer-view .video-summary {
+  justify-content: flex-start;
+  padding-left: 12px;
+}
+
 @media (min-width: 1281px) {
   .app-shell.home-view .top-bar {
     display: grid;
@@ -239,6 +244,10 @@ button {
 
   .app-shell.home-view .video-summary {
     grid-column: 2;
+  }
+
+  .app-shell.home-view.photo-viewer-view .video-summary {
+    grid-column: 1 / 3;
   }
 
   .app-shell.home-view .top-actions {

@@ -6193,7 +6193,7 @@ export default function App() {
   return (
     <>
     <main
-      className={`app-shell theme-${theme} ${isDragActive ? "drag-active" : ""} ${isPrivacyMode ? "privacy-mode" : ""} ${isCinemaMode ? "cinema-mode" : ""} ${isPhotoImmersive ? "photo-immersive" : ""} ${isNonPlayerViewVisible ? "home-view" : ""}`}
+      className={`app-shell theme-${theme} ${isDragActive ? "drag-active" : ""} ${isPrivacyMode ? "privacy-mode" : ""} ${isCinemaMode ? "cinema-mode" : ""} ${isPhotoImmersive ? "photo-immersive" : ""} ${activeView === "photoViewer" ? "photo-viewer-view" : ""} ${isNonPlayerViewVisible ? "home-view" : ""}`}
       ref={appShellRef}
       style={shellStyle}
       onDragOver={handleDragOver}
