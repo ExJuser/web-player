@@ -23,9 +23,33 @@ type ShortcutKeyboardEvent = {
   shiftKey: boolean;
 };
 
+export type ShortcutScope = "global" | "privacy" | "playback";
+
+const shortcutActionsByScope: Record<ShortcutScope, readonly ShortcutAction[]> = {
+  global: ["toggleShortcuts", "togglePrivacy", "toggleCinema"],
+  privacy: ["seekBackward", "seekForward"],
+  playback: [
+    "togglePlay",
+    "toggleMute",
+    "toggleFullscreen",
+    "toggleFavorite",
+    "playNext",
+    "playPrevious",
+    "seekBackward",
+    "holdSpeed",
+    "seekForward",
+    "volumeUp",
+    "volumeDown",
+  ],
+};
+
 export function shortcutCodeFromEvent(event: ShortcutKeyboardEvent) {
   if (event.code === "Slash" && event.shiftKey) return "Slash";
   return event.code || event.key;
+}
+
+export function resolveShortcutAction(shortcuts: ShortcutMap, eventCode: string, scope: ShortcutScope) {
+  return shortcutActionsByScope[scope].find((action) => shortcuts[action] === eventCode);
 }
 
 export function getShortcutConflict(shortcuts: ShortcutMap, action: ShortcutAction, nextCode: string) {

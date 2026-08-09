@@ -5,6 +5,23 @@ import { importTsModule } from "./importTsModule.mjs";
 
 const interactionUtils = await importTsModule(new URL("../src/playerInteractionUtils.ts", import.meta.url));
 
+const shortcuts = {
+  togglePlay: "Space",
+  seekBackward: "ArrowLeft",
+  seekForward: "ArrowRight",
+  holdSpeed: "ArrowRight",
+  volumeUp: "ArrowUp",
+  volumeDown: "ArrowDown",
+  toggleMute: "KeyM",
+  toggleFullscreen: "KeyF",
+  toggleFavorite: "KeyS",
+  playPrevious: "KeyB",
+  playNext: "KeyN",
+  togglePrivacy: "KeyP",
+  toggleCinema: "KeyT",
+  toggleShortcuts: "Slash",
+};
+
 test("clamps numeric values to the provided range", () => {
   assert.equal(interactionUtils.clamp(-1, 0, 1), 0);
   assert.equal(interactionUtils.clamp(0.4, 0, 1), 0.4);
@@ -28,26 +45,16 @@ test("normalizes keyboard events to shortcut codes", () => {
 });
 
 test("detects shortcut conflicts while allowing seek and hold speed to share a key", () => {
-  const shortcuts = {
-    togglePlay: "Space",
-    seekBackward: "ArrowLeft",
-    seekForward: "ArrowRight",
-    holdSpeed: "ArrowRight",
-    volumeUp: "ArrowUp",
-    volumeDown: "ArrowDown",
-    toggleMute: "KeyM",
-    toggleFullscreen: "KeyF",
-    toggleFavorite: "KeyS",
-    playPrevious: "KeyB",
-    playNext: "KeyN",
-    togglePrivacy: "KeyP",
-    toggleCinema: "KeyT",
-    toggleShortcuts: "Slash",
-  };
-
   assert.equal(interactionUtils.getShortcutConflict(shortcuts, "toggleMute", "Space"), "togglePlay");
   assert.equal(interactionUtils.getShortcutConflict(shortcuts, "holdSpeed", "ArrowRight"), undefined);
   assert.equal(interactionUtils.getShortcutConflict(shortcuts, "seekForward", "ArrowRight"), undefined);
+});
+
+test("resolves shortcut actions by scope while preserving shared-key priority", () => {
+  assert.equal(interactionUtils.resolveShortcutAction(shortcuts, "Slash", "global"), "toggleShortcuts");
+  assert.equal(interactionUtils.resolveShortcutAction(shortcuts, "Space", "global"), undefined);
+  assert.equal(interactionUtils.resolveShortcutAction(shortcuts, "ArrowRight", "privacy"), "seekForward");
+  assert.equal(interactionUtils.resolveShortcutAction(shortcuts, "ArrowRight", "playback"), "holdSpeed");
 });
 
 test("uses the first high energy segment as initial playback time when enabled", () => {

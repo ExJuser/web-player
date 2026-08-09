@@ -202,6 +202,7 @@ import {
   clamp,
   formatShortcutKey,
   resolveInitialPlaybackTime,
+  resolveShortcutAction,
   shortcutCodeFromEvent,
 } from "./playerInteractionUtils";
 import {
@@ -5904,42 +5905,37 @@ export default function App() {
         }
       }
 
-      if (eventCode === activeShortcuts.toggleShortcuts && !isFormControl(event.target)) {
-        event.preventDefault();
-        toggleShortcutDialog();
-        return;
-      }
-
-      if (eventCode === activeShortcuts.togglePrivacy && !isFormControl(event.target)) {
-        event.preventDefault();
-        if (!event.repeat) {
-          togglePrivacyMode();
+      if (!isFormControl(event.target)) {
+        const globalShortcutAction = resolveShortcutAction(activeShortcuts, eventCode, "global");
+        if (globalShortcutAction) {
+          event.preventDefault();
+          if (globalShortcutAction === "toggleShortcuts") {
+            toggleShortcutDialog();
+          } else if (!event.repeat && globalShortcutAction === "togglePrivacy") {
+            togglePrivacyMode();
+          } else if (!event.repeat && globalShortcutAction === "toggleCinema") {
+            toggleCinemaMode();
+          }
+          return;
         }
-        return;
-      }
-
-      if (eventCode === activeShortcuts.toggleCinema && !isFormControl(event.target)) {
-        event.preventDefault();
-        if (!event.repeat) {
-          toggleCinemaMode();
-        }
-        return;
       }
 
       if (!currentVideo || isShortcutDialogOpen || photoDeleteCandidate || photoAlbumDeleteCandidate || isFormControl(event.target)) return;
 
       if (isPrivacyMode) {
-        if (eventCode === activeShortcuts.seekBackward) {
+        const privacyShortcutAction = resolveShortcutAction(activeShortcuts, eventCode, "privacy");
+        if (privacyShortcutAction === "seekBackward") {
           event.preventDefault();
           seekBy(-seekStep);
-        } else if (eventCode === activeShortcuts.seekForward) {
+        } else if (privacyShortcutAction === "seekForward") {
           event.preventDefault();
           seekBy(seekStep);
         }
         return;
       }
 
-      if (eventCode === activeShortcuts.togglePlay) {
+      const playbackShortcutAction = resolveShortcutAction(activeShortcuts, eventCode, "playback");
+      if (playbackShortcutAction === "togglePlay") {
         event.preventDefault();
         if (!event.repeat) {
           togglePlay();
@@ -5947,7 +5943,7 @@ export default function App() {
         return;
       }
 
-      if (eventCode === activeShortcuts.toggleMute) {
+      if (playbackShortcutAction === "toggleMute") {
         event.preventDefault();
         if (!event.repeat) {
           toggleMute();
@@ -5955,7 +5951,7 @@ export default function App() {
         return;
       }
 
-      if (eventCode === activeShortcuts.toggleFullscreen) {
+      if (playbackShortcutAction === "toggleFullscreen") {
         event.preventDefault();
         if (!event.repeat) {
           void toggleFullscreen();
@@ -5963,7 +5959,7 @@ export default function App() {
         return;
       }
 
-      if (eventCode === activeShortcuts.toggleFavorite) {
+      if (playbackShortcutAction === "toggleFavorite") {
         event.preventDefault();
         if (!event.repeat) {
           toggleCurrentFavorite();
@@ -5971,7 +5967,7 @@ export default function App() {
         return;
       }
 
-      if (eventCode === activeShortcuts.playNext) {
+      if (playbackShortcutAction === "playNext") {
         event.preventDefault();
         if (!event.repeat) {
           playNext();
@@ -5979,7 +5975,7 @@ export default function App() {
         return;
       }
 
-      if (eventCode === activeShortcuts.playPrevious) {
+      if (playbackShortcutAction === "playPrevious") {
         event.preventDefault();
         if (!event.repeat) {
           playPrevious();
@@ -5987,10 +5983,10 @@ export default function App() {
         return;
       }
 
-      if (eventCode === activeShortcuts.seekBackward) {
+      if (playbackShortcutAction === "seekBackward") {
         event.preventDefault();
         seekBy(-seekStep);
-      } else if (eventCode === activeShortcuts.holdSpeed) {
+      } else if (playbackShortcutAction === "holdSpeed") {
         event.preventDefault();
         if (event.repeat || isRightKeyDownRef.current) return;
         isRightKeyDownRef.current = true;
@@ -6001,13 +5997,13 @@ export default function App() {
           startHoldSpeed();
           rightKeyHoldTimerRef.current = null;
         }, rightKeyHoldDelay);
-      } else if (eventCode === activeShortcuts.seekForward) {
+      } else if (playbackShortcutAction === "seekForward") {
         event.preventDefault();
         seekBy(seekStep);
-      } else if (eventCode === activeShortcuts.volumeUp) {
+      } else if (playbackShortcutAction === "volumeUp") {
         event.preventDefault();
         adjustVolume(volumeStep);
-      } else if (eventCode === activeShortcuts.volumeDown) {
+      } else if (playbackShortcutAction === "volumeDown") {
         event.preventDefault();
         adjustVolume(-volumeStep);
       }
