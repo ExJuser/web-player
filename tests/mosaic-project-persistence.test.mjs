@@ -121,3 +121,38 @@ test("reuses the saved target URL when reopening an uploaded project", async () 
   assert.equal(result.targetUrl, "/saved-target");
   assert.equal(result.project.targetUrl, "/saved-target");
 });
+
+test("replaces an uploaded target without changing the saved project identity", async () => {
+  const events = [];
+  const savedProjects = [];
+  const activeProject = {
+    id: "uploaded",
+    name: "Uploaded",
+    createdAt: 100,
+    updatedAt: 200,
+    previewUrl: "/old-preview",
+    targetUrl: "/old-target",
+    recipe: { version: 1, algorithmVersion: 1, target: { kind: "upload", label: "old.jpg", assetUrl: "/old-target" }, ...recipe },
+  };
+  const result = await persistence.saveGeneratedMosaicProject({
+    activeProject,
+    ...createDependencies(events, savedProjects),
+    preview: new Blob(["preview"]),
+    recipe,
+    target: {
+      file: new Blob(["replacement"]),
+      persistFile: true,
+      ref: { kind: "upload", label: "new.jpg", assetUrl: "" },
+    },
+  });
+
+  assert.deepEqual(events, ["target:uploaded", "preview:uploaded", "project"]);
+  assert.equal(result.project.id, "uploaded");
+  assert.equal(result.project.createdAt, 100);
+  assert.equal(result.targetUrl, "/mosaics/uploaded/target");
+  assert.deepEqual(result.targetRef, {
+    kind: "upload",
+    label: "new.jpg",
+    assetUrl: "/mosaics/uploaded/target",
+  });
+});
