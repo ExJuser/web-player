@@ -365,8 +365,7 @@ async function deleteMediaVideo(config, payload) {
 
 async function deletePhotoImage(config, payload) {
   const root = findMediaRoot(config, payload?.rootId);
-  if (!root) throw new Error("Unknown media root.");
-  if (root.source === "browser" && !root.localPath) {
+  if (root?.source === "browser" && !root.localPath) {
     throw new Error("浏览器添加的媒体库需要重新授权目录后才能删除磁盘图片。");
   }
 
