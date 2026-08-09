@@ -18,8 +18,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { analyzeMosaicSources, matchMosaic, readMosaicTargetGrid, renderMosaic } from "./mosaicImagePipeline";
 import { deleteMosaicProject, loadMosaicProjects, saveMosaicProject, writeMosaicPreview, writeMosaicTarget } from "./mosaicStorage";
+import { resolveMosaicVideoTarget } from "./mosaicTargetResolver";
 import { normalizeMosaicTargetRotation } from "./mosaicRotation";
-import { generateServerMosaicTarget } from "./playerStorage";
 import type {
   MosaicProject,
   MosaicRuntimeSource,
@@ -29,7 +29,6 @@ import type {
   MosaicTileFit,
 } from "./mosaicTypes";
 import type { PhotoAlbum, VideoItem } from "./playerTypes";
-import { createHighQualityVideoTarget } from "./videoThumbnail";
 import { MosaicViewport } from "./MosaicViewport";
 
 type RuntimeTarget = { ref: MosaicTargetRef; file?: Blob; url: string; persistFile?: boolean };
@@ -331,34 +330,11 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
     targetResolveAbortRef.current = controller;
     setResolvingTargetId(source.id);
     try {
-      let targetBlob: Blob | null = null;
-      let targetOrigin: "server" | "browser" | "fallback" | null = null;
-      if (video.mediaRootId) {
-        try {
-          const serverUrl = await generateServerMosaicTarget(video.id, video.mediaRootId, video.relativePath, video.size, video.lastModified, controller.signal);
-          if (serverUrl) {
-            const response = await fetch(serverUrl, { signal: controller.signal });
-            if (response.ok) {
-              targetBlob = await response.blob();
-              targetOrigin = "server";
-            }
-          }
-        } catch (error) {
-          if (controller.signal.aborted) throw error;
-        }
-      }
-      if (!targetBlob) {
-        targetBlob = await createHighQualityVideoTarget(video, controller.signal).catch(() => null);
-        if (targetBlob) targetOrigin = "browser";
-      }
-      if (!targetBlob && source.url) {
-        const response = await fetch(source.url, { signal: controller.signal });
-        if (response.ok) {
-          targetBlob = await response.blob();
-          targetOrigin = "fallback";
-        }
-      }
-      if (!targetBlob) throw new Error("无法读取该影片的高清目标图。");
+      const { blob: targetBlob, origin: targetOrigin } = await resolveMosaicVideoTarget({
+        signal: controller.signal,
+        sourceUrl: source.url,
+        video,
+      });
       releaseRuntimeTargetUrl();
       const url = URL.createObjectURL(targetBlob);
       runtimeTargetUrlRef.current = url;
