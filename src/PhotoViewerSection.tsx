@@ -18,6 +18,7 @@ type PhotoViewerSectionProps = {
   thumbnails: PhotoAlbumImage[];
   getImageUrl: (image: PhotoAlbumImage) => string;
   onBack: () => void;
+  onDeleteAlbum: (album: PhotoAlbum) => void;
   onDeleteCurrentPhoto: () => void;
   onEditTags: (album: PhotoAlbum) => void;
   onImmersiveChange: (isImmersive: boolean) => void;
@@ -41,6 +42,7 @@ export function PhotoViewerSection({
   thumbnails,
   getImageUrl,
   onBack,
+  onDeleteAlbum,
   onDeleteCurrentPhoto,
   onEditTags,
   onImmersiveChange,
@@ -60,6 +62,7 @@ export function PhotoViewerSection({
           isCoverCurrent={isCoverCurrent}
           isFavorite={isFavorite}
           onBack={onBack}
+          onDeleteAlbum={onDeleteAlbum}
           onDeleteCurrentPhoto={onDeleteCurrentPhoto}
           onEditTags={onEditTags}
           onEnterImmersive={() => onImmersiveChange(true)}

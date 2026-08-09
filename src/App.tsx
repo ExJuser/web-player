@@ -6496,6 +6496,7 @@ export default function App() {
               thumbnails={visiblePhotoThumbnails}
               getImageUrl={getPhotoImageUrl}
               onBack={returnFromPhotoViewer}
+              onDeleteAlbum={requestDeletePhotoAlbum}
               onDeleteCurrentPhoto={requestDeleteCurrentPhoto}
               onEditTags={openPhotoAlbumTagEditor}
               onImmersiveChange={setIsPhotoImmersive}

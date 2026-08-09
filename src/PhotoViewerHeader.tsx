@@ -1,4 +1,5 @@
-import { ArrowLeft, CheckCircle2, Images, Maximize2, RotateCcw, Star, Tags, Trash2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ArrowLeft, CheckCircle2, ChevronDown, Images, Maximize2, RotateCcw, Star, Tags, Trash2 } from "lucide-react";
 
 import type { PhotoAlbum, PhotoAlbumImage } from "./playerTypes";
 
@@ -8,6 +9,7 @@ type PhotoViewerHeaderProps = {
   isCoverCurrent: boolean;
   isFavorite: boolean;
   onBack: () => void;
+  onDeleteAlbum: (album: PhotoAlbum) => void;
   onDeleteCurrentPhoto: () => void;
   onEditTags: (album: PhotoAlbum) => void;
   onEnterImmersive: () => void;
@@ -23,6 +25,7 @@ export function PhotoViewerHeader({
   isCoverCurrent,
   isFavorite,
   onBack,
+  onDeleteAlbum,
   onDeleteCurrentPhoto,
   onEditTags,
   onEnterImmersive,
@@ -31,6 +34,27 @@ export function PhotoViewerHeader({
   onSetCover,
   onToggleFavorite,
 }: PhotoViewerHeaderProps) {
+  const [isDeleteMenuOpen, setIsDeleteMenuOpen] = useState(false);
+  const deleteMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isDeleteMenuOpen) return;
+
+    const closeOnOutsideClick = (event: PointerEvent) => {
+      if (!deleteMenuRef.current?.contains(event.target as Node)) setIsDeleteMenuOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsDeleteMenuOpen(false);
+    };
+
+    document.addEventListener("pointerdown", closeOnOutsideClick);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsideClick);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [isDeleteMenuOpen]);
+
   return (
     <header className="photo-viewer-header">
       <button className="secondary-button" type="button" onClick={onBack}>
@@ -72,16 +96,48 @@ export function PhotoViewerHeader({
             {isCoverCurrent ? "当前封面" : "设为封面"}
           </button>
         ) : null}
-        <button
-          className="danger-button photo-delete-button"
-          type="button"
-          onClick={onDeleteCurrentPhoto}
-          disabled={!currentPhoto}
-          title={currentPhoto ? "删除当前图片" : "当前没有可删除的图片"}
-        >
-          <Trash2 size={16} />
-          删除
-        </button>
+        <div className="photo-delete-menu" ref={deleteMenuRef}>
+          <button
+            aria-expanded={isDeleteMenuOpen}
+            aria-haspopup="menu"
+            className="danger-button photo-delete-button"
+            type="button"
+            onClick={() => setIsDeleteMenuOpen((isOpen) => !isOpen)}
+            title="删除当前图片或整个图集"
+          >
+            <Trash2 size={16} />
+            删除
+            <ChevronDown className="photo-delete-chevron" size={14} />
+          </button>
+          {isDeleteMenuOpen ? (
+            <div className="photo-delete-options" role="menu">
+              <button
+                type="button"
+                role="menuitem"
+                disabled={!currentPhoto}
+                onClick={() => {
+                  setIsDeleteMenuOpen(false);
+                  onDeleteCurrentPhoto();
+                }}
+              >
+                <Trash2 size={15} />
+                删除当前图片
+              </button>
+              <button
+                className="delete-album-option"
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setIsDeleteMenuOpen(false);
+                  onDeleteAlbum(album);
+                }}
+              >
+                <Images size={15} />
+                删除整个图集
+              </button>
+            </div>
+          ) : null}
+        </div>
       </div>
     </header>
   );
