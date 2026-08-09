@@ -2750,6 +2750,7 @@ button {
   border: 1px solid #242a31;
   border-radius: 8px;
   background: #090b10;
+  touch-action: manipulation;
 }
 
 .photo-stage-image {

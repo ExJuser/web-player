@@ -1,4 +1,11 @@
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type WheelEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
+  type WheelEvent,
+} from "react";
 import { ChevronLeft, ChevronRight, LoaderCircle } from "lucide-react";
 
 import { loadPhotoPreview, shouldCreatePhotoPreview } from "./photoPreviewCache";
@@ -15,7 +22,10 @@ type PhotoViewerStageProps = {
 const minPhotoZoom = 1;
 const maxPhotoZoom = 5;
 const photoZoomStep = 0.25;
+const photoDoubleClickZoom = 2;
 const photoOriginalLoadDelay = 450;
+const photoDoubleTapDelay = 300;
+const photoTapMoveTolerance = 12;
 type PhotoPan = { x: number; y: number };
 
 export function PhotoViewerStage({
@@ -36,6 +46,9 @@ export function PhotoViewerStage({
   const stageRef = useRef<HTMLDivElement | null>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
   const dragStartRef = useRef<{ pointerId: number; x: number; y: number; pan: PhotoPan } | null>(null);
+  const touchTapRef = useRef<{ pointerId: number; x: number; y: number } | null>(null);
+  const lastTouchTapRef = useRef<{ time: number; x: number; y: number } | null>(null);
+  const lastTouchZoomTimeRef = useRef(0);
 
   useEffect(() => {
     setZoom(minPhotoZoom);
@@ -112,17 +125,11 @@ export function PhotoViewerStage({
     return () => observer.disconnect();
   }, [pan, zoom]);
 
-  const handleWheel = (event: WheelEvent<HTMLDivElement>) => {
-    if (!currentPhotoUrl || event.deltaY === 0) return;
-    event.preventDefault();
-    const nextZoom = Math.min(
-      maxPhotoZoom,
-      Math.max(minPhotoZoom, zoom + (event.deltaY < 0 ? photoZoomStep : -photoZoomStep)),
-    );
+  const zoomAtPoint = (nextZoom: number, clientX: number, clientY: number, stage: HTMLDivElement) => {
     if (nextZoom === zoom) return;
-    const bounds = event.currentTarget.getBoundingClientRect();
-    const pointerX = event.clientX - bounds.left - bounds.width / 2;
-    const pointerY = event.clientY - bounds.top - bounds.height / 2;
+    const bounds = stage.getBoundingClientRect();
+    const pointerX = clientX - bounds.left - bounds.width / 2;
+    const pointerY = clientY - bounds.top - bounds.height / 2;
     const zoomRatio = nextZoom / zoom;
     const nextPan = nextZoom === minPhotoZoom
       ? { x: 0, y: 0 }
@@ -130,12 +137,32 @@ export function PhotoViewerStage({
           x: pointerX - (pointerX - pan.x) * zoomRatio,
           y: pointerY - (pointerY - pan.y) * zoomRatio,
         };
-    setPan(clampPan(nextPan, nextZoom, event.currentTarget));
+    setPan(clampPan(nextPan, nextZoom, stage));
     setZoom(nextZoom);
   };
 
+  const handleWheel = (event: WheelEvent<HTMLDivElement>) => {
+    if (!currentPhotoUrl || event.deltaY === 0) return;
+    event.preventDefault();
+    const nextZoom = Math.min(
+      maxPhotoZoom,
+      Math.max(minPhotoZoom, zoom + (event.deltaY < 0 ? photoZoomStep : -photoZoomStep)),
+    );
+    zoomAtPoint(nextZoom, event.clientX, event.clientY, event.currentTarget);
+  };
+
+  const handleDoubleClick = (event: ReactMouseEvent<HTMLDivElement>) => {
+    if (!currentPhotoUrl || (event.target as Element).closest("button")) return;
+    if (Date.now() - lastTouchZoomTimeRef.current < photoDoubleTapDelay) return;
+    zoomAtPoint(zoom > minPhotoZoom ? minPhotoZoom : photoDoubleClickZoom, event.clientX, event.clientY, event.currentTarget);
+  };
+
   const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (zoom <= minPhotoZoom || event.button !== 0 || (event.target as Element).closest("button")) return;
+    if (event.button !== 0 || (event.target as Element).closest("button")) return;
+    if (event.pointerType === "touch") {
+      touchTapRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
+    }
+    if (zoom <= minPhotoZoom) return;
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
     dragStartRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, pan };
@@ -143,6 +170,13 @@ export function PhotoViewerStage({
   };
 
   const handlePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const touchTap = touchTapRef.current;
+    if (touchTap?.pointerId === event.pointerId && (
+      Math.abs(event.clientX - touchTap.x) > photoTapMoveTolerance
+      || Math.abs(event.clientY - touchTap.y) > photoTapMoveTolerance
+    )) {
+      touchTapRef.current = null;
+    }
     const dragStart = dragStartRef.current;
     if (!dragStart || dragStart.pointerId !== event.pointerId) return;
     setPan(clampPan({
@@ -152,16 +186,32 @@ export function PhotoViewerStage({
   };
 
   const stopDragging = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (dragStartRef.current?.pointerId !== event.pointerId) return;
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
-    dragStartRef.current = null;
-    setIsDragging(false);
+    if (dragStartRef.current?.pointerId === event.pointerId) {
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+      dragStartRef.current = null;
+      setIsDragging(false);
+    }
+    const touchTap = touchTapRef.current;
+    touchTapRef.current = null;
+    if (event.type === "pointercancel" || touchTap?.pointerId !== event.pointerId) return;
+    const now = Date.now();
+    const lastTap = lastTouchTapRef.current;
+    if (lastTap && now - lastTap.time <= photoDoubleTapDelay
+      && Math.abs(event.clientX - lastTap.x) <= photoTapMoveTolerance
+      && Math.abs(event.clientY - lastTap.y) <= photoTapMoveTolerance) {
+      lastTouchTapRef.current = null;
+      lastTouchZoomTimeRef.current = now;
+      zoomAtPoint(zoom > minPhotoZoom ? minPhotoZoom : photoDoubleClickZoom, event.clientX, event.clientY, event.currentTarget);
+      return;
+    }
+    lastTouchTapRef.current = { time: now, x: event.clientX, y: event.clientY };
   };
 
   return (
     <div
       ref={stageRef}
       className={`photo-stage ${zoom > minPhotoZoom ? "can-pan" : ""} ${isDragging ? "dragging" : ""}`}
+      onDoubleClick={handleDoubleClick}
       onPointerCancel={stopDragging}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
