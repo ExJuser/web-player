@@ -159,7 +159,7 @@ import {
   replaceCachedPhotoAlbumScanAlbum,
   saveCachedPhotoAlbumScan,
 } from "./photoAlbumStorage";
-import { removePhotoFromAlbumState } from "./photoAlbumDeletionState";
+import { removePhotoAlbumState, removePhotoFromAlbumState } from "./photoAlbumDeletionState";
 import {
   PROGRESS_FILE_NAME,
   createPlaybackRateOptions,
@@ -4408,18 +4408,14 @@ export default function App() {
         }
       }
 
-      const nextAlbums = photoAlbumsRef.current.filter((item) => item.id !== album.id);
-      const nextProgress = { ...photoAlbumProgressRef.current };
-      delete nextProgress[album.id];
-      const nextCoverPreferences = { ...photoAlbumCoverPreferencesRef.current };
-      delete nextCoverPreferences[album.id];
-      const nextAlbumTags = { ...photoAlbumTagsRef.current };
-      delete nextAlbumTags[album.id];
-      let nextFavorites = favoritePhotoAlbumIdsRef.current;
-      if (favoritePhotoAlbumIdsRef.current.has(album.id)) {
-        nextFavorites = new Set(favoritePhotoAlbumIdsRef.current);
-        nextFavorites.delete(album.id);
-      }
+      const { nextAlbums, nextAlbumTags, nextCoverPreferences, nextFavorites, nextProgress } = removePhotoAlbumState({
+        albumId: album.id,
+        albums: photoAlbumsRef.current,
+        albumTags: photoAlbumTagsRef.current,
+        coverPreferences: photoAlbumCoverPreferencesRef.current,
+        favoriteAlbumIds: favoritePhotoAlbumIdsRef.current,
+        progress: photoAlbumProgressRef.current,
+      });
 
       const nextPhotoObjectUrls = removePhotoObjectUrlCacheEntries({
         accessTimes: photoObjectUrlAccessRef.current,

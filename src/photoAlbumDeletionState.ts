@@ -12,10 +12,39 @@ type RemovePhotoFromAlbumStateParams = {
   updatedAt?: number;
 };
 
+type RemovePhotoAlbumStateParams = {
+  albumId: string;
+  albums: PhotoAlbum[];
+  albumTags: Record<string, string[]>;
+  coverPreferences: Record<string, string>;
+  favoriteAlbumIds: Set<string>;
+  progress: Record<string, PhotoAlbumProgress>;
+};
+
 function withoutAlbumKey<T>(values: Record<string, T>, albumId: string) {
   const nextValues = { ...values };
   delete nextValues[albumId];
   return nextValues;
+}
+
+export function removePhotoAlbumState({
+  albumId,
+  albums,
+  albumTags,
+  coverPreferences,
+  favoriteAlbumIds,
+  progress,
+}: RemovePhotoAlbumStateParams) {
+  const nextFavorites = favoriteAlbumIds.has(albumId)
+    ? new Set([...favoriteAlbumIds].filter((favoriteAlbumId) => favoriteAlbumId !== albumId))
+    : favoriteAlbumIds;
+  return {
+    nextAlbums: albums.filter((item) => item.id !== albumId),
+    nextAlbumTags: withoutAlbumKey(albumTags, albumId),
+    nextCoverPreferences: withoutAlbumKey(coverPreferences, albumId),
+    nextFavorites,
+    nextProgress: withoutAlbumKey(progress, albumId),
+  };
 }
 
 export function removePhotoFromAlbumState({
@@ -35,16 +64,16 @@ export function removePhotoFromAlbumState({
   const nextPhotoIndex = Math.min(Math.max(photoIndex, 0), Math.max(remainingImages.length - 1, 0));
 
   if (!remainingImages.length) {
-    const nextFavorites = favoriteAlbumIds.has(album.id)
-      ? new Set([...favoriteAlbumIds].filter((albumId) => albumId !== album.id))
-      : favoriteAlbumIds;
     return {
-      nextAlbums: albums.filter((item) => item.id !== album.id),
-      nextAlbumTags: withoutAlbumKey(albumTags, album.id),
-      nextCoverPreferences: withoutAlbumKey(coverPreferences, album.id),
-      nextFavorites,
+      ...removePhotoAlbumState({
+        albumId: album.id,
+        albums,
+        albumTags,
+        coverPreferences,
+        favoriteAlbumIds,
+        progress,
+      }),
       nextPhotoIndex,
-      nextProgress: withoutAlbumKey(progress, album.id),
       nextSelectedAlbumId: null,
       remainingImages,
     };

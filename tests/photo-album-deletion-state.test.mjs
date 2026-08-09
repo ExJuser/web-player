@@ -96,3 +96,28 @@ test("removes an empty album and its related metadata after the last photo", () 
   assert.equal(result.nextPhotoIndex, 0);
   assert.equal(result.nextSelectedAlbumId, null);
 });
+
+test("removes a whole album state while preserving unrelated metadata", () => {
+  const photo = createImage("only", 0, 10, 100);
+  const album = createAlbum([photo]);
+  const otherAlbum = { ...createAlbum([createImage("other", 0, 20, 200)]), id: "other" };
+  const favoriteAlbumIds = new Set(["other"]);
+
+  const result = deletionState.removePhotoAlbumState({
+    albumId: "album",
+    albums: [album, otherAlbum],
+    albumTags: { album: ["remove"], other: ["keep"] },
+    coverPreferences: { album: "only", other: "other" },
+    favoriteAlbumIds,
+    progress: {
+      album: { imageIndex: 0, updatedAt: 1, completed: false },
+      other: { imageIndex: 0, updatedAt: 2, completed: false },
+    },
+  });
+
+  assert.deepEqual(result.nextAlbums.map((item) => item.id), ["other"]);
+  assert.deepEqual(result.nextProgress, { other: { imageIndex: 0, updatedAt: 2, completed: false } });
+  assert.deepEqual(result.nextCoverPreferences, { other: "other" });
+  assert.deepEqual(result.nextAlbumTags, { other: ["keep"] });
+  assert.equal(result.nextFavorites, favoriteAlbumIds);
+});
