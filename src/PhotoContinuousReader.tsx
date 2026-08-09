@@ -30,16 +30,26 @@ export function PhotoContinuousReader({
   const onCurrentImageChangeRef = useRef(onCurrentImageChange);
   const viewportAnchorRef = useRef<{ x: number; y: number } | null>(null);
   const [loadedImageIds, setLoadedImageIds] = useState<Set<string>>(() => new Set());
+  const [readingProgress, setReadingProgress] = useState(0);
   const [zoom, setZoom] = useState(1);
 
   currentIndexRef.current = currentIndex;
   onCurrentImageChangeRef.current = onCurrentImageChange;
+
+  const updateReadingProgress = () => {
+    const container = containerRef.current;
+    if (!container) return;
+    const maxScrollTop = container.scrollHeight - container.clientHeight;
+    const nextProgress = maxScrollTop <= 0 ? 100 : Math.round((container.scrollTop / maxScrollTop) * 100);
+    setReadingProgress((progress) => progress === nextProgress ? progress : nextProgress);
+  };
 
   useLayoutEffect(() => {
     visibleRatiosRef.current.clear();
     const container = containerRef.current;
     const page = pageRefs.current.get(currentIndexRef.current);
     if (container && page) container.scrollTop = page.offsetTop;
+    updateReadingProgress();
   }, [album.id]);
 
   useEffect(() => setLoadedImageIds(new Set()), [album.id]);
@@ -173,7 +183,7 @@ export function PhotoContinuousReader({
           <ZoomIn size={17} />
         </button>
       </div>
-      <div className="photo-continuous-reader" ref={containerRef} aria-label="连续竖向阅读">
+      <div className="photo-continuous-reader" ref={containerRef} aria-label="连续竖向阅读" onScroll={updateReadingProgress}>
         <div className="photo-continuous-pages" style={{ width: `${zoom * 100}%`, maxWidth: `${1200 * zoom}px` }}>
           {album.images.map((image) => {
             const imageUrl = getImageUrl(image);
@@ -195,13 +205,21 @@ export function PhotoContinuousReader({
                     decoding="async"
                     loading={Math.abs(image.index - currentIndex) <= 2 ? "eager" : "lazy"}
                     draggable={false}
-                    onLoad={() => setLoadedImageIds((ids) => ids.has(image.id) ? ids : new Set(ids).add(image.id))}
+                    onLoad={() => {
+                      setLoadedImageIds((ids) => ids.has(image.id) ? ids : new Set(ids).add(image.id));
+                      updateReadingProgress();
+                    }}
                   />
                 ) : <span>加载中…</span>}
               </div>
             );
           })}
         </div>
+      </div>
+      <div className="photo-continuous-progress" aria-label={`阅读进度 ${readingProgress}%`}>
+        {Math.min(currentIndex + 1, album.images.length)} / {album.images.length}
+        <span aria-hidden="true">·</span>
+        {readingProgress}%
       </div>
     </div>
   );
