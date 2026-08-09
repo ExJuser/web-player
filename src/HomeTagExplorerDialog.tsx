@@ -81,7 +81,7 @@ export function HomeTagExplorerDialog({
     () => videos.filter((card) => matchesTagExplorerSelection(card.tags ?? [], selection)),
     [selection, videos],
   );
-  const completedCount = matchingVideos.filter((card) => card.progress?.completed).length;
+  const completedCount = matchingVideos.reduce((count, card) => count + (card.progress?.completed ? 1 : 0), 0);
   const ratedVideos = matchingVideos.filter((card) => typeof card.rating === "number");
   const averageRating = ratedVideos.length
     ? ratedVideos.reduce((total, card) => total + (card.rating ?? 0), 0) / ratedVideos.length

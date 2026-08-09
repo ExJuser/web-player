@@ -98,7 +98,7 @@ export function createPhotoAlbumStats(
   favoriteAlbumIds: ReadonlySet<string>,
   progress: Record<string, PhotoAlbumProgress | undefined>,
 ) {
-  const completed = albums.filter((album) => progress[album.id]?.completed).length;
+  const completed = albums.reduce((count, album) => count + (progress[album.id]?.completed ? 1 : 0), 0);
   return {
     total: albums.length,
     images: albums.reduce((sum, album) => sum + album.imageCount, 0),

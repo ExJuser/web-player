@@ -301,7 +301,7 @@ export function MosaicStudioSection({ albums, videos, onOpenAlbum, onOpenVideo }
     setSeed(project.recipe.seed);
     setPreviewUrl(project.previewUrl);
     setSelectedSource(null);
-    const missing = project.recipe.sourceIds.filter((id) => !sourceById.has(id)).length;
+    const missing = project.recipe.sourceIds.reduce((count, id) => count + (sourceById.has(id) ? 0 : 1), 0);
     setMessage(missing ? `作品中有 ${missing} 项素材已不可用，预览仍可查看，重新生成会自动跳过。` : "作品已恢复。");
   };
 

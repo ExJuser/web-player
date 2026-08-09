@@ -287,7 +287,6 @@ export function createMediaRootIdSet(roots: Array<{ id?: string }>) {
 
 export function filterVideosByHomeMediaMode<Video extends ModeVideoForUi>(
   videos: Video[],
-  mode: HomeMediaMode,
   mediaRootIds: ReadonlySet<string | undefined>,
 ) {
   return videos.filter((video) => Boolean(video.mediaRootId && mediaRootIds.has(video.mediaRootId)));
@@ -295,7 +294,6 @@ export function filterVideosByHomeMediaMode<Video extends ModeVideoForUi>(
 
 export function filterMediaRootStatusesByHomeMediaMode<Status extends MediaRootStatusWithIdForUi>(
   statuses: Status[],
-  mode: HomeMediaMode,
   mediaRootIds: ReadonlySet<string | undefined>,
 ) {
   return statuses.filter((status) => mediaRootIds.has(status.id));

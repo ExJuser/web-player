@@ -6,7 +6,7 @@ type PhotoRootStatusCardProps = {
 };
 
 export function PhotoRootStatusCard({ statuses }: PhotoRootStatusCardProps) {
-  const readyCount = statuses.filter((status) => status.status === "ready").length;
+  const readyCount = statuses.reduce((count, status) => count + (status.status === "ready" ? 1 : 0), 0);
 
   if (!statuses.some((status) => status.status !== "ready")) {
     return null;

@@ -603,8 +603,8 @@ export default function App() {
   const [tagExplorerInitialKey, setTagExplorerInitialKey] = useState<string | null>(null);
   const [tagExplorerThumbnailVideoIds, setTagExplorerThumbnailVideoIds] = useState<string[]>([]);
   const [tagPlaylistSelection, setTagPlaylistSelection] = useState<TagExplorerSelection | null>(null);
-  const [ratingFilterOperator, setRatingFilterOperator] = useState<RatingFilterOperator>("gt");
-  const [ratingFilterThreshold, setRatingFilterThreshold] = useState(8);
+  const ratingFilterOperator: RatingFilterOperator = "gt";
+  const ratingFilterThreshold = 8;
   const [ratingPlaylistMode, setRatingPlaylistMode] = useState<RatingPlaylistMode | null>(null);
   const [libraryId, setLibraryId] = useState<string | null>(null);
   const [currentVideoId, setCurrentVideoId] = useState<string | null>(
@@ -1333,8 +1333,8 @@ export default function App() {
     [homeModeMediaRoots],
   );
   const modeFilteredVideos = useMemo(
-    () => filterVideosByHomeMediaMode(videos, homeMediaMode, homeModeMediaRootIds),
-    [homeMediaMode, homeModeMediaRootIds, videos],
+    () => filterVideosByHomeMediaMode(videos, homeModeMediaRootIds),
+    [homeModeMediaRootIds, videos],
   );
   const currentDuplicateDetectionScopeKey = useMemo(
     () => homeMediaMode,
@@ -1348,8 +1348,8 @@ export default function App() {
     [duplicateVideoGroups, isDuplicateDetectionResultCurrent],
   );
   const modeFilteredMediaRootStatuses = useMemo(
-    () => filterMediaRootStatusesByHomeMediaMode(mediaRootStatuses, homeMediaMode, homeModeMediaRootIds),
-    [homeMediaMode, homeModeMediaRootIds, mediaRootStatuses],
+    () => filterMediaRootStatusesByHomeMediaMode(mediaRootStatuses, homeModeMediaRootIds),
+    [homeModeMediaRootIds, mediaRootStatuses],
   );
   const homeMediaModeLabel = getHomeMediaModeLabel(homeMediaMode);
   const playerMediaModeLabel = getPlayerMediaModeLabel(homeMediaMode);
@@ -1484,7 +1484,6 @@ export default function App() {
     allTags,
     applyTagMergeSuggestion,
     commonTags,
-    getAllLibraryTags,
     hasActorTagSuggestions,
     keepTagMergeSuggestion,
     recentTags,
@@ -1521,10 +1520,6 @@ export default function App() {
     videoTags,
     videoTagsRef,
   });
-  const currentVideoMediaRootLabel = useMemo(() => {
-    if (!currentVideo) return "";
-    return (currentVideo.mediaRootId ? mediaRootLabelsById[currentVideo.mediaRootId] : "") || fallbackMediaRootLabelForVideo(currentVideo);
-  }, [currentVideo, mediaRootLabelsById]);
   const seriesOptionsKey = useMemo(() => createSeriesOptionsKey(seriesOptions), [seriesOptions]);
   const currentSeriesKey = useMemo(
     () => getCurrentSeriesKey(currentVideo, seriesTitleByVideoId),
@@ -3801,34 +3796,6 @@ export default function App() {
     selectVideo(firstVideo.id, { keepVersionPlaylist: true, syncSeriesMode: false });
   }, [selectVideo, versionPlaylistVideos]);
 
-  const openRatingPlaylist = useCallback((
-    mode: RatingPlaylistMode = "numeric",
-    filterOperator = ratingFilterOperator,
-    filterThreshold = ratingFilterThreshold,
-  ) => {
-    if (!isRatingFilterEnabled) return;
-    const nextVideos =
-      mode === "unrated"
-        ? playlistVideos.filter((video) => typeof videoRatings[video.id] !== "number")
-        : playlistVideos.filter((video) => {
-            const rating = videoRatings[video.id];
-            if (typeof rating !== "number") return false;
-            if (filterOperator === "gt") return rating > filterThreshold;
-            if (filterOperator === "lt") return rating < filterThreshold;
-            return rating === filterThreshold;
-          });
-    const firstVideo = nextVideos[0];
-    if (!firstVideo) return;
-    setPlaylistPage(1);
-    setPlaylistSearchQuery("");
-    setTagPlaylistSelection(null);
-    setRatingPlaylistMode(mode);
-    setIsDuplicatePlaylistActive(false);
-    setPlaylistFilter("all");
-    setIsSeriesMenuOpen(false);
-    selectVideo(firstVideo.id, { keepRatingPlaylist: true, syncSeriesMode: false });
-  }, [isRatingFilterEnabled, playlistVideos, ratingFilterOperator, ratingFilterThreshold, selectVideo, videoRatings]);
-
   const openFavoritePlaylist = useCallback(() => {
     const firstVideo = favoriteHomeCards[0]?.video;
     if (!firstVideo) return;
@@ -4232,7 +4199,10 @@ export default function App() {
           status.id === album.mediaRootId
             ? {
                 ...status,
-                videoCount: nextAlbums.filter((item) => item.mediaRootId === album.mediaRootId).length,
+                videoCount: nextAlbums.reduce(
+                  (count, item) => count + (item.mediaRootId === album.mediaRootId ? 1 : 0),
+                  0,
+                ),
                 scannedFiles: Math.max(status.scannedFiles - 1, 0),
                 updatedAt: Date.now(),
               }
@@ -4400,7 +4370,10 @@ export default function App() {
           status.id === album.mediaRootId
             ? {
                 ...status,
-                videoCount: nextAlbums.filter((item) => item.mediaRootId === album.mediaRootId).length,
+                videoCount: nextAlbums.reduce(
+                  (count, item) => count + (item.mediaRootId === album.mediaRootId ? 1 : 0),
+                  0,
+                ),
                 scannedFiles: Math.max(status.scannedFiles - deletedImageCount, 0),
                 updatedAt: Date.now(),
               }

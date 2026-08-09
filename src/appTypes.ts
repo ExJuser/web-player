@@ -3,8 +3,6 @@ import type { LocalMediaRoot } from "./mediaRootScanCache";
 import type {
   DanmakuComment,
   DanmakuSource,
-  PlaybackProgress,
-  VideoItem,
   VideoMetadata,
   VideoPlayability,
 } from "./playerTypes";

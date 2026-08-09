@@ -261,8 +261,8 @@ test("home media mode helpers filter roots videos and statuses", () => {
   const animeRootIds = uiState.createMediaRootIdSet(animeRoots);
 
   assert.deepEqual(animeRoots, [mediaRoots[1]]);
-  assert.deepEqual(uiState.filterVideosByHomeMediaMode(videos, "anime", animeRootIds), [videos[1]]);
-  assert.deepEqual(uiState.filterMediaRootStatusesByHomeMediaMode(statuses, "anime", animeRootIds), [statuses[1]]);
+  assert.deepEqual(uiState.filterVideosByHomeMediaMode(videos, animeRootIds), [videos[1]]);
+  assert.deepEqual(uiState.filterMediaRootStatusesByHomeMediaMode(statuses, animeRootIds), [statuses[1]]);
 });
 
 test("library stats helper counts total progress and favorites", () => {

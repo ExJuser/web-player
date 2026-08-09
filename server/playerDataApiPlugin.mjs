@@ -410,7 +410,10 @@ async function writeDanmakuSource(record) {
     if (comment.sourceLanguage && comment.sourceLanguage !== selected) return selected === "unknown" ? comment.sourceLanguage : "mixed";
     return selected;
   }, "unknown");
-  const translatedCount = record.comments.filter((comment) => comment.simplifiedText && comment.simplifiedText !== comment.text).length;
+  const translatedCount = record.comments.reduce(
+    (count, comment) => count + (comment.simplifiedText && comment.simplifiedText !== comment.text ? 1 : 0),
+    0,
+  );
   const sourceBreakdown =
     record.sourceBreakdown ||
     [
