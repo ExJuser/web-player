@@ -1,6 +1,7 @@
 import { ArrowLeft, Clock3, Film, History, ImageMinus, ImagePlus, Pencil, Play, Rocket, Search, Shuffle, Upload, UserRound, Users } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
+import { filterAndSortActors, selectActorCoverVideo, type ActorSort } from "./actorDiscovery";
 import type { ActorInsight } from "./actorUtils";
 import { ControlSelect } from "./ControlSelect";
 import { DeleteConfirmDialog } from "./DeleteConfirmDialog";
@@ -17,8 +18,6 @@ const actorVideoPageSize = 12;
 const unresolvedPageSize = 24;
 const maxRecentActorCount = 96;
 const maxRecentCoverCount = 3;
-
-type ActorSort = "explore" | "name" | "count" | "recent" | "playCount" | "duration" | "emissionCount";
 
 type ActorDiscoveryState = {
   scope: string;
@@ -69,25 +68,6 @@ function readActorDiscoveryState(scope: string, dateKey: string): ActorDiscovery
   } catch {
     return fallback;
   }
-}
-
-function hashActorDiscoveryValue(value: string) {
-  let hash = 2166136261;
-  for (let index = 0; index < value.length; index += 1) {
-    hash ^= value.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
-  }
-  return hash >>> 0;
-}
-
-function selectActorCoverVideo(entry: ActorInsight, seed: string, recentVideoIds: string[]) {
-  const candidates = entry.videos.map(({ video }) => video);
-  if (candidates.length <= 1) return candidates[0] ?? entry.representativeVideo;
-  const unseenCandidates = candidates.filter((video) => !recentVideoIds.includes(video.id));
-  const candidatePool = unseenCandidates.length
-    ? unseenCandidates
-    : candidates.filter((video) => video.id !== recentVideoIds[0]);
-  return candidatePool[hashActorDiscoveryValue(`${seed}:${entry.actor.id}`) % candidatePool.length] ?? entry.representativeVideo;
 }
 
 function hasNamedVideoArtwork(video: VideoItem) {
@@ -204,37 +184,16 @@ export function ActorDashboardSection({
     setActorCoverAvailability((availability) => availability[actorId] === isAvailable ? availability : { ...availability, [actorId]: isAvailable });
   }, []);
 
-  const filteredActors = useMemo(() => {
-    const normalizedQuery = query.normalize("NFKC").trim().toLocaleLowerCase();
-    const matchingActors = actors.filter((entry) => !normalizedQuery || entry.actor.name.toLocaleLowerCase().includes(normalizedQuery) || entry.actor.aliases.some((alias) => alias.label.toLocaleLowerCase().includes(normalizedQuery)));
-    const maxVideoCount = Math.max(1, ...matchingActors.map((entry) => entry.videos.length));
-    const latestModified = Math.max(0, ...matchingActors.map((entry) => entry.latestModified));
-    const earliestModified = Math.min(latestModified, ...matchingActors.map((entry) => entry.latestModified));
-    const modifiedRange = Math.max(1, latestModified - earliestModified);
-    const recentActorIds = new Set(discoveryState.recentActorIds);
-    const discoverySeed = `${discoveryScope}:${discoveryDateKey}:${discoveryState.batch}`;
-    return matchingActors
-      .sort((a, b) => {
-        const nameComparison = a.actor.name.localeCompare(b.actor.name, undefined, { numeric: true, sensitivity: "base" });
-        const direction = sortDirection === "asc" ? 1 : -1;
-        if (sort === "explore") {
-          const getDiscoveryScore = (entry: ActorInsight) => {
-            const videoCountScore = Math.log1p(entry.videos.length) / Math.log1p(maxVideoCount);
-            const recencyScore = (entry.latestModified - earliestModified) / modifiedRange;
-            const unseenScore = recentActorIds.has(entry.actor.id) ? 0 : 1;
-            const randomScore = hashActorDiscoveryValue(`${discoverySeed}:${entry.actor.id}`) / 0xffffffff;
-            return videoCountScore * 0.4 + recencyScore * 0.25 + unseenScore * 0.2 + randomScore * 0.15;
-          };
-          return getDiscoveryScore(b) - getDiscoveryScore(a) || nameComparison;
-        }
-        if (sort === "name") return nameComparison * direction;
-        if (sort === "recent") return (a.latestModified - b.latestModified) * direction || nameComparison;
-        if (sort === "playCount") return (a.stats.playCount - b.stats.playCount) * direction || nameComparison;
-        if (sort === "duration") return (a.stats.totalPlayedSeconds - b.stats.totalPlayedSeconds) * direction || nameComparison;
-        if (sort === "emissionCount") return (a.stats.emissionCount - b.stats.emissionCount) * direction || nameComparison;
-        return (a.videos.length - b.videos.length) * direction || nameComparison;
-      });
-  }, [actors, discoveryDateKey, discoveryScope, discoveryState.batch, discoveryState.recentActorIds, query, sort, sortDirection]);
+  const filteredActors = useMemo(() => filterAndSortActors({
+    actors,
+    discoveryBatch: discoveryState.batch,
+    discoveryDateKey,
+    discoveryScope,
+    query,
+    recentActorIds: discoveryState.recentActorIds,
+    sort,
+    sortDirection,
+  }), [actors, discoveryDateKey, discoveryScope, discoveryState.batch, discoveryState.recentActorIds, query, sort, sortDirection]);
   const actorPageCount = Math.max(1, Math.ceil(filteredActors.length / actorPageSize));
   const unresolvedPageCount = Math.max(1, Math.ceil(unresolvedVideos.length / unresolvedPageSize));
   useEffect(() => setActorPage(1), [actorPageSize, discoveryState.batch, query, sort, sortDirection]);
