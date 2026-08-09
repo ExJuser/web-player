@@ -520,6 +520,7 @@ export default function App() {
   const photoObjectUrlAccessRef = useRef<Record<string, number>>({});
   const decodedPhotoImageIdsRef = useRef(new Set<string>());
   const photoImageFilePromisesRef = useRef<Record<string, Promise<File | null>>>({});
+  const photoViewerScrollDirectionRef = useRef<-1 | 0 | 1>(0);
   const photoAlbumHydrationPromisesRef = useRef(new Map<string, Promise<PhotoAlbum>>());
   const duplicateDetectionRunIdRef = useRef(0);
   const duplicateDetectionAbortRef = useRef<AbortController | null>(null);
@@ -2333,6 +2334,7 @@ export default function App() {
     photoObjectUrlsRef,
     selectedPhotoAlbum,
     setPhotoObjectUrls,
+    viewerScrollDirectionRef: photoViewerScrollDirectionRef,
   });
   useEffect(() => {
     setPhotoAlbumPage((page) => Math.min(Math.max(page, 1), photoAlbumPageCount));
@@ -6637,6 +6639,9 @@ export default function App() {
               onSelectImage={(image) => {
                 setCurrentPhotoIndex(image.index);
                 persistPhotoAlbumProgress(selectedPhotoAlbum, image.index, image.index === selectedPhotoAlbum.images.length - 1);
+              }}
+              onScrollDirectionChange={(direction) => {
+                photoViewerScrollDirectionRef.current = direction;
               }}
               onSetCover={setPhotoAlbumCover}
               onToggleFavorite={togglePhotoAlbumFavorite}

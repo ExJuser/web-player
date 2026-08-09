@@ -40,6 +40,7 @@ type PhotoViewerSectionProps = {
   onSingleFitModeChange: (fitMode: PhotoSingleFitMode) => void;
   onResetProgress: () => void;
   onSelectImage: (image: PhotoAlbumImage) => void;
+  onScrollDirectionChange: (direction: -1 | 0 | 1) => void;
   onSetCover: (album: PhotoAlbum, image: PhotoAlbumImage) => void;
   onToggleFavorite: (album: PhotoAlbum) => void;
 };
@@ -92,6 +93,7 @@ export function PhotoViewerSection({
   onSingleFitModeChange,
   onResetProgress,
   onSelectImage,
+  onScrollDirectionChange,
   onSetCover,
   onToggleFavorite,
 }: PhotoViewerSectionProps) {
@@ -178,6 +180,7 @@ export function PhotoViewerSection({
           getImageUrl={getImageUrl}
           key={album.id}
           onCurrentImageChange={onSelectImage}
+          onScrollDirectionChange={onScrollDirectionChange}
           zoom={zoom}
           onZoomChange={onZoomChange}
         />

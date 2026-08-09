@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   photoViewerDecodeRadius,
@@ -11,12 +11,15 @@ import type { ActiveView, FileSystemDirectoryHandle, PhotoAlbum, PhotoAlbumImage
 const photoViewerIdleWarmRadius = 2;
 const photoViewerDirectionalWarmBehind = 1;
 const photoViewerFileLoadConcurrency = 2;
+const photoViewerFastNavigationThresholdMs = 300;
+const photoViewerFastWarmExtra = 2;
 
-function getPhotoViewerWarmIndexes(currentIndex: number, imageCount: number, direction: -1 | 0 | 1) {
+function getPhotoViewerWarmIndexes(currentIndex: number, imageCount: number, direction: -1 | 0 | 1, isFastNavigation: boolean) {
+  const directionalWarmRadius = photoViewerWarmRadius + (isFastNavigation ? photoViewerFastWarmExtra : 0);
   const offsets = direction === 0
     ? Array.from({ length: photoViewerIdleWarmRadius }, (_, index) => index + 1).flatMap((offset) => [-offset, offset])
     : [
-        ...Array.from({ length: photoViewerWarmRadius }, (_, index) => (index + 1) * direction),
+        ...Array.from({ length: directionalWarmRadius }, (_, index) => (index + 1) * direction),
         ...Array.from({ length: photoViewerDirectionalWarmBehind }, (_, index) => -(index + 1) * direction),
       ];
   return [0, ...offsets]
@@ -24,10 +27,12 @@ function getPhotoViewerWarmIndexes(currentIndex: number, imageCount: number, dir
     .filter((index) => index >= 0 && index < imageCount);
 }
 
-function getPhotoViewerDecodeIndexes(currentIndex: number, imageCount: number, direction: -1 | 0 | 1) {
+function getPhotoViewerDecodeIndexes(currentIndex: number, imageCount: number, direction: -1 | 0 | 1, isFastNavigation: boolean) {
   const offsets = direction === 0
     ? Array.from({ length: photoViewerDecodeRadius }, (_, index) => index + 1).flatMap((offset) => [-offset, offset])
-    : [direction, direction * 2, -direction];
+    : isFastNavigation
+      ? [direction]
+      : [direction, direction * 2, -direction];
   return [0, ...offsets]
     .map((offset) => currentIndex + offset)
     .filter((index) => index >= 0 && index < imageCount);
@@ -50,6 +55,7 @@ type UsePhotoObjectUrlsParams = {
   photoObjectUrlsRef: MutableRef<Record<string, string>>;
   selectedPhotoAlbum: PhotoAlbum | null;
   setPhotoObjectUrls: (urls: Record<string, string>) => void;
+  viewerScrollDirectionRef: MutableRef<-1 | 0 | 1>;
 };
 
 export function usePhotoObjectUrls({
@@ -65,11 +71,27 @@ export function usePhotoObjectUrls({
   photoObjectUrlsRef,
   selectedPhotoAlbum,
   setPhotoObjectUrls,
+  viewerScrollDirectionRef,
 }: UsePhotoObjectUrlsParams) {
-  const viewerPositionRef = useRef<{ albumId: string; index: number; direction: -1 | 0 | 1 } | null>(null);
+  const viewerPositionRef = useRef<{
+    albumId: string;
+    averageStepMs: number;
+    direction: -1 | 0 | 1;
+    index: number;
+    timestamp: number;
+  } | null>(null);
   const viewerObjectUrlIdsRef = useRef<{ albumId: string; imageIds: Set<string> } | null>(null);
+  const loadRunIdRef = useRef(0);
+  const [isPageVisible, setIsPageVisible] = useState(() => document.visibilityState !== "hidden");
 
   useEffect(() => {
+    const handleVisibilityChange = () => setIsPageVisible(document.visibilityState !== "hidden");
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, []);
+
+  useEffect(() => {
+    const runId = ++loadRunIdRef.current;
     const neededImages = new Map<string, PhotoAlbumImage>();
     const directory = photoAlbumDirectoryRef.current;
     const rememberNeededImage = (image?: PhotoAlbumImage | null) => {
@@ -77,23 +99,43 @@ export function usePhotoObjectUrls({
     };
 
     if (activeView === "photos") {
-      pagedPhotoAlbums.forEach((album) => {
-        rememberNeededImage(album.images.find((image) => image.id === photoAlbumCoverPreferences[album.id]) ?? album.images[0]);
-      });
+      if (isPageVisible) {
+        pagedPhotoAlbums.forEach((album) => {
+          rememberNeededImage(album.images.find((image) => image.id === photoAlbumCoverPreferences[album.id]) ?? album.images[0]);
+        });
+      }
     } else if (activeView === "photoViewer" && selectedPhotoAlbum) {
       const previousPosition = viewerPositionRef.current;
       const indexDelta = previousPosition?.albumId === selectedPhotoAlbum.id
         ? currentPhotoIndex - previousPosition.index
         : 0;
-      const direction = indexDelta === 1
-        ? 1
-        : indexDelta === -1
-          ? -1
-          : indexDelta === 0 && previousPosition?.albumId === selectedPhotoAlbum.id
-            ? previousPosition.direction
-            : 0;
-      viewerPositionRef.current = { albumId: selectedPhotoAlbum.id, index: currentPhotoIndex, direction };
-      for (const index of getPhotoViewerWarmIndexes(currentPhotoIndex, selectedPhotoAlbum.images.length, direction)) {
+      const now = performance.now();
+      const stepMs = previousPosition?.albumId === selectedPhotoAlbum.id && indexDelta
+        ? (now - previousPosition.timestamp) / Math.abs(indexDelta)
+        : 0;
+      const averageStepMs = stepMs
+        ? previousPosition?.averageStepMs
+          ? previousPosition.averageStepMs * 0.65 + stepMs * 0.35
+          : stepMs
+        : previousPosition?.averageStepMs ?? 0;
+      const indexDirection: -1 | 0 | 1 = indexDelta > 0 ? 1 : indexDelta < 0 ? -1 : 0;
+      const direction: -1 | 0 | 1 = viewerScrollDirectionRef.current
+        || indexDirection
+        || (previousPosition?.albumId === selectedPhotoAlbum.id ? previousPosition.direction : 0);
+      const isFastNavigation = averageStepMs > 0 && averageStepMs < photoViewerFastNavigationThresholdMs;
+      viewerPositionRef.current = {
+        albumId: selectedPhotoAlbum.id,
+        averageStepMs,
+        direction,
+        index: currentPhotoIndex,
+        timestamp: indexDelta || previousPosition?.albumId !== selectedPhotoAlbum.id
+          ? now
+          : previousPosition.timestamp,
+      };
+      const warmIndexes = isPageVisible
+        ? getPhotoViewerWarmIndexes(currentPhotoIndex, selectedPhotoAlbum.images.length, direction, isFastNavigation)
+        : [currentPhotoIndex];
+      for (const index of warmIndexes) {
         rememberNeededImage(selectedPhotoAlbum.images[index]);
       }
     } else {
@@ -156,6 +198,7 @@ export function usePhotoObjectUrls({
     if (!directory || !missingImages.length) return;
 
     let isCancelled = false;
+    const isStaleRun = () => isCancelled || loadRunIdRef.current !== runId;
     const loadMissingImage = async (image: PhotoAlbumImage) => {
       let filePromise = photoImageFilePromisesRef.current[image.id];
       if (!filePromise) {
@@ -166,9 +209,9 @@ export function usePhotoObjectUrls({
       if (photoImageFilePromisesRef.current[image.id] === filePromise) {
         delete photoImageFilePromisesRef.current[image.id];
       }
-      if (isCancelled || !file || photoObjectUrlsRef.current[image.id]) return;
+      if (isStaleRun() || !file || photoObjectUrlsRef.current[image.id]) return;
       const url = URL.createObjectURL(file);
-      if (isCancelled) {
+      if (isStaleRun()) {
         URL.revokeObjectURL(url);
         return;
       }
@@ -188,7 +231,7 @@ export function usePhotoObjectUrls({
     const loadQueue = async () => {
       let nextIndex = 0;
       const worker = async () => {
-        while (!isCancelled && nextIndex < missingImages.length) {
+        while (!isStaleRun() && nextIndex < missingImages.length) {
           const image = missingImages[nextIndex];
           nextIndex += 1;
           await loadMissingImage(image);
@@ -214,17 +257,21 @@ export function usePhotoObjectUrls({
     photoImageFilePromisesRef,
     photoObjectUrlAccessRef,
     photoObjectUrlsRef,
+    isPageVisible,
     selectedPhotoAlbum,
     setPhotoObjectUrls,
+    viewerScrollDirectionRef,
   ]);
 
   useEffect(() => {
-    if (activeView !== "photoViewer" || !selectedPhotoAlbum) return;
+    if (activeView !== "photoViewer" || !selectedPhotoAlbum || !isPageVisible) return;
 
-    const direction = viewerPositionRef.current?.albumId === selectedPhotoAlbum.id
-      ? viewerPositionRef.current.direction
-      : 0;
-    for (const index of getPhotoViewerDecodeIndexes(currentPhotoIndex, selectedPhotoAlbum.images.length, direction)) {
+    const position = viewerPositionRef.current?.albumId === selectedPhotoAlbum.id
+      ? viewerPositionRef.current
+      : null;
+    const direction = position?.direction ?? 0;
+    const isFastNavigation = Boolean(position?.averageStepMs && position.averageStepMs < photoViewerFastNavigationThresholdMs);
+    for (const index of getPhotoViewerDecodeIndexes(currentPhotoIndex, selectedPhotoAlbum.images.length, direction, isFastNavigation)) {
       const image = selectedPhotoAlbum.images[index];
       const url = image?.url || photoObjectUrls[image?.id ?? ""];
       if (!image || !url || decodedPhotoImageIdsRef.current.has(image.id)) continue;
@@ -244,7 +291,7 @@ export function usePhotoObjectUrls({
         };
       }
     }
-  }, [activeView, currentPhotoIndex, decodedPhotoImageIdsRef, photoObjectUrls, selectedPhotoAlbum]);
+  }, [activeView, currentPhotoIndex, decodedPhotoImageIdsRef, isPageVisible, photoObjectUrls, selectedPhotoAlbum]);
 
   useEffect(() => {
     return () => {

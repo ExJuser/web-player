@@ -8,6 +8,7 @@ type PhotoContinuousReaderProps = {
   currentIndex: number;
   getImageUrl: (image: PhotoAlbumImage) => string;
   onCurrentImageChange: (image: PhotoAlbumImage) => void;
+  onScrollDirectionChange: (direction: -1 | 0 | 1) => void;
   zoom: number;
   onZoomChange: (zoom: number) => void;
 };
@@ -31,6 +32,7 @@ export function PhotoContinuousReader({
   currentIndex,
   getImageUrl,
   onCurrentImageChange,
+  onScrollDirectionChange,
   zoom,
   onZoomChange,
 }: PhotoContinuousReaderProps) {
@@ -39,16 +41,30 @@ export function PhotoContinuousReader({
   const visibleRatiosRef = useRef(new Map<number, number>());
   const currentIndexRef = useRef(currentIndex);
   const onCurrentImageChangeRef = useRef(onCurrentImageChange);
+  const onScrollDirectionChangeRef = useRef(onScrollDirectionChange);
   const viewportAnchorRef = useRef<ContinuousViewportAnchor | null>(null);
+  const lastScrollTopRef = useRef(0);
+  const scrollDirectionRef = useRef<-1 | 0 | 1>(0);
   const [loadedImageIds, setLoadedImageIds] = useState<Set<string>>(() => new Set());
   const [readingProgress, setReadingProgress] = useState(0);
 
   currentIndexRef.current = currentIndex;
   onCurrentImageChangeRef.current = onCurrentImageChange;
+  onScrollDirectionChangeRef.current = onScrollDirectionChange;
 
   const updateReadingProgress = () => {
     const container = containerRef.current;
     if (!container) return;
+    const nextDirection = container.scrollTop > lastScrollTopRef.current
+      ? 1
+      : container.scrollTop < lastScrollTopRef.current
+        ? -1
+        : scrollDirectionRef.current;
+    lastScrollTopRef.current = container.scrollTop;
+    if (nextDirection !== scrollDirectionRef.current) {
+      scrollDirectionRef.current = nextDirection;
+      onScrollDirectionChangeRef.current(nextDirection);
+    }
     const maxScrollTop = container.scrollHeight - container.clientHeight;
     const nextProgress = maxScrollTop <= 0 ? 100 : Math.round((container.scrollTop / maxScrollTop) * 100);
     setReadingProgress((progress) => progress === nextProgress ? progress : nextProgress);
@@ -63,6 +79,8 @@ export function PhotoContinuousReader({
   }, [album.id]);
 
   useEffect(() => setLoadedImageIds(new Set()), [album.id]);
+
+  useEffect(() => () => onScrollDirectionChangeRef.current(0), []);
 
   useLayoutEffect(() => {
     const container = containerRef.current;
