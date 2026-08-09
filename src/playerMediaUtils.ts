@@ -849,6 +849,42 @@ async function scanDuplicateMetadataCandidates(
   return { pairScores, nameSimilarityCandidates, fingerprintCandidatePairs, processedPairs };
 }
 
+type ContentFingerprintStageOptions = {
+  context: DuplicateDetectionContext;
+  signal?: AbortSignal;
+  getContentFingerprint?: DuplicateDetectionOptions["getContentFingerprint"];
+  maxFingerprintVideos: number;
+  yieldEveryPairs: number;
+  onStart: (totalFingerprints: number) => void;
+  onProgress: (processedFingerprints: number) => void;
+};
+
+async function processContentFingerprintStage(
+  candidatePairs: DuplicateFingerprintCandidate[],
+  pairScores: Map<string, DuplicateVideoPair>,
+  options: ContentFingerprintStageOptions,
+) {
+  if (!options.getContentFingerprint) return;
+  const fingerprintCandidates = selectDuplicateFingerprintCandidates(candidatePairs, options.maxFingerprintVideos);
+  if (fingerprintCandidates.length <= 1) return;
+
+  const fingerprintByVideoId = new Map<string, string>();
+  options.onStart(fingerprintCandidates.length);
+  let processedFingerprints = 0;
+  for (const video of fingerprintCandidates) {
+    if (options.signal?.aborted) throw new DOMException("Duplicate detection aborted.", "AbortError");
+    const fingerprint = await options.getContentFingerprint(video, options.signal);
+    processedFingerprints += 1;
+    if (fingerprint) fingerprintByVideoId.set(video.id, fingerprint);
+    options.onProgress(processedFingerprints);
+    if (processedFingerprints % Math.max(1, Math.floor(options.yieldEveryPairs / 20)) === 0) {
+      await yieldToBrowser();
+    }
+  }
+
+  mergeContentFingerprintMatches(fingerprintCandidates, fingerprintByVideoId, pairScores, options.context);
+}
+
 export async function detectDuplicateVideosWithProgress(
   videos: VideoItem[],
   options: DuplicateDetectionOptions = {},
@@ -893,30 +929,23 @@ export async function detectDuplicateVideosWithProgress(
   processedPairs = metadataScan.processedPairs;
   reportProgress(50);
 
-  if (options.getContentFingerprint) {
-    const maxFingerprintVideos = Math.max(0, options.maxFingerprintVideos ?? defaultMaxFingerprintVideos);
-    const fingerprintCandidates = selectDuplicateFingerprintCandidates(fingerprintCandidatePairs, maxFingerprintVideos);
-    if (fingerprintCandidates.length > 1) {
-      const fingerprintByVideoId = new Map<string, string>();
+  await processContentFingerprintStage(fingerprintCandidatePairs, pairScores, {
+    context: options,
+    signal: options.signal,
+    getContentFingerprint: options.getContentFingerprint,
+    maxFingerprintVideos: Math.max(0, options.maxFingerprintVideos ?? defaultMaxFingerprintVideos),
+    yieldEveryPairs,
+    onStart: (nextTotalFingerprints) => {
       phase = "fingerprint";
-      totalFingerprints = fingerprintCandidates.length;
+      totalFingerprints = nextTotalFingerprints;
       processedFingerprints = 0;
       reportProgress();
-
-      for (const video of fingerprintCandidates) {
-        if (options.signal?.aborted) throw new DOMException("Duplicate detection aborted.", "AbortError");
-        const fingerprint = await options.getContentFingerprint(video, options.signal);
-        processedFingerprints += 1;
-        if (fingerprint) fingerprintByVideoId.set(video.id, fingerprint);
-        reportProgress();
-        if (processedFingerprints % Math.max(1, Math.floor(yieldEveryPairs / 20)) === 0) {
-          await yieldToBrowser();
-        }
-      }
-
-      mergeContentFingerprintMatches(fingerprintCandidates, fingerprintByVideoId, pairScores, options);
-    }
-  }
+    },
+    onProgress: (nextProcessedFingerprints) => {
+      processedFingerprints = nextProcessedFingerprints;
+      reportProgress();
+    },
+  });
 
   if (options.getNameSimilarityScores && nameSimilarityCandidates.length) {
     const maxAiNamePairs = Math.max(0, options.maxAiNamePairs ?? defaultMaxAiNamePairs);

@@ -557,6 +557,34 @@ test("detects content-identical videos with different names from fingerprints", 
   assert.ok(groups[0].reasons.includes("内容指纹一致"));
 });
 
+test("reports fingerprint progress and stops before the next fingerprint after cancellation", async () => {
+  const controller = new AbortController();
+  const fingerprintUpdates = [];
+  let fingerprintCalls = 0;
+  const videos = [
+    createVideo({ id: "first", relativePath: "A/movie.mp4", size: 1000, duration: 1200 }),
+    createVideo({ id: "second", relativePath: "B/movie-copy.mp4", size: 1000, duration: 1200 }),
+  ];
+
+  await assert.rejects(
+    mediaUtils.detectDuplicateVideosWithProgress(videos, {
+      signal: controller.signal,
+      getContentFingerprint: async () => {
+        fingerprintCalls += 1;
+        controller.abort();
+        return "same";
+      },
+      onProgress: (progress) => {
+        if (progress.phase === "fingerprint") fingerprintUpdates.push(progress.processedFingerprints);
+      },
+    }),
+    (error) => error?.name === "AbortError",
+  );
+
+  assert.equal(fingerprintCalls, 1);
+  assert.deepEqual(fingerprintUpdates, [0, 1]);
+});
+
 test("selects fingerprint candidates by pair score and distinct-video limit", () => {
   const lowA = createVideo({ id: "low-a", relativePath: "Z/low-a.mp4" });
   const lowB = createVideo({ id: "low-b", relativePath: "Z/low-b.mp4" });
