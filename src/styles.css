@@ -3310,7 +3310,7 @@ button {
 
 .favorite-home-section .home-compact-list {
   grid-template-columns: none;
-  grid-auto-columns: clamp(280px, 32vw, 440px);
+  grid-auto-columns: calc(50% - 4px);
   grid-auto-flow: column;
   align-items: start;
   max-height: none;
@@ -11978,6 +11978,10 @@ button {
 
   .home-recent-section .home-list-grid {
     grid-template-columns: 1fr;
+  }
+
+  .favorite-home-section .home-compact-list {
+    grid-auto-columns: 100%;
   }
 
   .home-next-card {
