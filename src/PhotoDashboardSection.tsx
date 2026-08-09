@@ -20,6 +20,7 @@ type PhotoDashboardSectionProps = {
   pagedPhotoAlbums: PhotoAlbum[];
   photoRootStatuses: PlayerMediaRootStatus[];
   searchQuery: string;
+  searchResultCount: number;
   searchResults: PhotoAlbumSearchResult[];
   sortMode: PhotoAlbumSortMode;
   sortOptions: Array<{ value: PhotoAlbumSortMode; label: string }>;
@@ -62,6 +63,7 @@ export function PhotoDashboardSection({
   pagedPhotoAlbums,
   photoRootStatuses,
   searchQuery,
+  searchResultCount,
   searchResults,
   sortMode,
   sortOptions,
@@ -97,7 +99,7 @@ export function PhotoDashboardSection({
         randomDisabled={isLoading || !totalVisibleAlbums}
       />
 
-      <PhotoAlbumSearchRow query={searchQuery} resultCount={totalVisibleAlbums} results={searchResults} onChange={onSearchChange} onClear={onSearchClear} onSelect={onSelectSearchResult} />
+      <PhotoAlbumSearchRow query={searchQuery} resultCount={searchResultCount} results={searchResults} onChange={onSearchChange} onClear={onSearchClear} onSelect={onSelectSearchResult} />
 
       <PhotoAlbumStats stats={stats} />
 

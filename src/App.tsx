@@ -2173,18 +2173,21 @@ export default function App() {
     setPhotoAlbumTags,
   });
   const visiblePhotoAlbums = useMemo(
-    () => getVisiblePhotoAlbums({ albums: photoAlbums, favoriteAlbumIds: favoritePhotoAlbumIds, filter: photoAlbumFilter, searchQuery: photoAlbumSearchQuery, sortMode: photoAlbumSortMode, albumTags: photoAlbumTags }),
-    [favoritePhotoAlbumIds, photoAlbumFilter, photoAlbumSearchQuery, photoAlbumSortMode, photoAlbumTags, photoAlbums],
+    () => getVisiblePhotoAlbums({ albums: photoAlbums, favoriteAlbumIds: favoritePhotoAlbumIds, filter: photoAlbumFilter, searchQuery: "", sortMode: photoAlbumSortMode, albumTags: photoAlbumTags }),
+    [favoritePhotoAlbumIds, photoAlbumFilter, photoAlbumSortMode, photoAlbumTags, photoAlbums],
   );
   const { pageCount: photoAlbumPageCount, start: photoAlbumPageStart, end: photoAlbumPageEnd } = getPhotoAlbumPageBounds(visiblePhotoAlbums.length, photoAlbumPage, photoAlbumPageSize);
   const pagedPhotoAlbums = useMemo(
     () => getPagedPhotoAlbums(visiblePhotoAlbums, photoAlbumPage, photoAlbumPageSize),
     [photoAlbumPage, visiblePhotoAlbums],
   );
-  const photoAlbumSearchResults = useMemo(
-    () => photoAlbumSearchQuery.trim() ? visiblePhotoAlbums.slice(0, 8) : [],
-    [photoAlbumSearchQuery, visiblePhotoAlbums],
+  const matchedPhotoAlbums = useMemo(
+    () => photoAlbumSearchQuery.trim()
+      ? getVisiblePhotoAlbums({ albums: photoAlbums, favoriteAlbumIds: favoritePhotoAlbumIds, filter: photoAlbumFilter, searchQuery: photoAlbumSearchQuery, sortMode: photoAlbumSortMode, albumTags: photoAlbumTags })
+      : [],
+    [favoritePhotoAlbumIds, photoAlbumFilter, photoAlbumSearchQuery, photoAlbumSortMode, photoAlbumTags, photoAlbums],
   );
+  const photoAlbumSearchResults = useMemo(() => matchedPhotoAlbums.slice(0, 8), [matchedPhotoAlbums]);
   const photoAlbumCoverAlbums = useMemo(
     () => Array.from(new Map([...pagedPhotoAlbums, ...photoAlbumSearchResults].map((album) => [album.id, album])).values()),
     [pagedPhotoAlbums, photoAlbumSearchResults],
@@ -6448,11 +6451,12 @@ export default function App() {
               pagedPhotoAlbums={pagedPhotoAlbums}
               photoRootStatuses={photoRootStatuses}
               searchQuery={photoAlbumSearchQuery}
+              searchResultCount={matchedPhotoAlbums.length}
               searchResults={photoAlbumSearchResults.map((album) => {
-                const preferredCover = album.images.find((image) => image.id === photoAlbumCoverPreferences[album.id]) ?? album.images[0];
+                const preferredCover = album.images.find((image) => image.id === photoAlbumCoverPreferences[album.id]) ?? null;
                 return {
                   album,
-                  coverImageUrl: getPhotoImageUrl(preferredCover) || album.coverImageUrl,
+                  coverImageUrl: getPhotoImageUrl(preferredCover) || album.coverImageUrl || getPhotoImageUrl(album.images[0]),
                   tags: photoAlbumTags[album.id] ?? [],
                 };
               })}
