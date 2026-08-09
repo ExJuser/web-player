@@ -3312,7 +3312,7 @@ button {
   grid-template-columns: none;
   grid-auto-columns: calc(50% - 4px);
   grid-auto-flow: column;
-  align-items: start;
+  align-items: stretch;
   max-height: none;
   overflow-x: auto;
   overflow-y: hidden;
