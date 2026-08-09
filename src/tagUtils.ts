@@ -229,6 +229,42 @@ export function mergeTags(existingTags: string[], incomingTags: string[]) {
   return nextTags;
 }
 
+export function createTagAdditionPlan({
+  allTags,
+  existingVideoTags,
+  incomingTags,
+  isKnownActorName,
+  mergeDecisions,
+  skipPrompt = false,
+}: {
+  allTags: string[];
+  existingVideoTags: string[];
+  incomingTags: string[];
+  isKnownActorName: (name: string) => boolean;
+  mergeDecisions: TagMergeDecisionStore;
+  skipPrompt?: boolean;
+}) {
+  const parsedIncomingTags = parseTagInput(incomingTags.join(" "));
+  if (!parsedIncomingTags.length) return { status: "empty" as const };
+
+  const { resolvedTags, unmatchedTags } = splitTagsByExistingMatch(parsedIncomingTags, allTags);
+  const unmatchedMergeTags = unmatchedTags.filter((tag) => !isKnownActorName(tag));
+  const offlineSuggestion = skipPrompt
+    ? null
+    : unmatchedMergeTags
+      .map((tag) => findTagMergeSuggestion(tag, allTags, mergeDecisions))
+      .find((item): item is TagMergeSuggestion => Boolean(item)) ?? null;
+  const existingTagKeys = new Set(existingVideoTags.map(normalizeTagKey));
+  return {
+    status: "ready" as const,
+    addedTags: resolvedTags.filter((tag) => !existingTagKeys.has(normalizeTagKey(tag))),
+    nextTags: mergeTags(existingVideoTags, resolvedTags),
+    offlineSuggestion,
+    resolvedTags,
+    unmatchedMergeTags,
+  };
+}
+
 export function doTagsSatisfyAllFilters(tags: string[], filters: string[]) {
   const filterKeys = filters.map(normalizeTagKey).filter(Boolean);
   if (!filterKeys.length) return true;

@@ -87,6 +87,50 @@ test("creates tag input suggestions from existing video tags", () => {
   );
 });
 
+test("creates a tag addition plan with normalized matches and actor exclusions", () => {
+  const plan = tagUtils.createTagAdditionPlan({
+    allTags: ["AI字幕", "长镜头"],
+    existingVideoTags: ["剧情", "AI字幕"],
+    incomingTags: ["ＡＩ-字幕", "Star", "长镜头感"],
+    isKnownActorName: (name) => name === "Star",
+    mergeDecisions: {},
+  });
+
+  assert.equal(plan.status, "ready");
+  assert.deepEqual(plan.resolvedTags, ["AI字幕", "Star", "长镜头感"]);
+  assert.deepEqual(plan.unmatchedMergeTags, ["长镜头感"]);
+  assert.deepEqual(plan.offlineSuggestion, {
+    newTag: "长镜头感",
+    existingTag: "长镜头",
+    reason: "相似标签",
+    score: 0.75,
+  });
+  assert.deepEqual(plan.nextTags, ["剧情", "AI字幕", "Star", "长镜头感"]);
+  assert.deepEqual(plan.addedTags, ["Star", "长镜头感"]);
+});
+
+test("tag addition plans handle empty input and skipped prompts", () => {
+  assert.deepEqual(tagUtils.createTagAdditionPlan({
+    allTags: [],
+    existingVideoTags: [],
+    incomingTags: ["  "],
+    isKnownActorName: () => false,
+    mergeDecisions: {},
+  }), { status: "empty" });
+
+  const plan = tagUtils.createTagAdditionPlan({
+    allTags: ["长镜头"],
+    existingVideoTags: [],
+    incomingTags: ["长镜头感"],
+    isKnownActorName: () => false,
+    mergeDecisions: {},
+    skipPrompt: true,
+  });
+  assert.equal(plan.status, "ready");
+  assert.equal(plan.offlineSuggestion, null);
+  assert.deepEqual(plan.nextTags, ["长镜头感"]);
+});
+
 test("sorts tag input suggestions by match quality, usage, and label", () => {
   assert.deepEqual(
     tagUtils.createTagInputSuggestions({

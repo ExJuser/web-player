@@ -9,14 +9,11 @@ import {
   createTagInputSuggestions,
   createTagSearchIndex,
   createAvailableTagViews,
+  createTagAdditionPlan,
   createTagPairKey,
-  findTagMergeSuggestion,
   getActiveTagInputSegment,
-  mergeTags,
   normalizeTagKey,
   parseTagInput,
-  splitTagsByExistingMatch,
-  type TagMergeSuggestion,
 } from "./tagUtils";
 
 type UseVideoTagControllerOptions = {
@@ -181,23 +178,27 @@ export function useVideoTagController({
     options?: { skipActorMatch?: boolean; skipPrompt?: boolean; markAsActor?: boolean },
   ) => {
     if (!currentVideo) return;
+    const { markAsActor, skipActorMatch = false, skipPrompt = false } = options ?? {};
     const existingVideoTags = videoTagsRef.current[currentVideo.id] ?? [];
     const allTags = getAllLibraryTags();
-    const incomingTags = parseTagInput(tags.join(" "));
-    if (!incomingTags.length) {
+    const plan = createTagAdditionPlan({
+      allTags,
+      existingVideoTags,
+      incomingTags: tags,
+      isKnownActorName,
+      mergeDecisions: tagMergeDecisionsRef.current,
+      skipPrompt,
+    });
+    if (plan.status === "empty") {
       setTagMessage("请输入至少一个标签。");
       return;
     }
 
-    const { resolvedTags, unmatchedTags } = splitTagsByExistingMatch(incomingTags, allTags);
-    const unmatchedMergeTags = unmatchedTags.filter((tag) => !isKnownActorName(tag));
+    const { addedTags, nextTags, offlineSuggestion, resolvedTags, unmatchedMergeTags } = plan;
 
-    if (!options?.skipPrompt && unmatchedMergeTags.length) {
-      const suggestion = unmatchedMergeTags
-        .map((tag) => findTagMergeSuggestion(tag, allTags, tagMergeDecisionsRef.current))
-        .find((item): item is TagMergeSuggestion => Boolean(item));
-      if (suggestion) {
-        setTagMergePrompt({ pendingTags: resolvedTags, suggestion, markAsActor: options?.markAsActor });
+    if (!skipPrompt && unmatchedMergeTags.length) {
+      if (offlineSuggestion) {
+        setTagMergePrompt({ pendingTags: resolvedTags, suggestion: offlineSuggestion, markAsActor });
         setTagMessage("");
         return;
       }
@@ -218,7 +219,7 @@ export function useVideoTagController({
                 reason: "相似标签",
                 score: 0.86,
               },
-              markAsActor: options?.markAsActor,
+              markAsActor,
             });
             setTagMessage(aiSuggestion.reason || "");
             return;
@@ -231,9 +232,6 @@ export function useVideoTagController({
       }
     }
 
-    const nextTags = mergeTags(existingVideoTags, resolvedTags);
-    const existingTagKeys = new Set(existingVideoTags.map(normalizeTagKey));
-    const addedTags = resolvedTags.filter((tag) => !existingTagKeys.has(normalizeTagKey(tag)));
     const nextVideoTags = {
       ...videoTagsRef.current,
       [currentVideo.id]: nextTags,
@@ -241,7 +239,7 @@ export function useVideoTagController({
     const didSave = await replaceVideoTags(nextVideoTags, `已保存 ${nextTags.length} 个标签。`);
     if (!didSave) return;
     recordRecentVideoTags(addedTags);
-    if (!options?.skipActorMatch) onMarkActorTags(resolvedTags, options?.markAsActor);
+    if (!skipActorMatch) onMarkActorTags(resolvedTags, markAsActor);
     setTagInput("");
     setTagMergePrompt(null);
   }, [
