@@ -127,3 +127,35 @@ test("collects actors only from a same-basename browser nfo", async () => {
     URL.createObjectURL = originalCreateObjectUrl;
   }
 });
+
+test("ignores unreadable artwork and marks an unreadable matching nfo invalid", async () => {
+  const originalCreateObjectUrl = URL.createObjectURL;
+  URL.createObjectURL = (file) => `blob:${file.name}`;
+  const createUnreadableEntry = (name) => ({
+    kind: "file",
+    name,
+    async getFile() {
+      throw new Error("unreadable");
+    },
+  });
+
+  try {
+    const directory = createDirectoryEntry("Root", [
+      createFileEntry("Movie.mp4", { size: 100 * 1024 * 1024, lastModified: 10 }),
+      createUnreadableEntry("movie-poster.jpg"),
+      createUnreadableEntry("movie.nfo"),
+    ]);
+    const batches = [];
+
+    for await (const batch of browserMediaScan.collectVideos(directory, "root-a")) batches.push(batch);
+
+    assert.equal(batches[0].videos[0].posterFile, undefined);
+    assert.deepEqual(batches[0].videos[0].actorHints, {
+      fileName: "movie.nfo",
+      names: [],
+      status: "invalid",
+    });
+  } finally {
+    URL.createObjectURL = originalCreateObjectUrl;
+  }
+});

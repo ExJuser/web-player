@@ -54,6 +54,98 @@ export async function browserVideoFileExists(parentDirectory: FileSystemDirector
   }
 }
 
+type BrowserMediaFileContext = {
+  directory: FileSystemDirectoryHandle;
+  segments: string[];
+  rootId?: string | null;
+  fileEntryNames: string[];
+  fileEntriesByName: Map<string, FileSystemFileHandle>;
+  findMatchingNfoName: ReturnType<typeof createMatchingNfoNameLookup>;
+};
+
+type BrowserMediaFileResult =
+  | { kind: "ignored" }
+  | { kind: "filteredVideo" }
+  | { kind: "video"; video: VideoItem }
+  | { kind: "subtitle"; subtitle: SubtitleItem };
+
+async function readOptionalBrowserFile(entry: FileSystemFileHandle | undefined) {
+  if (!entry) return undefined;
+  try {
+    return await entry.getFile();
+  } catch {
+    return undefined;
+  }
+}
+
+async function createBrowserDirectoryVideo(
+  entry: FileSystemFileHandle,
+  file: File,
+  context: BrowserMediaFileContext,
+) {
+  const relativePath = [...context.segments, entry.name].join("/");
+  const video: VideoItem = {
+    id: context.rootId ? createGlobalVideoId(context.rootId, relativePath, file) : createLegacyVideoId(relativePath, file),
+    name: entry.name,
+    relativePath,
+    file,
+    url: URL.createObjectURL(file),
+    size: file.size,
+    lastModified: file.lastModified,
+    parentDirectory: context.directory,
+    playbackSource: "browser",
+  };
+
+  const posterName = findVideoPosterName(entry.name, context.fileEntryNames);
+  const posterFile = await readOptionalBrowserFile(posterName ? context.fileEntriesByName.get(posterName) : undefined);
+  if (posterFile) video.posterFile = posterFile;
+  const fanartName = findVideoArtworkName(entry.name, context.fileEntryNames, "fanart");
+  const fanartFile = await readOptionalBrowserFile(fanartName ? context.fileEntriesByName.get(fanartName) : undefined);
+  if (fanartFile) video.fanartFile = fanartFile;
+  const thumbName = findVideoArtworkName(entry.name, context.fileEntryNames, "thumb");
+  const thumbFile = await readOptionalBrowserFile(thumbName ? context.fileEntriesByName.get(thumbName) : undefined);
+  if (thumbFile) video.thumbFile = thumbFile;
+
+  const nfoName = context.findMatchingNfoName(entry.name);
+  const nfoEntry = nfoName ? context.fileEntriesByName.get(nfoName) : undefined;
+  if (nfoEntry) {
+    try {
+      const nfoFile = await nfoEntry.getFile();
+      video.actorHints = nfoFile.size > maxActorNfoBytes
+        ? { fileName: nfoName ?? nfoEntry.name, names: [], status: "tooLarge" }
+        : parseActorNfoBytes(await nfoFile.arrayBuffer(), nfoName ?? nfoEntry.name);
+    } catch {
+      video.actorHints = { fileName: nfoName ?? nfoEntry.name, names: [], status: "invalid" };
+    }
+  }
+  return video;
+}
+
+async function readBrowserMediaFile(
+  entry: FileSystemFileHandle,
+  context: BrowserMediaFileContext,
+): Promise<BrowserMediaFileResult> {
+  if (isVideoFile(entry.name)) {
+    const file = await entry.getFile();
+    if (shouldFilterLocalVideoFile(entry.name, file.size)) return { kind: "filteredVideo" };
+    return { kind: "video", video: await createBrowserDirectoryVideo(entry, file, context) };
+  }
+  if (!isSubtitleFile(entry.name)) return { kind: "ignored" };
+  const file = await entry.getFile();
+  const relativePath = [...context.segments, entry.name].join("/");
+  return {
+    kind: "subtitle",
+    subtitle: {
+      id: context.rootId ? createGlobalVideoId(context.rootId, relativePath, file) : createLegacyVideoId(relativePath, file),
+      name: entry.name,
+      relativePath,
+      file,
+      url: "",
+      mediaRootId: context.rootId ?? undefined,
+    },
+  };
+}
+
 export async function* collectVideos(
   directory: FileSystemDirectoryHandle,
   rootId?: string | null,
@@ -84,79 +176,23 @@ export async function* collectVideos(
     const fileEntryNames = fileEntries.map((entry) => entry.name);
     const fileEntriesByName = new Map(fileEntries.map((entry) => [entry.name, entry]));
     const findMatchingNfoName = createMatchingNfoNameLookup(fileEntryNames);
+    const context = { directory: handle, segments, rootId, fileEntryNames, fileEntriesByName, findMatchingNfoName };
 
     for (const entry of entries) {
       if (entry.kind === "directory") {
         yield* walk(entry, [...segments, entry.name]);
-      } else if (isVideoFile(entry.name)) {
-        scannedFiles += 1;
-        const file = await entry.getFile();
-        if (shouldFilterLocalVideoFile(entry.name, file.size)) {
+      } else {
+        const result = await readBrowserMediaFile(entry, context);
+        if (result.kind === "filteredVideo") {
+          scannedFiles += 1;
           filteredSmallVideos += 1;
-        } else {
-          const relativePath = [...segments, entry.name].join("/");
-          const video: VideoItem = {
-            id: rootId ? createGlobalVideoId(rootId, relativePath, file) : createLegacyVideoId(relativePath, file),
-            name: entry.name,
-            relativePath,
-            file,
-            url: URL.createObjectURL(file),
-            size: file.size,
-            lastModified: file.lastModified,
-            parentDirectory: handle,
-            playbackSource: "browser",
-          };
-          const posterName = findVideoPosterName(entry.name, fileEntryNames);
-          const posterEntry = posterName ? fileEntriesByName.get(posterName) : undefined;
-          if (posterEntry) {
-            try {
-              video.posterFile = await posterEntry.getFile();
-            } catch {
-              // Fall back to the generated thumbnail when the poster cannot be read.
-            }
-          }
-          const fanartName = findVideoArtworkName(entry.name, fileEntryNames, "fanart");
-          const thumbName = findVideoArtworkName(entry.name, fileEntryNames, "thumb");
-          if (fanartName) {
-            try {
-              video.fanartFile = await fileEntriesByName.get(fanartName)?.getFile();
-            } catch {
-              // Unreadable alternatives are ignored.
-            }
-          }
-          if (thumbName) {
-            try {
-              video.thumbFile = await fileEntriesByName.get(thumbName)?.getFile();
-            } catch {
-              // Unreadable alternatives are ignored.
-            }
-          }
-          const nfoName = findMatchingNfoName(entry.name);
-          const nfoEntry = nfoName ? fileEntriesByName.get(nfoName) : undefined;
-          if (nfoEntry) {
-            try {
-              const nfoFile = await nfoEntry.getFile();
-              video.actorHints = nfoFile.size > maxActorNfoBytes
-                ? { fileName: nfoName ?? nfoEntry.name, names: [], status: "tooLarge" }
-                : parseActorNfoBytes(await nfoFile.arrayBuffer(), nfoName ?? nfoEntry.name);
-            } catch {
-              video.actorHints = { fileName: nfoName ?? nfoEntry.name, names: [], status: "invalid" };
-            }
-          }
-          pendingVideos.push(video);
+        } else if (result.kind === "video") {
+          scannedFiles += 1;
+          pendingVideos.push(result.video);
+        } else if (result.kind === "subtitle") {
+          scannedFiles += 1;
+          pendingSubtitles.push(result.subtitle);
         }
-      } else if (isSubtitleFile(entry.name)) {
-        scannedFiles += 1;
-        const file = await entry.getFile();
-        const relativePath = [...segments, entry.name].join("/");
-        pendingSubtitles.push({
-          id: rootId ? createGlobalVideoId(rootId, relativePath, file) : createLegacyVideoId(relativePath, file),
-          name: entry.name,
-          relativePath,
-          file,
-          url: "",
-          mediaRootId: rootId ?? undefined,
-        });
       }
 
       if (shouldFlushMediaScan(lastFlushAt, pendingVideos, pendingSubtitles)) {
