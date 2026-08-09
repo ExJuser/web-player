@@ -5,6 +5,7 @@ import type {
   FileSystemDirectoryHandle,
   PhotoAlbum,
   PhotoAlbumProgress,
+  PhotoAlbumReadingMode,
   PhotoAlbumSortDirection,
   PhotoAlbumSortMode,
   PhotoAlbumStore,
@@ -18,6 +19,7 @@ type UsePhotoAlbumRuntimeOptions = {
   photoAlbumFilter: PhotoAlbumViewFilterValue;
   photoAlbumProgress: Record<string, PhotoAlbumProgress>;
   photoAlbums: PhotoAlbum[];
+  photoAlbumReadingMode: PhotoAlbumReadingMode;
   photoAlbumSortDirection: PhotoAlbumSortDirection;
   photoAlbumSortMode: PhotoAlbumSortMode;
   photoAlbumTags: Record<string, string[]>;
@@ -25,6 +27,7 @@ type UsePhotoAlbumRuntimeOptions = {
   setPhotoAlbumCoverPreferences: Dispatch<SetStateAction<Record<string, string>>>;
   setPhotoAlbumFilter: Dispatch<SetStateAction<PhotoAlbumViewFilterValue>>;
   setPhotoAlbumProgress: Dispatch<SetStateAction<Record<string, PhotoAlbumProgress>>>;
+  setPhotoAlbumReadingMode: Dispatch<SetStateAction<PhotoAlbumReadingMode>>;
   setPhotoAlbumSortDirection: Dispatch<SetStateAction<PhotoAlbumSortDirection>>;
   setPhotoAlbumSortMode: Dispatch<SetStateAction<PhotoAlbumSortMode>>;
   setPhotoAlbumTags: Dispatch<SetStateAction<Record<string, string[]>>>;
@@ -36,6 +39,7 @@ export function usePhotoAlbumRuntime({
   photoAlbumFilter,
   photoAlbumProgress,
   photoAlbums,
+  photoAlbumReadingMode,
   photoAlbumSortDirection,
   photoAlbumSortMode,
   photoAlbumTags,
@@ -43,6 +47,7 @@ export function usePhotoAlbumRuntime({
   setPhotoAlbumCoverPreferences,
   setPhotoAlbumFilter,
   setPhotoAlbumProgress,
+  setPhotoAlbumReadingMode,
   setPhotoAlbumSortDirection,
   setPhotoAlbumSortMode,
   setPhotoAlbumTags,
@@ -63,6 +68,7 @@ export function usePhotoAlbumRuntime({
   photoAlbumPreferencesRef.current = {
     sortMode: photoAlbumSortMode,
     sortDirection: photoAlbumSortDirection,
+    readingMode: photoAlbumReadingMode,
     favoritesOnly: photoAlbumFilter === "favorites",
     recentTags: photoAlbumPreferencesRef.current.recentTags,
     tagMergeDecisions: photoAlbumPreferencesRef.current.tagMergeDecisions,
@@ -99,6 +105,7 @@ export function usePhotoAlbumRuntime({
     setPhotoAlbumProgress(store.progress);
     setPhotoAlbumCoverPreferences(store.coverImageByAlbumId);
     setPhotoAlbumTags(store.albumTags);
+    setPhotoAlbumReadingMode(store.preferences.readingMode);
     setPhotoAlbumSortDirection(store.preferences.sortDirection);
     setPhotoAlbumSortMode(store.preferences.sortMode);
     setPhotoAlbumFilter(store.preferences.favoritesOnly ? "favorites" : "all");
@@ -107,6 +114,7 @@ export function usePhotoAlbumRuntime({
     setPhotoAlbumCoverPreferences,
     setPhotoAlbumFilter,
     setPhotoAlbumProgress,
+    setPhotoAlbumReadingMode,
     setPhotoAlbumSortDirection,
     setPhotoAlbumSortMode,
     setPhotoAlbumTags,

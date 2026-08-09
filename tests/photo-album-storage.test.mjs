@@ -29,6 +29,7 @@ test("missing photo album store fields fall back to defaults", () => {
   assert.deepEqual(parsed.preferences, {
     sortMode: "updated",
     sortDirection: "desc",
+    readingMode: "single",
     favoritesOnly: false,
     recentTags: [],
     tagMergeDecisions: {},
@@ -59,6 +60,7 @@ test("photo album store keeps valid favorites, progress, preferences, and tags",
     preferences: {
       sortMode: "count",
       sortDirection: "asc",
+      readingMode: "continuous",
       favoritesOnly: true,
     },
   }));
@@ -71,6 +73,7 @@ test("photo album store keeps valid favorites, progress, preferences, and tags",
   assert.deepEqual(parsed.preferences, {
     sortMode: "count",
     sortDirection: "asc",
+    readingMode: "continuous",
     favoritesOnly: true,
     recentTags: [],
     tagMergeDecisions: {},
@@ -100,9 +103,6 @@ test("photo album display helpers keep sort labels and progress text", () => {
   assert.equal(storage.formatPhotoAlbumProgress(album, { [album.id]: { imageIndex: 2, updatedAt: 10, completed: false } }), "看到 3 / 5");
   assert.equal(storage.formatPhotoAlbumProgress(album, { [album.id]: { imageIndex: 9, updatedAt: 10, completed: false } }), "看到 5 / 5");
   assert.equal(storage.formatPhotoAlbumProgress(album, { [album.id]: { imageIndex: 4, updatedAt: 10, completed: true } }), "已读完");
-  assert.equal(storage.shouldUseContinuousPhotoReader(["旅行", "漫画"]), true);
-  assert.equal(storage.shouldUseContinuousPhotoReader([" 本 子 "]), true);
-  assert.equal(storage.shouldUseContinuousPhotoReader(["旅行", "人像"]), false);
 });
 
 test("photo album display helpers filter sort paginate and summarize albums", () => {

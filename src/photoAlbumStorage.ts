@@ -18,16 +18,11 @@ export const photoAlbumSortDirectionOptions: Array<{ value: PhotoAlbumSortDirect
 export const defaultPhotoAlbumPreferences: PhotoAlbumPreferences = {
   sortMode: "updated",
   sortDirection: "desc",
+  readingMode: "single",
   favoritesOnly: false,
   recentTags: [],
   tagMergeDecisions: {},
 };
-
-const continuousPhotoReaderTagKeys = new Set(["本子", "漫画"].map(normalizeTagKey));
-
-export function shouldUseContinuousPhotoReader(tags: string[]) {
-  return tags.some((tag) => continuousPhotoReaderTagKeys.has(normalizeTagKey(tag)));
-}
 
 export function formatPhotoAlbumProgress(album: PhotoAlbum, progressStore: Record<string, PhotoAlbumProgress>) {
   const progress = progressStore[album.id];
@@ -192,6 +187,10 @@ export function parsePhotoAlbumPreferences(source: unknown): PhotoAlbumPreferenc
       preferences.sortDirection === "asc" || preferences.sortDirection === "desc"
         ? preferences.sortDirection
         : defaultPhotoAlbumPreferences.sortDirection,
+    readingMode:
+      preferences.readingMode === "continuous" || preferences.readingMode === "single"
+        ? preferences.readingMode
+        : defaultPhotoAlbumPreferences.readingMode,
     favoritesOnly:
       typeof preferences.favoritesOnly === "boolean"
         ? preferences.favoritesOnly

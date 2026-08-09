@@ -7,6 +7,7 @@ type PhotoViewerHeaderProps = {
   album: PhotoAlbum;
   currentPhoto: PhotoAlbumImage | null;
   isCoverCurrent: boolean;
+  isContinuousReading: boolean;
   isFavorite: boolean;
   onBack: () => void;
   onDeleteAlbum: (album: PhotoAlbum) => void;
@@ -14,6 +15,7 @@ type PhotoViewerHeaderProps = {
   onEditTags: (album: PhotoAlbum) => void;
   onEnterImmersive: () => void;
   onMarkCompleted: () => void;
+  onReadingModeChange: (isContinuous: boolean) => void;
   onResetProgress: () => void;
   onSetCover: (album: PhotoAlbum, image: PhotoAlbumImage) => void;
   onToggleFavorite: (album: PhotoAlbum) => void;
@@ -23,6 +25,7 @@ export function PhotoViewerHeader({
   album,
   currentPhoto,
   isCoverCurrent,
+  isContinuousReading,
   isFavorite,
   onBack,
   onDeleteAlbum,
@@ -30,6 +33,7 @@ export function PhotoViewerHeader({
   onEditTags,
   onEnterImmersive,
   onMarkCompleted,
+  onReadingModeChange,
   onResetProgress,
   onSetCover,
   onToggleFavorite,
@@ -65,6 +69,10 @@ export function PhotoViewerHeader({
         <button className="secondary-button" type="button" onClick={onEnterImmersive}>
           <Maximize2 size={16} />
           沉浸阅读
+        </button>
+        <button className="secondary-button" type="button" onClick={() => onReadingModeChange(!isContinuousReading)}>
+          <Images size={16} />
+          {isContinuousReading ? "单页阅读" : "竖向阅读"}
         </button>
       </div>
       <div className="photo-viewer-actions">

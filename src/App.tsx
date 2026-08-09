@@ -108,6 +108,7 @@ import type {
   PhotoAlbum,
   PhotoAlbumImage,
   PhotoAlbumProgress,
+  PhotoAlbumReadingMode,
   PhotoAlbumSortDirection,
   PhotoAlbumSortMode,
   PlaylistFilter,
@@ -151,7 +152,6 @@ import {
   photoAlbumSortOptions,
   replaceCachedPhotoAlbumScanAlbum,
   saveCachedPhotoAlbumScan,
-  shouldUseContinuousPhotoReader,
 } from "./photoAlbumStorage";
 import {
   PROGRESS_FILE_NAME,
@@ -626,6 +626,7 @@ export default function App() {
   const [photoAlbumCoverPreferences, setPhotoAlbumCoverPreferences] = useState<Record<string, string>>({});
   const [photoAlbumTags, setPhotoAlbumTags] = useState<Record<string, string[]>>({});
   const [favoritePhotoAlbumIds, setFavoritePhotoAlbumIds] = useState<Set<string>>(() => new Set());
+  const [photoAlbumReadingMode, setPhotoAlbumReadingMode] = useState<PhotoAlbumReadingMode>(defaultPhotoAlbumPreferences.readingMode);
   const [photoAlbumSortDirection, setPhotoAlbumSortDirection] = useState<PhotoAlbumSortDirection>(defaultPhotoAlbumPreferences.sortDirection);
   const [photoAlbumSortMode, setPhotoAlbumSortMode] = useState<PhotoAlbumSortMode>(defaultPhotoAlbumPreferences.sortMode);
   const [photoAlbumFilter, setPhotoAlbumFilter] = useState<PhotoAlbumViewFilter>(
@@ -653,6 +654,7 @@ export default function App() {
     photoAlbumFilter,
     photoAlbumProgress,
     photoAlbums,
+    photoAlbumReadingMode,
     photoAlbumSortDirection,
     photoAlbumSortMode,
     photoAlbumTags,
@@ -660,6 +662,7 @@ export default function App() {
     setPhotoAlbumCoverPreferences,
     setPhotoAlbumFilter,
     setPhotoAlbumProgress,
+    setPhotoAlbumReadingMode,
     setPhotoAlbumSortDirection,
     setPhotoAlbumSortMode,
     setPhotoAlbumTags,
@@ -2147,9 +2150,16 @@ export default function App() {
     () => photoAlbums.find((album) => album.id === selectedPhotoAlbumId) ?? null,
     [photoAlbums, selectedPhotoAlbumId],
   );
-  const isPhotoContinuousReading = Boolean(
-    selectedPhotoAlbum && shouldUseContinuousPhotoReader(photoAlbumTags[selectedPhotoAlbum.id] ?? []),
-  );
+  const isPhotoContinuousReading = photoAlbumReadingMode === "continuous";
+  const updatePhotoAlbumReadingMode = useCallback((isContinuous: boolean) => {
+    const readingMode: PhotoAlbumReadingMode = isContinuous ? "continuous" : "single";
+    const nextPreferences = { ...photoAlbumPreferencesRef.current, readingMode };
+    photoAlbumPreferencesRef.current = nextPreferences;
+    setPhotoAlbumReadingMode(readingMode);
+    void saveCurrentPhotoAlbumStore({ preferences: nextPreferences }).catch(() => {
+      setPhotoAlbumMessage("阅读模式保存失败。");
+    });
+  }, [photoAlbumPreferencesRef, saveCurrentPhotoAlbumStore]);
   const {
     activeSuggestionIndex: photoAlbumTagSuggestionIndex,
     addTags: addTagsToPhotoAlbum,
@@ -6513,6 +6523,7 @@ export default function App() {
               onImmersiveChange={setIsPhotoImmersive}
               onMarkCompleted={markSelectedPhotoAlbumCompleted}
               onMove={movePhoto}
+              onReadingModeChange={updatePhotoAlbumReadingMode}
               onResetProgress={resetSelectedPhotoAlbumProgress}
               onSelectImage={(image) => {
                 setCurrentPhotoIndex(image.index);

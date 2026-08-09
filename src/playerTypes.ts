@@ -480,10 +480,12 @@ export type PhotoAlbumProgress = {
 
 export type PhotoAlbumSortMode = "updated" | "folderModified" | "name" | "count";
 export type PhotoAlbumSortDirection = "asc" | "desc";
+export type PhotoAlbumReadingMode = "single" | "continuous";
 
 export type PhotoAlbumPreferences = {
   sortMode: PhotoAlbumSortMode;
   sortDirection: PhotoAlbumSortDirection;
+  readingMode: PhotoAlbumReadingMode;
   favoritesOnly: boolean;
   recentTags: RecentVideoTag[];
   tagMergeDecisions: TagMergeDecisionStore;
