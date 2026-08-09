@@ -668,6 +668,36 @@ test("continues with local results when AI name scoring fails", async () => {
   assert.equal(groups[0].severity, "suspicious");
 });
 
+test("reports AI name progress and stops before the next batch after cancellation", async () => {
+  const controller = new AbortController();
+  const aiUpdates = [];
+  let aiCalls = 0;
+  const videos = [
+    createVideo({ id: "first", name: "Alpha.mkv", relativePath: "A/Alpha.mkv", size: 1000, duration: 1200 }),
+    createVideo({ id: "second", name: "Beta.mkv", relativePath: "B/Beta.mkv", size: 1000, duration: 1200 }),
+    createVideo({ id: "third", name: "Gamma.mkv", relativePath: "C/Gamma.mkv", size: 1000, duration: 1200 }),
+  ];
+
+  await assert.rejects(
+    mediaUtils.detectDuplicateVideosWithProgress(videos, {
+      signal: controller.signal,
+      aiNameBatchSize: 1,
+      getNameSimilarityScores: async () => {
+        aiCalls += 1;
+        controller.abort();
+        return new Map();
+      },
+      onProgress: (progress) => {
+        if (progress.phase === "aiName") aiUpdates.push(progress.processedNamePairs);
+      },
+    }),
+    (error) => error?.name === "AbortError",
+  );
+
+  assert.equal(aiCalls, 1);
+  assert.deepEqual(aiUpdates, [0, 1]);
+});
+
 test("rebuilds duplicate groups from remaining pair edges", () => {
   const first = createVideo({ id: "first", name: "A.mkv", relativePath: "A.mkv", size: 1000 });
   const bridge = createVideo({ id: "bridge", name: "B.mkv", relativePath: "B.mkv", size: 1000 });

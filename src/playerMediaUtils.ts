@@ -885,6 +885,48 @@ async function processContentFingerprintStage(
   mergeContentFingerprintMatches(fingerprintCandidates, fingerprintByVideoId, pairScores, options.context);
 }
 
+type NameSimilarityStageOptions = {
+  signal?: AbortSignal;
+  getNameSimilarityScores?: DuplicateDetectionOptions["getNameSimilarityScores"];
+  onNameSimilarityError?: DuplicateDetectionOptions["onNameSimilarityError"];
+  maxAiNamePairs?: number;
+  batchSize?: number;
+  onStart: (totalNamePairs: number) => void;
+  onProgress: (processedNamePairs: number) => void;
+};
+
+async function processNameSimilarityStage(
+  candidates: DuplicateNameSimilarityCandidate[],
+  pairScores: Map<string, DuplicateVideoPair>,
+  options: NameSimilarityStageOptions,
+) {
+  if (!options.getNameSimilarityScores || !candidates.length) return;
+  const maxAiNamePairs = Math.max(0, options.maxAiNamePairs ?? defaultMaxAiNamePairs);
+  const batchSize = Math.max(1, Math.min(defaultAiNameBatchSize, options.batchSize ?? defaultAiNameBatchSize));
+  const selectedCandidates = selectDuplicateNameSimilarityCandidates(candidates, pairScores, maxAiNamePairs);
+  if (!selectedCandidates.length) return;
+
+  options.onStart(selectedCandidates.length);
+  let processedNamePairs = 0;
+  for (let offset = 0; offset < selectedCandidates.length; offset += batchSize) {
+    if (options.signal?.aborted) throw new DOMException("Duplicate detection aborted.", "AbortError");
+    const batchCandidates = selectedCandidates.slice(offset, offset + batchSize);
+    const pairs = batchCandidates.map((candidate, index) =>
+      createDuplicateNameSimilarityPair(`pair-${offset + index + 1}`, candidate.a, candidate.b, candidate.pair.score),
+    );
+    let similarityScores: Map<string, number>;
+    try {
+      similarityScores = await options.getNameSimilarityScores(pairs, options.signal);
+    } catch (error) {
+      options.onNameSimilarityError?.(error);
+      break;
+    }
+    processedNamePairs += batchCandidates.length;
+    options.onProgress(processedNamePairs);
+    applyDuplicateNameSimilarityScores(batchCandidates, pairs, similarityScores, pairScores);
+  }
+}
+
 export async function detectDuplicateVideosWithProgress(
   videos: VideoItem[],
   options: DuplicateDetectionOptions = {},
@@ -947,34 +989,23 @@ export async function detectDuplicateVideosWithProgress(
     },
   });
 
-  if (options.getNameSimilarityScores && nameSimilarityCandidates.length) {
-    const maxAiNamePairs = Math.max(0, options.maxAiNamePairs ?? defaultMaxAiNamePairs);
-    const aiNameBatchSize = Math.max(1, Math.min(defaultAiNameBatchSize, options.aiNameBatchSize ?? defaultAiNameBatchSize));
-    const selectedCandidates = selectDuplicateNameSimilarityCandidates(nameSimilarityCandidates, pairScores, maxAiNamePairs);
-    if (selectedCandidates.length) {
+  await processNameSimilarityStage(nameSimilarityCandidates, pairScores, {
+    signal: options.signal,
+    getNameSimilarityScores: options.getNameSimilarityScores,
+    onNameSimilarityError: options.onNameSimilarityError,
+    maxAiNamePairs: options.maxAiNamePairs,
+    batchSize: options.aiNameBatchSize,
+    onStart: (nextTotalNamePairs) => {
       phase = "aiName";
-      totalNamePairs = selectedCandidates.length;
+      totalNamePairs = nextTotalNamePairs;
       processedNamePairs = 0;
       reportProgress();
-      for (let offset = 0; offset < selectedCandidates.length; offset += aiNameBatchSize) {
-        if (options.signal?.aborted) throw new DOMException("Duplicate detection aborted.", "AbortError");
-        const batchCandidates = selectedCandidates.slice(offset, offset + aiNameBatchSize);
-        const pairs = batchCandidates.map((candidate, index) =>
-          createDuplicateNameSimilarityPair(`pair-${offset + index + 1}`, candidate.a, candidate.b, candidate.pair.score),
-        );
-        let similarityScores: Map<string, number>;
-        try {
-          similarityScores = await options.getNameSimilarityScores(pairs, options.signal);
-        } catch (error) {
-          options.onNameSimilarityError?.(error);
-          break;
-        }
-        processedNamePairs += batchCandidates.length;
-        reportProgress();
-        applyDuplicateNameSimilarityScores(batchCandidates, pairs, similarityScores, pairScores);
-      }
-    }
-  }
+    },
+    onProgress: (nextProcessedNamePairs) => {
+      processedNamePairs = nextProcessedNamePairs;
+      reportProgress();
+    },
+  });
 
   reportProgress(100);
   return buildDuplicateVideoGroups(videos, pairScores);
