@@ -56,14 +56,14 @@ test("assignment finalization is deterministic, avoids neighbors, and respects r
 
 test("project target is guaranteed to appear once when it belongs to the source pool", () => {
   const assignments = engine.finalizeMosaicAssignments({
-    candidates: [[0], [0], [0], [0]],
+    candidates: [[0]],
     sourceIds: ["regular", "recursive-target"],
-    columns: 2,
+    columns: 1,
     maxReuse: 99,
     seed: 7,
     guaranteedSourceId: "recursive-target",
   });
-  assert.ok(assignments.includes("recursive-target"));
+  assert.deepEqual(assignments, ["recursive-target"]);
 });
 
 test("assignment finalization broadens exhausted candidates without breaking the reuse cap", () => {
@@ -76,6 +76,23 @@ test("assignment finalization broadens exhausted candidates without breaking the
   });
   assert.equal(assignments.filter((value) => value === "a").length, 2);
   assert.equal(assignments.filter((value) => value === "b").length, 2);
+});
+
+test("assignment finalization uses the global source pool when local candidates are empty", () => {
+  const assignments = engine.finalizeMosaicAssignments({
+    candidates: [[], [], [], []],
+    sourceIds: ["a", "b", "c", "d"],
+    columns: 2,
+    maxReuse: 1,
+    seed: 11,
+  });
+
+  assert.equal(assignments.includes(""), false);
+  assert.equal(new Set(assignments).size, 4);
+  assert.notEqual(assignments[0], assignments[1]);
+  assert.notEqual(assignments[0], assignments[2]);
+  assert.notEqual(assignments[1], assignments[3]);
+  assert.notEqual(assignments[2], assignments[3]);
 });
 
 test("GPU candidate matching selects the Worker fallback when WebGPU is unavailable", async () => {

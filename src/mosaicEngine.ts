@@ -79,6 +79,51 @@ function seededUnit(seed: number, index: number) {
   return (value >>> 0) / 0x100000000;
 }
 
+function getMosaicNeighborAssignments(assignments: readonly number[], cellIndex: number, columns: number) {
+  return {
+    left: cellIndex % columns ? assignments[cellIndex - 1] : -1,
+    above: cellIndex >= columns ? assignments[cellIndex - columns] : -1,
+  };
+}
+
+function createMosaicAssignmentPool(input: {
+  candidates: readonly number[];
+  sourceCount: number;
+  counts: ReadonlyMap<number, number>;
+  left?: number;
+  above?: number;
+  maxReuse: number;
+}) {
+  const canUse = (sourceIndex: number) => sourceIndex >= 0 && (input.counts.get(sourceIndex) ?? 0) < input.maxReuse;
+  const available = input.candidates.filter(
+    (sourceIndex) => canUse(sourceIndex) && sourceIndex !== input.left && sourceIndex !== input.above,
+  );
+  if (available.length) return available;
+
+  const globalFallback = Array.from({ length: input.sourceCount }, (_, sourceIndex) => sourceIndex)
+    .filter((sourceIndex) => sourceIndex !== input.left && sourceIndex !== input.above && canUse(sourceIndex))
+    .sort((leftIndex, rightIndex) => (input.counts.get(leftIndex) ?? 0) - (input.counts.get(rightIndex) ?? 0))
+    .slice(0, mosaicCandidateCount);
+  return globalFallback.length ? globalFallback : input.candidates.filter(canUse);
+}
+
+function applyGuaranteedMosaicAssignment(input: {
+  assignments: number[];
+  sourceIds: readonly string[];
+  columns: number;
+  guaranteedSourceId?: string;
+}) {
+  if (!input.guaranteedSourceId) return;
+  const guaranteedIndex = input.sourceIds.indexOf(input.guaranteedSourceId);
+  if (guaranteedIndex < 0 || input.assignments.includes(guaranteedIndex) || !input.assignments.length) return;
+
+  const replaceIndex = input.assignments.findIndex((assignment, index) => {
+    const { left, above } = getMosaicNeighborAssignments(input.assignments, index, input.columns);
+    return assignment !== guaranteedIndex && left !== guaranteedIndex && above !== guaranteedIndex;
+  });
+  input.assignments[Math.max(replaceIndex, 0)] = guaranteedIndex;
+}
+
 export function finalizeMosaicAssignments(input: {
   candidates: readonly (readonly number[])[];
   sourceIds: readonly string[];
@@ -90,39 +135,26 @@ export function finalizeMosaicAssignments(input: {
   const counts = new Map<number, number>();
   const assignments: number[] = [];
   input.candidates.forEach((candidates, cellIndex) => {
-    const left = cellIndex % input.columns ? assignments[cellIndex - 1] : -1;
-    const above = cellIndex >= input.columns ? assignments[cellIndex - input.columns] : -1;
-    const available = candidates.filter((candidate) =>
-      candidate >= 0
-      && candidate !== left
-      && candidate !== above
-      && (counts.get(candidate) ?? 0) < input.maxReuse);
-    const relaxed = candidates.filter((candidate) => candidate >= 0 && (counts.get(candidate) ?? 0) < input.maxReuse);
-    let pool = available;
-    if (!pool.length) {
-      const globalFallback = input.sourceIds
-        .map((_, sourceIndex) => sourceIndex)
-        .filter((sourceIndex) => sourceIndex !== left && sourceIndex !== above && (counts.get(sourceIndex) ?? 0) < input.maxReuse)
-        .sort((leftIndex, rightIndex) => (counts.get(leftIndex) ?? 0) - (counts.get(rightIndex) ?? 0))
-        .slice(0, mosaicCandidateCount);
-      pool = globalFallback.length ? globalFallback : relaxed;
-    }
+    const { left, above } = getMosaicNeighborAssignments(assignments, cellIndex, input.columns);
+    const pool = createMosaicAssignmentPool({
+      candidates,
+      sourceCount: input.sourceIds.length,
+      counts,
+      left,
+      above,
+      maxReuse: input.maxReuse,
+    });
     const choice = pool.length ? pool[Math.floor(seededUnit(input.seed, cellIndex) * pool.length)] : -1;
     assignments.push(choice);
     if (choice >= 0) counts.set(choice, (counts.get(choice) ?? 0) + 1);
   });
 
-  if (input.guaranteedSourceId) {
-    const guaranteedIndex = input.sourceIds.indexOf(input.guaranteedSourceId);
-    if (guaranteedIndex >= 0 && !assignments.includes(guaranteedIndex) && assignments.length) {
-      const replaceIndex = assignments.findIndex((assignment, index) => {
-        const left = index % input.columns ? assignments[index - 1] : -1;
-        const above = index >= input.columns ? assignments[index - input.columns] : -1;
-        return assignment !== guaranteedIndex && left !== guaranteedIndex && above !== guaranteedIndex;
-      });
-      assignments[Math.max(replaceIndex, 0)] = guaranteedIndex;
-    }
-  }
+  applyGuaranteedMosaicAssignment({
+    assignments,
+    sourceIds: input.sourceIds,
+    columns: input.columns,
+    guaranteedSourceId: input.guaranteedSourceId,
+  });
 
   return assignments.map((sourceIndex) => input.sourceIds[sourceIndex] ?? "");
 }
