@@ -1491,7 +1491,7 @@ button {
 
 .home-primary-column {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   grid-auto-rows: max-content;
   align-content: start;
   align-items: start;
@@ -3303,18 +3303,32 @@ button {
 .favorite-home-section,
 .home-recent-section {
   align-content: start;
+  width: 100%;
+  max-height: none;
+  overflow: visible;
 }
 
-.favorite-home-section,
-.home-recent-section {
-  max-height: min(560px, calc(100vh - 160px));
-  min-height: 0;
-  overflow: hidden;
+.favorite-home-section .home-compact-list {
+  grid-template-columns: none;
+  grid-auto-columns: clamp(280px, 32vw, 440px);
+  grid-auto-flow: column;
+  align-items: start;
+  max-height: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0 0 6px;
+  scroll-snap-type: x proximity;
 }
 
-.favorite-home-section .home-compact-list,
+.favorite-home-section .home-list-card {
+  scroll-snap-align: start;
+}
+
 .home-recent-section .home-list-grid {
-  max-height: min(560px, calc(100vh - 160px));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-height: none;
+  overflow: visible;
+  padding-right: 0;
 }
 
 .favorite-home-more {
@@ -11959,6 +11973,10 @@ button {
   }
 
   .home-list-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .home-recent-section .home-list-grid {
     grid-template-columns: 1fr;
   }
 
