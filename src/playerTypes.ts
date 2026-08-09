@@ -481,11 +481,16 @@ export type PhotoAlbumProgress = {
 export type PhotoAlbumSortMode = "updated" | "folderModified" | "name" | "count";
 export type PhotoAlbumSortDirection = "asc" | "desc";
 export type PhotoAlbumReadingMode = "single" | "continuous";
+export type PhotoReaderBackground = "black" | "dark" | "light" | "white" | "sepia";
+export type PhotoContinuousPageGap = "none" | "narrow" | "normal" | "wide";
 
 export type PhotoAlbumPreferences = {
   sortMode: PhotoAlbumSortMode;
   sortDirection: PhotoAlbumSortDirection;
   readingMode: PhotoAlbumReadingMode;
+  singleReaderBackground: PhotoReaderBackground;
+  continuousReaderBackground: PhotoReaderBackground;
+  continuousPageGap: PhotoContinuousPageGap;
   favoritesOnly: boolean;
   recentTags: RecentVideoTag[];
   tagMergeDecisions: TagMergeDecisionStore;

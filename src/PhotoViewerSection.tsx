@@ -4,7 +4,7 @@ import { PhotoContinuousReader } from "./PhotoContinuousReader";
 import { PhotoViewerFilmstrip } from "./PhotoViewerFilmstrip";
 import { PhotoViewerHeader } from "./PhotoViewerHeader";
 import { PhotoViewerStage } from "./PhotoViewerStage";
-import type { PhotoAlbum, PhotoAlbumImage } from "./playerTypes";
+import type { PhotoAlbum, PhotoAlbumImage, PhotoContinuousPageGap, PhotoReaderBackground } from "./playerTypes";
 
 type PhotoViewerSectionProps = {
   album: PhotoAlbum;
@@ -15,6 +15,8 @@ type PhotoViewerSectionProps = {
   isFavorite: boolean;
   isContinuousReading: boolean;
   isImmersive: boolean;
+  pageGap: PhotoContinuousPageGap;
+  readerBackground: PhotoReaderBackground;
   hasNextAlbum: boolean;
   hasPreviousAlbum: boolean;
   thumbnails: PhotoAlbumImage[];
@@ -28,6 +30,8 @@ type PhotoViewerSectionProps = {
   onMoveAlbum: (delta: number) => void;
   onMove: (delta: number) => void;
   onReadingModeChange: (isContinuous: boolean) => void;
+  onPageGapChange: (pageGap: PhotoContinuousPageGap) => void;
+  onReaderBackgroundChange: (background: PhotoReaderBackground) => void;
   onResetProgress: () => void;
   onSelectImage: (image: PhotoAlbumImage) => void;
   onSetCover: (album: PhotoAlbum, image: PhotoAlbumImage) => void;
@@ -43,6 +47,8 @@ export function PhotoViewerSection({
   isFavorite,
   isContinuousReading,
   isImmersive,
+  pageGap,
+  readerBackground,
   hasNextAlbum,
   hasPreviousAlbum,
   thumbnails,
@@ -56,13 +62,18 @@ export function PhotoViewerSection({
   onMoveAlbum,
   onMove,
   onReadingModeChange,
+  onPageGapChange,
+  onReaderBackgroundChange,
   onResetProgress,
   onSelectImage,
   onSetCover,
   onToggleFavorite,
 }: PhotoViewerSectionProps) {
   return (
-    <section className={`photo-viewer ${isImmersive ? "immersive" : ""}`} aria-label={`阅读 ${album.title}`}>
+    <section
+      className={`photo-viewer reader-background-${readerBackground} page-gap-${pageGap} ${isImmersive ? "immersive" : ""}`}
+      aria-label={`阅读 ${album.title}`}
+    >
       {!isImmersive ? (
         <PhotoViewerHeader
           album={album}
@@ -80,6 +91,10 @@ export function PhotoViewerSection({
           onMarkCompleted={onMarkCompleted}
           onMoveAlbum={onMoveAlbum}
           onReadingModeChange={onReadingModeChange}
+          onPageGapChange={onPageGapChange}
+          onReaderBackgroundChange={onReaderBackgroundChange}
+          pageGap={pageGap}
+          readerBackground={readerBackground}
           onResetProgress={onResetProgress}
           onSetCover={onSetCover}
           onToggleFavorite={onToggleFavorite}

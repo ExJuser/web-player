@@ -19,6 +19,9 @@ export const defaultPhotoAlbumPreferences: PhotoAlbumPreferences = {
   sortMode: "updated",
   sortDirection: "desc",
   readingMode: "single",
+  singleReaderBackground: "dark",
+  continuousReaderBackground: "dark",
+  continuousPageGap: "normal",
   favoritesOnly: false,
   recentTags: [],
   tagMergeDecisions: {},
@@ -191,6 +194,29 @@ export function parsePhotoAlbumPreferences(source: unknown): PhotoAlbumPreferenc
       preferences.readingMode === "continuous" || preferences.readingMode === "single"
         ? preferences.readingMode
         : defaultPhotoAlbumPreferences.readingMode,
+    singleReaderBackground:
+      preferences.singleReaderBackground === "black" ||
+      preferences.singleReaderBackground === "light" ||
+      preferences.singleReaderBackground === "white" ||
+      preferences.singleReaderBackground === "sepia" ||
+      preferences.singleReaderBackground === "dark"
+        ? preferences.singleReaderBackground
+        : defaultPhotoAlbumPreferences.singleReaderBackground,
+    continuousReaderBackground:
+      preferences.continuousReaderBackground === "black" ||
+      preferences.continuousReaderBackground === "light" ||
+      preferences.continuousReaderBackground === "white" ||
+      preferences.continuousReaderBackground === "sepia" ||
+      preferences.continuousReaderBackground === "dark"
+        ? preferences.continuousReaderBackground
+        : defaultPhotoAlbumPreferences.continuousReaderBackground,
+    continuousPageGap:
+      preferences.continuousPageGap === "none" ||
+      preferences.continuousPageGap === "narrow" ||
+      preferences.continuousPageGap === "wide" ||
+      preferences.continuousPageGap === "normal"
+        ? preferences.continuousPageGap
+        : defaultPhotoAlbumPreferences.continuousPageGap,
     favoritesOnly:
       typeof preferences.favoritesOnly === "boolean"
         ? preferences.favoritesOnly

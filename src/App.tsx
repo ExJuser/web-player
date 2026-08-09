@@ -109,6 +109,8 @@ import type {
   PhotoAlbumImage,
   PhotoAlbumProgress,
   PhotoAlbumReadingMode,
+  PhotoContinuousPageGap,
+  PhotoReaderBackground,
   PhotoAlbumSortDirection,
   PhotoAlbumSortMode,
   PlaylistFilter,
@@ -628,6 +630,9 @@ export default function App() {
   const [photoAlbumTags, setPhotoAlbumTags] = useState<Record<string, string[]>>({});
   const [favoritePhotoAlbumIds, setFavoritePhotoAlbumIds] = useState<Set<string>>(() => new Set());
   const [photoAlbumReadingMode, setPhotoAlbumReadingMode] = useState<PhotoAlbumReadingMode>(defaultPhotoAlbumPreferences.readingMode);
+  const [photoSingleReaderBackground, setPhotoSingleReaderBackground] = useState<PhotoReaderBackground>(defaultPhotoAlbumPreferences.singleReaderBackground);
+  const [photoContinuousReaderBackground, setPhotoContinuousReaderBackground] = useState<PhotoReaderBackground>(defaultPhotoAlbumPreferences.continuousReaderBackground);
+  const [photoContinuousPageGap, setPhotoContinuousPageGap] = useState<PhotoContinuousPageGap>(defaultPhotoAlbumPreferences.continuousPageGap);
   const [photoAlbumSortDirection, setPhotoAlbumSortDirection] = useState<PhotoAlbumSortDirection>(defaultPhotoAlbumPreferences.sortDirection);
   const [photoAlbumSortMode, setPhotoAlbumSortMode] = useState<PhotoAlbumSortMode>(defaultPhotoAlbumPreferences.sortMode);
   const [photoAlbumFilter, setPhotoAlbumFilter] = useState<PhotoAlbumViewFilter>(
@@ -657,6 +662,9 @@ export default function App() {
     photoAlbumProgress,
     photoAlbums,
     photoAlbumReadingMode,
+    photoContinuousPageGap,
+    photoContinuousReaderBackground,
+    photoSingleReaderBackground,
     photoAlbumSortDirection,
     photoAlbumSortMode,
     photoAlbumTags,
@@ -665,6 +673,9 @@ export default function App() {
     setPhotoAlbumFilter,
     setPhotoAlbumProgress,
     setPhotoAlbumReadingMode,
+    setPhotoContinuousPageGap,
+    setPhotoContinuousReaderBackground,
+    setPhotoSingleReaderBackground,
     setPhotoAlbumSortDirection,
     setPhotoAlbumSortMode,
     setPhotoAlbumTags,
@@ -2155,6 +2166,26 @@ export default function App() {
     setPhotoAlbumReadingMode(readingMode);
     void saveCurrentPhotoAlbumStore({ preferences: nextPreferences }).catch(() => {
       setPhotoAlbumMessage("阅读模式保存失败。");
+    });
+  }, [photoAlbumPreferencesRef, saveCurrentPhotoAlbumStore]);
+  const updatePhotoReaderBackground = useCallback((background: PhotoReaderBackground) => {
+    const backgroundKey = photoAlbumReadingMode === "continuous"
+      ? "continuousReaderBackground"
+      : "singleReaderBackground";
+    const nextPreferences = { ...photoAlbumPreferencesRef.current, [backgroundKey]: background };
+    photoAlbumPreferencesRef.current = nextPreferences;
+    if (photoAlbumReadingMode === "continuous") setPhotoContinuousReaderBackground(background);
+    else setPhotoSingleReaderBackground(background);
+    void saveCurrentPhotoAlbumStore({ preferences: nextPreferences }).catch(() => {
+      setPhotoAlbumMessage("阅读背景保存失败。");
+    });
+  }, [photoAlbumPreferencesRef, photoAlbumReadingMode, saveCurrentPhotoAlbumStore]);
+  const updatePhotoContinuousPageGap = useCallback((pageGap: PhotoContinuousPageGap) => {
+    const nextPreferences = { ...photoAlbumPreferencesRef.current, continuousPageGap: pageGap };
+    photoAlbumPreferencesRef.current = nextPreferences;
+    setPhotoContinuousPageGap(pageGap);
+    void saveCurrentPhotoAlbumStore({ preferences: nextPreferences }).catch(() => {
+      setPhotoAlbumMessage("图片间距保存失败。");
     });
   }, [photoAlbumPreferencesRef, saveCurrentPhotoAlbumStore]);
   const {
@@ -6526,6 +6557,8 @@ export default function App() {
               isContinuousReading={isPhotoContinuousReading}
               isFavorite={favoritePhotoAlbumIds.has(selectedPhotoAlbum.id)}
               isImmersive={isPhotoImmersive}
+              pageGap={photoContinuousPageGap}
+              readerBackground={isPhotoContinuousReading ? photoContinuousReaderBackground : photoSingleReaderBackground}
               hasNextAlbum={selectedVisiblePhotoAlbumIndex >= 0 && selectedVisiblePhotoAlbumIndex < visiblePhotoAlbums.length - 1}
               hasPreviousAlbum={selectedVisiblePhotoAlbumIndex > 0}
               thumbnails={visiblePhotoThumbnails}
@@ -6539,6 +6572,8 @@ export default function App() {
               onMoveAlbum={movePhotoAlbum}
               onMove={movePhoto}
               onReadingModeChange={updatePhotoAlbumReadingMode}
+              onPageGapChange={updatePhotoContinuousPageGap}
+              onReaderBackgroundChange={updatePhotoReaderBackground}
               onResetProgress={resetSelectedPhotoAlbumProgress}
               onSelectImage={(image) => {
                 setCurrentPhotoIndex(image.index);

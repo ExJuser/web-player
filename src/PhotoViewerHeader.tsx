@@ -1,7 +1,22 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, CheckCircle2, Images, Maximize2, MoreHorizontal, RotateCcw, SkipBack, SkipForward, Star, Tags, Trash2 } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Images, Maximize2, MoreHorizontal, RotateCcw, Settings2, SkipBack, SkipForward, Star, Tags, Trash2 } from "lucide-react";
 
-import type { PhotoAlbum, PhotoAlbumImage } from "./playerTypes";
+import type { PhotoAlbum, PhotoAlbumImage, PhotoContinuousPageGap, PhotoReaderBackground } from "./playerTypes";
+
+const readerBackgroundOptions: Array<{ value: PhotoReaderBackground; label: string }> = [
+  { value: "black", label: "纯黑" },
+  { value: "dark", label: "深灰" },
+  { value: "light", label: "浅灰" },
+  { value: "white", label: "白色" },
+  { value: "sepia", label: "护眼" },
+];
+
+const continuousPageGapOptions: Array<{ value: PhotoContinuousPageGap; label: string }> = [
+  { value: "none", label: "无缝" },
+  { value: "narrow", label: "窄缝" },
+  { value: "normal", label: "普通" },
+  { value: "wide", label: "宽松" },
+];
 
 type PhotoViewerHeaderProps = {
   album: PhotoAlbum;
@@ -9,6 +24,8 @@ type PhotoViewerHeaderProps = {
   isCoverCurrent: boolean;
   isContinuousReading: boolean;
   isFavorite: boolean;
+  pageGap: PhotoContinuousPageGap;
+  readerBackground: PhotoReaderBackground;
   hasNextAlbum: boolean;
   hasPreviousAlbum: boolean;
   onBack: () => void;
@@ -19,6 +36,8 @@ type PhotoViewerHeaderProps = {
   onMarkCompleted: () => void;
   onMoveAlbum: (delta: number) => void;
   onReadingModeChange: (isContinuous: boolean) => void;
+  onPageGapChange: (pageGap: PhotoContinuousPageGap) => void;
+  onReaderBackgroundChange: (background: PhotoReaderBackground) => void;
   onResetProgress: () => void;
   onSetCover: (album: PhotoAlbum, image: PhotoAlbumImage) => void;
   onToggleFavorite: (album: PhotoAlbum) => void;
@@ -30,6 +49,8 @@ export function PhotoViewerHeader({
   isCoverCurrent,
   isContinuousReading,
   isFavorite,
+  pageGap,
+  readerBackground,
   hasNextAlbum,
   hasPreviousAlbum,
   onBack,
@@ -40,21 +61,29 @@ export function PhotoViewerHeader({
   onMarkCompleted,
   onMoveAlbum,
   onReadingModeChange,
+  onPageGapChange,
+  onReaderBackgroundChange,
   onResetProgress,
   onSetCover,
   onToggleFavorite,
 }: PhotoViewerHeaderProps) {
   const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
+  const [isReaderSettingsOpen, setIsReaderSettingsOpen] = useState(false);
   const actionMenuRef = useRef<HTMLDivElement>(null);
+  const readerSettingsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!isActionMenuOpen) return;
+    if (!isActionMenuOpen && !isReaderSettingsOpen) return;
 
     const closeOnOutsideClick = (event: PointerEvent) => {
       if (!actionMenuRef.current?.contains(event.target as Node)) setIsActionMenuOpen(false);
+      if (!readerSettingsRef.current?.contains(event.target as Node)) setIsReaderSettingsOpen(false);
     };
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setIsActionMenuOpen(false);
+      if (event.key === "Escape") {
+        setIsActionMenuOpen(false);
+        setIsReaderSettingsOpen(false);
+      }
     };
 
     document.addEventListener("pointerdown", closeOnOutsideClick);
@@ -63,7 +92,7 @@ export function PhotoViewerHeader({
       document.removeEventListener("pointerdown", closeOnOutsideClick);
       document.removeEventListener("keydown", closeOnEscape);
     };
-  }, [isActionMenuOpen]);
+  }, [isActionMenuOpen, isReaderSettingsOpen]);
 
   return (
     <header className="photo-viewer-header">
@@ -108,6 +137,59 @@ export function PhotoViewerHeader({
         </button>
       </div>
       <div className="photo-viewer-actions">
+        <div className="photo-action-menu" ref={readerSettingsRef}>
+          <button
+            aria-expanded={isReaderSettingsOpen}
+            aria-haspopup="menu"
+            className="secondary-button"
+            type="button"
+            onClick={() => {
+              setIsActionMenuOpen(false);
+              setIsReaderSettingsOpen((isOpen) => !isOpen);
+            }}
+          >
+            <Settings2 size={16} />
+            阅读设置
+          </button>
+          {isReaderSettingsOpen ? (
+            <div className="photo-action-options photo-reader-settings" role="menu">
+              <span>阅读背景</span>
+              <div className="photo-reader-setting-options">
+                {readerBackgroundOptions.map((option) => (
+                  <button
+                    className={readerBackground === option.value ? "active" : ""}
+                    key={option.value}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={readerBackground === option.value}
+                    onClick={() => onReaderBackgroundChange(option.value)}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+              {isContinuousReading ? (
+                <>
+                  <span>图片间距</span>
+                  <div className="photo-reader-setting-options">
+                    {continuousPageGapOptions.map((option) => (
+                      <button
+                        className={pageGap === option.value ? "active" : ""}
+                        key={option.value}
+                        type="button"
+                        role="menuitemradio"
+                        aria-checked={pageGap === option.value}
+                        onClick={() => onPageGapChange(option.value)}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
         <button
           className={`secondary-button ${isFavorite ? "active" : ""}`}
           type="button"
@@ -130,7 +212,10 @@ export function PhotoViewerHeader({
             aria-haspopup="menu"
             className="secondary-button photo-more-button"
             type="button"
-            onClick={() => setIsActionMenuOpen((isOpen) => !isOpen)}
+            onClick={() => {
+              setIsReaderSettingsOpen(false);
+              setIsActionMenuOpen((isOpen) => !isOpen);
+            }}
             title="更多图集操作"
           >
             <MoreHorizontal size={17} />
