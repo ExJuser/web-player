@@ -133,59 +133,88 @@ export async function acquireMosaicBitmap(source: MosaicRuntimeSource, maxEdge =
   }
 }
 
-export async function analyzeMosaicSources(input: {
+type MosaicSourceAnalysisInput = {
   sources: MosaicRuntimeSource[];
   worker: Worker;
   signal: AbortSignal;
   onProgress: (completed: number, total: number) => void;
-}) {
-  const cached = await loadMosaicFeatures(input.sources.map((source) => source.id)).catch(() => []);
+};
+
+function partitionMosaicSourcesByCache(
+  sources: readonly MosaicRuntimeSource[],
+  cached: readonly MosaicFeatureDescriptor[],
+) {
   const cachedById = new Map(cached.map((feature) => [feature.sourceId, feature]));
-  const result: MosaicFeatureDescriptor[] = [];
+  const features: MosaicFeatureDescriptor[] = [];
   const missing: MosaicRuntimeSource[] = [];
-  input.sources.forEach((source) => {
+  sources.forEach((source) => {
     const feature = cachedById.get(source.id);
-    if (feature?.signature === createMosaicSignature(source)) result.push(feature);
+    if (feature?.signature === createMosaicSignature(source)) features.push(feature);
     else missing.push(source);
   });
-  input.onProgress(result.length, input.sources.length);
+  return { features, missing };
+}
+
+async function loadMosaicAnalysisItems(sources: readonly MosaicRuntimeSource[]) {
+  return (await Promise.all(sources.map(async (source) => {
+    try {
+      return {
+        sourceId: source.id,
+        signature: createMosaicSignature(source),
+        bitmap: await loadMosaicBitmap({ file: source.file, url: source.url }),
+      };
+    } catch {
+      return null;
+    }
+  }))).filter((item): item is NonNullable<typeof item> => Boolean(item));
+}
+
+async function analyzeMosaicSourceBatch(input: {
+  sources: readonly MosaicRuntimeSource[];
+  worker: Worker;
+  signal: AbortSignal;
+}) {
+  const items = await loadMosaicAnalysisItems(input.sources);
+  if (!items.length) return [];
+  return callWorker<MosaicFeatureDescriptor[]>(
+    input.worker,
+    { type: "analyze", items },
+    items.map((item) => item.bitmap),
+    input.signal,
+  );
+}
+
+function orderMosaicAnalysisResult(
+  sources: readonly MosaicRuntimeSource[],
+  features: readonly MosaicFeatureDescriptor[],
+) {
+  const featuresById = new Map(features.map((feature) => [feature.sourceId, feature]));
+  return {
+    features: sources.flatMap((source) => {
+      const feature = featuresById.get(source.id);
+      return feature ? [feature] : [];
+    }),
+    skipped: sources.length - featuresById.size,
+  };
+}
+
+export async function analyzeMosaicSources(input: MosaicSourceAnalysisInput) {
+  const cached = await loadMosaicFeatures(input.sources.map((source) => source.id)).catch(() => []);
+  const { features, missing } = partitionMosaicSourcesByCache(input.sources, cached);
+  const cachedCount = features.length;
+  input.onProgress(cachedCount, input.sources.length);
 
   const created: MosaicFeatureDescriptor[] = [];
   for (let offset = 0; offset < missing.length; offset += 12) {
     if (input.signal.aborted) throw new DOMException("生成已取消。", "AbortError");
     const batch = missing.slice(offset, offset + 12);
-    const items = (await Promise.all(batch.map(async (source) => {
-      try {
-        return {
-          sourceId: source.id,
-          signature: createMosaicSignature(source),
-          bitmap: await loadMosaicBitmap({ file: source.file, url: source.url }),
-        };
-      } catch {
-        return null;
-      }
-    }))).filter((item): item is NonNullable<typeof item> => Boolean(item));
-    if (items.length) {
-      const features = await callWorker<MosaicFeatureDescriptor[]>(
-        input.worker,
-        { type: "analyze", items },
-        items.map((item) => item.bitmap),
-        input.signal,
-      );
-      created.push(...features);
-      result.push(...features);
-    }
-    input.onProgress(Math.min(input.sources.length, result.length + offset + batch.length - created.length), input.sources.length);
+    const batchFeatures = await analyzeMosaicSourceBatch({ sources: batch, worker: input.worker, signal: input.signal });
+    created.push(...batchFeatures);
+    features.push(...batchFeatures);
+    input.onProgress(Math.min(input.sources.length, cachedCount + offset + batch.length), input.sources.length);
   }
   void saveMosaicFeatures(created).catch(() => undefined);
-  const resultById = new Map(result.map((feature) => [feature.sourceId, feature]));
-  return {
-    features: input.sources.flatMap((source) => {
-      const feature = resultById.get(source.id);
-      return feature ? [feature] : [];
-    }),
-    skipped: input.sources.length - resultById.size,
-  };
+  return orderMosaicAnalysisResult(input.sources, features);
 }
 
 function drawRotatedTarget(

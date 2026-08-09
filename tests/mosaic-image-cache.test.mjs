@@ -67,6 +67,63 @@ test("mosaic bitmap cache uses the original media URL for detail viewing", async
   }
 });
 
+test("mosaic source analysis combines cache and Worker results in source order", async () => {
+  const cachedFeature = { version: 1, sourceId: "cached", signature: "1:10:1", values: [1] };
+  const freshFeature = { version: 1, sourceId: "fresh", signature: "1:20:2", values: [2] };
+  const decoded = [];
+  const saved = [];
+  const workerMessages = [];
+  let messageHandler;
+  const worker = {
+    addEventListener(type, handler) { if (type === "message") messageHandler = handler; },
+    removeEventListener(type, handler) { if (type === "message" && messageHandler === handler) messageHandler = undefined; },
+    postMessage(message, transfer) {
+      workerMessages.push({ message, transfer });
+      queueMicrotask(() => messageHandler?.({ data: { id: message.id, result: [freshFeature] } }));
+    },
+  };
+  const restoreFetch = replaceGlobal("fetch", async (url, options = {}) => {
+    if (url === "/api/mosaics/features" && options.method === "POST") {
+      return { ok: true, json: async () => [cachedFeature] };
+    }
+    if (url === "/api/mosaics/features" && options.method === "PUT") {
+      saved.push(JSON.parse(options.body));
+      return { ok: true };
+    }
+    throw new Error(`Unexpected request: ${url}`);
+  });
+  const restoreBitmap = replaceGlobal("createImageBitmap", async (file) => {
+    decoded.push(file.kind);
+    if (file.kind === "broken") throw new Error("decode failed");
+    return { width: 64, height: 48, close() {} };
+  });
+  const progress = [];
+
+  try {
+    const result = await pipeline.analyzeMosaicSources({
+      sources: [
+        { id: "fresh", size: 20, lastModified: 2, file: { kind: "fresh" } },
+        { id: "cached", size: 10, lastModified: 1, file: { kind: "cached" } },
+        { id: "broken", size: 30, lastModified: 3, file: { kind: "broken" } },
+      ],
+      worker,
+      signal: new AbortController().signal,
+      onProgress: (completed, total) => progress.push([completed, total]),
+    });
+
+    assert.deepEqual(result, { features: [freshFeature, cachedFeature], skipped: 1 });
+    assert.deepEqual(decoded, ["fresh", "broken"]);
+    assert.deepEqual(progress, [[1, 3], [3, 3]]);
+    assert.equal(workerMessages.length, 1);
+    assert.deepEqual(workerMessages[0].message.items.map((item) => item.sourceId), ["fresh"]);
+    assert.equal(workerMessages[0].transfer.length, 1);
+    assert.deepEqual(saved, [{ features: [freshFeature] }]);
+  } finally {
+    restoreBitmap();
+    restoreFetch();
+  }
+});
+
 test("mosaic rendering preserves layout, rotation, progress, and target cleanup", async () => {
   const canvases = [];
   class FakeOffscreenCanvas {
