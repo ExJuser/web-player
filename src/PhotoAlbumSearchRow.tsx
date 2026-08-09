@@ -28,7 +28,7 @@ export function PhotoAlbumSearchRow({ query, resultCount, results, onChange, onC
       aria-label="搜索图集"
       onFocus={() => setIsFocused(true)}
       onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setIsFocused(false); }}
-      onSubmit={(event) => { event.preventDefault(); if (results[0]) onSelect(results[0].album); }}
+      onSubmit={(event) => { event.preventDefault(); }}
     >
       <Search size={17} />
       <input type="search" value={query} placeholder="搜索图集、路径或标签" onChange={(event) => onChange(event.target.value)} aria-controls="photo-search-results" aria-expanded={isFocused && hasQuery} />

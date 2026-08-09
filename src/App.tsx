@@ -2190,8 +2190,8 @@ export default function App() {
     setPhotoAlbumTags,
   });
   const visiblePhotoAlbums = useMemo(
-    () => getVisiblePhotoAlbums({ albums: photoAlbums, favoriteAlbumIds: favoritePhotoAlbumIds, filter: photoAlbumFilter, searchQuery: "", tagFilterKey: photoAlbumTagFilter ?? undefined, sortDirection: photoAlbumSortDirection, sortMode: photoAlbumSortMode, albumTags: photoAlbumTags }),
-    [favoritePhotoAlbumIds, photoAlbumFilter, photoAlbumSortDirection, photoAlbumSortMode, photoAlbumTagFilter, photoAlbumTags, photoAlbums],
+    () => getVisiblePhotoAlbums({ albums: photoAlbums, favoriteAlbumIds: favoritePhotoAlbumIds, filter: photoAlbumFilter, searchQuery: photoAlbumSearchQuery, tagFilterKey: photoAlbumTagFilter ?? undefined, sortDirection: photoAlbumSortDirection, sortMode: photoAlbumSortMode, albumTags: photoAlbumTags }),
+    [favoritePhotoAlbumIds, photoAlbumFilter, photoAlbumSearchQuery, photoAlbumSortDirection, photoAlbumSortMode, photoAlbumTagFilter, photoAlbumTags, photoAlbums],
   );
   const selectedVisiblePhotoAlbumIndex = selectedPhotoAlbum
     ? visiblePhotoAlbums.findIndex((album) => album.id === selectedPhotoAlbum.id)
