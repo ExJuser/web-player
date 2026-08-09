@@ -19,6 +19,12 @@ button,
   touch-action: manipulation;
 }
 
+.control-primary-playback,
+.control-secondary-strip,
+.control-primary-view {
+  display: contents;
+}
+
 /* Keep the resume artwork and copy readable beside the fixed home rail. */
 @media (min-width: 981px) and (max-width: 1280px) {
   .app-shell.home-view .home-resume-card,
@@ -132,5 +138,298 @@ button,
   input[type="number"],
   select {
     font-size: 16px;
+  }
+
+  .control-bar {
+    min-height: 0;
+    gap: 8px;
+    padding: 8px 8px max(10px, env(safe-area-inset-bottom));
+  }
+
+  .timeline-row {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 2px 8px;
+  }
+
+  .timeline-row > .timeline-time {
+    width: auto;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .timeline-time-current {
+    grid-column: 1;
+    grid-row: 1;
+    text-align: left;
+  }
+
+  .timeline-time-duration {
+    grid-column: 3;
+    grid-row: 1;
+    text-align: right;
+  }
+
+  .timeline-track {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    height: 30px;
+  }
+
+  .timeline {
+    height: 28px;
+    background-color: transparent;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: 100% 7px;
+  }
+
+  .timeline-preview {
+    bottom: 30px;
+    left: clamp(82px, var(--preview-left), calc(100% - 82px));
+    width: min(164px, calc(100vw - 32px));
+  }
+
+  .timeline-edit-menu {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: center;
+  }
+
+  .timeline-edit-menu-button {
+    min-width: 44px;
+    height: 44px;
+  }
+
+  .timeline-segment-popover {
+    left: 50%;
+    width: min(260px, calc(100vw - 32px));
+  }
+
+  .control-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(96px, 42%);
+    gap: 8px;
+    align-items: start;
+  }
+
+  .control-primary-playback,
+  .control-primary-view,
+  .control-secondary-strip {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    gap: 6px;
+  }
+
+  .control-primary-playback {
+    grid-column: 1;
+    grid-row: 1;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+  }
+
+  .control-primary-view {
+    grid-column: 2;
+    grid-row: 1;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+  }
+
+  .control-primary-playback::-webkit-scrollbar,
+  .control-primary-view::-webkit-scrollbar {
+    display: none;
+  }
+
+  .control-primary-view .fullscreen-toggle {
+    order: -2;
+  }
+
+  .control-primary-view .rotate-toggle {
+    order: -1;
+  }
+
+  .control-secondary-strip {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    flex-wrap: wrap;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .control-spacer {
+    display: none;
+  }
+
+  .control-row > .special-stats-control {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  .control-row > .special-stats-control > .icon-button {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+  }
+
+  .control-row > .special-stats-control .special-stats-card {
+    min-height: 44px;
+    max-height: 44px;
+  }
+
+  .control-primary-playback > .icon-button,
+  .control-primary-view > .icon-button,
+  .control-secondary-strip > .icon-button,
+  .control-secondary-strip > .player-options-menu > .icon-button {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+  }
+
+  .volume-control {
+    width: 44px;
+    min-width: 44px;
+    gap: 0;
+  }
+
+  .volume-toggle {
+    width: 44px;
+    height: 44px;
+  }
+
+  .volume-control input {
+    display: none;
+  }
+
+  .volume-control + .control-group,
+  .control-group + .control-group,
+  .control-group + .subtitle-control {
+    margin-left: 0;
+  }
+
+  .control-select-trigger {
+    min-height: 44px;
+    font-size: 14px;
+  }
+
+  .subtitle-control .control-select {
+    width: min(126px, 36vw);
+  }
+
+  .special-player-actions {
+    max-width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .special-player-actions .icon-button {
+    width: 44px;
+    height: 44px;
+  }
+
+  .player-options-popover {
+    position: fixed;
+    right: max(12px, env(safe-area-inset-right));
+    bottom: max(12px, env(safe-area-inset-bottom));
+    left: max(12px, env(safe-area-inset-left));
+    width: auto;
+    max-height: calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .control-select-list {
+    max-height: min(280px, calc(100dvh - 112px));
+  }
+}
+
+@media (max-width: 900px) and (max-height: 520px) and (orientation: landscape) {
+  .app-shell:not(.home-view):not(.cinema-mode) .player-frame:not(.fullscreen) .player-viewport {
+    height: clamp(150px, calc(100dvh - 230px), 56.25vw);
+    aspect-ratio: auto;
+  }
+
+  .control-bar {
+    min-height: 0;
+    padding: 6px 8px;
+  }
+
+  .control-bar .icon-button,
+  .control-bar .special-player-actions .icon-button {
+    width: 40px;
+    min-width: 40px;
+    height: 40px;
+  }
+
+  .control-bar .volume-toggle {
+    width: 36px;
+    height: 40px;
+  }
+
+  .control-bar .volume-control input {
+    width: 72px;
+  }
+
+  .control-bar .control-select-trigger {
+    min-height: 40px;
+  }
+
+  .control-bar .control-spacer {
+    display: none;
+  }
+
+  .control-bar .special-stats-control {
+    width: auto;
+    margin-left: 0;
+  }
+
+  .control-bar .special-stats-card {
+    width: 40px;
+    min-height: 40px;
+    max-height: 40px;
+  }
+
+  .control-bar .special-stats-summary > span {
+    display: none;
+  }
+
+  .player-frame.fullscreen .control-bar,
+  .app-shell.cinema-mode .control-bar {
+    gap: 4px;
+    padding: 5px max(8px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+  }
+
+  .player-frame.fullscreen .timeline-row,
+  .app-shell.cinema-mode .timeline-row {
+    grid-template-columns: 48px minmax(0, 1fr) 48px;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .player-frame.fullscreen .timeline-time-current,
+  .app-shell.cinema-mode .timeline-time-current {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .player-frame.fullscreen .timeline-track,
+  .app-shell.cinema-mode .timeline-track {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .player-frame.fullscreen .timeline-time-duration,
+  .app-shell.cinema-mode .timeline-time-duration {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  .player-frame.fullscreen .control-secondary-strip,
+  .player-frame.fullscreen .control-row > .special-stats-control,
+  .player-frame.fullscreen .timeline-edit-menu,
+  .app-shell.cinema-mode .control-secondary-strip,
+  .app-shell.cinema-mode .control-row > .special-stats-control,
+  .app-shell.cinema-mode .timeline-edit-menu {
+    display: none;
   }
 }

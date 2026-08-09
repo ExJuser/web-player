@@ -1,4 +1,4 @@
-import type { FocusEventHandler, MouseEventHandler, Ref } from "react";
+import type { FocusEventHandler, MouseEventHandler, PointerEventHandler, Ref } from "react";
 
 import { PlayerMediaActionControls } from "./PlayerMediaActionControls";
 import { PlayerOptionControls } from "./PlayerOptionControls";
@@ -222,6 +222,9 @@ export function PlayerControlBar({
     onKeepControlsVisible();
   };
   const handleFocus: FocusEventHandler<HTMLDivElement> = () => onKeepControlsVisible();
+  const handlePointerUp: PointerEventHandler<HTMLDivElement> = (event) => {
+    if (event.pointerType !== "mouse") onScheduleControlsHide();
+  };
 
   return (
     <div
@@ -231,6 +234,8 @@ export function PlayerControlBar({
       onMouseEnter={onKeepControlsVisible}
       onMouseLeave={onScheduleControlsHide}
       onMouseMove={handleMouseMove}
+      onPointerDown={onKeepControlsVisible}
+      onPointerUp={handlePointerUp}
     >
       <PlayerTimelineControls
         currentTime={currentTime}
@@ -259,90 +264,96 @@ export function PlayerControlBar({
       />
 
       <div className="control-row">
-        <PlayerPlaybackControls
-          canPlayNext={canPlayNext}
-          canPlayPrevious={canPlayPrevious}
-          hasCurrentVideo={hasCurrentVideo}
-          isMuted={isMuted}
-          isPlaying={isPlaying}
-          playbackRate={effectivePlaybackRate}
-          playbackRateOptions={playbackRateOptions}
-          volume={volume}
-          onChangePlaybackRate={onChangePlaybackRate}
-          onChangeVolume={onChangeVolume}
-          onPlayNext={onPlayNext}
-          onPlayPrevious={onPlayPrevious}
-          onToggleMute={onToggleMute}
-          onTogglePlay={onTogglePlay}
-        />
+        <div className="control-primary-playback">
+          <PlayerPlaybackControls
+            canPlayNext={canPlayNext}
+            canPlayPrevious={canPlayPrevious}
+            hasCurrentVideo={hasCurrentVideo}
+            isMuted={isMuted}
+            isPlaying={isPlaying}
+            playbackRate={effectivePlaybackRate}
+            playbackRateOptions={playbackRateOptions}
+            volume={volume}
+            onChangePlaybackRate={onChangePlaybackRate}
+            onChangeVolume={onChangeVolume}
+            onPlayNext={onPlayNext}
+            onPlayPrevious={onPlayPrevious}
+            onToggleMute={onToggleMute}
+            onTogglePlay={onTogglePlay}
+          />
+        </div>
 
-        <PlayerOptionControls
-          hasCompatibleMedia={currentVideoHasCompatibleMedia}
-          hasCurrentVideo={hasCurrentVideo}
-          holdPlaybackRate={holdPlaybackRate}
-          holdRateOptions={holdRateOptions}
-          isDeletingCompatibleMedia={isDeletingCompatibleMedia}
-          playbackMode={playbackMode}
-          playbackModeOptions={playbackModeOptions}
-          seekStep={seekStep}
-          seekStepOptions={seekStepOptions}
-          showPlaybackMode={showPlaybackMode}
-          sourceChoice={currentVideoSourceChoice}
-          subtitleStyle={subtitleStyle}
-          onChangeHoldPlaybackRate={onChangeHoldPlaybackRate}
-          onChangePlaybackMode={onChangePlaybackMode}
-          onChangeSeekStep={onChangeSeekStep}
-          onChangeSourceChoice={onChangeSourceChoice}
-          onChangeSubtitleStyle={onChangeSubtitleStyle}
-          onDeleteCompatibleMedia={onDeleteCompatibleMedia}
-        />
+        <div className="control-secondary-strip">
+          <PlayerOptionControls
+            hasCompatibleMedia={currentVideoHasCompatibleMedia}
+            hasCurrentVideo={hasCurrentVideo}
+            holdPlaybackRate={holdPlaybackRate}
+            holdRateOptions={holdRateOptions}
+            isDeletingCompatibleMedia={isDeletingCompatibleMedia}
+            playbackMode={playbackMode}
+            playbackModeOptions={playbackModeOptions}
+            seekStep={seekStep}
+            seekStepOptions={seekStepOptions}
+            showPlaybackMode={showPlaybackMode}
+            sourceChoice={currentVideoSourceChoice}
+            subtitleStyle={subtitleStyle}
+            onChangeHoldPlaybackRate={onChangeHoldPlaybackRate}
+            onChangePlaybackMode={onChangePlaybackMode}
+            onChangeSeekStep={onChangeSeekStep}
+            onChangeSourceChoice={onChangeSourceChoice}
+            onChangeSubtitleStyle={onChangeSubtitleStyle}
+            onDeleteCompatibleMedia={onDeleteCompatibleMedia}
+          />
 
-        <PlayerMediaActionControls
-          canUseEmbeddedSubtitles={canUseEmbeddedSubtitles}
-          canRestoreWithLada={canRestoreWithLada}
-          currentVideoRating={currentVideoRating}
-          hasCurrentVideo={hasCurrentVideo}
-          hasSelectedSubtitle={hasSelectedSubtitle}
-          homeMediaMode={homeMediaMode}
-          isAiPanelOpen={isAiPanelOpen}
-          isDanmakuActive={danmakuEnabled}
-          isEmbeddedSubtitleLoading={isEmbeddedSubtitleLoading}
-          isHighEnergyMarkDisabled={isHighEnergyMarkDisabled || !duration}
-          isHighEnergyMarkPending={isHighEnergyMarkPending}
-          isEditSegmentMarkDisabled={isEditSegmentMarkDisabled || !duration}
-          isEditSegmentMarkPending={isEditSegmentMarkPending}
-          isSeriesMode={isSeriesMode}
-          ladaDisabledReason={ladaDisabledReason}
-          selectedSubtitleId={selectedSubtitleId}
-          subtitleControlOptions={subtitleControlOptions}
-          videoTagCount={currentVideoTagsCount}
-          onChangeSubtitle={onChangeSubtitle}
-          onMarkHighEnergySegment={onMarkHighEnergySegment}
-          onMarkEditSegment={onMarkEditSegment}
-          onOpenAiPanel={onOpenAiPanel}
-          onOpenDanmakuDialog={onOpenDanmakuDialog}
-          onOpenRatingDialog={onOpenRatingDialog}
-          onOpenLadaRestoration={onOpenLadaRestoration}
-          onOpenTagDialog={onOpenTagDialog}
-          onProbeEmbeddedSubtitles={onProbeEmbeddedSubtitles}
-        />
+          <PlayerMediaActionControls
+            canUseEmbeddedSubtitles={canUseEmbeddedSubtitles}
+            canRestoreWithLada={canRestoreWithLada}
+            currentVideoRating={currentVideoRating}
+            hasCurrentVideo={hasCurrentVideo}
+            hasSelectedSubtitle={hasSelectedSubtitle}
+            homeMediaMode={homeMediaMode}
+            isAiPanelOpen={isAiPanelOpen}
+            isDanmakuActive={danmakuEnabled}
+            isEmbeddedSubtitleLoading={isEmbeddedSubtitleLoading}
+            isHighEnergyMarkDisabled={isHighEnergyMarkDisabled || !duration}
+            isHighEnergyMarkPending={isHighEnergyMarkPending}
+            isEditSegmentMarkDisabled={isEditSegmentMarkDisabled || !duration}
+            isEditSegmentMarkPending={isEditSegmentMarkPending}
+            isSeriesMode={isSeriesMode}
+            ladaDisabledReason={ladaDisabledReason}
+            selectedSubtitleId={selectedSubtitleId}
+            subtitleControlOptions={subtitleControlOptions}
+            videoTagCount={currentVideoTagsCount}
+            onChangeSubtitle={onChangeSubtitle}
+            onMarkHighEnergySegment={onMarkHighEnergySegment}
+            onMarkEditSegment={onMarkEditSegment}
+            onOpenAiPanel={onOpenAiPanel}
+            onOpenDanmakuDialog={onOpenDanmakuDialog}
+            onOpenRatingDialog={onOpenRatingDialog}
+            onOpenLadaRestoration={onOpenLadaRestoration}
+            onOpenTagDialog={onOpenTagDialog}
+            onProbeEmbeddedSubtitles={onProbeEmbeddedSubtitles}
+          />
+        </div>
         <span className="control-spacer" />
 
-        <PlayerViewControls
-          hasCurrentVideo={hasCurrentVideo}
-          isCinemaMode={isCinemaMode}
-          isPrivacyMode={isPrivacyMode}
-          normalizedVideoRotation={normalizedVideoRotation}
-          showStartFromHighEnergy={homeMediaMode === "special"}
-          startFromHighEnergy={startFromHighEnergy}
-          onRotateVideo={onRotateVideo}
-          onToggleCinemaMode={onToggleCinemaMode}
-          onToggleFullscreen={onToggleFullscreen}
-          onTogglePictureInPicture={onTogglePictureInPicture}
-          onTogglePrivacyMode={onTogglePrivacyMode}
-          onToggleShortcutDialog={onToggleShortcutDialog}
-          onToggleStartFromHighEnergy={onToggleStartFromHighEnergy}
-        />
+        <div className="control-primary-view">
+          <PlayerViewControls
+            hasCurrentVideo={hasCurrentVideo}
+            isCinemaMode={isCinemaMode}
+            isPrivacyMode={isPrivacyMode}
+            normalizedVideoRotation={normalizedVideoRotation}
+            showStartFromHighEnergy={homeMediaMode === "special"}
+            startFromHighEnergy={startFromHighEnergy}
+            onRotateVideo={onRotateVideo}
+            onToggleCinemaMode={onToggleCinemaMode}
+            onToggleFullscreen={onToggleFullscreen}
+            onTogglePictureInPicture={onTogglePictureInPicture}
+            onTogglePrivacyMode={onTogglePrivacyMode}
+            onToggleShortcutDialog={onToggleShortcutDialog}
+            onToggleStartFromHighEnergy={onToggleStartFromHighEnergy}
+          />
+        </div>
 
         {canRecordEmission ? (
           <SpecialStatsControl disabled={!hasCurrentVideo} stats={currentVideoSpecialStats} onRecordEmission={onRecordEmission} />

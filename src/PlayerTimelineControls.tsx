@@ -145,7 +145,7 @@ export function PlayerTimelineControls({
 
   return (
     <div className="timeline-row">
-      <span>{formatTime(displayTime)}</span>
+      <span className="timeline-time timeline-time-current">{formatTime(displayTime)}</span>
       <div
         className={`timeline-track ${timelinePreview.isVisible ? "preview-visible" : ""}`}
         style={
@@ -256,7 +256,7 @@ export function PlayerTimelineControls({
           disabled={!hasCurrentVideo || isPrivacyMode}
         />
       </div>
-      <span>{formatTime(duration)}</span>
+      <span className="timeline-time timeline-time-duration">{formatTime(duration)}</span>
       {showEditSegmentControls ? (
         <PlayerEditSegmentMenu
           segments={editSegments}

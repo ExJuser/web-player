@@ -2,6 +2,21 @@ import { useCallback, type Dispatch, type MutableRefObject, type SetStateAction 
 
 import type { VideoItem } from "./playerTypes";
 
+type WebkitFullscreenDocument = Document & {
+  webkitExitFullscreen?: () => Promise<void> | void;
+  webkitFullscreenElement?: Element | null;
+};
+
+type WebkitFullscreenElement = HTMLElement & {
+  webkitRequestFullscreen?: () => Promise<void> | void;
+};
+
+type WebkitFullscreenVideo = HTMLVideoElement & {
+  webkitDisplayingFullscreen?: boolean;
+  webkitEnterFullscreen?: () => void;
+  webkitExitFullscreen?: () => void;
+};
+
 type UsePlayerToolActionsOptions = {
   currentVideo: VideoItem | null;
   playerRef: MutableRefObject<HTMLDivElement | null>;
@@ -18,17 +33,45 @@ export function usePlayerToolActions({
   videoRef,
 }: UsePlayerToolActionsOptions) {
   const toggleFullscreen = useCallback(async () => {
-    if (!playerRef.current || !currentVideo) return;
+    const player = playerRef.current as WebkitFullscreenElement | null;
+    const video = videoRef.current as WebkitFullscreenVideo | null;
+    if (!player || !currentVideo) return;
+
+    const fullscreenDocument = document as WebkitFullscreenDocument;
     try {
-      if (document.fullscreenElement) {
-        await document.exitFullscreen();
-      } else {
-        await playerRef.current.requestFullscreen();
+      if (document.fullscreenElement || fullscreenDocument.webkitFullscreenElement) {
+        const exitFullscreen = document.exitFullscreen?.bind(document)
+          ?? fullscreenDocument.webkitExitFullscreen?.bind(fullscreenDocument);
+        await exitFullscreen?.();
+        return;
       }
+
+      if (video?.webkitDisplayingFullscreen && video.webkitExitFullscreen) {
+        video.webkitExitFullscreen();
+        return;
+      }
+
+      const requestFullscreen = player.requestFullscreen?.bind(player)
+        ?? player.webkitRequestFullscreen?.bind(player);
+      if (requestFullscreen) {
+        try {
+          await requestFullscreen();
+          return;
+        } catch (error) {
+          if (!video?.webkitEnterFullscreen) throw error;
+        }
+      }
+
+      if (video?.webkitEnterFullscreen) {
+        video.webkitEnterFullscreen();
+        return;
+      }
+
+      setMessage("当前浏览器不支持全屏播放");
     } catch {
       setMessage("无法进入全屏模式");
     }
-  }, [currentVideo, playerRef, setMessage]);
+  }, [currentVideo, playerRef, setMessage, videoRef]);
 
   const togglePictureInPicture = useCallback(async () => {
     const element = videoRef.current;

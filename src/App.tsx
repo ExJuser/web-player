@@ -5043,14 +5043,33 @@ export default function App() {
   }, [currentVideo?.duration, currentVideo?.id, isPlaying, shouldUseDanmakuPlaybackClock]);
 
   useEffect(() => {
+    const fullscreenDocument = document as Document & { webkitFullscreenElement?: Element | null };
+    const video = videoRef.current;
     const handleFullscreenChange = () => {
-      setIsFullscreen(document.fullscreenElement === playerRef.current);
+      const fullscreenElement = document.fullscreenElement ?? fullscreenDocument.webkitFullscreenElement;
+      setIsFullscreen(fullscreenElement === playerRef.current);
+      showControls();
+    };
+    const handleVideoFullscreenStart = () => {
+      setIsFullscreen(true);
+      showControls();
+    };
+    const handleVideoFullscreenEnd = () => {
+      setIsFullscreen(false);
       showControls();
     };
 
     document.addEventListener("fullscreenchange", handleFullscreenChange);
-    return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
-  }, [showControls]);
+    document.addEventListener("webkitfullscreenchange", handleFullscreenChange);
+    video?.addEventListener("webkitbeginfullscreen", handleVideoFullscreenStart);
+    video?.addEventListener("webkitendfullscreen", handleVideoFullscreenEnd);
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+      document.removeEventListener("webkitfullscreenchange", handleFullscreenChange);
+      video?.removeEventListener("webkitbeginfullscreen", handleVideoFullscreenStart);
+      video?.removeEventListener("webkitendfullscreen", handleVideoFullscreenEnd);
+    };
+  }, [currentVideo?.id, showControls]);
 
   useLayoutEffect(() => {
     const element = videoRef.current;
@@ -5719,6 +5738,10 @@ export default function App() {
 
   const handlePlayerPointerDown = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
+      if (currentVideo && event.pointerType !== "mouse" && event.target === videoRef.current) {
+        revealControls();
+        return;
+      }
       if (!currentVideo || event.button !== 2 || event.target !== videoRef.current) return;
       event.preventDefault();
       event.stopPropagation();

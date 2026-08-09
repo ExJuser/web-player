@@ -46,11 +46,11 @@ export function PlayerViewControls({
         </label>
       ) : null}
 
-      <button className="icon-button" type="button" onClick={onTogglePictureInPicture} disabled={!hasCurrentVideo} title="画中画">
+      <button className="icon-button view-control-secondary" type="button" onClick={onTogglePictureInPicture} disabled={!hasCurrentVideo} title="画中画">
         <PictureInPicture2 size={20} />
       </button>
       <button
-        className={`icon-button ${normalizedVideoRotation ? "active" : ""}`}
+        className={`icon-button rotate-toggle ${normalizedVideoRotation ? "active" : ""}`}
         type="button"
         onClick={onRotateVideo}
         disabled={!hasCurrentVideo}
@@ -60,11 +60,11 @@ export function PlayerViewControls({
       >
         <RotateCw size={20} />
       </button>
-      <button className="icon-button" type="button" onClick={onToggleShortcutDialog} title="快捷键帮助">
+      <button className="icon-button view-control-secondary" type="button" onClick={onToggleShortcutDialog} title="快捷键帮助">
         <Keyboard size={20} />
       </button>
       <button
-        className={`icon-button privacy-toggle ${isPrivacyMode ? "active" : ""}`}
+        className={`icon-button privacy-toggle view-control-secondary ${isPrivacyMode ? "active" : ""}`}
         type="button"
         onClick={onTogglePrivacyMode}
         title="隐私模式 / 快速清屏 (P)"
@@ -73,7 +73,7 @@ export function PlayerViewControls({
         <EyeOff size={20} />
       </button>
       <button
-        className={`icon-button cinema-toggle ${isCinemaMode ? "active" : ""}`}
+        className={`icon-button cinema-toggle view-control-secondary ${isCinemaMode ? "active" : ""}`}
         type="button"
         onClick={onToggleCinemaMode}
         disabled={!hasCurrentVideo}
@@ -82,7 +82,7 @@ export function PlayerViewControls({
       >
         T
       </button>
-      <button className="icon-button" type="button" onClick={onToggleFullscreen} disabled={!hasCurrentVideo} title="全屏">
+      <button className="icon-button fullscreen-toggle" type="button" onClick={onToggleFullscreen} disabled={!hasCurrentVideo} title="全屏" aria-label="全屏播放">
         <Maximize size={20} />
       </button>
     </>
