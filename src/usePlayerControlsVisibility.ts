@@ -19,7 +19,7 @@ export function usePlayerControlsVisibility({
   const controlsHideTimerRef = useRef<number | null>(null);
   const [areControlsVisible, setAreControlsVisible] = useState(true);
   const shouldAutoHideControls = useMemo(
-    () => (isFullscreen || isCinemaMode) && isPlaying && Boolean(currentVideo),
+    () => isPlaying && Boolean(currentVideo),
     [currentVideo, isCinemaMode, isFullscreen, isPlaying],
   );
 
@@ -50,7 +50,8 @@ export function usePlayerControlsVisibility({
 
   const showControls = useCallback(() => {
     setAreControlsVisible(true);
-  }, []);
+    scheduleControlsHide();
+  }, [scheduleControlsHide]);
 
   useEffect(() => {
     if (!shouldAutoHideControls) {

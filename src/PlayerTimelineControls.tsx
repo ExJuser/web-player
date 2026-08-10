@@ -1,4 +1,4 @@
-import { Pencil, X } from "lucide-react";
+import { Pencil, X, Zap } from "lucide-react";
 import { useEffect, useRef, useState, type CSSProperties, type ChangeEvent, type PointerEvent as ReactPointerEvent, type Ref } from "react";
 
 import { clamp } from "./playerInteractionUtils";
@@ -24,12 +24,16 @@ type PlayerTimelineControlsProps = {
   canGenerateMontage: boolean;
   montageDisabledReason: string;
   isPrivacyMode: boolean;
+  isHighEnergyMarkDisabled: boolean;
+  isHighEnergyMarkPending: boolean;
+  highEnergyPendingStartTime: number | null;
   showEditSegmentControls: boolean;
   progressPercent: number;
   timelinePreview: TimelinePreviewState;
   timelineRef: Ref<HTMLInputElement>;
   onHideTimelinePreview: () => void;
   onGenerateMontage: () => void;
+  onMarkHighEnergySegment: () => void;
   onEditHighlight: (highlight: VideoHighlightSegment) => void;
   onRemoveHighlight: (highlightId: string) => void;
   onRemoveEditSegment: (segmentId: string) => void;
@@ -50,12 +54,16 @@ export function PlayerTimelineControls({
   canGenerateMontage,
   montageDisabledReason,
   isPrivacyMode,
+  isHighEnergyMarkDisabled,
+  isHighEnergyMarkPending,
+  highEnergyPendingStartTime,
   showEditSegmentControls,
   progressPercent,
   timelinePreview,
   timelineRef,
   onHideTimelinePreview,
   onGenerateMontage,
+  onMarkHighEnergySegment,
   onEditHighlight,
   onRemoveHighlight,
   onRemoveEditSegment,
@@ -257,6 +265,18 @@ export function PlayerTimelineControls({
         />
       </div>
       <span className="timeline-time timeline-time-duration">{formatTime(duration)}</span>
+      {showEditSegmentControls ? (
+        <button
+          className={`timeline-highlight-action ${isHighEnergyMarkPending ? "active" : ""}`}
+          type="button"
+          onClick={onMarkHighEnergySegment}
+          disabled={isHighEnergyMarkDisabled}
+          aria-pressed={isHighEnergyMarkPending}
+        >
+          <Zap size={15} aria-hidden="true" />
+          <span>{isHighEnergyMarkPending && highEnergyPendingStartTime !== null ? `设为终点 · ${formatTime(highEnergyPendingStartTime)}` : "标记高能"}</span>
+        </button>
+      ) : null}
       {showEditSegmentControls ? (
         <PlayerEditSegmentMenu
           segments={editSegments}

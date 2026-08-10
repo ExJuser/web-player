@@ -19,7 +19,7 @@ type WebkitFullscreenVideo = HTMLVideoElement & {
 
 type UsePlayerToolActionsOptions = {
   currentVideo: VideoItem | null;
-  playerRef: MutableRefObject<HTMLDivElement | null>;
+  fullscreenRef: MutableRefObject<HTMLElement | null>;
   setMessage: (message: string) => void;
   setVideoRotation: Dispatch<SetStateAction<number>>;
   videoRef: MutableRefObject<HTMLVideoElement | null>;
@@ -27,13 +27,13 @@ type UsePlayerToolActionsOptions = {
 
 export function usePlayerToolActions({
   currentVideo,
-  playerRef,
+  fullscreenRef,
   setMessage,
   setVideoRotation,
   videoRef,
 }: UsePlayerToolActionsOptions) {
   const toggleFullscreen = useCallback(async () => {
-    const player = playerRef.current as WebkitFullscreenElement | null;
+    const player = fullscreenRef.current as WebkitFullscreenElement | null;
     const video = videoRef.current as WebkitFullscreenVideo | null;
     if (!player || !currentVideo) return;
 
@@ -71,7 +71,7 @@ export function usePlayerToolActions({
     } catch {
       setMessage("无法进入全屏模式");
     }
-  }, [currentVideo, playerRef, setMessage, videoRef]);
+  }, [currentVideo, fullscreenRef, setMessage, videoRef]);
 
   const togglePictureInPicture = useCallback(async () => {
     const element = videoRef.current;

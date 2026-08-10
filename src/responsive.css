@@ -317,14 +317,21 @@ button,
     width: min(126px, 36vw);
   }
 
-  .special-player-actions {
-    max-width: 100%;
-    flex-wrap: wrap;
+  .player-tool-menu > summary,
+  .player-rating-action,
+  .timeline-highlight-action {
+    min-height: 44px;
   }
 
-  .special-player-actions .icon-button {
-    width: 44px;
-    height: 44px;
+  .player-tool-menu-popover {
+    position: fixed;
+    right: max(12px, env(safe-area-inset-right));
+    bottom: max(12px, env(safe-area-inset-bottom));
+    left: max(12px, env(safe-area-inset-left));
+    width: auto;
+    max-height: calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    overflow-y: auto;
+    overscroll-behavior: contain;
   }
 
   .player-options-popover {
@@ -354,8 +361,7 @@ button,
     padding: 6px 8px;
   }
 
-  .control-bar .icon-button,
-  .control-bar .special-player-actions .icon-button {
+  .control-bar .icon-button {
     width: 40px;
     min-width: 40px;
     height: 40px;
@@ -372,6 +378,12 @@ button,
 
   .control-bar .control-select-trigger {
     min-height: 40px;
+  }
+
+  .control-bar .player-tool-menu > summary,
+  .control-bar .player-rating-action,
+  .control-bar .timeline-highlight-action {
+    height: 40px;
   }
 
   .control-bar .control-spacer {

@@ -1,4 +1,5 @@
-import { Scissors, Sparkles, Star, Subtitles, Tags, Zap } from "lucide-react";
+import { Scissors, Sparkles, Star, Subtitles, Tags, Wrench } from "lucide-react";
+import { useRef } from "react";
 
 import { ControlSelect } from "./ControlSelect";
 import type { HomeMediaMode } from "./playerUiState";
@@ -13,8 +14,6 @@ type PlayerMediaActionControlsProps = {
   isAiPanelOpen: boolean;
   isDanmakuActive: boolean;
   isEmbeddedSubtitleLoading: boolean;
-  isHighEnergyMarkDisabled: boolean;
-  isHighEnergyMarkPending: boolean;
   isEditSegmentMarkDisabled: boolean;
   isEditSegmentMarkPending: boolean;
   isSeriesMode: boolean;
@@ -23,7 +22,6 @@ type PlayerMediaActionControlsProps = {
   subtitleControlOptions: Array<{ value: string; label: string }>;
   videoTagCount: number;
   onChangeSubtitle: (subtitleId: string) => void;
-  onMarkHighEnergySegment: () => void;
   onMarkEditSegment: () => void;
   onOpenAiPanel: () => void;
   onOpenDanmakuDialog: () => void;
@@ -43,8 +41,6 @@ export function PlayerMediaActionControls({
   isAiPanelOpen,
   isDanmakuActive,
   isEmbeddedSubtitleLoading,
-  isHighEnergyMarkDisabled,
-  isHighEnergyMarkPending,
   isEditSegmentMarkDisabled,
   isEditSegmentMarkPending,
   isSeriesMode,
@@ -53,7 +49,6 @@ export function PlayerMediaActionControls({
   subtitleControlOptions,
   videoTagCount,
   onChangeSubtitle,
-  onMarkHighEnergySegment,
   onMarkEditSegment,
   onOpenAiPanel,
   onOpenDanmakuDialog,
@@ -62,8 +57,12 @@ export function PlayerMediaActionControls({
   onOpenTagDialog,
   onProbeEmbeddedSubtitles,
 }: PlayerMediaActionControlsProps) {
+  const toolMenuRef = useRef<HTMLDetailsElement>(null);
   const hasRating = typeof currentVideoRating === "number";
-  const highEnergyMarkLabel = isHighEnergyMarkPending ? "标记高能结束点" : "标记高能起点";
+  const runToolAction = (action: () => void) => {
+    toolMenuRef.current?.removeAttribute("open");
+    action();
+  };
 
   return (
     <>
@@ -111,60 +110,54 @@ export function PlayerMediaActionControls({
         </button>
       ) : null}
       {homeMediaMode === "special" ? (
-        <div className="special-player-actions" role="group" aria-label="常用影片操作">
+        <>
           <button
-            className={`icon-button ${videoTagCount ? "active" : ""}`}
-            type="button"
-            onClick={onOpenTagDialog}
-            disabled={!hasCurrentVideo}
-            title="管理视频标签"
-            aria-label="管理视频标签"
-          >
-            <Tags size={18} />
-          </button>
-          <button
-            className={`icon-button ${hasRating ? "active" : ""}`}
+            className={`player-rating-action ${hasRating ? "active" : ""}`}
             type="button"
             onClick={onOpenRatingDialog}
             disabled={!hasCurrentVideo}
-            title={hasRating ? `当前评分 ${currentVideoRating}/10` : "给视频评分"}
-            aria-label="给视频评分"
           >
-            <Star size={18} fill={hasRating ? "currentColor" : "none"} />
+            <Star size={16} fill={hasRating ? "currentColor" : "none"} aria-hidden="true" />
+            <span>{hasRating ? `评分 ${currentVideoRating} / 10` : "给影片评分"}</span>
           </button>
-          <button
-            className="icon-button lada-restoration-button"
-            type="button"
-            onClick={onOpenLadaRestoration}
-            disabled={!canRestoreWithLada}
-            title={canRestoreWithLada ? "修复当前影片马赛克" : ladaDisabledReason}
-            aria-label="修复当前影片马赛克"
-          >
-            <Sparkles size={18} />
-          </button>
-          <button
-            className={`icon-button highlight-mark-button ${isHighEnergyMarkPending ? "active" : ""}`}
-            type="button"
-            onClick={onMarkHighEnergySegment}
-            disabled={isHighEnergyMarkDisabled}
-            title={highEnergyMarkLabel}
-            aria-label={highEnergyMarkLabel}
-            aria-pressed={isHighEnergyMarkPending}
-          >
-            <Zap size={18} />
-          </button>
-          <button
-            className={`icon-button edit-segment-mark-button ${isEditSegmentMarkPending ? "active" : ""}`}
-            type="button"
-            onClick={onMarkEditSegment}
-            disabled={isEditSegmentMarkDisabled}
-            title={isEditSegmentMarkPending ? "标记剪辑保留终点" : "标记剪辑保留起点"}
-            aria-label={isEditSegmentMarkPending ? "标记剪辑保留终点" : "标记剪辑保留起点"}
-            aria-pressed={isEditSegmentMarkPending}
-          >
-            <Scissors size={18} />
-          </button>
-        </div>
+          <details className="player-tool-menu" ref={toolMenuRef}>
+            <summary aria-label="打开影片工具">
+              <Wrench size={16} aria-hidden="true" />
+              <span>影片工具</span>
+            </summary>
+            <div className="player-tool-menu-popover" role="group" aria-label="影片工具">
+              <button
+                className={videoTagCount ? "active" : ""}
+                type="button"
+                onClick={() => runToolAction(onOpenTagDialog)}
+                disabled={!hasCurrentVideo}
+              >
+                <Tags size={17} aria-hidden="true" />
+                <span><strong>管理标签</strong><small>{videoTagCount ? `${videoTagCount} 个标签` : "整理影片信息"}</small></span>
+              </button>
+            <button
+              className="lada-restoration-button"
+              type="button"
+              onClick={() => runToolAction(onOpenLadaRestoration)}
+              disabled={!canRestoreWithLada}
+              title={canRestoreWithLada ? undefined : ladaDisabledReason}
+            >
+              <Sparkles size={17} aria-hidden="true" />
+              <span><strong>创建修复版</strong><small>{canRestoreWithLada ? "使用 LADA 去除马赛克" : ladaDisabledReason}</small></span>
+            </button>
+            <button
+              className={isEditSegmentMarkPending ? "active" : ""}
+              type="button"
+              onClick={() => runToolAction(onMarkEditSegment)}
+              disabled={isEditSegmentMarkDisabled}
+              aria-pressed={isEditSegmentMarkPending}
+            >
+              <Scissors size={17} aria-hidden="true" />
+              <span><strong>{isEditSegmentMarkPending ? "设置剪辑终点" : "标记剪辑片段"}</strong><small>创建剪辑版的保留范围</small></span>
+            </button>
+            </div>
+          </details>
+        </>
       ) : null}
     </>
   );

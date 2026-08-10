@@ -395,6 +395,7 @@ import { PhotoAlbumCard } from "./PhotoAlbumCard";
 import { PhotoAlbumTagDialog } from "./PhotoAlbumTagDialog";
 import type { PhotoAlbumViewFilter } from "./PhotoAlbumToolbar";
 import { PlaylistPanel } from "./PlaylistPanel";
+import type { PlaylistArchiveTab } from "./PlaylistArchiveTabs";
 import { createPlaylistThumbnailStore } from "./playlistThumbnailStore";
 import { PlayerControlBar } from "./PlayerControlBar";
 import { PlayerStage } from "./PlayerStage";
@@ -425,9 +426,25 @@ const PhotoDashboardSection = lazy(() =>
 const PhotoViewerSection = lazy(() =>
   loadPhotoViewer().then((module) => ({ default: module.PhotoViewerSection })));
 
-const playlistResizeMinWidth = 280;
-const playlistResizeDefaultWidth = 360;
+const playlistResizeMinWidth = 400;
+const playlistResizeDefaultWidth = 460;
 const playlistResizeMaxWidth = 560;
+
+type PlaylistArchiveTabKind = "library" | "search" | "favorites" | "duplicate" | "version" | "rating" | "tag";
+
+type PlaylistArchiveTabState = PlaylistArchiveTab & {
+  kind: PlaylistArchiveTabKind;
+  filter: PlaylistFilter;
+  isSeriesMode: boolean;
+  page: number;
+  query: string;
+  ratingMode: RatingPlaylistMode | null;
+  reversed: boolean;
+  scrollTop: number;
+  selectedSeriesKey: string;
+  sortMode: PlaylistSortMode;
+  tagSelection: TagExplorerSelection | null;
+};
 function isServerPhotoImage(image: PhotoAlbumImage) {
   return Boolean(image.url && !image.file && !image.parentDirectory);
 }
@@ -905,6 +922,26 @@ export default function App() {
     playlistWidth: number;
   } | null>(null);
   const [playlistWidthOverride, setPlaylistWidthOverride] = useState<number | null>(null);
+  const [isPlaylistCollapsed, setIsPlaylistCollapsed] = useState(false);
+  const [isFullscreenPlaylistOpen, setIsFullscreenPlaylistOpen] = useState(false);
+  const [activePlaylistArchiveTabId, setActivePlaylistArchiveTabId] = useState("library");
+  const [playlistArchiveTabs, setPlaylistArchiveTabs] = useState<PlaylistArchiveTabState[]>([{
+    id: "library",
+    kind: "library",
+    label: "全部片库",
+    marker: "库",
+    closable: false,
+    filter: "all",
+    isSeriesMode: defaultPlayerPreferences.isSeriesMode,
+    page: 1,
+    query: "",
+    ratingMode: null,
+    reversed: defaultPlayerPreferences.isPlaylistSortReversed,
+    scrollTop: 0,
+    selectedSeriesKey: defaultPlayerPreferences.selectedSeriesKey,
+    sortMode: defaultPlayerPreferences.playlistSortMode,
+    tagSelection: null,
+  }]);
   const playbackRateRef = useRef(playbackRate);
   const holdPlaybackRateRef = useRef(holdPlaybackRate);
   const isHoldSpeedActiveRef = useRef(isHoldSpeedActive);
@@ -4615,7 +4652,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (isFullscreen || activeView !== "player") {
+    if (isFullscreen || isPlaylistCollapsed || activeView !== "player") {
       setAdaptiveColumns(null);
       return;
     }
@@ -4638,7 +4675,7 @@ export default function App() {
       const playerColumnStyles = window.getComputedStyle(playerColumn);
       const playerColumnGap = Number.parseFloat(playerColumnStyles.rowGap) || 14;
       const topBarHeight = topBarRef.current?.getBoundingClientRect().height ?? 0;
-      const controlsHeight = controlBarRef.current?.getBoundingClientRect().height ?? 0;
+      const controlsHeight = 0;
       const frameStyles = window.getComputedStyle(frame);
       const frameBorderX =
         (Number.parseFloat(frameStyles.borderLeftWidth) || 0) + (Number.parseFloat(frameStyles.borderRightWidth) || 0);
@@ -4696,7 +4733,7 @@ export default function App() {
       resizeObserver.disconnect();
       window.removeEventListener("resize", updateAdaptiveColumns);
     };
-  }, [activeView, isFullscreen, isVideoSideways, playlistWidthOverride, videoAspectRatio]);
+  }, [activeView, isFullscreen, isPlaylistCollapsed, isVideoSideways, playlistWidthOverride, videoAspectRatio]);
 
   useLayoutEffect(() => {
     const layer = danmakuLayerRef.current;
@@ -5149,7 +5186,7 @@ export default function App() {
     const video = videoRef.current;
     const handleFullscreenChange = () => {
       const fullscreenElement = document.fullscreenElement ?? fullscreenDocument.webkitFullscreenElement;
-      setIsFullscreen(fullscreenElement === playerRef.current);
+      setIsFullscreen(activeView === "player" && fullscreenElement === appShellRef.current);
       showControls();
     };
     const handleVideoFullscreenStart = () => {
@@ -5171,7 +5208,7 @@ export default function App() {
       video?.removeEventListener("webkitbeginfullscreen", handleVideoFullscreenStart);
       video?.removeEventListener("webkitendfullscreen", handleVideoFullscreenEnd);
     };
-  }, [currentVideo?.id, showControls]);
+  }, [activeView, currentVideo?.id, showControls]);
 
   useLayoutEffect(() => {
     const element = videoRef.current;
@@ -5742,7 +5779,7 @@ export default function App() {
     togglePictureInPicture,
   } = usePlayerToolActions({
     currentVideo,
-    playerRef,
+    fullscreenRef: appShellRef,
     setMessage,
     setVideoRotation,
     videoRef,
@@ -6403,10 +6440,101 @@ export default function App() {
     ? `标签片单 · ${playlistVisibleCountLabel} 个视频`
     : defaultPlaylistPanelLabels.title;
 
+  useEffect(() => {
+    setIsFullscreenPlaylistOpen(false);
+  }, [isFullscreen]);
+
+  useEffect(() => {
+    const trimmedSearchQuery = playlistSearchQuery.trim();
+    const tabIdentity = isDuplicatePlaylistActive
+      ? { id: "duplicate", kind: "duplicate" as const, label: "重复影片", marker: "重" }
+      : isVersionPlaylistActive
+        ? { id: "version", kind: "version" as const, label: "影片版本", marker: "版" }
+        : isRatingPlaylistActive
+          ? { id: "rating", kind: "rating" as const, label: activeRatingPlaylistLabel || "评分列表", marker: "评" }
+          : isTagPlaylistActive
+            ? { id: "tag", kind: "tag" as const, label: `标签 · ${formatTagExplorerSearchQuery(tagPlaylistSelection!)}`, marker: "签" }
+            : playlistFilter === "favorites"
+              ? { id: "favorites", kind: "favorites" as const, label: trimmedSearchQuery ? `收藏 · ${trimmedSearchQuery}` : "收藏影片", marker: "藏" }
+              : trimmedSearchQuery
+                ? { id: "search", kind: "search" as const, label: `搜索 · ${trimmedSearchQuery}`, marker: "搜" }
+                : { id: "library", kind: "library" as const, label: "全部片库", marker: "库" };
+    const nextTab: PlaylistArchiveTabState = {
+      ...tabIdentity,
+      closable: tabIdentity.id !== "library",
+      filter: playlistFilter,
+      isSeriesMode,
+      page: visiblePlaylistPage,
+      query: playlistSearchQuery,
+      ratingMode: ratingPlaylistMode,
+      reversed: isPlaylistSortReversed,
+      scrollTop: playlistViewport.scrollTop,
+      selectedSeriesKey,
+      sortMode: playlistSortMode,
+      tagSelection: tagPlaylistSelection,
+    };
+
+    setActivePlaylistArchiveTabId(tabIdentity.id);
+    setPlaylistArchiveTabs((previous) => {
+      const existingIndex = previous.findIndex((tab) => tab.id === tabIdentity.id);
+      if (existingIndex < 0) return [...previous, nextTab];
+      return previous.map((tab, index) => index === existingIndex ? nextTab : tab);
+    });
+  }, [
+    activeRatingPlaylistLabel,
+    isDuplicatePlaylistActive,
+    isPlaylistSeriesMode,
+    isPlaylistSortReversed,
+    isRatingPlaylistActive,
+    isSeriesMode,
+    isTagPlaylistActive,
+    isVersionPlaylistActive,
+    playlistFilter,
+    playlistSearchQuery,
+    playlistSortMode,
+    playlistViewport.scrollTop,
+    ratingPlaylistMode,
+    selectedSeriesKey,
+    tagPlaylistSelection,
+    visiblePlaylistPage,
+  ]);
+
+  const activatePlaylistArchiveTab = (tabId: string) => {
+    const tab = playlistArchiveTabs.find((candidate) => candidate.id === tabId);
+    if (!tab || tab.id === activePlaylistArchiveTabId) return;
+
+    setActivePlaylistArchiveTabId(tab.id);
+    setPlaylistPage(tab.page);
+    setPlaylistPageInput(String(tab.page));
+    setPlaylistSearchQuery(tab.query);
+    setPlaylistFilter(tab.filter);
+    setPlaylistSortMode(tab.sortMode);
+    setIsPlaylistSortReversed(tab.reversed);
+    setIsSeriesMode(tab.isSeriesMode);
+    setSelectedSeriesKey(tab.selectedSeriesKey);
+    setIsSeriesMenuOpen(false);
+    setIsDuplicatePlaylistActive(tab.kind === "duplicate");
+    setIsVersionPlaylistActive(tab.kind === "version");
+    setRatingPlaylistMode(tab.kind === "rating" ? tab.ratingMode : null);
+    setTagPlaylistSelection(tab.kind === "tag" ? tab.tagSelection : null);
+
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        if (playlistRef.current) playlistRef.current.scrollTop = tab.scrollTop;
+      });
+    });
+  };
+
+  const closePlaylistArchiveTab = (tabId: string) => {
+    if (tabId === "library") return;
+    if (tabId === activePlaylistArchiveTabId) activatePlaylistArchiveTab("library");
+    setPlaylistArchiveTabs((previous) => previous.filter((tab) => tab.id !== tabId));
+  };
+
   return (
     <>
     <main
-      className={`app-shell theme-${theme} ${isDragActive ? "drag-active" : ""} ${isPrivacyMode ? "privacy-mode" : ""} ${isCinemaMode ? "cinema-mode" : ""} ${isPhotoImmersive ? "photo-immersive" : ""} ${activeView === "photoViewer" ? "photo-viewer-view" : ""} ${isNonPlayerViewVisible ? "home-view" : ""}`}
+      className={`app-shell theme-${theme} ${isDragActive ? "drag-active" : ""} ${isPrivacyMode ? "privacy-mode" : ""} ${isCinemaMode ? "cinema-mode" : ""} ${isPhotoImmersive ? "photo-immersive" : ""} ${activeView === "photoViewer" ? "photo-viewer-view" : ""} ${isNonPlayerViewVisible ? "home-view" : ""} ${isPlaylistCollapsed && !isFullscreen ? "playlist-collapsed" : ""} ${isFullscreen ? "player-fullscreen" : ""} ${isFullscreenPlaylistOpen ? "fullscreen-playlist-open" : ""}`}
       ref={appShellRef}
       style={shellStyle}
       onDragOver={handleDragOver}
@@ -6895,6 +7023,7 @@ export default function App() {
             isEditSegmentMarkPending={isCurrentEditSegmentMarkPending}
             isHighEnergyMarkDisabled={!currentVideo || isPrivacyMode}
             isHighEnergyMarkPending={isCurrentHighEnergyMarkPending}
+            highEnergyPendingStartTime={isCurrentHighEnergyMarkPending ? pendingHighEnergyStart?.time ?? null : null}
             isMuted={isMuted}
             isPrivacyMode={isPrivacyMode}
             isSeriesMode={isSeriesMode}
@@ -6978,8 +7107,9 @@ export default function App() {
         </div>
       </section>
 
-      {!isNonPlayerViewVisible && !isPrivacyMode && !isCinemaMode ? (
+      {!isNonPlayerViewVisible && !isPrivacyMode && !isCinemaMode && (isFullscreen ? isFullscreenPlaylistOpen : !isPlaylistCollapsed) ? (
         <>
+        {!isFullscreen ? (
         <button
           className="playlist-resize-handle"
           type="button"
@@ -6987,7 +7117,10 @@ export default function App() {
           title="拖动调整侧边栏宽度"
           onPointerDown={handlePlaylistResizePointerDown}
         />
+        ) : null}
         <PlaylistPanel
+          activeArchiveTabId={activePlaylistArchiveTabId}
+          archiveTabs={playlistArchiveTabs}
           ariaLabel={playlistPanelAriaLabel}
           bangumiButtonTitle={bangumiButtonTitle}
           canOpenBangumiSubject={canOpenBangumiSubject}
@@ -7041,10 +7174,8 @@ export default function App() {
           visibleVideoCount={visibleVideos.length}
           videoComments={videoComments}
           videoRatings={videoRatings}
-          videoTags={effectiveVideoTags}
-          systemVideoTags={systemVideoTags}
-          videoActorTags={videoActorTags}
           createVideoTitle={createVideoMetadataTitle}
+          onActivateArchiveTab={activatePlaylistArchiveTab}
           onChangePlaylistFilter={(nextFilter) => {
             setPlaylistPage(1);
             setPlaylistFilter(nextFilter);
@@ -7117,8 +7248,21 @@ export default function App() {
           onThumbnailError={markPlaylistThumbnailFailed}
           onTogglePlaylistSortDirection={togglePlaylistSortDirection}
           onToggleSeriesMenu={() => setIsSeriesMenuOpen((isOpen) => !isOpen)}
+          onCloseArchiveTab={closePlaylistArchiveTab}
+          onCollapse={() => isFullscreen ? setIsFullscreenPlaylistOpen(false) : setIsPlaylistCollapsed(true)}
         />
         </>
+      ) : null}
+      {!isNonPlayerViewVisible && !isPrivacyMode && !isCinemaMode && (isFullscreen ? !isFullscreenPlaylistOpen : isPlaylistCollapsed) ? (
+        <button
+          className="playlist-expand-button"
+          type="button"
+          onClick={() => isFullscreen ? setIsFullscreenPlaylistOpen(true) : setIsPlaylistCollapsed(false)}
+          aria-label="展开影片档案"
+        >
+          <span aria-hidden="true">档</span>
+          <strong>影片档案</strong>
+        </button>
       ) : null}
     </main>
     <HomeTagExplorerDialog

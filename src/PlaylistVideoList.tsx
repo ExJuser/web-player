@@ -7,14 +7,11 @@ import type {
   VideoCommentStore,
   VideoItem,
   VideoRatingStore,
-  VideoTagStore,
 } from "./playerTypes";
 import type { DuplicatePlaylistVideoMeta } from "./playerUiState";
 import type { PlaylistSearchMatch } from "./playerPlaylistSearch";
 import type { VideoVersionPlaylistMeta } from "./videoVersionUtils";
 import type { PlaylistThumbnailStore } from "./playlistThumbnailStore";
-
-const emptyVideoTags: string[] = [];
 
 type PlaylistVideoListProps = {
   currentVideoId: string | null;
@@ -23,7 +20,6 @@ type PlaylistVideoListProps = {
   favoriteVideoIds: Set<string>;
   homeMediaModeLabel: string;
   isDuplicatePlaylistActive: boolean;
-  isVersionPlaylistActive: boolean;
   isRatingPlaylistActive: boolean;
   isSearchPending: boolean;
   isPlaylistSeriesMode: boolean;
@@ -44,9 +40,6 @@ type PlaylistVideoListProps = {
   totalVideoCount: number;
   videoComments: VideoCommentStore;
   videoRatings: VideoRatingStore;
-  videoTags: VideoTagStore;
-  systemVideoTags: VideoTagStore;
-  videoActorTags: Record<string, string[]>;
   visibleVideoCount: number;
   createVideoTitle: (video: VideoItem) => string;
   onDelete: (video: VideoItem) => void;
@@ -66,7 +59,6 @@ export function PlaylistVideoList({
   favoriteVideoIds,
   homeMediaModeLabel,
   isDuplicatePlaylistActive,
-  isVersionPlaylistActive,
   isRatingPlaylistActive,
   isSearchPending,
   isPlaylistSeriesMode,
@@ -87,9 +79,6 @@ export function PlaylistVideoList({
   totalVideoCount,
   videoComments,
   videoRatings,
-  videoTags,
-  systemVideoTags,
-  videoActorTags,
   visibleVideoCount,
   createVideoTitle,
   onDelete,
@@ -119,8 +108,7 @@ export function PlaylistVideoList({
         const isFavorite = favoriteVideoIds.has(video.id);
         const seriesTitle = isPlaylistSeriesMode ? seriesTitleByVideoId.get(video.id) : "";
         const duplicateMeta = isDuplicatePlaylistActive ? duplicatePlaylistMetaByVideoId.get(video.id) : null;
-        const versionMeta = isVersionPlaylistActive ? versionPlaylistMetaByVideoId.get(video.id) : null;
-        const tags = videoTags[video.id] ?? emptyVideoTags;
+        const versionMeta = versionPlaylistMetaByVideoId.get(video.id) ?? null;
         const rating = videoRatings[video.id];
         const ratingComment = videoComments[video.id];
 
@@ -129,7 +117,7 @@ export function PlaylistVideoList({
             key={video.id}
             duplicateMeta={duplicateMeta}
             versionMeta={versionMeta}
-            hasProgress={Boolean(progress)}
+            progress={progress}
             isActive={isActive}
             isCompleted={isCompleted}
             isDeletePending={isVideoDeletePending}
@@ -142,9 +130,6 @@ export function PlaylistVideoList({
             searchTerms={searchTerms}
             seriesTitle={seriesTitle}
             showVideoMetadata={showVideoMetadata}
-            tags={tags}
-            systemTags={systemVideoTags[video.id]}
-            actorTags={videoActorTags[video.id]}
             title={createVideoTitle(video)}
             video={video}
             onDelete={onDelete}

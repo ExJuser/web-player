@@ -58,6 +58,7 @@ type PlayerControlBarProps = {
   isEditSegmentMarkPending: boolean;
   isHighEnergyMarkDisabled: boolean;
   isHighEnergyMarkPending: boolean;
+  highEnergyPendingStartTime: number | null;
   isMuted: boolean;
   isPrivacyMode: boolean;
   isSeriesMode: boolean;
@@ -152,6 +153,7 @@ export function PlayerControlBar({
   isEditSegmentMarkPending,
   isHighEnergyMarkDisabled,
   isHighEnergyMarkPending,
+  highEnergyPendingStartTime,
   isMuted,
   isPrivacyMode,
   isSeriesMode,
@@ -222,6 +224,13 @@ export function PlayerControlBar({
     onKeepControlsVisible();
   };
   const handleFocus: FocusEventHandler<HTMLDivElement> = () => onKeepControlsVisible();
+  const handleMouseLeave: MouseEventHandler<HTMLDivElement> = (event) => {
+    if (event.currentTarget.querySelector('details[open], [aria-expanded="true"]')) {
+      onKeepControlsVisible();
+      return;
+    }
+    onScheduleControlsHide();
+  };
   const handlePointerUp: PointerEventHandler<HTMLDivElement> = (event) => {
     if (event.pointerType !== "mouse") onScheduleControlsHide();
   };
@@ -232,11 +241,14 @@ export function PlayerControlBar({
       className="control-bar"
       onFocus={handleFocus}
       onMouseEnter={onKeepControlsVisible}
-      onMouseLeave={onScheduleControlsHide}
+      onMouseLeave={handleMouseLeave}
       onMouseMove={handleMouseMove}
       onPointerDown={onKeepControlsVisible}
       onPointerUp={handlePointerUp}
     >
+      <div className="control-progress-rail" aria-hidden="true">
+        <span style={{ width: `${progressPercent}%` }} />
+      </div>
       <PlayerTimelineControls
         currentTime={currentTime}
         duration={duration}
@@ -247,12 +259,16 @@ export function PlayerControlBar({
         canGenerateMontage={canGenerateMontage}
         montageDisabledReason={montageDisabledReason}
         isPrivacyMode={isPrivacyMode}
+        isHighEnergyMarkDisabled={isHighEnergyMarkDisabled || !duration}
+        isHighEnergyMarkPending={isHighEnergyMarkPending}
+        highEnergyPendingStartTime={highEnergyPendingStartTime}
         showEditSegmentControls={homeMediaMode === "special"}
         progressPercent={progressPercent}
         timelinePreview={timelinePreview}
         timelineRef={timelineRef}
         onHideTimelinePreview={onHideTimelinePreview}
         onGenerateMontage={onGenerateMontage}
+        onMarkHighEnergySegment={onMarkHighEnergySegment}
         onEditHighlight={onEditHighlight}
         onRemoveHighlight={onRemoveHighlight}
         onRemoveEditSegment={onRemoveEditSegment}
@@ -315,8 +331,6 @@ export function PlayerControlBar({
             isAiPanelOpen={isAiPanelOpen}
             isDanmakuActive={danmakuEnabled}
             isEmbeddedSubtitleLoading={isEmbeddedSubtitleLoading}
-            isHighEnergyMarkDisabled={isHighEnergyMarkDisabled || !duration}
-            isHighEnergyMarkPending={isHighEnergyMarkPending}
             isEditSegmentMarkDisabled={isEditSegmentMarkDisabled || !duration}
             isEditSegmentMarkPending={isEditSegmentMarkPending}
             isSeriesMode={isSeriesMode}
@@ -325,7 +339,6 @@ export function PlayerControlBar({
             subtitleControlOptions={subtitleControlOptions}
             videoTagCount={currentVideoTagsCount}
             onChangeSubtitle={onChangeSubtitle}
-            onMarkHighEnergySegment={onMarkHighEnergySegment}
             onMarkEditSegment={onMarkEditSegment}
             onOpenAiPanel={onOpenAiPanel}
             onOpenDanmakuDialog={onOpenDanmakuDialog}

@@ -1,6 +1,7 @@
 import type { RefObject } from "react";
 
 import { PlayerSearchInput } from "./PlayerSearchInput";
+import { PlaylistArchiveTabs, type PlaylistArchiveTab } from "./PlaylistArchiveTabs";
 import { PlaylistPagination } from "./PlaylistPagination";
 import { PlaylistTools } from "./PlaylistTools";
 import { PlaylistVideoList } from "./PlaylistVideoList";
@@ -15,11 +16,12 @@ import type {
   VideoCommentStore,
   VideoItem,
   VideoRatingStore,
-  VideoTagStore,
 } from "./playerTypes";
 
 type PlaylistPanelProps = {
   ariaLabel: string;
+  activeArchiveTabId: string;
+  archiveTabs: PlaylistArchiveTab[];
   bangumiButtonTitle: string;
   canOpenBangumiSubject: boolean;
   currentVideoId: string | null;
@@ -72,10 +74,8 @@ type PlaylistPanelProps = {
   visibleVideoCount: number;
   videoComments: VideoCommentStore;
   videoRatings: VideoRatingStore;
-  videoTags: VideoTagStore;
-  systemVideoTags: VideoTagStore;
-  videoActorTags: Record<string, string[]>;
   createVideoTitle: (video: VideoItem) => string;
+  onActivateArchiveTab: (tabId: string) => void;
   onChangePlaylistFilter: (filter: PlaylistFilter) => void;
   onChangePlaylistSortMode: (sortMode: PlaylistSortMode) => void;
   onChangePlaylistSearch: (query: string) => void;
@@ -101,10 +101,14 @@ type PlaylistPanelProps = {
   onThumbnailError: (videoId: string) => void;
   onTogglePlaylistSortDirection: () => void;
   onToggleSeriesMenu: () => void;
+  onCloseArchiveTab: (tabId: string) => void;
+  onCollapse: () => void;
 };
 
 export function PlaylistPanel({
   ariaLabel,
+  activeArchiveTabId,
+  archiveTabs,
   bangumiButtonTitle,
   canOpenBangumiSubject,
   currentVideoId,
@@ -157,10 +161,8 @@ export function PlaylistPanel({
   visibleVideoCount,
   videoComments,
   videoRatings,
-  videoTags,
-  systemVideoTags,
-  videoActorTags,
   createVideoTitle,
+  onActivateArchiveTab,
   onChangePlaylistFilter,
   onChangePlaylistSortMode,
   onChangePlaylistSearch,
@@ -186,9 +188,26 @@ export function PlaylistPanel({
   onThumbnailError,
   onTogglePlaylistSortDirection,
   onToggleSeriesMenu,
+  onCloseArchiveTab,
+  onCollapse,
 }: PlaylistPanelProps) {
   return (
     <aside className="playlist-panel" aria-label={ariaLabel}>
+      <div className="playlist-archive-heading">
+        <div>
+          <span className="playlist-archive-eyebrow">私人影片档案</span>
+          <strong>影片档案</strong>
+        </div>
+        <button className="playlist-collapse-button" type="button" onClick={onCollapse} aria-label="折叠影片档案" title="折叠影片档案">
+          <span aria-hidden="true">›</span>
+        </button>
+      </div>
+      <PlaylistArchiveTabs
+        activeTabId={activeArchiveTabId}
+        tabs={archiveTabs}
+        onActivate={onActivateArchiveTab}
+        onClose={onCloseArchiveTab}
+      />
       <div className="playlist-header">
         <div className="playlist-title-row">
           <span className={`player-mode-indicator mode-${homeMediaMode}`} title={`当前播放模式：${playerMediaModeLabel}`}>
@@ -263,7 +282,6 @@ export function PlaylistPanel({
         favoriteVideoIds={favoriteVideoIds}
         homeMediaModeLabel={homeMediaModeLabel}
         isDuplicatePlaylistActive={isDuplicatePlaylistActive}
-        isVersionPlaylistActive={isVersionPlaylistActive}
         isRatingPlaylistActive={isRatingPlaylistActive}
         isSearchPending={isSearchPending}
         isPlaylistSeriesMode={isPlaylistSeriesMode}
@@ -284,9 +302,6 @@ export function PlaylistPanel({
         totalVideoCount={totalVideoCount}
         videoComments={videoComments}
         videoRatings={videoRatings}
-        videoTags={videoTags}
-        systemVideoTags={systemVideoTags}
-        videoActorTags={videoActorTags}
         visibleVideoCount={visibleVideoCount}
         createVideoTitle={createVideoTitle}
         onClearSearch={onClearPlaylistSearch}
