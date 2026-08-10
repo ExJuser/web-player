@@ -2363,7 +2363,11 @@ button {
 
 .photo-root-status .photo-utility-popover {
   right: 0;
-  width: min(860px, calc(100vw - 52px));
+  width: min(860px, 100%);
+}
+
+.photo-root-status {
+  position: static;
 }
 
 .photo-utility-popover-header {
