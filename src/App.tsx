@@ -1154,7 +1154,6 @@ export default function App() {
     const nextDirectories = options?.retainExisting ? { ...photoAlbumDirectoriesRef.current } : {};
     const rootsWithoutWriteAccess = new Set<string>();
     scannedRootIds.forEach((rootId) => delete nextDirectories[rootId]);
-    resetPhotoAlbumObjectUrls();
 
     try {
       for (const root of roots) {
@@ -1196,6 +1195,7 @@ export default function App() {
         await writePhotoAlbumLibraryRoots(nextStoredRoots).catch(() => undefined);
         setPhotoLibraryRoots(nextStoredRoots);
       }
+      resetPhotoAlbumObjectUrls();
       photoAlbumDirectoriesRef.current = nextDirectories;
       photoAlbumsRef.current = nextAlbums;
       setPhotoAlbums(nextAlbums);
@@ -1408,12 +1408,14 @@ export default function App() {
         ));
         if (cachedScan && hasConfiguredCache) {
           applyCachedPhotoAlbumScan(cachedScan, restoredRoots, readableRootIds);
-          if (readableRootIds.size !== restoredRoots.length) {
-            const fullCachedScan = await loadCachedPhotoAlbumScan({ includeImages: true });
-            const accessibleAlbums = (fullCachedScan?.albums ?? cachedScan.albums)
-              .filter((album) => readableRootIds.has(album.mediaRootId));
-            await saveCachedPhotoAlbumScan(createCachedPhotoAlbumLibraryScan(accessibleAlbums)).catch(() => undefined);
-          }
+          window.requestAnimationFrame(() => {
+            window.setTimeout(() => {
+              void scanPhotoLibraryRoots(restoredRoots).catch((error) => {
+                setPhotoAlbumMessage(error instanceof Error ? error.message : "后台刷新看图媒体库失败，请重试。");
+              });
+            }, 0);
+          });
+          return;
         }
         await scanPhotoLibraryRoots(restoredRoots);
       } catch (error) {
