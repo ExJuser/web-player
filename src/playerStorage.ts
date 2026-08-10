@@ -12,6 +12,7 @@ import type {
   PlayerDeferredData,
   PlayerGlobalMetadata,
   PlayerLibraryMetadata,
+  PhotoAlbumLibraryRoot,
   PlayerStartupData,
   PersistedDuplicateVideoPair,
   PlayerPersistentSettings,
@@ -50,6 +51,7 @@ import {
   RECENT_FOLDER_KEY,
   RECENT_FOLDER_STORE_NAME,
   PHOTO_ALBUM_FOLDER_KEY,
+  PHOTO_ALBUM_FOLDERS_KEY,
   thumbnailCacheVersion,
   danmakuSpeedMin,
   danmakuSpeedMax,
@@ -63,6 +65,7 @@ import {
   seekSteps,
   defaultShortcuts
 } from "./playerConstants";
+import { hashString, sanitizeLibraryName } from "./playerLibraryUtils";
 import { createWatchActivityKey, isValidWatchActivityDate } from "./watchActivityInsights";
 
 const LEGACY_THUMBNAIL_STORE_NAME = "thumbnails";
@@ -1613,6 +1616,63 @@ export async function clearPhotoAlbumFolderHandle() {
   await runObjectStoreRequest<undefined>(RECENT_FOLDER_STORE_NAME, "readwrite", (store) =>
     store.delete(PHOTO_ALBUM_FOLDER_KEY),
   );
+}
+
+function parsePhotoAlbumLibraryRoots(source: unknown) {
+  if (!Array.isArray(source)) return [];
+  return source.flatMap((entry) => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) return [];
+    const root = entry as Partial<PhotoAlbumLibraryRoot>;
+    const id = typeof root.id === "string" ? root.id.trim() : "";
+    const label = typeof root.label === "string" ? root.label.trim() : "";
+    const basename = typeof root.basename === "string" ? root.basename.trim() : "";
+    if (!id || !label || !basename) return [];
+    return [{
+      id,
+      label,
+      basename,
+      directory: root.directory?.kind === "directory" ? root.directory : undefined,
+      createdAt: typeof root.createdAt === "number" && Number.isFinite(root.createdAt) ? root.createdAt : 0,
+    }];
+  });
+}
+
+export async function writePhotoAlbumLibraryRoots(roots: PhotoAlbumLibraryRoot[]) {
+  if (!("indexedDB" in window)) return;
+  await runObjectStoreRequest<IDBValidKey>(RECENT_FOLDER_STORE_NAME, "readwrite", (store) =>
+    store.put(roots, PHOTO_ALBUM_FOLDERS_KEY),
+  );
+}
+
+export async function readPhotoAlbumLibraryRoots(): Promise<PhotoAlbumLibraryRoot[]> {
+  if (!("indexedDB" in window)) return [];
+  const stored = await runObjectStoreRequest<unknown>(RECENT_FOLDER_STORE_NAME, "readonly", (store) =>
+    store.get(PHOTO_ALBUM_FOLDERS_KEY),
+  );
+  const roots = parsePhotoAlbumLibraryRoots(stored);
+  if (roots.length) return roots;
+
+  const legacyDirectory = await readPhotoAlbumFolderHandle();
+  if (!legacyDirectory) return [];
+  const legacyLabel = legacyDirectory.name || "看图";
+  const migratedRoot: PhotoAlbumLibraryRoot = {
+    id: `browser-photo:${sanitizeLibraryName(legacyLabel)}-${hashString(legacyLabel)}`,
+    label: legacyLabel,
+    basename: legacyDirectory.name,
+    directory: legacyDirectory,
+    createdAt: Date.now(),
+  };
+  await writePhotoAlbumLibraryRoots([migratedRoot]);
+  await clearPhotoAlbumFolderHandle();
+  return [migratedRoot];
+}
+
+export async function clearPhotoAlbumLibraryRoots() {
+  if (!("indexedDB" in window)) return;
+  await runObjectStoreRequest<undefined>(RECENT_FOLDER_STORE_NAME, "readwrite", (store) =>
+    store.delete(PHOTO_ALBUM_FOLDERS_KEY),
+  );
+  await clearPhotoAlbumFolderHandle();
 }
 
 export async function hasDirectoryWritePermission(directory: FileSystemDirectoryHandle) {

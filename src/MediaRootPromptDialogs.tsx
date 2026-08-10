@@ -4,6 +4,7 @@ import type { LocalMediaRoot } from "./mediaRootScanCache";
 
 type MediaRootLabelDialogProps = {
   directoryName: string;
+  mediaKind?: "video" | "photo";
   value: string;
   onClose: () => void;
   onSubmit: () => void;
@@ -13,6 +14,7 @@ type MediaRootLabelDialogProps = {
 type ExistingMediaRootDialogProps = {
   directoryName: string;
   mediaRootLabel: string;
+  mediaKind?: "video" | "photo";
   onCancel: () => void;
   onRescan: () => void;
 };
@@ -29,6 +31,7 @@ type MediaRootLocalPathDialogViewProps = {
 
 export function MediaRootLabelDialog({
   directoryName,
+  mediaKind = "video",
   value,
   onClose,
   onSubmit,
@@ -50,8 +53,8 @@ export function MediaRootLabelDialog({
           <FolderOpen size={28} />
         </div>
         <div className="dialog-copy">
-          <h2 id="media-root-label-title">命名媒体库</h2>
-          <p>为“{directoryName}”设置一个媒体库名称。</p>
+          <h2 id="media-root-label-title">{mediaKind === "photo" ? "命名看图媒体库" : "命名媒体库"}</h2>
+          <p>为“{directoryName}”设置一个{mediaKind === "photo" ? "看图" : ""}媒体库名称。</p>
         </div>
         <label className="media-root-label-field">
           <span>媒体库名称</span>
@@ -82,6 +85,7 @@ export function MediaRootLabelDialog({
 export function ExistingMediaRootDialog({
   directoryName,
   mediaRootLabel,
+  mediaKind = "video",
   onCancel,
   onRescan,
 }: ExistingMediaRootDialogProps) {
@@ -102,7 +106,10 @@ export function ExistingMediaRootDialog({
         </div>
         <div className="dialog-copy">
           <h2 id="existing-media-root-title">该媒体库已添加</h2>
-          <p>“{mediaRootLabel}”已在全局媒体库中。重新扫描会刷新“{directoryName}”下的视频和字幕。</p>
+          <p>
+            “{mediaRootLabel}”已在{mediaKind === "photo" ? "看图" : "全局"}媒体库中。重新扫描会刷新
+            “{directoryName}”下的{mediaKind === "photo" ? "图片" : "视频和字幕"}。
+          </p>
         </div>
         <div className="dialog-actions">
           <button className="secondary-button" type="button" onClick={onCancel}>

@@ -85,7 +85,7 @@ export function usePhotoAlbumRuntime({
   const photoAlbumTagsRef = useRef<Record<string, string[]>>({});
   const favoritePhotoAlbumIdsRef = useRef(new Set<string>());
   const photoAlbumPreferencesRef = useRef(defaultPhotoAlbumPreferences);
-  const photoAlbumDirectoryRef = useRef<FileSystemDirectoryHandle | null>(null);
+  const photoAlbumDirectoriesRef = useRef<Record<string, FileSystemDirectoryHandle>>({});
 
   photoAlbumsRef.current = photoAlbums;
   photoAlbumProgressRef.current = photoAlbumProgress;
@@ -170,7 +170,7 @@ export function usePhotoAlbumRuntime({
     buildPhotoAlbumStore,
     favoritePhotoAlbumIdsRef,
     photoAlbumCoverPreferencesRef,
-    photoAlbumDirectoryRef,
+    photoAlbumDirectoriesRef,
     photoAlbumPreferencesRef,
     photoAlbumProgressRef,
     photoAlbumsRef,

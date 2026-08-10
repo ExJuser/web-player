@@ -2166,6 +2166,45 @@ button {
   max-height: 220px;
 }
 
+.photo-root-status .home-section-header,
+.photo-root-status .home-section-header > div,
+.photo-root-actions,
+.photo-root-row-actions {
+  display: flex;
+  align-items: center;
+}
+
+.photo-root-status .home-section-header {
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.photo-root-status .home-section-header > div,
+.photo-root-actions,
+.photo-root-row-actions {
+  gap: 8px;
+}
+
+.photo-root-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.photo-root-status .home-section-header h2 {
+  margin: 0;
+}
+
+.photo-root-row-actions {
+  grid-column: 2;
+  grid-row: 1 / span 4;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.photo-root-row-actions .secondary-button {
+  padding: 7px 10px;
+}
+
 .photo-album-grid {
   display: flex;
   flex: 1 0 auto;

@@ -5,6 +5,7 @@ export type FileSystemDirectoryHandle = {
   removeEntry?(name: string, options?: { recursive?: boolean }): Promise<void>;
   queryPermission?(descriptor?: { mode?: "read" | "readwrite" }): Promise<PermissionState>;
   requestPermission?(descriptor?: { mode?: "read" | "readwrite" }): Promise<PermissionState>;
+  isSameEntry?(other: FileSystemDirectoryHandle): Promise<boolean>;
   kind: "directory";
   name: string;
 };
@@ -470,6 +471,14 @@ export type PhotoAlbum = {
   updatedAt: number;
   folderModifiedAt?: number;
   images: PhotoAlbumImage[];
+};
+
+export type PhotoAlbumLibraryRoot = {
+  id: string;
+  label: string;
+  basename: string;
+  directory?: FileSystemDirectoryHandle;
+  createdAt: number;
 };
 
 export type PhotoAlbumProgress = {

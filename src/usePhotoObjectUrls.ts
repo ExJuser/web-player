@@ -21,7 +21,7 @@ type UsePhotoObjectUrlsParams = {
   decodedPhotoImageIdsRef: MutableRef<Set<string>>;
   pagedPhotoAlbums: PhotoAlbum[];
   photoAlbumCoverPreferences: Record<string, string>;
-  photoAlbumDirectoryRef: MutableRef<FileSystemDirectoryHandle | null>;
+  photoAlbumDirectoriesRef: MutableRef<Record<string, FileSystemDirectoryHandle>>;
   photoImageFilePromisesRef: MutableRef<Record<string, Promise<File | null>>>;
   photoObjectUrlAccessRef: MutableRef<Record<string, number>>;
   photoObjectUrlMetadataRef: MutableRef<PhotoObjectUrlCacheMetadata>;
@@ -38,7 +38,7 @@ export function usePhotoObjectUrls({
   decodedPhotoImageIdsRef,
   pagedPhotoAlbums,
   photoAlbumCoverPreferences,
-  photoAlbumDirectoryRef,
+  photoAlbumDirectoriesRef,
   photoImageFilePromisesRef,
   photoObjectUrlAccessRef,
   photoObjectUrlMetadataRef,
@@ -62,9 +62,10 @@ export function usePhotoObjectUrls({
   useEffect(() => {
     const runId = ++loadRunIdRef.current;
     const neededImages = new Map<string, PhotoAlbumImage>();
-    const directory = photoAlbumDirectoryRef.current;
     const rememberNeededImage = (image?: PhotoAlbumImage | null) => {
-      if (image && !image.url && (image.file || directory)) neededImages.set(image.id, image);
+      if (image && !image.url && (image.file || photoAlbumDirectoriesRef.current[image.mediaRootId])) {
+        neededImages.set(image.id, image);
+      }
     };
 
     if (activeView === "photos") {
@@ -134,7 +135,7 @@ export function usePhotoObjectUrls({
         photoObjectUrlAccessRef.current[id] = now;
         photoObjectUrlMetadataRef.current[id] = { bytes: image.file.size, createdAt: now, decoded: false, lastAccessedAt: now };
         didChange = true;
-      } else if (directory) {
+      } else if (photoAlbumDirectoriesRef.current[image.mediaRootId]) {
         missingImages.push(image);
       }
     });
@@ -153,11 +154,13 @@ export function usePhotoObjectUrls({
       setPhotoObjectUrls(prunedUrls);
     }
 
-    if (!directory || !missingImages.length) return;
+    if (!missingImages.length) return;
 
     let isCancelled = false;
     const isStaleRun = () => isCancelled || loadRunIdRef.current !== runId;
     const loadMissingImage = async (image: PhotoAlbumImage) => {
+      const directory = photoAlbumDirectoriesRef.current[image.mediaRootId];
+      if (!directory) return;
       let filePromise = photoImageFilePromisesRef.current[image.id];
       if (!filePromise) {
         filePromise = getPhotoImageFileFromDirectory(directory, image.relativePath).catch(() => null);
@@ -214,7 +217,7 @@ export function usePhotoObjectUrls({
     decodedPhotoImageIdsRef,
     pagedPhotoAlbums,
     photoAlbumCoverPreferences,
-    photoAlbumDirectoryRef,
+    photoAlbumDirectoriesRef,
     photoImageFilePromisesRef,
     photoObjectUrlAccessRef,
     photoObjectUrlMetadataRef,

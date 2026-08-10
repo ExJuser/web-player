@@ -28,6 +28,7 @@ export type TagMergePrompt = {
 export type ExistingMediaRootPrompt = {
   directoryName: string;
   mediaRootLabel: string;
+  mediaKind?: "video" | "photo";
   resolve: (shouldRescan: boolean) => void;
 };
 
@@ -56,6 +57,7 @@ export type BangumiSeriesMatch = {
 
 export type MediaRootLabelPrompt = {
   directoryName: string;
+  mediaKind?: "video" | "photo";
   value: string;
   resolve: (value: string | null) => void;
 };

@@ -110,6 +110,7 @@ import type {
   CachedPhotoAlbumScan,
   PhotoAlbum,
   PhotoAlbumImage,
+  PhotoAlbumLibraryRoot,
   PhotoAlbumProgress,
   PhotoAlbumReadingMode,
   PhotoContinuousPageGap,
@@ -143,7 +144,6 @@ import {
 } from "./actorUtils";
 import { normalizeActorKey } from "./actorNfoCore.mjs";
 import {
-  clearCachedPhotoAlbumScan,
   createPhotoAlbumStats,
   defaultPhotoAlbumPreferences,
   formatPhotoAlbumProgress,
@@ -236,8 +236,9 @@ import {
 } from "./playerDuplicateRuntime";
 import {
   collectPhotoAlbumsFromDirectory,
-  createCachedPhotoAlbumScan,
-  createPhotoAlbumRootStatusFromCache,
+  createCachedPhotoAlbumLibraryScan,
+  createPhotoAlbumLibraryRoot,
+  createPhotoAlbumLibraryRootStatus,
   photoFileExists,
   resolvePhotoAlbumDirectory,
   resolvePhotoParentDirectory,
@@ -245,16 +246,12 @@ import {
 import {
   deleteServerPhotoAlbum,
   deleteServerPhotoImage,
-  hasReadyPhotoAlbumRoot,
-  loadServerPhotoAlbumScan,
-  type PhotoAlbumScanResponse,
 } from "./photoAlbumServerClient";
 import {
   browserVideoFileExists,
   collectVideos,
   collectVideosFromFiles,
   ensureDirectoryReadPermission,
-  hasDirectoryReadPermission,
   resolveBrowserVideoParentDirectory,
 } from "./browserMediaScan";
 import {
@@ -273,7 +270,6 @@ import {
 import {
   photoAlbumPageRowCount,
   photoThumbnailWindowSize,
-  photoAlbumScanCacheStaleMs,
   shouldStartLegacyThumbnailMigration,
 } from "./appConfig";
 import type { PlaybackSourceChoice, TagMergePrompt } from "./appTypes";
@@ -339,7 +335,7 @@ import {
   createVideoVersionPlaylistMetaByVideoId,
 } from "./videoVersionUtils";
 import {
-  clearPhotoAlbumFolderHandle,
+  clearPhotoAlbumLibraryRoots,
   clearRecentFolderHandle,
   createDefaultPlayerDataStore,
   deleteActorCover,
@@ -354,11 +350,11 @@ import {
   loadPlayerDataStore,
   migrateLegacyCachedThumbnailsToLocalData,
   writeActorCover,
-  readPhotoAlbumFolderHandle,
+  readPhotoAlbumLibraryRoots,
   saveDanmakuSelection,
   saveCachedMediaRootScan,
   saveGlobalPlayerDataStore,
-  writePhotoAlbumFolderHandle,
+  writePhotoAlbumLibraryRoots,
   writeRecentFolderHandle
 } from "./playerStorage";
 import {
@@ -410,6 +406,7 @@ import { TagDialog } from "./TagDialog";
 import { WatchActivitySection } from "./WatchActivitySection";
 import { ActorEditDialog } from "./ActorEditDialog";
 import { LazyFeatureBoundary } from "./LazyFeatureBoundary";
+import { DeleteConfirmDialog } from "./DeleteConfirmDialog";
 
 const loadActorDashboard = () => import("./ActorDashboardSection");
 const loadMosaicStudio = () => import("./MosaicStudioSection");
@@ -431,9 +428,6 @@ const PhotoViewerSection = lazy(() =>
 const playlistResizeMinWidth = 280;
 const playlistResizeDefaultWidth = 360;
 const playlistResizeMaxWidth = 560;
-const serverPhotoAlbumCacheRootId = "server-photo-albums";
-const serverPhotoAlbumCacheRootName = "媒体库看图";
-
 function isServerPhotoImage(image: PhotoAlbumImage) {
   return Boolean(image.url && !image.file && !image.parentDirectory);
 }
@@ -624,6 +618,7 @@ export default function App() {
   const [activeView, setActiveView] = useState<ActiveView>(() => activeViewForRoute(initialAppRoute));
   const [photoAlbums, setPhotoAlbums] = useState<PhotoAlbum[]>([]);
   const [photoRootStatuses, setPhotoRootStatuses] = useState<PlayerMediaRootStatus[]>([]);
+  const [photoLibraryRoots, setPhotoLibraryRoots] = useState<PhotoAlbumLibraryRoot[]>([]);
   const [selectedPhotoAlbumId, setSelectedPhotoAlbumId] = useState<string | null>(
     initialAppRoute.kind === "photoViewer" ? initialAppRoute.albumId : null,
   );
@@ -663,7 +658,7 @@ export default function App() {
     applyPhotoAlbumStore,
     favoritePhotoAlbumIdsRef,
     photoAlbumCoverPreferencesRef,
-    photoAlbumDirectoryRef,
+    photoAlbumDirectoriesRef,
     photoAlbumPreferencesRef,
     photoAlbumProgressRef,
     photoAlbumTagsRef,
@@ -838,6 +833,8 @@ export default function App() {
     imageCount: number;
     totalSize: number;
   } | null>(null);
+  const [photoMediaRootRemoveCandidate, setPhotoMediaRootRemoveCandidate] = useState<PhotoAlbumLibraryRoot | null>(null);
+  const [isPhotoMediaRootRemovePending, setIsPhotoMediaRootRemovePending] = useState(false);
   const [photoDeleteError, setPhotoDeleteError] = useState("");
   const [isPhotoDeletePending, setIsPhotoDeletePending] = useState(false);
   const [videoDeleteCandidate, setVideoDeleteCandidate] = useState<VideoItem | null>(null);
@@ -1004,17 +1001,10 @@ export default function App() {
     setDuplicateDetectionMessage(message);
   }, [getVideosForHomeMode]);
 
-  const applyCachedPhotoAlbumScan = useCallback((cache: CachedPhotoAlbumScan, options?: { status?: PlayerMediaRootStatus["status"]; message?: string; error?: string }) => {
-    photoAlbumsRef.current = cache.albums;
-    setPhotoAlbums(cache.albums);
-    setPhotoAlbumPage(1);
-    setPhotoRootStatuses([createPhotoAlbumRootStatusFromCache(cache, options?.status, options?.error)]);
-    setHasLoadedPhotoAlbums(true);
-    setPhotoAlbumMessage(options?.message ?? `已加载“${cache.rootName}”上次扫描结果，包含 ${cache.albums.length} 本相册`);
-  }, []);
-
-  const applyServerPhotoAlbumScan = useCallback((scan: PhotoAlbumScanResponse) => {
-    photoAlbumDirectoryRef.current = null;
+  const resetPhotoAlbumObjectUrls = useCallback(() => {
+    photoAlbumsRef.current.forEach((album) => {
+      album.images.forEach((image) => revokeObjectUrl(image.url));
+    });
     revokeObjectUrls(Object.values(photoObjectUrlsRef.current));
     photoObjectUrlsRef.current = {};
     photoObjectUrlAccessRef.current = {};
@@ -1022,16 +1012,29 @@ export default function App() {
     photoImageFilePromisesRef.current = {};
     decodedPhotoImageIdsRef.current.clear();
     setPhotoObjectUrls({});
-    photoAlbumsRef.current = scan.albums;
-    setPhotoAlbums(scan.albums);
+  }, []);
+
+  const applyCachedPhotoAlbumScan = useCallback((
+    cache: CachedPhotoAlbumScan,
+    roots: PhotoAlbumLibraryRoot[],
+    readableRootIds: ReadonlySet<string>,
+  ) => {
+    const configuredRootIds = new Set(roots.map((root) => root.id));
+    const albums = cache.albums.filter((album) => configuredRootIds.has(album.mediaRootId) && readableRootIds.has(album.mediaRootId));
+    photoAlbumsRef.current = albums;
+    setPhotoAlbums(albums);
     setPhotoAlbumPage(1);
-    setPhotoRootStatuses(scan.metadata.mediaRoots);
+    setPhotoRootStatuses(roots.map((root) => createPhotoAlbumLibraryRootStatus(
+      root,
+      albums,
+      readableRootIds.has(root.id) ? "ready" : "needsAccess",
+      readableRootIds.has(root.id) ? undefined : "需要重新授权浏览器目录。",
+    )));
     setHasLoadedPhotoAlbums(true);
-    setPhotoAlbumMessage(
-      scan.albums.length
-        ? `已从媒体库加载 ${scan.albums.length} 本相册，扫描 ${scan.scannedFiles} 张图片`
-        : "已扫描媒体库，未找到包含图片的图集",
-    );
+    const needsAccessCount = roots.length - readableRootIds.size;
+    setPhotoAlbumMessage(needsAccessCount
+      ? `已加载 ${albums.length} 本相册；${needsAccessCount} 个看图媒体库需要重新授权`
+      : `已加载 ${albums.length} 本相册，未重新扫描磁盘`);
   }, []);
 
   const applyPlayerDataStore = useApplyPlayerDataStore({
@@ -1130,68 +1133,84 @@ export default function App() {
     await deferredPlayerDataPromiseRef.current;
   }, [activateDuplicateDetectionForMode, danmakuSelectionsRef, duplicateDetectionResultsByModeRef, libraryIdRef, playerPreferencesRef, subtitlesRef, videoEditSegmentsRef, videoHighlightsRef, videosRef]);
 
-  const loadPhotoAlbumDirectory = useCallback(
-    async (directory: FileSystemDirectoryHandle, options?: { remember?: boolean }) => {
-      photoAlbumDirectoryRef.current = directory;
-      setIsPhotoAlbumsLoading(true);
-      setPhotoAlbumMessage("正在扫描看图文件夹...");
-      try {
-        const [scan, store] = await Promise.all([
-          collectPhotoAlbumsFromDirectory(directory),
-          loadPhotoAlbumStore().catch(() => ({
-            version: 1,
-            favorites: [],
-            progress: {},
-            coverImageByAlbumId: {},
-            albumTags: {},
-            preferences: defaultPhotoAlbumPreferences,
-          })),
-        ]);
-        applyPhotoAlbumStore(store);
-        photoAlbumsRef.current.forEach((album) => {
-          album.images.forEach((image) => {
-            revokeObjectUrl(image.url);
-          });
-        });
-        revokeObjectUrls(Object.values(photoObjectUrlsRef.current));
-        photoObjectUrlsRef.current = {};
-        photoObjectUrlAccessRef.current = {};
-        photoObjectUrlMetadataRef.current = {};
-        decodedPhotoImageIdsRef.current.clear();
-        setPhotoObjectUrls({});
-        const cachedScan = createCachedPhotoAlbumScan(scan);
-        setPhotoAlbums(scan.albums);
-        photoAlbumsRef.current = scan.albums;
-        setPhotoAlbumPage(1);
-        setPhotoRootStatuses([
-          {
-            id: scan.rootId,
-            label: scan.rootLabel,
-            source: "browser",
-            status: "ready",
-            videoCount: scan.albums.length,
-            scannedFiles: scan.scannedFiles,
-            updatedAt: Date.now(),
-          },
-        ]);
-        setHasLoadedPhotoAlbums(true);
-        if (options?.remember !== false) {
-          await writePhotoAlbumFolderHandle(directory).catch(() => undefined);
+  const scanPhotoLibraryRoots = useCallback(async (
+    roots: PhotoAlbumLibraryRoot[],
+    options?: { retainExisting?: boolean },
+  ) => {
+    const scannedRootIds = new Set(roots.map((root) => root.id));
+    setIsPhotoAlbumsLoading(true);
+    setPhotoAlbumMessage(roots.length > 1 ? "正在刷新全部看图媒体库..." : "正在扫描看图媒体库...");
+    const fullCachedScan = options?.retainExisting
+      ? await loadCachedPhotoAlbumScan({ includeImages: true })
+      : null;
+    const retainedAlbums = options?.retainExisting
+      ? (fullCachedScan?.albums ?? photoAlbumsRef.current).filter((album) => !scannedRootIds.has(album.mediaRootId))
+      : [];
+    const retainedStatuses = options?.retainExisting
+      ? photoRootStatuses.filter((status) => !scannedRootIds.has(status.id))
+      : [];
+    const nextAlbums = [...retainedAlbums];
+    const nextStatuses = [...retainedStatuses];
+    const nextDirectories = options?.retainExisting ? { ...photoAlbumDirectoriesRef.current } : {};
+    const rootsWithoutWriteAccess = new Set<string>();
+    scannedRootIds.forEach((rootId) => delete nextDirectories[rootId]);
+    resetPhotoAlbumObjectUrls();
+
+    try {
+      for (const root of roots) {
+        if (!root.directory || !(await hasDirectoryWritePermission(root.directory))) {
+          if (root.directory) rootsWithoutWriteAccess.add(root.id);
+          nextStatuses.push(createPhotoAlbumLibraryRootStatus(
+            root,
+            [],
+            "needsAccess",
+            "需要重新授权浏览器目录。",
+          ));
+          continue;
         }
-        await saveCachedPhotoAlbumScan(cachedScan).catch(() => undefined);
-        setPhotoAlbumMessage(
-          scan.albums.length
-            ? `已从“${scan.rootLabel}”加载 ${scan.albums.length} 本相册，扫描 ${scan.scannedFiles} 张图片`
-            : `“${scan.rootLabel}”里没有找到包含图片的文件夹`,
-        );
-      } catch (error) {
-        setPhotoAlbumMessage(error instanceof Error ? error.message : "扫描看图文件夹失败。");
-      } finally {
-        setIsPhotoAlbumsLoading(false);
+
+        nextDirectories[root.id] = root.directory;
+        try {
+          const scan = await collectPhotoAlbumsFromDirectory(root.directory, {
+            rootId: root.id,
+            rootLabel: root.label,
+          });
+          nextAlbums.push(...scan.albums);
+          nextStatuses.push(createPhotoAlbumLibraryRootStatus(root, scan.albums, "ready"));
+        } catch (error) {
+          nextStatuses.push(createPhotoAlbumLibraryRootStatus(
+            root,
+            [],
+            "error",
+            error instanceof Error ? error.message : "扫描看图文件夹失败。",
+          ));
+        }
       }
-    },
-    [applyPhotoAlbumStore],
-  );
+
+      nextAlbums.sort((a, b) => b.updatedAt - a.updatedAt || a.title.localeCompare(b.title, "zh-Hans-CN", { numeric: true }));
+      if (rootsWithoutWriteAccess.size) {
+        const storedRoots = await readPhotoAlbumLibraryRoots();
+        const nextStoredRoots = storedRoots.map((root) => rootsWithoutWriteAccess.has(root.id)
+          ? { ...root, directory: undefined }
+          : root);
+        await writePhotoAlbumLibraryRoots(nextStoredRoots).catch(() => undefined);
+        setPhotoLibraryRoots(nextStoredRoots);
+      }
+      photoAlbumDirectoriesRef.current = nextDirectories;
+      photoAlbumsRef.current = nextAlbums;
+      setPhotoAlbums(nextAlbums);
+      setPhotoRootStatuses(nextStatuses);
+      setPhotoAlbumPage(1);
+      setHasLoadedPhotoAlbums(true);
+      await saveCachedPhotoAlbumScan(createCachedPhotoAlbumLibraryScan(nextAlbums)).catch(() => undefined);
+      const failedCount = nextStatuses.filter((status) => status.status !== "ready").length;
+      setPhotoAlbumMessage(failedCount
+        ? `已加载 ${nextAlbums.length} 本相册；${failedCount} 个看图媒体库不可用`
+        : `已从 ${nextStatuses.length} 个看图媒体库加载 ${nextAlbums.length} 本相册`);
+    } finally {
+      setIsPhotoAlbumsLoading(false);
+    }
+  }, [photoAlbumDirectoriesRef, photoRootStatuses, resetPhotoAlbumObjectUrls]);
 
   const choosePhotoAlbumDirectory = useCallback(async () => {
     if (isPhotoAlbumsLoading) return;
@@ -1202,7 +1221,42 @@ export default function App() {
 
     try {
       const directory = await window.showDirectoryPicker({ mode: "readwrite" });
-      await loadPhotoAlbumDirectory(directory);
+      if (!(await hasDirectoryWritePermission(directory))) {
+        setPhotoAlbumMessage("看图媒体库需要文件夹写入权限，以支持删除图片。");
+        return;
+      }
+
+      let existingRoot: PhotoAlbumLibraryRoot | undefined;
+      for (const root of photoLibraryRoots) {
+        if (root.directory === directory || (root.directory?.isSameEntry && await root.directory.isSameEntry(directory).catch(() => false))) {
+          existingRoot = root;
+          break;
+        }
+      }
+      if (existingRoot) {
+        const shouldRescan = await requestExistingMediaRootRescan(directory.name, existingRoot.label, "photo");
+        if (!shouldRescan) {
+          setPhotoAlbumMessage("已取消重新扫描看图媒体库");
+          return;
+        }
+        const nextRoot = { ...existingRoot, basename: directory.name, directory };
+        const nextRoots = photoLibraryRoots.map((root) => root.id === nextRoot.id ? nextRoot : root);
+        setPhotoLibraryRoots(nextRoots);
+        await writePhotoAlbumLibraryRoots(nextRoots);
+        await scanPhotoLibraryRoots([nextRoot], { retainExisting: true });
+        return;
+      }
+
+      const label = (await requestMediaRootLabel(directory.name, "photo"))?.trim();
+      if (!label) {
+        setPhotoAlbumMessage("已取消添加看图媒体库");
+        return;
+      }
+      const nextRoot = createPhotoAlbumLibraryRoot(directory, label);
+      const nextRoots = [...photoLibraryRoots, nextRoot];
+      setPhotoLibraryRoots(nextRoots);
+      await writePhotoAlbumLibraryRoots(nextRoots);
+      await scanPhotoLibraryRoots([nextRoot], { retainExisting: true });
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
         setPhotoAlbumMessage("已取消选择看图文件夹。");
@@ -1210,44 +1264,98 @@ export default function App() {
         setPhotoAlbumMessage("选择看图文件夹失败，请确认浏览器权限后重试。");
       }
     }
-  }, [isPhotoAlbumsLoading, loadPhotoAlbumDirectory]);
+  }, [
+    isPhotoAlbumsLoading,
+    photoLibraryRoots,
+    requestExistingMediaRootRescan,
+    requestMediaRootLabel,
+    scanPhotoLibraryRoots,
+  ]);
 
   const refreshPhotoAlbumDirectory = useCallback(async () => {
     if (isPhotoAlbumsLoading) return;
-    const activeBrowserDirectory = photoAlbumDirectoryRef.current;
-    if (!activeBrowserDirectory) {
-      setIsPhotoAlbumsLoading(true);
-      setPhotoAlbumMessage("正在扫描媒体库看图资源...");
-      try {
-        const scan = await loadServerPhotoAlbumScan(fetchJson);
-        if (hasReadyPhotoAlbumRoot(scan)) {
-          applyServerPhotoAlbumScan(scan);
-        } else {
-          setPhotoRootStatuses(scan.metadata.mediaRoots);
-          setPhotoAlbumMessage("媒体库暂无可直接访问的看图目录，请选择看图文件夹。");
-        }
-      } catch (error) {
-        setPhotoAlbumMessage(error instanceof Error ? error.message : "扫描媒体库看图资源失败。");
-      } finally {
-        setIsPhotoAlbumsLoading(false);
+    if (!photoLibraryRoots.length) {
+      setPhotoAlbumMessage("请先新增看图媒体库。");
+      return;
+    }
+    await scanPhotoLibraryRoots(photoLibraryRoots);
+  }, [isPhotoAlbumsLoading, photoLibraryRoots, scanPhotoLibraryRoots]);
+
+  const reauthorizePhotoLibraryRoot = useCallback(async (root: PhotoAlbumLibraryRoot) => {
+    if (isPhotoAlbumsLoading) return;
+    if (!window.showDirectoryPicker) {
+      setPhotoAlbumMessage("当前浏览器不支持文件夹重新授权，请使用支持 File System Access API 的浏览器。");
+      return;
+    }
+    try {
+      const directory = await window.showDirectoryPicker({ mode: "readwrite" });
+      const isSameDirectory = root.directory?.isSameEntry
+        ? await root.directory.isSameEntry(directory).catch(() => false)
+        : directory.name === root.basename;
+      if (!isSameDirectory) {
+        setPhotoAlbumMessage(`请选择原文件夹“${root.basename}”。`);
+        return;
       }
-      return;
+      if (!(await hasDirectoryWritePermission(directory))) {
+        setPhotoAlbumMessage(`“${root.label}”仍缺少写入权限。`);
+        return;
+      }
+      const nextRoot = { ...root, basename: directory.name, directory };
+      const nextRoots = photoLibraryRoots.map((item) => item.id === root.id ? nextRoot : item);
+      setPhotoLibraryRoots(nextRoots);
+      await writePhotoAlbumLibraryRoots(nextRoots);
+      await scanPhotoLibraryRoots([nextRoot], { retainExisting: true });
+    } catch (error) {
+      setPhotoAlbumMessage(error instanceof DOMException && error.name === "AbortError"
+        ? "已取消重新授权看图媒体库。"
+        : "重新授权看图媒体库失败，请重试。");
     }
+  }, [isPhotoAlbumsLoading, photoLibraryRoots, scanPhotoLibraryRoots]);
 
-    const directory = activeBrowserDirectory ?? (await readPhotoAlbumFolderHandle().catch(() => null));
-    if (!directory) {
-      setPhotoAlbumMessage("请先选择看图文件夹。");
-      return;
+  const confirmRemovePhotoLibraryRoot = useCallback(async () => {
+    if (!photoMediaRootRemoveCandidate || isPhotoMediaRootRemovePending) return;
+    setIsPhotoMediaRootRemovePending(true);
+    try {
+      const removedRoot = photoMediaRootRemoveCandidate;
+      const removedSelectedAlbum = photoAlbumsRef.current.find((album) => album.id === selectedPhotoAlbumId);
+      const nextRoots = photoLibraryRoots.filter((root) => root.id !== removedRoot.id);
+      const nextAlbums = photoAlbumsRef.current.filter((album) => album.mediaRootId !== removedRoot.id);
+      const fullCachedScan = await loadCachedPhotoAlbumScan({ includeImages: true });
+      const nextCachedAlbums = (fullCachedScan?.albums ?? photoAlbumsRef.current)
+        .filter((album) => album.mediaRootId !== removedRoot.id);
+      await writePhotoAlbumLibraryRoots(nextRoots);
+      resetPhotoAlbumObjectUrls();
+      const nextDirectories = { ...photoAlbumDirectoriesRef.current };
+      delete nextDirectories[removedRoot.id];
+      photoAlbumDirectoriesRef.current = nextDirectories;
+      photoAlbumsRef.current = nextAlbums;
+      setPhotoLibraryRoots(nextRoots);
+      setPhotoAlbums(nextAlbums);
+      setPhotoRootStatuses((current) => current.filter((status) => status.id !== removedRoot.id));
+      setPhotoAlbumPage(1);
+      if (removedSelectedAlbum?.mediaRootId === removedRoot.id) {
+        setSelectedPhotoAlbumId(null);
+        setCurrentPhotoIndex(0);
+        setActiveView("photos");
+        updateAppRoute({ kind: "photos" }, { replace: true });
+      }
+      await saveCachedPhotoAlbumScan(createCachedPhotoAlbumLibraryScan(nextCachedAlbums)).catch(() => undefined);
+      setPhotoMediaRootRemoveCandidate(null);
+      setPhotoAlbumMessage(`已移除看图媒体库“${removedRoot.label}”，未删除本地文件。`);
+    } catch (error) {
+      setPhotoAlbumMessage(error instanceof Error ? error.message : "移除看图媒体库失败。");
+    } finally {
+      setIsPhotoMediaRootRemovePending(false);
     }
-
-    const canReadDirectory = await ensureDirectoryReadPermission(directory);
-    if (!canReadDirectory) {
-      setPhotoAlbumMessage(`浏览器需要重新授权“${directory.name}”，请重新选择看图文件夹。`);
-      return;
-    }
-
-    await loadPhotoAlbumDirectory(directory, { remember: true });
-  }, [applyServerPhotoAlbumScan, isPhotoAlbumsLoading, loadPhotoAlbumDirectory]);
+  }, [
+    isPhotoMediaRootRemovePending,
+    photoAlbumDirectoriesRef,
+    photoLibraryRoots,
+    photoMediaRootRemoveCandidate,
+    resetPhotoAlbumObjectUrls,
+    selectedPhotoAlbumId,
+    updateAppRoute,
+  ]);
 
   useEffect(() => {
     const shouldLoadForPhotoView = activeView === "photos" || activeView === "photoViewer";
@@ -1258,13 +1366,11 @@ export default function App() {
     if ((!shouldLoadForPhotoView && !shouldLoadForMosaic) || hasLoadedPhotoAlbums || isPhotoAlbumsLoading || photoAlbumAutoLoadAttemptedRef.current) return;
     photoAlbumAutoLoadAttemptedRef.current = true;
     setIsPhotoAlbumsLoading(true);
-    setPhotoAlbumMessage("正在恢复看图文件夹...");
+    setPhotoAlbumMessage("正在恢复看图媒体库...");
     void (async () => {
-      let fallbackRootStatuses: PlayerMediaRootStatus[] = [];
-      let fallbackMessage = "";
       try {
-        const [directory, cachedScan, store] = await Promise.all([
-          readPhotoAlbumFolderHandle(),
+        const [roots, cachedScan, store] = await Promise.all([
+          readPhotoAlbumLibraryRoots(),
           loadCachedPhotoAlbumScan({ includeImages: shouldLoadForMosaic }),
           loadPhotoAlbumStore().catch(() => ({
             version: 1,
@@ -1276,65 +1382,43 @@ export default function App() {
           })),
         ]);
         applyPhotoAlbumStore(store);
-        if (cachedScan) {
-          const isServerPhotoAlbumCache = cachedScan.rootId === serverPhotoAlbumCacheRootId;
-          let canReadDirectory = isServerPhotoAlbumCache;
-          if (!isServerPhotoAlbumCache && directory) {
-            canReadDirectory = await hasDirectoryReadPermission(directory);
-            photoAlbumDirectoryRef.current = canReadDirectory ? directory : null;
-          } else if (isServerPhotoAlbumCache) {
-            photoAlbumDirectoryRef.current = null;
-          }
-          const isStale = Date.now() - cachedScan.updatedAt > photoAlbumScanCacheStaleMs;
-          applyCachedPhotoAlbumScan(cachedScan, {
-            status: canReadDirectory ? "ready" : "needsAccess",
-            message: isServerPhotoAlbumCache
-              ? isStale
-                ? `已加载${serverPhotoAlbumCacheRootName}上次扫描结果，超过 24 小时未刷新，正在后台刷新`
-                : `已加载${serverPhotoAlbumCacheRootName}上次扫描结果，正在后台刷新`
-              : canReadDirectory
-              ? isStale
-                ? `已加载“${cachedScan.rootName}”上次扫描结果，超过 24 小时未刷新，可手动刷新`
-                : `已加载“${cachedScan.rootName}”上次扫描结果，未重新扫描磁盘`
-              : `已加载“${cachedScan.rootName}”上次扫描结果；如需查看图片或刷新，请重新授权文件夹`,
-            error: canReadDirectory ? undefined : "需要重新授权浏览器目录。",
-          });
-          setIsPhotoAlbumsLoading(false);
-          const serverScan = await loadServerPhotoAlbumScan(fetchJson).catch(() => null);
-          if (serverScan && hasReadyPhotoAlbumRoot(serverScan)) {
-            applyServerPhotoAlbumScan(serverScan);
+        const permissionResults = await Promise.all(roots.map(async (root) => ({
+          root,
+          canRead: Boolean(root.directory && await hasDirectoryWritePermission(root.directory)),
+        })));
+        const restoredRoots = permissionResults.map(({ root, canRead }) => canRead ? root : { ...root, directory: undefined });
+        if (restoredRoots.some((root, index) => root.directory !== roots[index].directory)) {
+          await writePhotoAlbumLibraryRoots(restoredRoots).catch(() => undefined);
+        }
+        setPhotoLibraryRoots(restoredRoots);
+        const readableRootIds = new Set(permissionResults.filter((item) => item.canRead).map((item) => item.root.id));
+        photoAlbumDirectoriesRef.current = Object.fromEntries(permissionResults.flatMap(({ root, canRead }) =>
+          canRead && root.directory ? [[root.id, root.directory]] : []));
+        if (!roots.length) {
+          photoAlbumDirectoriesRef.current = {};
+          setPhotoRootStatuses([]);
+          setHasLoadedPhotoAlbums(true);
+          setPhotoAlbumMessage("新增一个看图媒体库后开始扫描图片。");
+          return;
+        }
+        const hasConfiguredCache = Boolean(cachedScan && (
+          cachedScan.rootId === "browser-photo-libraries"
+          || roots.some((root) => root.id === cachedScan.rootId)
+          || cachedScan.albums.some((album) => roots.some((root) => root.id === album.mediaRootId))
+        ));
+        if (cachedScan && hasConfiguredCache) {
+          applyCachedPhotoAlbumScan(cachedScan, restoredRoots, readableRootIds);
+          if (readableRootIds.size !== restoredRoots.length) {
+            const fullCachedScan = await loadCachedPhotoAlbumScan({ includeImages: true });
+            const accessibleAlbums = (fullCachedScan?.albums ?? cachedScan.albums)
+              .filter((album) => readableRootIds.has(album.mediaRootId));
+            await saveCachedPhotoAlbumScan(createCachedPhotoAlbumLibraryScan(accessibleAlbums)).catch(() => undefined);
           }
           return;
         }
-
-        const serverScan = await loadServerPhotoAlbumScan(fetchJson).catch((error) => {
-          fallbackMessage = error instanceof Error ? error.message : "扫描媒体库看图资源失败。";
-          return null;
-        });
-        if (serverScan) {
-          fallbackRootStatuses = serverScan.metadata.mediaRoots;
-          if (hasReadyPhotoAlbumRoot(serverScan)) {
-            applyServerPhotoAlbumScan(serverScan);
-            return;
-          }
-          fallbackMessage = "媒体库暂无可直接访问的看图目录，将尝试浏览器目录。";
-        }
-
-        if (!directory) {
-          if (fallbackRootStatuses.length) setPhotoRootStatuses(fallbackRootStatuses);
-          setPhotoAlbumMessage(fallbackMessage || "首次选择看图文件夹后，下次进入会自动复用。");
-          return;
-        }
-        const canReadDirectory = await ensureDirectoryReadPermission(directory);
-        if (!canReadDirectory) {
-          if (fallbackRootStatuses.length) setPhotoRootStatuses(fallbackRootStatuses);
-          setPhotoAlbumMessage(`浏览器需要重新授权“${directory.name}”，请重新选择看图文件夹。`);
-          return;
-        }
-        await loadPhotoAlbumDirectory(directory, { remember: true });
+        await scanPhotoLibraryRoots(restoredRoots);
       } catch (error) {
-        await clearPhotoAlbumFolderHandle().catch(() => undefined);
-        setPhotoAlbumMessage(error instanceof Error ? error.message : "读取已保存的看图文件夹失败，请重新选择。");
+        setPhotoAlbumMessage(error instanceof Error ? error.message : "读取已保存的看图媒体库失败，请重新选择。");
       } finally {
         setIsPhotoAlbumsLoading(false);
       }
@@ -1343,11 +1427,10 @@ export default function App() {
     activeView,
     applyCachedPhotoAlbumScan,
     applyPhotoAlbumStore,
-    applyServerPhotoAlbumScan,
     hasLoadedPhotoAlbums,
     homeMediaMode,
     isPhotoAlbumsLoading,
-    loadPhotoAlbumDirectory,
+    scanPhotoLibraryRoots,
     creativeFeature,
     specialHomeSection,
   ]);
@@ -2338,7 +2421,7 @@ export default function App() {
     decodedPhotoImageIdsRef,
     pagedPhotoAlbums: photoAlbumCoverAlbums,
     photoAlbumCoverPreferences,
-    photoAlbumDirectoryRef,
+    photoAlbumDirectoriesRef,
     photoImageFilePromisesRef,
     photoObjectUrlAccessRef,
     photoObjectUrlMetadataRef,
@@ -4145,30 +4228,38 @@ export default function App() {
     }, { replace: true });
   }, [activeView, appRoute, currentPhotoIndex, photoAlbums, selectedPhotoAlbumId, updateAppRoute]);
 
-  const clearPhotoAlbumAccessAfterWritePermissionDenied = useCallback(async () => {
-    await clearPhotoAlbumFolderHandle().catch(() => undefined);
-    await clearCachedPhotoAlbumScan().catch(() => undefined);
-    revokeObjectUrls(Object.values(photoObjectUrlsRef.current));
-    photoAlbumDirectoryRef.current = null;
-    photoAlbumsRef.current = [];
-    photoObjectUrlsRef.current = {};
-    photoObjectUrlAccessRef.current = {};
-    photoObjectUrlMetadataRef.current = {};
-    decodedPhotoImageIdsRef.current.clear();
-    setPhotoAlbums([]);
-    setPhotoRootStatuses([]);
-    setPhotoObjectUrls({});
+  const clearPhotoAlbumAccessAfterWritePermissionDenied = useCallback(async (rootId: string) => {
+    const deniedRoot = photoLibraryRoots.find((root) => root.id === rootId);
+    const nextRoots = photoLibraryRoots.map((root) => root.id === rootId ? { ...root, directory: undefined } : root);
+    const nextAlbums = photoAlbumsRef.current.filter((album) => album.mediaRootId !== rootId);
+    const fullCachedScan = await loadCachedPhotoAlbumScan({ includeImages: true });
+    const nextCachedAlbums = (fullCachedScan?.albums ?? photoAlbumsRef.current)
+      .filter((album) => album.mediaRootId !== rootId);
+    await writePhotoAlbumLibraryRoots(nextRoots).catch(() => undefined);
+    resetPhotoAlbumObjectUrls();
+    const nextDirectories = { ...photoAlbumDirectoriesRef.current };
+    delete nextDirectories[rootId];
+    photoAlbumDirectoriesRef.current = nextDirectories;
+    photoAlbumsRef.current = nextAlbums;
+    setPhotoLibraryRoots(nextRoots);
+    setPhotoAlbums(nextAlbums);
+    setPhotoRootStatuses((current) => current.map((status) => status.id === rootId
+      ? { ...status, status: "needsAccess", videoCount: 0, scannedFiles: 0, error: "需要重新授权浏览器目录。" }
+      : status));
     setPhotoAlbumPage(1);
-    setCurrentPhotoIndex(0);
-    setSelectedPhotoAlbumId(null);
     setPhotoDeleteCandidate(null);
     setPhotoAlbumDeleteCandidate(null);
     setPhotoDeleteError("");
     setHasLoadedPhotoAlbums(true);
-    setActiveView("photos");
-    updateAppRoute({ kind: "photos" }, { replace: true });
-    setPhotoAlbumMessage("旧看图目录记录没有写入权限，已自动清除。请重新选择看图文件夹以授予删除权限。");
-  }, [updateAppRoute]);
+    if (selectedPhotoAlbum?.mediaRootId === rootId) {
+      setCurrentPhotoIndex(0);
+      setSelectedPhotoAlbumId(null);
+      setActiveView("photos");
+      updateAppRoute({ kind: "photos" }, { replace: true });
+    }
+    await saveCachedPhotoAlbumScan(createCachedPhotoAlbumLibraryScan(nextCachedAlbums)).catch(() => undefined);
+    setPhotoAlbumMessage(`“${deniedRoot?.label ?? "看图媒体库"}”没有写入权限，已清除目录授权；请重新授权。`);
+  }, [photoAlbumDirectoriesRef, photoLibraryRoots, resetPhotoAlbumObjectUrls, selectedPhotoAlbum, updateAppRoute]);
 
   const requestDeleteCurrentPhoto = useCallback(() => {
     if (!selectedPhotoAlbum) return;
@@ -4218,7 +4309,7 @@ export default function App() {
       if (isServerPhotoImage(photo)) {
         await deleteServerPhotoImage(fetchJson, photo);
       } else {
-        const rootDirectory = photoAlbumDirectoryRef.current ?? (await readPhotoAlbumFolderHandle().catch(() => null));
+        const rootDirectory = photoAlbumDirectoriesRef.current[photo.mediaRootId];
         const parentDirectory = photo.parentDirectory ?? photoDeleteCandidate.parentDirectory ?? (rootDirectory ? await resolvePhotoParentDirectory(rootDirectory, photo.relativePath) : null);
         if (!parentDirectory?.removeEntry) {
           setPhotoDeleteError("当前图片来源不支持直接删除，请刷新看图文件夹或在文件管理器中删除。");
@@ -4227,7 +4318,7 @@ export default function App() {
         }
 
         if (!(await hasDirectoryWritePermission(parentDirectory))) {
-          await clearPhotoAlbumAccessAfterWritePermissionDenied();
+          await clearPhotoAlbumAccessAfterWritePermissionDenied(photo.mediaRootId);
           setIsPhotoDeletePending(false);
           return;
         }
@@ -4361,7 +4452,7 @@ export default function App() {
         directoryRemoved = result.directoryRemoved;
         directoryRetainedReason = result.directoryRetainedReason;
       } else {
-        const rootDirectory = photoAlbumDirectoryRef.current ?? (await readPhotoAlbumFolderHandle().catch(() => null));
+        const rootDirectory = photoAlbumDirectoriesRef.current[album.mediaRootId];
         if (!rootDirectory?.removeEntry) {
           setPhotoDeleteError("当前图集来源不支持直接删除，请刷新看图文件夹或在文件管理器中删除。");
           setIsPhotoDeletePending(false);
@@ -4376,7 +4467,7 @@ export default function App() {
         }
 
         if (!(await hasDirectoryWritePermission(albumDirectory))) {
-          await clearPhotoAlbumAccessAfterWritePermissionDenied();
+          await clearPhotoAlbumAccessAfterWritePermissionDenied(album.mediaRootId);
           setIsPhotoDeletePending(false);
           return;
         }
@@ -5503,7 +5594,12 @@ export default function App() {
 
   const clearAllCacheRuntimeData = useCallback(async () => {
     await clearRecentFolderHandle().catch(() => undefined);
-    await clearPhotoAlbumFolderHandle().catch(() => undefined);
+    await clearPhotoAlbumLibraryRoots().catch(() => undefined);
+    photoAlbumDirectoriesRef.current = {};
+    photoAlbumsRef.current = [];
+    setPhotoLibraryRoots([]);
+    setPhotoRootStatuses([]);
+    setPhotoAlbums([]);
     clearLoadedMedia();
     directoryRef.current = null;
     libraryIdRef.current = null;
@@ -6619,6 +6715,7 @@ export default function App() {
               message={photoAlbumMessage}
               pageCount={photoAlbumPageCount}
               pagedPhotoAlbums={pagedPhotoAlbums}
+              photoLibraryRoots={photoLibraryRoots}
               photoRootStatuses={photoRootStatuses}
               appliedSearchQuery={photoAlbumAppliedSearchQuery}
               searchQuery={photoAlbumSearchQuery}
@@ -6646,6 +6743,8 @@ export default function App() {
               onPageChange={setPhotoAlbumPage}
               onRandomAlbum={openRandomPhotoAlbum}
               onRefresh={() => void refreshPhotoAlbumDirectory()}
+              onRemoveRoot={setPhotoMediaRootRemoveCandidate}
+              onReauthorizeRoot={(root) => void reauthorizePhotoLibraryRoot(root)}
               onRenderAlbum={renderPhotoAlbumCard}
               onSearchChange={setPhotoAlbumSearchQuery}
               onSearchClear={() => { setPhotoAlbumSearchQuery(""); setPhotoAlbumAppliedSearchQuery(""); }}
@@ -7090,6 +7189,19 @@ export default function App() {
         onConfirm: () => void confirmDeletePhotoAlbum(),
       }}
     />
+    <DeleteConfirmDialog
+      isOpen={Boolean(photoMediaRootRemoveCandidate)}
+      titleId="remove-photo-media-root-title"
+      title="移除看图媒体库？"
+      description="只会从看图模式移除这个媒体库，不会删除本地文件。"
+      primaryText="移除媒体库"
+      pendingText="移除中"
+      isPending={isPhotoMediaRootRemovePending}
+      previewTitle={photoMediaRootRemoveCandidate?.label ?? ""}
+      previewMeta={photoMediaRootRemoveCandidate?.basename ?? ""}
+      onClose={() => setPhotoMediaRootRemoveCandidate(null)}
+      onConfirm={() => void confirmRemovePhotoLibraryRoot()}
+    />
     <PhotoAlbumTagDialog
       activeSuggestionIndex={photoAlbumTagSuggestionIndex}
       album={photoAlbumTagEditorAlbum}
@@ -7115,6 +7227,7 @@ export default function App() {
     <MediaRootDialogsGroup
       label={mediaRootLabelPrompt ? {
         directoryName: mediaRootLabelPrompt.directoryName,
+        mediaKind: mediaRootLabelPrompt.mediaKind,
         value: mediaRootLabelPrompt.value,
         onClose: () => closeMediaRootLabelPrompt(null),
         onSubmit: submitMediaRootLabelPrompt,
@@ -7123,6 +7236,7 @@ export default function App() {
       existingRoot={existingMediaRootPrompt ? {
         directoryName: existingMediaRootPrompt.directoryName,
         mediaRootLabel: existingMediaRootPrompt.mediaRootLabel,
+        mediaKind: existingMediaRootPrompt.mediaKind,
         onCancel: () => closeExistingMediaRootPrompt(false),
         onRescan: () => closeExistingMediaRootPrompt(true),
       } : null}

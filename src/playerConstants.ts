@@ -10,6 +10,7 @@ export const RECENT_FOLDER_DB_NAME = "local-web-player";
 export const RECENT_FOLDER_STORE_NAME = "handles";
 export const RECENT_FOLDER_KEY = "recent-folder";
 export const PHOTO_ALBUM_FOLDER_KEY = "photo-album-folder";
+export const PHOTO_ALBUM_FOLDERS_KEY = "photo-album-folders";
 export const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
 export const rates = [0.5, 1, 1.25, 1.5, 1.75, 2, 2.5, 3];
 export const seekSteps = [5, 10, 15];

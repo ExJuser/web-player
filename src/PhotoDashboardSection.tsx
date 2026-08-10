@@ -7,7 +7,7 @@ import { PhotoAlbumStats } from "./PhotoAlbumStats";
 import { PhotoTagStats } from "./PhotoTagStats";
 import { PhotoAlbumToolbar, type PhotoAlbumViewFilter } from "./PhotoAlbumToolbar";
 import { PhotoRootStatusCard } from "./PhotoRootStatusCard";
-import type { PhotoAlbum, PhotoAlbumSortDirection, PhotoAlbumSortMode, PlayerMediaRootStatus } from "./playerTypes";
+import type { PhotoAlbum, PhotoAlbumLibraryRoot, PhotoAlbumSortDirection, PhotoAlbumSortMode, PlayerMediaRootStatus } from "./playerTypes";
 
 type PhotoDashboardSectionProps = {
   appliedSearchQuery: string;
@@ -19,6 +19,7 @@ type PhotoDashboardSectionProps = {
   message: string;
   pageCount: number;
   pagedPhotoAlbums: PhotoAlbum[];
+  photoLibraryRoots: PhotoAlbumLibraryRoot[];
   photoRootStatuses: PlayerMediaRootStatus[];
   searchQuery: string;
   searchResultCount: number;
@@ -48,6 +49,8 @@ type PhotoDashboardSectionProps = {
   onPageChange: (page: number) => void;
   onRandomAlbum: () => void;
   onRefresh: () => void;
+  onRemoveRoot: (root: PhotoAlbumLibraryRoot) => void;
+  onReauthorizeRoot: (root: PhotoAlbumLibraryRoot) => void;
   onRenderAlbum: (album: PhotoAlbum) => ReactNode;
   onSearchChange: (query: string) => void;
   onSearchClear: () => void;
@@ -68,6 +71,7 @@ export function PhotoDashboardSection({
   message,
   pageCount,
   pagedPhotoAlbums,
+  photoLibraryRoots,
   photoRootStatuses,
   searchQuery,
   searchResultCount,
@@ -87,6 +91,8 @@ export function PhotoDashboardSection({
   onPageChange,
   onRandomAlbum,
   onRefresh,
+  onRemoveRoot,
+  onReauthorizeRoot,
   onRenderAlbum,
   onSearchChange,
   onSearchClear,
@@ -143,7 +149,15 @@ export function PhotoDashboardSection({
 
       <PhotoTagStats {...tagStats} selectedTagKey={tagFilterKey} onSelectTag={onSelectTag} />
 
-      <PhotoRootStatusCard statuses={photoRootStatuses} />
+      <PhotoRootStatusCard
+        isLoading={isLoading}
+        roots={photoLibraryRoots}
+        statuses={photoRootStatuses}
+        onAdd={onChooseDirectory}
+        onRefresh={onRefresh}
+        onRemove={onRemoveRoot}
+        onReauthorize={onReauthorizeRoot}
+      />
 
       {totalVisibleAlbums ? (
         <>

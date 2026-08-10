@@ -9,15 +9,15 @@ export function useMediaRootPrompts() {
   const [mediaRootLabelPrompt, setMediaRootLabelPrompt] = useState<MediaRootLabelPrompt | null>(null);
   const [existingMediaRootPrompt, setExistingMediaRootPrompt] = useState<ExistingMediaRootPrompt | null>(null);
 
-  const requestMediaRootLabel = useCallback((directoryName: string) => {
+  const requestMediaRootLabel = useCallback((directoryName: string, mediaKind: "video" | "photo" = "video") => {
     return new Promise<string | null>((resolve) => {
-      setMediaRootLabelPrompt({ directoryName, value: directoryName, resolve });
+      setMediaRootLabelPrompt({ directoryName, mediaKind, value: directoryName, resolve });
     });
   }, []);
 
-  const requestExistingMediaRootRescan = useCallback((directoryName: string, mediaRootLabel: string) => {
+  const requestExistingMediaRootRescan = useCallback((directoryName: string, mediaRootLabel: string, mediaKind: "video" | "photo" = "video") => {
     return new Promise<boolean>((resolve) => {
-      setExistingMediaRootPrompt({ directoryName, mediaRootLabel, resolve });
+      setExistingMediaRootPrompt({ directoryName, mediaRootLabel, mediaKind, resolve });
     });
   }, []);
 

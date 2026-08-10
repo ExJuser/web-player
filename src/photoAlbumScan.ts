@@ -2,6 +2,7 @@ import type {
   CachedPhotoAlbumScan,
   FileSystemDirectoryHandle,
   PhotoAlbum,
+  PhotoAlbumLibraryRoot,
   PlayerMediaRootStatus,
 } from "./playerTypes";
 import { photoAlbumScanCacheVersion } from "./photoAlbumStorage";
@@ -78,7 +79,10 @@ export function collectPhotoAlbumsFromBrowserFiles(rootLabel: string, rootId: st
   };
 }
 
-export async function collectPhotoAlbumsFromDirectory(directory: FileSystemDirectoryHandle) {
+export async function collectPhotoAlbumsFromDirectory(
+  directory: FileSystemDirectoryHandle,
+  options?: { rootId?: string; rootLabel?: string },
+) {
   const photoFiles: BrowserPhotoFile[] = [];
 
   async function walk(handle: FileSystemDirectoryHandle, segments: string[]) {
@@ -98,10 +102,51 @@ export async function collectPhotoAlbumsFromDirectory(directory: FileSystemDirec
 
   await walk(directory, []);
 
-  const rootLabel = directory.name || "看图";
-  const rootId = `browser-photo:${sanitizeLibraryName(rootLabel)}-${hashString(rootLabel)}`;
+  const rootLabel = options?.rootLabel?.trim() || directory.name || "看图";
+  const rootId = options?.rootId || `browser-photo:${sanitizeLibraryName(rootLabel)}-${hashString(rootLabel)}`;
 
   return collectPhotoAlbumsFromBrowserFiles(rootLabel, rootId, photoFiles);
+}
+
+export function createPhotoAlbumLibraryRoot(directory: FileSystemDirectoryHandle, label: string): PhotoAlbumLibraryRoot {
+  const uniquePart = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
+  return {
+    id: `browser-photo:${sanitizeLibraryName(directory.name || label)}-${hashString(uniquePart)}`,
+    label: label.trim(),
+    basename: directory.name,
+    directory,
+    createdAt: Date.now(),
+  };
+}
+
+export function createCachedPhotoAlbumLibraryScan(albums: PhotoAlbum[]): CachedPhotoAlbumScan {
+  return {
+    version: photoAlbumScanCacheVersion,
+    rootId: "browser-photo-libraries",
+    rootName: "看图媒体库",
+    albums,
+    scannedFiles: albums.reduce((sum, album) => sum + album.imageCount, 0),
+    updatedAt: Date.now(),
+  };
+}
+
+export function createPhotoAlbumLibraryRootStatus(
+  root: PhotoAlbumLibraryRoot,
+  albums: PhotoAlbum[],
+  status: PlayerMediaRootStatus["status"],
+  error?: string,
+): PlayerMediaRootStatus {
+  const rootAlbums = albums.filter((album) => album.mediaRootId === root.id);
+  return {
+    id: root.id,
+    label: root.label,
+    source: "browser",
+    status,
+    videoCount: rootAlbums.length,
+    scannedFiles: rootAlbums.reduce((sum, album) => sum + album.imageCount, 0),
+    updatedAt: Date.now(),
+    error,
+  };
 }
 
 export async function resolvePhotoParentDirectory(rootDirectory: FileSystemDirectoryHandle, relativePath: string) {

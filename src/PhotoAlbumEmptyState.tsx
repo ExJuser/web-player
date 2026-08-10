@@ -28,7 +28,7 @@ export function PhotoAlbumEmptyState({
       </p>
       <button className="primary-button" type="button" onClick={onChooseDirectory} disabled={isLoading}>
         <FolderOpen size={18} />
-        {isLoading ? "扫描中" : "选择看图文件夹"}
+        {isLoading ? "扫描中" : "新增看图媒体库"}
       </button>
     </section>
   );

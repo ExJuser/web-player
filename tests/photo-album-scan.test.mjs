@@ -42,3 +42,27 @@ test("creates cached scan and root status shells", () => {
   assert.equal(status.videoCount, 1);
   assert.equal(status.error, "missing permission");
 });
+
+test("creates one aggregate cache while keeping per-library status", () => {
+  const first = scan.collectPhotoAlbumsFromBrowserFiles("旅行", "photo-root-1", [
+    { file: createImage("01.jpg", 10), relativePath: "Trip/01.jpg", parentDirectory },
+  ]);
+  const second = scan.collectPhotoAlbumsFromBrowserFiles("画集", "photo-root-2", [
+    { file: createImage("cover.png", 20), relativePath: "Art/cover.png", parentDirectory },
+  ]);
+  const albums = [...first.albums, ...second.albums];
+  const cached = scan.createCachedPhotoAlbumLibraryScan(albums);
+  const status = scan.createPhotoAlbumLibraryRootStatus({
+    id: "photo-root-2",
+    label: "画集",
+    basename: "Pictures",
+    createdAt: 1,
+  }, albums, "ready");
+
+  assert.equal(cached.rootId, "browser-photo-libraries");
+  assert.equal(cached.albums.length, 2);
+  assert.equal(cached.scannedFiles, 2);
+  assert.equal(status.id, "photo-root-2");
+  assert.equal(status.videoCount, 1);
+  assert.equal(status.scannedFiles, 1);
+});
