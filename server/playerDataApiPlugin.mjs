@@ -173,7 +173,7 @@ function createCacheStatusDefinitions(thumbnailMemoryStats = { entries: 0, bytes
       id: "photo-scan-cache",
       label: "看图扫描缓存",
       path: path.join(photoAlbumsRoot, "scan-cache"),
-      getStats: () => store.getPhotoAlbumScanCacheStats(),
+      getStats: () => localDataStore.getPhotoAlbumScanCacheStats(),
     },
     { id: "subtitles", label: "内封字幕", path: embeddedSubtitlesRoot },
     { id: "compatible-media", label: "兼容播放缓存", path: compatibleMediaRoot },
@@ -205,7 +205,7 @@ async function clearCacheItems(payload, thumbnailMemoryStats) {
         clearCacheEntriesByKinds: (kinds) => localDataStore.clearCacheEntriesByKinds(kinds),
       })
     : { cleared: [] };
-  if (shouldClearPhotoScanCache) store.clearPhotoAlbumScanCache();
+  if (shouldClearPhotoScanCache) localDataStore.clearPhotoAlbumScanCache();
   return {
     cleared: shouldClearPhotoScanCache ? ["photo-scan-cache", ...result.cleared] : result.cleared,
     status: await createCacheStatus(thumbnailMemoryStats),
