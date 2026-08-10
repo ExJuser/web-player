@@ -44,7 +44,7 @@ export function PlaylistArchiveTabs({ activeTabId, tabs, onActivate, onClose }: 
         </div>
       ))}
       {hiddenTabs.length ? (
-        <details className="playlist-archive-more">
+        <details className="playlist-archive-more" data-dismiss-on-outside>
           <summary>更多队列 · {hiddenTabs.length}</summary>
           <div className="playlist-archive-more-popover">
             {hiddenTabs.map((tab) => (

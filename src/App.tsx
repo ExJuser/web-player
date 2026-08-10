@@ -465,6 +465,40 @@ export default function App() {
   const appShellRef = useRef<HTMLElement | null>(null);
   const playerColumnRef = useRef<HTMLElement | null>(null);
   const topBarRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    const dismissMenusOutside = (target: EventTarget | null) => {
+      if (!(target instanceof Node)) return;
+      document.querySelectorAll<HTMLDetailsElement>('details[data-dismiss-on-outside][open]').forEach((menu) => {
+        if (!menu.contains(target)) menu.removeAttribute("open");
+      });
+    };
+    const handlePointerDown = (event: PointerEvent) => dismissMenusOutside(event.target);
+    const handleFocusIn = (event: FocusEvent) => dismissMenusOutside(event.target);
+    const handleClick = (event: MouseEvent) => {
+      if (!(event.target instanceof Element)) return;
+      event.target.closest<HTMLButtonElement>('details[data-dismiss-on-outside][open] button')
+        ?.closest<HTMLDetailsElement>("details")
+        ?.removeAttribute("open");
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      document.querySelectorAll<HTMLDetailsElement>('details[data-dismiss-on-outside][open]').forEach((menu) => {
+        menu.removeAttribute("open");
+      });
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown, true);
+    document.addEventListener("focusin", handleFocusIn);
+    document.addEventListener("click", handleClick);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown, true);
+      document.removeEventListener("focusin", handleFocusIn);
+      document.removeEventListener("click", handleClick);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []);
   const playerRef = useRef<HTMLDivElement | null>(null);
   const danmakuLayerRef = useRef<HTMLDivElement | null>(null);
   const controlBarRef = useRef<HTMLDivElement | null>(null);

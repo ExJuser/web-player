@@ -120,7 +120,7 @@ export function PlayerMediaActionControls({
             <Star size={16} fill={hasRating ? "currentColor" : "none"} aria-hidden="true" />
             <span>{hasRating ? `评分 ${currentVideoRating} / 10` : "给影片评分"}</span>
           </button>
-          <details className="player-tool-menu" ref={toolMenuRef}>
+          <details className="player-tool-menu" data-dismiss-on-outside ref={toolMenuRef}>
             <summary aria-label="打开影片工具">
               <Wrench size={16} aria-hidden="true" />
               <span>影片工具</span>

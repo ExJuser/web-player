@@ -139,7 +139,7 @@ export const PlaylistItemCard = memo(function PlaylistItemCard({
           已看完
         </span>
       ) : null}
-      <details className="episode-action-menu">
+      <details className="episode-action-menu" data-dismiss-on-outside>
         <summary aria-label="影片操作" title="影片操作"><MoreHorizontal size={17} /></summary>
         <div className="episode-action-menu-popover">
           <button type="button" onClick={() => onFavoriteToggle(video)}>
