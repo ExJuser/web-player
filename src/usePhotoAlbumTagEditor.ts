@@ -55,7 +55,13 @@ export function usePhotoAlbumTagEditor({
   );
   const currentTags = editorAlbum ? photoAlbumTagsRef.current[editorAlbum.id] ?? [] : [];
   const activeInputSegment = useMemo(() => getActiveTagInputSegment(tagInput), [tagInput]);
-  const tagSearchIndex = useMemo(() => createTagSearchIndex(photoAlbumTagsRef.current), [photoAlbumTagsRef, photoAlbumTagsRef.current]);
+  const tagSearchIndex = useMemo(() => {
+    const activeAlbumIds = new Set(photoAlbums.map((album) => album.id));
+    const activeAlbumTags = Object.fromEntries(
+      Object.entries(photoAlbumTagsRef.current).filter(([albumId]) => activeAlbumIds.has(albumId)),
+    );
+    return createTagSearchIndex(activeAlbumTags);
+  }, [photoAlbums, photoAlbumTagsRef, photoAlbumTagsRef.current]);
   const tagInputSuggestions = useMemo(() => editorAlbum && activeInputSegment
     ? createTagInputSuggestions({ query: activeInputSegment, tagIndex: tagSearchIndex, currentTags })
     : [], [activeInputSegment, currentTags, editorAlbum, tagSearchIndex]);

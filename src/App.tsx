@@ -1416,7 +1416,16 @@ export default function App() {
           }
           return;
         }
-        await scanPhotoLibraryRoots(restoredRoots);
+        photoAlbumsRef.current = [];
+        setPhotoAlbums([]);
+        setPhotoRootStatuses(restoredRoots.map((root) => createPhotoAlbumLibraryRootStatus(
+          root,
+          [],
+          readableRootIds.has(root.id) ? "ready" : "needsAccess",
+          readableRootIds.has(root.id) ? undefined : "需要重新授权浏览器目录。",
+        )));
+        setHasLoadedPhotoAlbums(true);
+        setPhotoAlbumMessage("暂无看图媒体库缓存；点击“刷新全部”后扫描图片。");
       } catch (error) {
         setPhotoAlbumMessage(error instanceof Error ? error.message : "读取已保存的看图媒体库失败，请重新选择。");
       } finally {
@@ -1430,7 +1439,6 @@ export default function App() {
     hasLoadedPhotoAlbums,
     homeMediaMode,
     isPhotoAlbumsLoading,
-    scanPhotoLibraryRoots,
     creativeFeature,
     specialHomeSection,
   ]);

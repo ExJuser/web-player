@@ -40,7 +40,7 @@ export function PhotoRootStatusCard({
       {isOpen ? (
         <div className="photo-utility-popover" id="photo-root-panel">
           <div className="photo-utility-popover-header">
-            <div><strong>看图媒体库</strong><span>管理目录授权与扫描状态</span></div>
+            <div className="photo-root-popover-copy"><strong>看图媒体库</strong><span>管理目录授权与扫描状态</span></div>
             <div className="photo-root-actions">
               <button className="secondary-button" type="button" onClick={onAdd} disabled={isLoading}>
                 <FolderPlus size={16} />
@@ -58,10 +58,12 @@ export function PhotoRootStatusCard({
                 const status = statusByRootId.get(root.id);
                 return (
                   <div className="media-library-row" key={root.id}>
-                    <strong>{root.label}</strong>
-                    <code>{root.basename}</code>
-                    <code>{status ? formatPhotoRootStatus(status) : "尚未扫描"}</code>
-                    {status?.error ? <code>{status.error}</code> : null}
+                    <div className="photo-root-row-copy">
+                      <strong>{root.label}</strong>
+                      <code>{root.basename}</code>
+                      <code>{status ? formatPhotoRootStatus(status) : "尚未扫描"}</code>
+                      {status?.error ? <code>{status.error}</code> : null}
+                    </div>
                     <div className="photo-root-row-actions">
                       <button className="secondary-button" type="button" onClick={() => onReauthorize(root)} disabled={isLoading}>
                         <KeyRound size={15} />

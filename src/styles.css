@@ -2362,7 +2362,7 @@ button {
 }
 
 .photo-root-status .photo-utility-popover {
-  right: -6px;
+  right: 0;
   width: min(860px, calc(100vw - 52px));
 }
 
@@ -2376,6 +2376,11 @@ button {
 .photo-utility-popover-header > div:first-child {
   display: grid;
   gap: 3px;
+}
+
+.photo-root-popover-copy {
+  min-width: 0;
+  flex: 1 1 180px;
 }
 
 .photo-utility-popover-header strong {
@@ -2412,6 +2417,11 @@ button {
 .photo-root-actions {
   flex-wrap: wrap;
   justify-content: flex-end;
+}
+
+.photo-root-row-copy {
+  grid-column: 1;
+  min-width: 0;
 }
 
 .photo-root-row-actions {
@@ -11990,6 +12000,22 @@ button {
   color: #667085;
 }
 
+.app-shell.theme-light .photo-root-status .media-library-row,
+:root[data-theme="light"] .photo-root-status .media-library-row {
+  border-color: #d7e0ea;
+  background: #f8fafc;
+}
+
+.app-shell.theme-light .photo-root-row-copy strong,
+:root[data-theme="light"] .photo-root-row-copy strong {
+  color: #172033;
+}
+
+.app-shell.theme-light .photo-root-row-copy code,
+:root[data-theme="light"] .photo-root-row-copy code {
+  color: #475467;
+}
+
 .app-shell.theme-light .photo-command-deck .photo-stats,
 :root[data-theme="light"] .photo-command-deck .photo-stats {
   background: transparent;
@@ -12437,6 +12463,10 @@ button {
     grid-column: 1 / -1;
     grid-row: auto;
     justify-content: flex-start;
+  }
+
+  .photo-root-row-copy {
+    grid-column: 1 / -1;
   }
 
   .photo-album-grid {
