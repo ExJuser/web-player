@@ -7869,6 +7869,13 @@ button {
   overflow: hidden;
 }
 
+.playlist-item .tag-chip-row.adaptive {
+  max-height: 39px;
+  align-content: flex-start;
+  flex-wrap: wrap;
+  row-gap: 3px;
+}
+
 .playlist-item .tag-chip {
   max-width: 82px;
   min-height: 18px;

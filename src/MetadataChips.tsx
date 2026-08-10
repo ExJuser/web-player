@@ -5,9 +5,10 @@ type TagChipsProps = {
   limit?: number;
   compact?: boolean;
   userTagsFirst?: boolean;
+  adaptive?: boolean;
 };
 
-export function TagChips({ tags, actorTags = [], systemTags = [], limit, compact = false, userTagsFirst = false }: TagChipsProps) {
+export function TagChips({ tags, actorTags = [], systemTags = [], limit, compact = false, userTagsFirst = false, adaptive = false }: TagChipsProps) {
   const systemTagKeys = new Set(systemTags.map((tag) => tag.normalize("NFKC").trim().toLocaleLowerCase()));
   const actorTagKeys = new Set(actorTags.map((tag) => tag.normalize("NFKC").trim().toLocaleLowerCase()));
   const systemTagItems = systemTags.map((tag) => ({ label: tag, kind: "system" as const }));
@@ -31,7 +32,7 @@ export function TagChips({ tags, actorTags = [], systemTags = [], limit, compact
   if (!visibleTags.length) return null;
 
   return (
-    <span className={`tag-chip-row ${compact ? "compact" : ""}`} title={combinedTags.map((tag) => tag.label).join(" · ")}>
+    <span className={`tag-chip-row${compact ? " compact" : ""}${adaptive ? " adaptive" : ""}`} title={combinedTags.map((tag) => tag.label).join(" · ")}>
       {visibleTags.map((tag) => (
         <span className={`tag-chip${tag.kind === "actor" ? " actor" : tag.kind === "system" ? " system" : ""}`} key={`${tag.kind}:${tag.label}`}>
           {tag.label}
