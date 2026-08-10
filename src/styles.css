@@ -2169,14 +2169,15 @@ button {
 .photo-album-grid {
   display: grid;
   flex: 1 0 auto;
-  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
-  grid-auto-rows: minmax(180px, 1fr);
-  gap: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(390px, 1fr));
+  grid-auto-rows: auto;
+  align-content: start;
+  gap: 12px;
   min-height: 0;
 }
 
 .photo-album-grid-compact {
-  grid-auto-rows: 190px;
+  grid-auto-rows: auto;
   align-content: start;
 }
 
@@ -2259,10 +2260,10 @@ button {
   display: grid;
   min-width: 0;
   min-height: 0;
-  grid-template-columns: minmax(152px, 42%) minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   overflow: hidden;
   border: 1px solid #242a31;
-  border-radius: 8px;
+  border-radius: 10px;
   background: #1a1e24;
 }
 
@@ -2270,11 +2271,11 @@ button {
   position: relative;
   display: block;
   width: 100%;
-  height: 100%;
+  height: auto;
   min-height: 0;
   overflow: hidden;
   border: 0;
-  aspect-ratio: auto;
+  aspect-ratio: 16 / 9;
   background: #101319;
   cursor: pointer;
 }
@@ -2299,6 +2300,9 @@ button {
   position: absolute;
   right: 6px;
   bottom: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   border-radius: 999px;
   padding: 3px 6px;
   background: rgba(8, 10, 14, 0.76);
@@ -2313,8 +2317,8 @@ button {
   min-height: 0;
   flex: 1;
   flex-direction: column;
-  gap: 5px;
-  padding: 10px;
+  gap: 8px;
+  padding: 12px;
 }
 
 .photo-album-title-row {
@@ -2332,7 +2336,7 @@ button {
   color: #f5f7fb;
   cursor: pointer;
   font: inherit;
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 800;
   line-height: 1.15;
   letter-spacing: 0;
@@ -2353,11 +2357,23 @@ button {
   color: #ffd35b;
 }
 
-.photo-album-copy > span {
-  overflow: hidden;
+.photo-album-path {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
   color: #8e97a5;
-  font-size: 16px;
-  line-height: 1.5;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.photo-album-path svg {
+  flex: 0 0 auto;
+}
+
+.photo-album-path span {
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -2365,8 +2381,8 @@ button {
 .photo-album-tags {
   display: flex;
   min-width: 0;
-  min-height: 26px;
-  flex-wrap: wrap;
+  min-height: 24px;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 5px;
   overflow: hidden;
@@ -2379,6 +2395,49 @@ button {
   font-size: 12px;
 }
 
+.photo-album-more-tags {
+  flex: 0 0 auto;
+  color: #aeb7c4;
+}
+
+.photo-album-empty-tags {
+  display: inline-flex;
+  width: fit-content;
+  min-height: 24px;
+  align-items: center;
+  border: 1px dashed #343b46;
+  border-radius: 999px;
+  padding: 0 8px;
+  color: #6f7886;
+  font-size: 12px;
+}
+
+.photo-album-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.photo-album-meta span {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  border-radius: 6px;
+  padding: 7px 8px;
+  background: #15191f;
+  color: #aeb7c4;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.photo-album-meta svg {
+  flex: 0 0 auto;
+  color: #667180;
+}
+
 .photo-album-footer {
   display: flex;
   min-width: 0;
@@ -2387,14 +2446,33 @@ button {
   margin-top: auto;
 }
 
+.photo-album-progress-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #6f7886;
+  font-size: 12px;
+}
+
+.photo-album-progress-label strong {
+  overflow: hidden;
+  color: #b9c2ce;
+  font-size: 12px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .photo-album-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
 }
 
+.photo-album-actions .primary-button,
 .photo-album-actions .secondary-button,
-.photo-album-actions .danger-button {
+.photo-album-actions .icon-button {
   min-width: auto;
   width: auto;
   height: 34px;
@@ -2403,7 +2481,17 @@ button {
 }
 
 .photo-album-delete-button {
+  width: 34px !important;
   margin-left: auto;
+  border-color: rgba(239, 68, 68, 0.24);
+  color: #ef7b7b;
+}
+
+.photo-album-delete-button:hover,
+.photo-album-delete-button:focus-visible {
+  border-color: rgba(239, 68, 68, 0.5);
+  background: rgba(239, 68, 68, 0.12);
+  color: #ff9a9a;
 }
 
 .photo-empty-state {
@@ -8786,7 +8874,8 @@ button {
 .app-shell.theme-light .home-resume-copy small,
 .app-shell.theme-light .photo-toolbar p,
 .app-shell.theme-light .photo-empty-state p,
-.app-shell.theme-light .photo-album-copy > span,
+.app-shell.theme-light .photo-album-path,
+:root[data-theme="light"] .photo-album-path,
 .app-shell.theme-light .photo-viewer-header span,
 .app-shell.theme-light .photo-page-indicator span,
 .app-shell.theme-light .home-next-card small,
@@ -8827,6 +8916,7 @@ button {
 .app-shell.theme-light .photo-toolbar h2,
 .app-shell.theme-light .photo-empty-state h2,
 .app-shell.theme-light .photo-album-title-row > button:first-child,
+:root[data-theme="light"] .photo-album-title-row > button:first-child,
 .app-shell.theme-light .photo-viewer-header strong,
 .app-shell.theme-light .photo-page-indicator strong,
 .app-shell.theme-light .home-next-card strong,
@@ -9212,6 +9302,7 @@ button {
 .app-shell.theme-light .home-stats,
 .app-shell.theme-light .photo-search-row,
 .app-shell.theme-light .photo-album-card,
+:root[data-theme="light"] .photo-album-card,
 .app-shell.theme-light .photo-viewer-header,
 .app-shell.theme-light .photo-filmstrip,
 .app-shell.theme-light .playlist-item,
@@ -9263,10 +9354,35 @@ button {
 .app-shell.theme-light .home-card-thumbnail,
 .app-shell.theme-light .episode-thumbnail,
 .app-shell.theme-light .photo-album-cover,
+:root[data-theme="light"] .photo-album-cover,
 .app-shell.theme-light .photo-thumbnails button {
   border-color: #d7e0ea;
   background: #e8eef6;
   color: #667085;
+}
+
+.app-shell.theme-light .photo-album-meta span,
+:root[data-theme="light"] .photo-album-meta span {
+  background: #f5f7fa;
+  color: #475467;
+}
+
+.app-shell.theme-light .photo-album-meta svg,
+:root[data-theme="light"] .photo-album-meta svg,
+.app-shell.theme-light .photo-album-progress-label,
+:root[data-theme="light"] .photo-album-progress-label {
+  color: #7b8798;
+}
+
+.app-shell.theme-light .photo-album-progress-label strong,
+:root[data-theme="light"] .photo-album-progress-label strong {
+  color: #344054;
+}
+
+.app-shell.theme-light .photo-album-empty-tags,
+:root[data-theme="light"] .photo-album-empty-tags {
+  border-color: #cbd5e1;
+  color: #7b8798;
 }
 
 .app-shell.theme-light .playlist-item {

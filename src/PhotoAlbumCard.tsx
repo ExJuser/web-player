@@ -1,4 +1,4 @@
-import { Star, Tags, Trash2 } from "lucide-react";
+import { Clock3, FolderOpen, HardDrive, Images, Star, Tags, Trash2 } from "lucide-react";
 
 import type { PhotoAlbum } from "./playerTypes";
 
@@ -9,7 +9,8 @@ type PhotoAlbumCardProps = {
   progressPercent: number;
   isFavorite: boolean;
   tags: string[];
-  metaLabel: string;
+  sizeLabel: string;
+  updatedLabel: string;
   hasProgress: boolean;
   onOpen: (album: PhotoAlbum, options?: { fromBeginning?: boolean }) => void;
   onToggleFavorite: (album: PhotoAlbum) => void;
@@ -24,7 +25,8 @@ export function PhotoAlbumCard({
   progressPercent,
   isFavorite,
   tags,
-  metaLabel,
+  sizeLabel,
+  updatedLabel,
   hasProgress,
   onOpen,
   onToggleFavorite,
@@ -35,7 +37,7 @@ export function PhotoAlbumCard({
     <article className="photo-album-card">
       <button className="photo-album-cover" type="button" onClick={() => onOpen(album)} title={album.relativePath || album.title}>
         {coverImageUrl ? <img src={coverImageUrl} alt="" loading="lazy" draggable={false} /> : null}
-        <span className="photo-album-count">{album.imageCount} 张</span>
+        <span className="photo-album-count"><Images size={13} />{album.imageCount} 张</span>
       </button>
       <div className="photo-album-copy">
         <div className="photo-album-title-row">
@@ -52,26 +54,32 @@ export function PhotoAlbumCard({
             <Star size={16} fill={isFavorite ? "currentColor" : "none"} />
           </button>
         </div>
-        <span>
-          {album.mediaRootLabel} · {album.relativePath || "根目录"}
-        </span>
+        <p className="photo-album-path" title={`${album.mediaRootLabel} · ${album.relativePath || "根目录"}`}>
+          <FolderOpen size={14} />
+          <span>{album.mediaRootLabel} · {album.relativePath || "根目录"}</span>
+        </p>
         {tags.length ? (
           <div className="photo-album-tags" aria-label="图集标签">
-            {tags.map((tag) => (
+            {tags.slice(0, 3).map((tag) => (
               <span className="tag-chip" key={`${album.id}-${tag}`}>
                 {tag}
               </span>
             ))}
+            {tags.length > 3 ? <span className="tag-chip photo-album-more-tags">+{tags.length - 3}</span> : null}
           </div>
-        ) : null}
-        <span>{metaLabel}</span>
+        ) : <span className="photo-album-empty-tags">暂无标签</span>}
+        <div className="photo-album-meta" aria-label="图集信息">
+          <span title={`占用空间 ${sizeLabel}`}><HardDrive size={14} />{sizeLabel}</span>
+          <span title={`最近更新 ${updatedLabel}`}><Clock3 size={14} />{updatedLabel}</span>
+        </div>
         <div className="photo-album-footer">
-          <div className="home-progress" aria-label={progressLabel}>
+          <div className="photo-album-progress-label"><span>阅读进度</span><strong>{progressLabel}</strong></div>
+          <div className="home-progress" aria-label={`阅读进度：${progressLabel}`}>
             <span style={{ width: `${progressPercent}%` }} />
           </div>
           <div className="photo-album-actions">
-            <button className="secondary-button" type="button" onClick={() => onOpen(album)}>
-              打开
+            <button className="primary-button" type="button" onClick={() => onOpen(album)}>
+              <FolderOpen size={16} />打开
             </button>
             {hasProgress ? (
               <button className="secondary-button" type="button" onClick={() => onOpen(album, { fromBeginning: true })}>
@@ -82,9 +90,8 @@ export function PhotoAlbumCard({
               <Tags size={16} />
               标签
             </button>
-            <button className="danger-button photo-album-delete-button" type="button" onClick={() => onDelete(album)} title="删除整个图集">
+            <button className="icon-button photo-album-delete-button" type="button" onClick={() => onDelete(album)} title="删除整个图集" aria-label="删除整个图集">
               <Trash2 size={16} />
-              删除
             </button>
           </div>
         </div>

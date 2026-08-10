@@ -6246,7 +6246,8 @@ export default function App() {
         hasProgress={Boolean(progress)}
         isFavorite={isFavorite}
         key={album.id}
-        metaLabel={`${progressLabel} · ${formatFileSize(album.totalSize)} · ${formatRelativeTime(album.updatedAt)}`}
+        sizeLabel={formatFileSize(album.totalSize)}
+        updatedLabel={formatRelativeTime(album.updatedAt)}
         onDelete={requestDeletePhotoAlbum}
         onEditTags={openPhotoAlbumTagEditor}
         onOpen={openPhotoAlbum}
