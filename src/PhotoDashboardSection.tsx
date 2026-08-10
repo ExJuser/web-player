@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { PhotoAlbumEmptyState } from "./PhotoAlbumEmptyState";
 import { PhotoAlbumPagination } from "./PhotoAlbumPagination";
@@ -103,6 +103,8 @@ export function PhotoDashboardSection({
   onSortModeChange,
 }: PhotoDashboardSectionProps) {
   const albumGridRef = useRef<HTMLElement>(null);
+  const utilityDockRef = useRef<HTMLDivElement>(null);
+  const [openUtilityPanel, setOpenUtilityPanel] = useState<"tags" | "roots" | null>(null);
 
   useEffect(() => {
     const grid = albumGridRef.current;
@@ -125,39 +127,63 @@ export function PhotoDashboardSection({
     return () => observer.disconnect();
   }, [onGridColumnCountChange]);
 
+  useEffect(() => {
+    if (!openUtilityPanel) return;
+
+    const closeOnOutsidePress = (event: PointerEvent) => {
+      if (!utilityDockRef.current?.contains(event.target as Node)) setOpenUtilityPanel(null);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpenUtilityPanel(null);
+    };
+
+    document.addEventListener("pointerdown", closeOnOutsidePress);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsidePress);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [openUtilityPanel]);
+
   return (
     <section className="photo-dashboard" aria-label="看图">
-      <PhotoAlbumToolbar
-        filter={filter}
-        isLoading={isLoading}
-        message={message}
-        sortDirection={sortDirection}
-        sortDirectionOptions={sortDirectionOptions}
-        sortMode={sortMode}
-        sortOptions={sortOptions}
-        onFilterChange={onFilterChange}
-        onRandomAlbum={onRandomAlbum}
-        onRefresh={onRefresh}
-        onSortDirectionChange={onSortDirectionChange}
-        onSortModeChange={onSortModeChange}
-        randomDisabled={isLoading || !totalVisibleAlbums}
-      />
+      <div className="photo-command-deck">
+        <PhotoAlbumToolbar
+          filter={filter}
+          isLoading={isLoading}
+          message={message}
+          sortDirection={sortDirection}
+          sortDirectionOptions={sortDirectionOptions}
+          sortMode={sortMode}
+          sortOptions={sortOptions}
+          onFilterChange={onFilterChange}
+          onRandomAlbum={onRandomAlbum}
+          onRefresh={onRefresh}
+          onSortDirectionChange={onSortDirectionChange}
+          onSortModeChange={onSortModeChange}
+          randomDisabled={isLoading || !totalVisibleAlbums}
+        />
 
-      <PhotoAlbumSearchRow query={searchQuery} resultCount={searchResultCount} results={searchResults} onChange={onSearchChange} onClear={onSearchClear} onSubmit={onSearchSubmit} onSelect={onSelectSearchResult} />
+        <PhotoAlbumSearchRow query={searchQuery} resultCount={searchResultCount} results={searchResults} onChange={onSearchChange} onClear={onSearchClear} onSubmit={onSearchSubmit} onSelect={onSelectSearchResult} />
 
-      <PhotoAlbumStats stats={stats} />
+        <PhotoAlbumStats stats={stats} />
+      </div>
 
-      <PhotoTagStats {...tagStats} selectedTagKey={tagFilterKey} onSelectTag={onSelectTag} />
+      <div className="photo-dashboard-utilities" ref={utilityDockRef}>
+        <PhotoTagStats {...tagStats} selectedTagKey={tagFilterKey} isOpen={openUtilityPanel === "tags"} onSelectTag={onSelectTag} onToggle={() => setOpenUtilityPanel((current) => current === "tags" ? null : "tags")} />
 
-      <PhotoRootStatusCard
-        isLoading={isLoading}
-        roots={photoLibraryRoots}
-        statuses={photoRootStatuses}
-        onAdd={onChooseDirectory}
-        onRefresh={onRefresh}
-        onRemove={onRemoveRoot}
-        onReauthorize={onReauthorizeRoot}
-      />
+        <PhotoRootStatusCard
+          isLoading={isLoading}
+          roots={photoLibraryRoots}
+          statuses={photoRootStatuses}
+          isOpen={openUtilityPanel === "roots"}
+          onAdd={onChooseDirectory}
+          onRefresh={onRefresh}
+          onRemove={onRemoveRoot}
+          onReauthorize={onReauthorizeRoot}
+          onToggle={() => setOpenUtilityPanel((current) => current === "roots" ? null : "roots")}
+        />
+      </div>
 
       {totalVisibleAlbums ? (
         <>

@@ -1,4 +1,4 @@
-import { RefreshCw, Shuffle } from "lucide-react";
+import { Images, RefreshCw, Shuffle } from "lucide-react";
 
 import { ControlSelect } from "./ControlSelect";
 import type { PhotoAlbumSortDirection, PhotoAlbumSortMode } from "./playerTypes";
@@ -38,7 +38,8 @@ export function PhotoAlbumToolbar({
 }: PhotoAlbumToolbarProps) {
   return (
     <section className="photo-toolbar home-section">
-      <div>
+      <div className="photo-toolbar-copy">
+        <span className="photo-toolbar-kicker"><Images size={14} /> 图集工作台</span>
         <h2>本地相册</h2>
         <p>{message}</p>
       </div>
