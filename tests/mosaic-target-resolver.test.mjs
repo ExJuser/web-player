@@ -73,6 +73,30 @@ test("uses the existing source image when higher-quality targets are unavailable
   assert.equal(result.blob.size, fallbackBlob.size);
 });
 
+test("continues to the source image after a rejected server response and browser error", async () => {
+  const fallbackBlob = new Blob(["fallback"]);
+  const requestedUrls = [];
+  const result = await resolver.resolveMosaicVideoTarget({
+    createBrowserTarget: async () => {
+      throw new Error("browser decode failed");
+    },
+    fetchTarget: async (url) => {
+      requestedUrls.push(url);
+      return url === "/generated-target"
+        ? new Response(null, { status: 503 })
+        : new Response(fallbackBlob, { status: 200 });
+    },
+    generateServerTarget: async () => "/generated-target",
+    signal: new AbortController().signal,
+    sourceUrl: "/fallback",
+    video,
+  });
+
+  assert.deepEqual(requestedUrls, ["/generated-target", "/fallback"]);
+  assert.equal(result.origin, "fallback");
+  assert.equal(result.blob.size, fallbackBlob.size);
+});
+
 test("preserves abort failures instead of continuing to lower-quality fallbacks", async () => {
   const controller = new AbortController();
   controller.abort();

@@ -3154,6 +3154,10 @@ button {
   gap: 5px;
 }
 
+.photo-reader-single-fit-options {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .photo-reader-setting-options button {
   justify-content: center;
   padding: 0 8px;

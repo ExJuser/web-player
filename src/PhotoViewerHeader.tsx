@@ -195,7 +195,7 @@ export function PhotoViewerHeader({
               ) : (
                 <>
                   <span>单页显示</span>
-                  <div className="photo-reader-setting-options">
+                  <div className="photo-reader-setting-options photo-reader-single-fit-options">
                     {([ ["fit", "适应窗口"], ["width", "适应宽度"], ["original", "原始大小"] ] as Array<[PhotoSingleFitMode, string]>).map(([value, label]) => (
                       <button className={singleFitMode === value ? "active" : ""} key={value} type="button" onClick={() => onSingleFitModeChange(value)}>
                         {label}
