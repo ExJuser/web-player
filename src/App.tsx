@@ -6510,12 +6510,16 @@ export default function App() {
 
     setActivePlaylistArchiveTabId(tabIdentity.id);
     setPlaylistArchiveTabs((previous) => {
-      const existingIndex = previous.findIndex((tab) => tab.id === tabIdentity.id);
-      if (existingIndex < 0) return [...previous, nextTab];
-      return previous.map((tab, index) => index === existingIndex ? nextTab : tab);
+      const availableTabs = !trimmedSearchQuery && activePlaylistArchiveTabId === "search"
+        ? previous.filter((tab) => tab.id !== "search")
+        : previous;
+      const existingIndex = availableTabs.findIndex((tab) => tab.id === tabIdentity.id);
+      if (existingIndex < 0) return [...availableTabs, nextTab];
+      return availableTabs.map((tab, index) => index === existingIndex ? nextTab : tab);
     });
   }, [
     activeRatingPlaylistLabel,
+    activePlaylistArchiveTabId,
     isDuplicatePlaylistActive,
     isPlaylistSeriesMode,
     isPlaylistSortReversed,
