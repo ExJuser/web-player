@@ -7208,6 +7208,9 @@ export default function App() {
           visibleVideoCount={visibleVideos.length}
           videoComments={videoComments}
           videoRatings={videoRatings}
+          videoTags={effectiveVideoTags}
+          systemVideoTags={systemVideoTags}
+          videoActorTags={videoActorTags}
           createVideoTitle={createVideoMetadataTitle}
           onActivateArchiveTab={activatePlaylistArchiveTab}
           onChangePlaylistFilter={(nextFilter) => {

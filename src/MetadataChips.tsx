@@ -4,28 +4,34 @@ type TagChipsProps = {
   systemTags?: string[];
   limit?: number;
   compact?: boolean;
+  userTagsFirst?: boolean;
 };
 
-export function TagChips({ tags, actorTags = [], systemTags = [], limit, compact = false }: TagChipsProps) {
+export function TagChips({ tags, actorTags = [], systemTags = [], limit, compact = false, userTagsFirst = false }: TagChipsProps) {
   const systemTagKeys = new Set(systemTags.map((tag) => tag.normalize("NFKC").trim().toLocaleLowerCase()));
   const actorTagKeys = new Set(actorTags.map((tag) => tag.normalize("NFKC").trim().toLocaleLowerCase()));
-  const combinedTags = [
-    ...systemTags.map((tag) => ({ label: tag, kind: "system" as const })),
-    ...actorTags
-      .filter((tag) => !systemTagKeys.has(tag.normalize("NFKC").trim().toLocaleLowerCase()))
-      .map((tag) => ({ label: tag, kind: "actor" as const })),
-    ...tags
-      .filter((tag) => {
-        const key = tag.normalize("NFKC").trim().toLocaleLowerCase();
-        return !actorTagKeys.has(key) && !systemTagKeys.has(key);
-      })
-      .map((tag) => ({ label: tag, kind: "tag" as const })),
-  ];
+  const systemTagItems = systemTags.map((tag) => ({ label: tag, kind: "system" as const }));
+  const actorTagItems = actorTags
+    .filter((tag) => !systemTagKeys.has(tag.normalize("NFKC").trim().toLocaleLowerCase()))
+    .map((tag) => ({ label: tag, kind: "actor" as const }));
+  const userTagItems = tags
+    .filter((tag) => {
+      const key = tag.normalize("NFKC").trim().toLocaleLowerCase();
+      return !actorTagKeys.has(key) && !systemTagKeys.has(key);
+    })
+    .map((tag) => ({ label: tag, kind: "tag" as const }));
+  const combinedTags = userTagsFirst
+    ? [...userTagItems, ...actorTagItems, ...systemTagItems]
+    : [
+        ...systemTagItems,
+        ...actorTagItems,
+        ...userTagItems,
+      ];
   const visibleTags = typeof limit === "number" ? combinedTags.slice(0, limit) : combinedTags;
   if (!visibleTags.length) return null;
 
   return (
-    <span className={`tag-chip-row ${compact ? "compact" : ""}`}>
+    <span className={`tag-chip-row ${compact ? "compact" : ""}`} title={combinedTags.map((tag) => tag.label).join(" · ")}>
       {visibleTags.map((tag) => (
         <span className={`tag-chip${tag.kind === "actor" ? " actor" : tag.kind === "system" ? " system" : ""}`} key={`${tag.kind}:${tag.label}`}>
           {tag.label}

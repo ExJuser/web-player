@@ -7,6 +7,7 @@ import type {
   VideoCommentStore,
   VideoItem,
   VideoRatingStore,
+  VideoTagStore,
 } from "./playerTypes";
 import type { DuplicatePlaylistVideoMeta } from "./playerUiState";
 import type { PlaylistSearchMatch } from "./playerPlaylistSearch";
@@ -40,6 +41,9 @@ type PlaylistVideoListProps = {
   totalVideoCount: number;
   videoComments: VideoCommentStore;
   videoRatings: VideoRatingStore;
+  videoTags: VideoTagStore;
+  systemVideoTags: VideoTagStore;
+  videoActorTags: Record<string, string[]>;
   visibleVideoCount: number;
   createVideoTitle: (video: VideoItem) => string;
   onDelete: (video: VideoItem) => void;
@@ -79,6 +83,9 @@ export function PlaylistVideoList({
   totalVideoCount,
   videoComments,
   videoRatings,
+  videoTags,
+  systemVideoTags,
+  videoActorTags,
   visibleVideoCount,
   createVideoTitle,
   onDelete,
@@ -111,6 +118,7 @@ export function PlaylistVideoList({
         const versionMeta = versionPlaylistMetaByVideoId.get(video.id) ?? null;
         const rating = videoRatings[video.id];
         const ratingComment = videoComments[video.id];
+        const tags = videoTags[video.id] ?? [];
 
         return (
           <PlaylistItemCard
@@ -130,6 +138,9 @@ export function PlaylistVideoList({
             searchTerms={searchTerms}
             seriesTitle={seriesTitle}
             showVideoMetadata={showVideoMetadata}
+            tags={tags}
+            systemTags={systemVideoTags[video.id]}
+            actorTags={videoActorTags[video.id]}
             title={createVideoTitle(video)}
             video={video}
             onDelete={onDelete}

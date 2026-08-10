@@ -16,6 +16,7 @@ import type {
   VideoCommentStore,
   VideoItem,
   VideoRatingStore,
+  VideoTagStore,
 } from "./playerTypes";
 
 type PlaylistPanelProps = {
@@ -74,6 +75,9 @@ type PlaylistPanelProps = {
   visibleVideoCount: number;
   videoComments: VideoCommentStore;
   videoRatings: VideoRatingStore;
+  videoTags: VideoTagStore;
+  systemVideoTags: VideoTagStore;
+  videoActorTags: Record<string, string[]>;
   createVideoTitle: (video: VideoItem) => string;
   onActivateArchiveTab: (tabId: string) => void;
   onChangePlaylistFilter: (filter: PlaylistFilter) => void;
@@ -161,6 +165,9 @@ export function PlaylistPanel({
   visibleVideoCount,
   videoComments,
   videoRatings,
+  videoTags,
+  systemVideoTags,
+  videoActorTags,
   createVideoTitle,
   onActivateArchiveTab,
   onChangePlaylistFilter,
@@ -302,6 +309,9 @@ export function PlaylistPanel({
         totalVideoCount={totalVideoCount}
         videoComments={videoComments}
         videoRatings={videoRatings}
+        videoTags={videoTags}
+        systemVideoTags={systemVideoTags}
+        videoActorTags={videoActorTags}
         visibleVideoCount={visibleVideoCount}
         createVideoTitle={createVideoTitle}
         onClearSearch={onClearPlaylistSearch}

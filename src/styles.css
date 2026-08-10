@@ -7862,9 +7862,24 @@ button {
 }
 
 .playlist-item .tag-chip-row {
-  max-height: 20px;
+  max-height: 19px;
+  margin-top: 5px;
   flex-wrap: nowrap;
+  gap: 3px;
   overflow: hidden;
+}
+
+.playlist-item .tag-chip {
+  max-width: 82px;
+  min-height: 18px;
+  padding: 0 5px;
+  border-radius: 4px;
+  font-size: 10px;
+  line-height: 16px;
+}
+
+.playlist-item .tag-chip.more {
+  max-width: none;
 }
 
 .playlist-item .rating-chip {

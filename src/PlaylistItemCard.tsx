@@ -1,7 +1,7 @@
 import { CheckCircle2, Heart, MoreHorizontal, Play, RotateCcw, Star, Trash2 } from "lucide-react";
 import { memo, useCallback, useSyncExternalStore } from "react";
 
-import { RatingChip } from "./MetadataChips";
+import { RatingChip, TagChips } from "./MetadataChips";
 import { formatTime } from "./playerFormatUtils";
 import type { PlaybackProgress, VideoItem } from "./playerTypes";
 import type { PlaylistSearchMatch } from "./playerPlaylistSearch";
@@ -25,6 +25,9 @@ type PlaylistItemCardProps = {
   searchTerms: string[];
   seriesTitle?: string;
   showVideoMetadata: boolean;
+  tags: string[];
+  actorTags?: string[];
+  systemTags?: string[];
   title: string;
   video: VideoItem;
   onDelete: (video: VideoItem) => void;
@@ -51,6 +54,9 @@ export const PlaylistItemCard = memo(function PlaylistItemCard({
   searchTerms,
   seriesTitle,
   showVideoMetadata,
+  tags,
+  actorTags,
+  systemTags,
   title,
   video,
   onDelete,
@@ -114,6 +120,7 @@ export const PlaylistItemCard = memo(function PlaylistItemCard({
         <span className="episode-main">
           <strong>{highlightSearchTerms(video.name, searchTerms)}</strong>
           <small className="episode-parent-path">{parentPath}</small>
+          <TagChips tags={tags} actorTags={actorTags} systemTags={systemTags} limit={2} compact userTagsFirst />
           {searchMatch?.reasons.length ? <SearchMatchReasons match={searchMatch} /> : null}
           {duplicateMeta ? (
             <small className={`episode-duplicate-meta severity-${duplicateMeta.severity}`}>
