@@ -1,4 +1,4 @@
-export const photoAlbumPageSize = 20;
+export const photoAlbumPageRowCount = 5;
 export const photoThumbnailWindowSize = 24;
 export const photoViewerWarmRadius = 4;
 export const photoViewerDecodeRadius = 2;

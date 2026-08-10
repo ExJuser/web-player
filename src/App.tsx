@@ -271,7 +271,7 @@ import {
   type UpsertMediaRootResponse,
 } from "./mediaRootScanCache";
 import {
-  photoAlbumPageSize,
+  photoAlbumPageRowCount,
   photoThumbnailWindowSize,
   photoAlbumScanCacheStaleMs,
   shouldStartLegacyThumbnailMigration,
@@ -650,6 +650,9 @@ export default function App() {
     defaultPhotoAlbumPreferences.favoritesOnly ? "favorites" : "all",
   );
   const [photoAlbumPage, setPhotoAlbumPage] = useState(1);
+  const [photoAlbumGridColumnCount, setPhotoAlbumGridColumnCount] = useState(4);
+  const photoAlbumPageSize = photoAlbumGridColumnCount * photoAlbumPageRowCount;
+  const previousPhotoAlbumPageSizeRef = useRef(photoAlbumPageSize);
   const [photoAlbumSearchQuery, setPhotoAlbumSearchQuery] = useState("");
   const [photoAlbumAppliedSearchQuery, setPhotoAlbumAppliedSearchQuery] = useState("");
   const [photoAlbumTagFilter, setPhotoAlbumTagFilter] = useState<string | null>(null);
@@ -2289,7 +2292,7 @@ export default function App() {
   const { pageCount: photoAlbumPageCount, start: photoAlbumPageStart, end: photoAlbumPageEnd } = getPhotoAlbumPageBounds(visiblePhotoAlbums.length, photoAlbumPage, photoAlbumPageSize);
   const pagedPhotoAlbums = useMemo(
     () => getPagedPhotoAlbums(visiblePhotoAlbums, photoAlbumPage, photoAlbumPageSize),
-    [photoAlbumPage, visiblePhotoAlbums],
+    [photoAlbumPage, photoAlbumPageSize, visiblePhotoAlbums],
   );
   const matchedPhotoAlbums = useMemo(
     () => photoAlbumSearchQuery.trim()
@@ -2348,6 +2351,13 @@ export default function App() {
   useEffect(() => {
     setPhotoAlbumPage((page) => Math.min(Math.max(page, 1), photoAlbumPageCount));
   }, [photoAlbumPageCount]);
+  useEffect(() => {
+    const previousPageSize = previousPhotoAlbumPageSizeRef.current;
+    if (previousPageSize === photoAlbumPageSize) return;
+    const previousPageStart = (photoAlbumPage - 1) * previousPageSize;
+    previousPhotoAlbumPageSizeRef.current = photoAlbumPageSize;
+    setPhotoAlbumPage(Math.floor(previousPageStart / photoAlbumPageSize) + 1);
+  }, [photoAlbumPage, photoAlbumPageSize]);
   const findMatchedSubtitleForVideo = useCallback(
     (video: VideoItem) => {
       let matchedSubtitle: SubtitleItem | null = null;
@@ -6632,6 +6642,7 @@ export default function App() {
               totalVisibleAlbums={visiblePhotoAlbums.length}
               onChooseDirectory={() => void choosePhotoAlbumDirectory()}
               onFilterChange={updatePhotoAlbumFilter}
+              onGridColumnCountChange={setPhotoAlbumGridColumnCount}
               onPageChange={setPhotoAlbumPage}
               onRandomAlbum={openRandomPhotoAlbum}
               onRefresh={() => void refreshPhotoAlbumDirectory()}

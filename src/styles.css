@@ -2167,13 +2167,18 @@ button {
 }
 
 .photo-album-grid {
-  display: grid;
+  display: flex;
   flex: 1 0 auto;
-  grid-template-columns: repeat(auto-fill, minmax(390px, 1fr));
-  grid-auto-rows: auto;
+  flex-wrap: wrap;
+  justify-content: center;
   align-content: start;
   gap: 12px;
   min-height: 0;
+  --photo-album-card-width: 390px;
+}
+
+.photo-album-grid > .photo-album-card {
+  flex: 0 1 var(--photo-album-card-width);
 }
 
 .photo-album-grid-compact {
@@ -12004,9 +12009,8 @@ button {
   }
 
   .photo-album-grid {
-    grid-template-columns: 1fr;
-    grid-auto-rows: auto;
     gap: 10px;
+    --photo-album-card-width: 100%;
   }
 
   .photo-album-grid-compact {

@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 
 import { PhotoAlbumEmptyState } from "./PhotoAlbumEmptyState";
 import { PhotoAlbumPagination } from "./PhotoAlbumPagination";
@@ -44,6 +44,7 @@ type PhotoDashboardSectionProps = {
   totalVisibleAlbums: number;
   onChooseDirectory: () => void;
   onFilterChange: (filter: PhotoAlbumViewFilter) => void;
+  onGridColumnCountChange: (columnCount: number) => void;
   onPageChange: (page: number) => void;
   onRandomAlbum: () => void;
   onRefresh: () => void;
@@ -82,6 +83,7 @@ export function PhotoDashboardSection({
   totalVisibleAlbums,
   onChooseDirectory,
   onFilterChange,
+  onGridColumnCountChange,
   onPageChange,
   onRandomAlbum,
   onRefresh,
@@ -94,6 +96,29 @@ export function PhotoDashboardSection({
   onSortDirectionChange,
   onSortModeChange,
 }: PhotoDashboardSectionProps) {
+  const albumGridRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    const grid = albumGridRef.current;
+    if (!grid) return;
+
+    const updateGridLayout = () => {
+      const styles = window.getComputedStyle(grid);
+      const gap = Number.parseFloat(styles.columnGap) || 0;
+      const width = grid.getBoundingClientRect().width;
+      const columnCount = Math.max(1, Math.floor((width + gap) / (390 + gap)));
+      const cardWidthPercent = 100 / columnCount;
+      const cardGapOffset = gap * (columnCount - 1) / columnCount;
+      grid.style.setProperty("--photo-album-card-width", `calc(${cardWidthPercent}% - ${cardGapOffset}px)`);
+      onGridColumnCountChange(columnCount);
+    };
+
+    updateGridLayout();
+    const observer = new ResizeObserver(updateGridLayout);
+    observer.observe(grid);
+    return () => observer.disconnect();
+  }, [onGridColumnCountChange]);
+
   return (
     <section className="photo-dashboard" aria-label="看图">
       <PhotoAlbumToolbar
@@ -122,7 +147,7 @@ export function PhotoDashboardSection({
 
       {totalVisibleAlbums ? (
         <>
-          <section className={`photo-album-grid ${isGridCompact ? "photo-album-grid-compact" : ""}`.trim()}>
+          <section ref={albumGridRef} className={`photo-album-grid ${isGridCompact ? "photo-album-grid-compact" : ""}`.trim()}>
             {pagedPhotoAlbums.map(onRenderAlbum)}
           </section>
           <PhotoAlbumPagination
