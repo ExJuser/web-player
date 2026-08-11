@@ -1,4 +1,5 @@
 import type { RefObject } from "react";
+import { ChevronRight } from "lucide-react";
 
 import { PlayerSearchInput } from "./PlayerSearchInput";
 import { PlaylistArchiveTabs, type PlaylistArchiveTab } from "./PlaylistArchiveTabs";
@@ -206,7 +207,7 @@ export function PlaylistPanel({
           <strong>影片档案</strong>
         </div>
         <button className="playlist-collapse-button" type="button" onClick={onCollapse} aria-label="折叠影片档案" title="折叠影片档案">
-          <span aria-hidden="true">›</span>
+          <ChevronRight size={18} aria-hidden="true" />
         </button>
       </div>
       <PlaylistArchiveTabs
