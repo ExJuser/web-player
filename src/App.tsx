@@ -4707,10 +4707,8 @@ export default function App() {
         (Number.parseFloat(shellStyles.paddingRight) || 0);
       const availableWidth = shell.clientWidth - paddingX;
       const playerColumnStyles = window.getComputedStyle(playerColumn);
-      const topBar = topBarRef.current;
-      const isTopBarInFlow = Boolean(topBar && window.getComputedStyle(topBar).position !== "absolute");
-      const playerColumnGap = isTopBarInFlow ? Number.parseFloat(playerColumnStyles.rowGap) || 14 : 0;
-      const topBarHeight = isTopBarInFlow ? topBar?.getBoundingClientRect().height ?? 0 : 0;
+      const playerColumnGap = Number.parseFloat(playerColumnStyles.rowGap) || 14;
+      const topBarHeight = topBarRef.current?.getBoundingClientRect().height ?? 0;
       const controlsHeight = 0;
       const frameStyles = window.getComputedStyle(frame);
       const frameBorderX =
@@ -6590,7 +6588,6 @@ export default function App() {
       <section className="player-column" ref={playerColumnRef}>
         <PlayerTopBar
           ref={topBarRef}
-          arePlayerControlsVisible={areControlsVisible}
           canShowExplore={homeMediaMode === "special"}
           currentVideoId={currentVideo?.id ?? null}
           homeSearchQuery={playlistSearchQuery}
@@ -6622,7 +6619,6 @@ export default function App() {
           onChangeHomeSearch={changeHomeSearch}
           onClearHomeSearch={() => setPlaylistSearchQuery("")}
           onFocusHomeSearch={resetHomeSearchScope}
-          onKeepPlayerControlsVisible={keepControlsVisible}
           onOpenCacheStatus={openCacheStatusDialog}
           onOpenMediaProcessingTask={reopenMediaProcessingTask}
           onThumbnailError={markVideoThumbnailFailed}
@@ -6631,7 +6627,6 @@ export default function App() {
           onShowExplore={showExploreView}
           onShowHome={showHomeView}
           onShowPhotoAlbums={showPhotoAlbumsView}
-          onSchedulePlayerControlsHide={scheduleControlsHide}
           onPreloadExplore={preloadExplore}
           onPreloadPhotoAlbums={preloadPhotoAlbums}
           onToggleTheme={toggleTheme}
