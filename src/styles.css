@@ -15481,7 +15481,7 @@ button {
 .actor-card-index {
   color: var(--archive-cyan);
   font-family: ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.16em;
   line-height: 1.2;
@@ -15571,7 +15571,7 @@ button {
 
 .actor-archive-index span,
 .actor-unresolved-count span {
-  font-size: 12px;
+  font-size: 13px;
   letter-spacing: 0.08em;
 }
 
@@ -15587,7 +15587,7 @@ button {
 .actor-archive-index small,
 .actor-unresolved-count small {
   color: color-mix(in srgb, var(--archive-paper) 48%, transparent);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .actor-archive .actor-toolbar {
@@ -15628,6 +15628,7 @@ button {
 
 .actor-archive .actor-toolbar input {
   color: var(--archive-paper);
+  font-size: 15px;
 }
 
 .actor-archive .actor-toolbar input::placeholder {
@@ -15639,6 +15640,7 @@ button {
   border: 1px solid color-mix(in srgb, var(--archive-paper) 14%, transparent);
   border-radius: 7px;
   color: color-mix(in srgb, var(--archive-paper) 72%, transparent);
+  font-size: 14px;
   background: var(--archive-night);
 }
 
@@ -15672,7 +15674,7 @@ button {
 
 .actor-archive .actor-card-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 16px;
 }
 
@@ -15733,6 +15735,7 @@ button {
   border-radius: 3px;
   color: var(--archive-paper);
   font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: 12px;
   background: color-mix(in srgb, var(--archive-night) 86%, transparent);
   backdrop-filter: blur(8px);
 }
@@ -15766,7 +15769,7 @@ button {
 .actor-archive .actor-card-heading small {
   color: color-mix(in srgb, var(--archive-paper) 48%, transparent);
   font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 0.06em;
 }
 
@@ -15782,6 +15785,7 @@ button {
   border: 1px solid color-mix(in srgb, var(--archive-cyan) 24%, transparent);
   border-radius: 3px;
   color: var(--archive-cyan);
+  font-size: 13px;
   background: color-mix(in srgb, var(--archive-cyan) 7%, transparent);
 }
 
@@ -15797,7 +15801,7 @@ button {
   display: grid;
   min-width: 0;
   gap: 4px;
-  padding: 9px 7px;
+  padding: 10px 8px;
   border-left: 1px solid color-mix(in srgb, var(--archive-paper) 10%, transparent);
 }
 
@@ -15816,19 +15820,19 @@ button {
 
 .actor-credit-strip small {
   color: color-mix(in srgb, var(--archive-paper) 42%, transparent);
-  font-size: 9px;
+  font-size: 11px;
   letter-spacing: 0.1em;
 }
 
 .actor-credit-strip strong {
   color: var(--archive-paper);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
 }
 
 .actor-archive .actor-card-featured {
   grid-column: span 2;
-  grid-template-columns: minmax(0, 1.45fr) minmax(280px, 0.85fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   background: var(--archive-night);
 }
 
@@ -15882,7 +15886,7 @@ button {
 
 .actor-profile-hero {
   display: grid;
-  grid-template-columns: minmax(0, 1.22fr) minmax(320px, 0.78fr);
+  grid-template-columns: minmax(320px, 0.78fr) minmax(0, 1.22fr);
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--archive-paper) 12%, transparent);
   border-left: 3px solid var(--archive-amber);
@@ -15938,7 +15942,7 @@ button {
 
 .actor-archive .actor-video-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 16px;
 }
 
@@ -15983,6 +15987,7 @@ button {
   gap: 6px 14px;
   color: color-mix(in srgb, var(--archive-paper) 50%, transparent);
   font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: 12px;
 }
 
 .actor-archive .actor-video-card > div {
@@ -16147,10 +16152,25 @@ button {
   background: color-mix(in srgb, var(--archive-cyan) 7%, transparent);
 }
 
-@media (max-width: 1280px) {
+@media (max-width: 1500px) {
+  .actor-archive .actor-card-grid,
+  .actor-archive .actor-video-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .actor-archive .actor-unresolved-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1100px) {
   .actor-archive .actor-card-grid,
   .actor-archive .actor-video-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .actor-archive .actor-unresolved-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -16163,14 +16183,6 @@ button {
     grid-column: 1 / -1;
   }
 
-  .actor-profile-hero {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .actor-profile-cover {
-    border-right: 0;
-    border-bottom: 1px solid color-mix(in srgb, var(--archive-paper) 11%, transparent);
-  }
 }
 
 @media (max-width: 760px) {
@@ -16215,6 +16227,15 @@ button {
   .actor-archive .actor-video-grid,
   .actor-archive .actor-unresolved-grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .actor-profile-hero {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .actor-profile-cover {
+    border-right: 0;
+    border-bottom: 1px solid color-mix(in srgb, var(--archive-paper) 11%, transparent);
   }
 
   .actor-archive .actor-card-featured {
