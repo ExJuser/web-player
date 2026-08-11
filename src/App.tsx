@@ -429,6 +429,7 @@ const PhotoViewerSection = lazy(() =>
 const playlistResizeMinWidth = 400;
 const playlistResizeDefaultWidth = 460;
 const playlistResizeMaxWidth = 560;
+const playlistAutoFitMinWidth = 280;
 
 type PlaylistArchiveTabKind = "library" | "search" | "favorites" | "duplicate" | "version" | "rating" | "tag";
 
@@ -4718,7 +4719,7 @@ export default function App() {
       const maxFrameHeight = Math.max(240, Math.floor(playerColumn.clientHeight - topBarHeight - playerColumnGap));
       const maxVideoHeight = Math.max(180, Math.floor(maxFrameHeight - controlsHeight - frameBorderY));
       const minPlayerWidth = 420;
-      const minPlaylistWidth = playlistResizeMinWidth;
+      const minPlaylistWidth = playlistWidthOverride == null ? playlistAutoFitMinWidth : playlistResizeMinWidth;
       const sourceVideoAspectRatio = Number.isFinite(videoAspectRatio) && videoAspectRatio > 0 ? videoAspectRatio : 16 / 9;
       const activeVideoAspectRatio = isVideoSideways ? 1 / sourceVideoAspectRatio : sourceVideoAspectRatio;
       const maxVideoWidth = Math.max(1, Math.floor(availableWidth - gap - minPlaylistWidth - frameBorderX));
@@ -4731,9 +4732,12 @@ export default function App() {
       const remainingPlaylistWidth = Math.round(
         availableWidth - gap - Math.max(minPlayerWidth, videoWidth + frameBorderX),
       );
+      const availablePlaylistWidth = availableWidth - gap - minPlayerWidth;
       const maxPlaylistWidth = Math.max(
         minPlaylistWidth,
-        Math.min(playlistResizeMaxWidth, availableWidth - gap - minPlayerWidth),
+        playlistWidthOverride == null
+          ? availablePlaylistWidth
+          : Math.min(playlistResizeMaxWidth, availablePlaylistWidth),
       );
       const targetPlaylistWidth = playlistWidthOverride ?? remainingPlaylistWidth;
       const playlistWidth = Math.round(clamp(targetPlaylistWidth, minPlaylistWidth, maxPlaylistWidth));
