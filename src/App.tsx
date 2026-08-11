@@ -4738,7 +4738,7 @@ export default function App() {
       const targetPlaylistWidth = playlistWidthOverride ?? remainingPlaylistWidth;
       const playlistWidth = Math.round(clamp(targetPlaylistWidth, minPlaylistWidth, maxPlaylistWidth));
       const playerWidth = Math.max(minPlayerWidth, Math.round(availableWidth - gap - playlistWidth));
-      const playerHeight = videoHeight + controlsHeight + frameBorderY;
+      const playerHeight = maxFrameHeight;
 
       setAdaptiveColumns((previous) => {
         if (

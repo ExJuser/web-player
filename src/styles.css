@@ -1046,7 +1046,7 @@ button {
   align-self: stretch;
   min-height: 0;
   height: var(--player-frame-height);
-  margin: auto 0 0;
+  margin: 0;
   flex-direction: column;
   overflow: hidden;
   border: 1px solid #242a31;
