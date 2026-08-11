@@ -25,27 +25,98 @@ button,
   display: contents;
 }
 
-/* Keep the resume artwork and copy readable beside the fixed home rail. */
-@media (min-width: 981px) and (max-width: 1280px) {
-  .app-shell.home-view .home-resume-card,
-  .app-shell.home-view .home-resume-card.has-thumbnail {
+/* The home rail changes the card width independently from the viewport. */
+.app-shell.home-view .home-primary-column {
+  container-name: home-primary;
+  container-type: inline-size;
+}
+
+@container home-primary (max-width: 899px) {
+  .home-resume-card,
+  .home-resume-card.has-thumbnail {
     grid-template-columns: minmax(0, 1fr);
-    min-height: auto;
+    height: auto;
+    min-height: 0;
+    padding: 0;
   }
 
-  .app-shell.home-view .home-resume-card > .home-card-thumbnail.has-image {
-    justify-self: stretch;
-    width: 100%;
+  .home-resume-card.empty {
+    min-height: 360px;
+  }
+
+  .home-resume-visual {
     height: auto;
+    border-right: 0;
+    border-bottom: 1px solid #29313b;
     aspect-ratio: 16 / 9;
   }
 
-  .app-shell.home-view .home-resume-card > .home-card-thumbnail.has-image img {
-    width: 100%;
+  .app-shell.theme-light .home-resume-visual,
+  :root[data-theme="light"] .home-resume-visual {
+    border-bottom-color: #d7e0ea;
+  }
+
+  .home-resume-copy {
+    min-height: 360px;
+    padding: 32px;
+  }
+}
+
+@container home-primary (max-width: 619px) {
+  .home-resume-card {
+    border-radius: 10px;
+  }
+
+  .home-resume-copy {
+    min-height: 340px;
+    gap: 14px;
+    padding: 22px;
+  }
+
+  .home-resume-copy .home-resume-identity h2 {
+    display: -webkit-box;
+    font-size: 28px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .home-resume-metadata .tag-chip-row {
     max-width: 100%;
-    height: 100%;
-    max-height: 360px;
-    object-fit: contain;
+    overflow: hidden;
+    flex-wrap: nowrap;
+  }
+
+  .home-resume-frame-timecode {
+    bottom: 14px;
+    left: 14px;
+  }
+
+  .home-resume-actions .primary-button,
+  .home-resume-actions .secondary-button {
+    width: auto;
+    min-width: 0;
+  }
+
+  .home-resume-actions .primary-button {
+    flex: 1 1 auto;
+  }
+
+  .home-resume-actions .secondary-button {
+    flex: 0 0 auto;
+  }
+}
+
+@media (max-width: 380px) {
+  .home-resume-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .home-resume-actions .primary-button,
+  .home-resume-actions .secondary-button {
+    width: 100%;
   }
 }
 
