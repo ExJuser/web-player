@@ -1,5 +1,4 @@
-import { ChevronDown } from "lucide-react";
-import type { CSSProperties, ReactNode } from "react";
+import { useState, type CSSProperties, type ReactNode } from "react";
 
 import { HomeCardThumbnail } from "./HomeVideoCards";
 import { RatingChip, TagChips } from "./MetadataChips";
@@ -18,7 +17,6 @@ type SpecialActorMetric = "played" | "count" | "emission";
 
 type SpecialInsightsCardProps = {
   insights: SpecialModeInsights;
-  isExpanded: boolean;
   activeTab: SpecialInsightTab;
   actors: ActorInsight[];
   createCard: (video: VideoItem) => HomeVideoCard;
@@ -33,8 +31,19 @@ type SpecialInsightsCardProps = {
   onTabChange: (tab: SpecialInsightTab) => void;
   onOpenVideo: (video: VideoItem) => void;
   onThumbnailError: (videoId: string) => void;
-  onToggle: () => void;
 };
+
+const actorMetricOptions: Array<{ value: SpecialActorMetric; label: string }> = [
+  { value: "played", label: "播放" },
+  { value: "count", label: "次数" },
+  { value: "emission", label: "发射" },
+];
+
+const tagMetricOptions: Array<{ value: SpecialTagMetric; label: string }> = [
+  { value: "videoCount", label: "数量" },
+  { value: "played", label: "播放" },
+  { value: "emission", label: "发射" },
+];
 
 function getSpecialActorMetricValue(insight: ActorInsight, metric: SpecialActorMetric) {
   if (metric === "played") return insight.stats.totalPlayedSeconds;
@@ -224,7 +233,6 @@ function SpecialTagChartGroup({
 
 export function SpecialInsightsCard({
   insights,
-  isExpanded,
   activeTab,
   actors,
   createCard,
@@ -239,112 +247,132 @@ export function SpecialInsightsCard({
   onTabChange,
   onOpenVideo,
   onThumbnailError,
-  onToggle,
 }: SpecialInsightsCardProps) {
+  const [actorMetric, setActorMetric] = useState<SpecialActorMetric>("played");
+  const [tagMetric, setTagMetric] = useState<SpecialTagMetric>("videoCount");
+  const actorMetricLabel = actorMetricOptions.find((option) => option.value === actorMetric)?.label ?? "播放";
+  const tagMetricConfig = tagMetric === "videoCount"
+    ? { label: "热门标签", insights: insights.tagsByVideoCount, emptyText: "暂无标签" }
+    : tagMetric === "played"
+      ? { label: "播放标签", insights: insights.tagsByPlayedDuration, emptyText: "暂无播放统计" }
+      : { label: "发射标签", insights: insights.tagsByEmissionCount, emptyText: "暂无发射统计" };
+
   return (
-    <section className="home-section special-insights-card">
-      <button
-        className="home-section-toggle"
-        type="button"
-        aria-expanded={isExpanded}
-        aria-controls="special-insights-content"
-        onClick={onToggle}
-      >
-        <h2>特殊模式洞察</h2>
-        <span>{isExpanded ? `${insights.summary.taggedVideos} 个已打标签` : "点击展开"}</span>
-        <ChevronDown className="home-section-toggle-chevron" size={16} aria-hidden="true" />
-      </button>
-      {isExpanded ? (
-        <div id="special-insights-content" className="home-section-collapsible-content">
-      <div className="special-insight-summary">
+    <section className="special-insights-card explore-ledger-section" aria-labelledby="special-insights-title">
+      <header className="explore-section-heading special-insights-heading">
         <div>
-          <strong>{formatDuration(insights.summary.totalPlayedSeconds)}</strong>
-          <span>累计播放</span>
+          <span className="explore-section-eyebrow">Archive ranking</span>
+          <h2 id="special-insights-title">观看排行</h2>
+          <p>从全库记录里找出停留最久、反复播放和最近活跃的内容。</p>
         </div>
-        <div>
-          <strong>{insights.summary.playCount}</strong>
-          <span>播放次数</span>
+        <span className="special-insight-subtle">
+          最近发射：{insights.summary.lastEmissionAt ? formatRelativeTime(insights.summary.lastEmissionAt) : "暂无记录"}
+        </span>
+      </header>
+
+      <dl className="special-insight-summary" aria-label="全库观看统计">
+        <div><dt>全库累计</dt><dd>{formatDuration(insights.summary.totalPlayedSeconds)}</dd></div>
+        <div><dt>播放次数</dt><dd>{insights.summary.playCount}</dd></div>
+        <div><dt>发射次数</dt><dd>{insights.summary.emissionCount}</dd></div>
+        <div><dt>标签覆盖</dt><dd>{Math.round(insights.summary.tagCoverage * 100)}%</dd></div>
+      </dl>
+
+      <div className="special-insight-layout">
+        <div className="special-ranking-panel">
+          <div className="special-insight-tabs" role="tablist" aria-label="观看视频榜单">
+            {tabOptions.map((option) => (
+              <button
+                className={activeTab === option.value ? "active" : ""}
+                key={option.value}
+                type="button"
+                role="tab"
+                aria-selected={activeTab === option.value}
+                onClick={() => onTabChange(option.value)}
+              >
+                {option.icon}
+                {option.label}
+              </button>
+            ))}
+          </div>
+          {rankingVideos.length ? (
+            <div className="special-insight-list">
+              {rankingVideos.map((insight, index) => (
+                <SpecialInsightVideoRow
+                  card={createCard(insight.video)}
+                  comment={videoComments[insight.video.id]}
+                  formatMetric={formatVideoMetric}
+                  index={index}
+                  insight={insight}
+                  key={`${activeTab}-${insight.video.id}`}
+                  onOpenVideo={onOpenVideo}
+                  onThumbnailError={onThumbnailError}
+                  rating={videoRatings[insight.video.id]}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="empty-list compact">当前榜单还没有可展示的观看记录。</div>
+          )}
         </div>
-        <div>
-          <strong>{insights.summary.emissionCount}</strong>
-          <span>发射次数</span>
-        </div>
-        <div>
-          <strong>{Math.round(insights.summary.tagCoverage * 100)}%</strong>
-          <span>标签覆盖</span>
-        </div>
-      </div>
-      <div className="special-insight-subtle">
-        最近发射：
-        {insights.summary.lastEmissionAt ? formatRelativeTime(insights.summary.lastEmissionAt) : "暂无记录"}
-      </div>
-      <div className="special-insight-tabs" role="tablist" aria-label="特殊模式视频榜单">
-        {tabOptions.map((option) => (
-          <button
-            className={activeTab === option.value ? "active" : ""}
-            key={option.value}
-            type="button"
-            role="tab"
-            aria-selected={activeTab === option.value}
-            onClick={() => onTabChange(option.value)}
-          >
-            {option.icon}
-            {option.label}
-          </button>
-        ))}
-      </div>
-      {rankingVideos.length ? (
-        <div className="special-insight-list">
-          {rankingVideos.map((insight, index) => (
-            <SpecialInsightVideoRow
-              card={createCard(insight.video)}
-              comment={videoComments[insight.video.id]}
-              formatMetric={formatVideoMetric}
-              index={index}
-              insight={insight}
-              key={`${activeTab}-${insight.video.id}`}
-              onOpenVideo={onOpenVideo}
-              onThumbnailError={onThumbnailError}
-              rating={videoRatings[insight.video.id]}
+
+        <aside className="special-preference-panel" aria-labelledby="special-preference-title">
+          <div className="special-preference-heading">
+            <div><span>Preference facets</span><h3 id="special-preference-title">偏好切面</h3></div>
+            <small>{insights.summary.taggedVideos} 个影片已打标签</small>
+          </div>
+          <section className="special-facet-card" aria-labelledby="special-actor-facet-title">
+            <header>
+              <h4 id="special-actor-facet-title">演员</h4>
+              <div className="special-facet-switch" role="group" aria-label="演员统计指标">
+                {actorMetricOptions.map((option) => (
+                  <button
+                    className={actorMetric === option.value ? "active" : ""}
+                    key={option.value}
+                    type="button"
+                    aria-pressed={actorMetric === option.value}
+                    onClick={() => setActorMetric(option.value)}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </header>
+            <SpecialActorChartGroup
+              actors={actors}
+              formatDuration={formatDuration}
+              icon={tagGroupIcons[actorMetric === "count" ? "videoCount" : actorMetric]}
+              label={`${actorMetricLabel}靠前的演员`}
+              metric={actorMetric}
             />
-          ))}
-        </div>
-      ) : (
-        <div className="empty-list compact">当前榜单暂无统计记录。</div>
-      )}
-      <div className="special-tag-groups">
-        <SpecialActorChartGroup actors={actors} formatDuration={formatDuration} icon={tagGroupIcons.played} label="播放最久的演员" metric="played" />
-        <SpecialActorChartGroup actors={actors} formatDuration={formatDuration} icon={tagGroupIcons.videoCount} label="次数最多的演员" metric="count" />
-        <SpecialActorChartGroup actors={actors} formatDuration={formatDuration} icon={tagGroupIcons.emission} label="发射最多的演员" metric="emission" />
+          </section>
+          <section className="special-facet-card" aria-labelledby="special-tag-facet-title">
+            <header>
+              <h4 id="special-tag-facet-title">标签</h4>
+              <div className="special-facet-switch" role="group" aria-label="标签统计指标">
+                {tagMetricOptions.map((option) => (
+                  <button
+                    className={tagMetric === option.value ? "active" : ""}
+                    key={option.value}
+                    type="button"
+                    aria-pressed={tagMetric === option.value}
+                    onClick={() => setTagMetric(option.value)}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </header>
+            <SpecialTagChartGroup
+              emptyText={tagMetricConfig.emptyText}
+              formatDuration={formatDuration}
+              icon={tagGroupIcons[tagMetric]}
+              insights={tagMetricConfig.insights}
+              label={tagMetricConfig.label}
+              metric={tagMetric}
+            />
+          </section>
+        </aside>
       </div>
-      <div className="special-tag-groups">
-        <SpecialTagChartGroup
-          emptyText="暂无标签"
-          formatDuration={formatDuration}
-          icon={tagGroupIcons.videoCount}
-          insights={insights.tagsByVideoCount}
-          label="热门标签"
-          metric="videoCount"
-        />
-        <SpecialTagChartGroup
-          emptyText="暂无播放统计"
-          formatDuration={formatDuration}
-          icon={tagGroupIcons.played}
-          insights={insights.tagsByPlayedDuration}
-          label="播放标签"
-          metric="played"
-        />
-        <SpecialTagChartGroup
-          emptyText="暂无发射统计"
-          formatDuration={formatDuration}
-          icon={tagGroupIcons.emission}
-          insights={insights.tagsByEmissionCount}
-          label="发射标签"
-          metric="emission"
-        />
-      </div>
-        </div>
-      ) : null}
     </section>
   );
 }

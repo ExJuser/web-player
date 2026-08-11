@@ -648,7 +648,6 @@ export default function App() {
   const [homeProgressRecapVideoId, setHomeProgressRecapVideoId] = useState("");
   const [isHomeProgressRecapLoading, setIsHomeProgressRecapLoading] = useState(false);
   const [specialInsightTab, setSpecialInsightTab] = useState<SpecialInsightTab>("played");
-  const [isSpecialInsightsExpanded, setIsSpecialInsightsExpanded] = useState(true);
   const [duplicateVideoGroups, setDuplicateVideoGroups] = useState<DuplicateVideoGroup[]>([]);
   const [duplicateDetectionProgress, setDuplicateDetectionProgress] = useState<DuplicateDetectionProgress | null>(null);
   const [duplicateDetectionMessage, setDuplicateDetectionMessage] = useState("尚未检测重复视频。");
@@ -845,7 +844,6 @@ export default function App() {
   const [watchActivityRevision, setWatchActivityRevision] = useState(0);
   const [watchActivityRange, setWatchActivityRange] = useState<WatchActivityRange>(30);
   const [watchActivityMetric, setWatchActivityMetric] = useState<WatchActivityMetric>("watched");
-  const [isWatchActivityExpanded, setIsWatchActivityExpanded] = useState(true);
   const [selectedWatchActivityDate, setSelectedWatchActivityDate] = useState<string | null>(null);
   const [watchActivityCarouselTick, setWatchActivityCarouselTick] = useState(0);
   const [launchEffectKey, setLaunchEffectKey] = useState(0);
@@ -2013,12 +2011,10 @@ export default function App() {
   const shouldKeepMosaicExploreMounted = activeView === "photoViewer" && photoViewerReturnRef.current === "mosaic";
   const shouldLoadWatchActivity = isExploreViewVisible
     && isRatingFilterEnabled
-    && specialHomeSection === "overview"
-    && isWatchActivityExpanded;
+    && specialHomeSection === "overview";
   const shouldLoadSpecialInsights = isExploreViewVisible
     && homeMediaMode === "special"
-    && specialHomeSection === "overview"
-    && isSpecialInsightsExpanded;
+    && specialHomeSection === "overview";
   const shouldLoadGrowthRings = isExploreViewVisible
     && homeMediaMode === "special"
     && specialHomeSection === "creative"
@@ -6758,34 +6754,62 @@ export default function App() {
             </nav>
 
             <div className="explore-content">
-              {isRatingFilterEnabled && specialHomeSection === "overview" ? (
-                <WatchActivitySection
-                  carouselCardsByDate={watchActivityCarouselCardsByDate}
-                  carouselTick={watchActivityCarouselTick}
-                  cards={selectedWatchActivityCards}
-                  insights={watchActivityInsights}
-                  isExpanded={isWatchActivityExpanded}
-                  metric={watchActivityMetric}
-                  metricOptions={watchActivityMetricOptions}
-                  monthGroups={watchActivityMonthGroups}
-                  range={watchActivityRange}
-                  rangeOptions={watchActivityRangeOptions}
-                  selectedDay={selectedWatchActivityDay}
-                  watchActivityStore={watchActivityRef.current}
-                  formatCumulativeDuration={formatCumulativeDuration}
-                  formatDate={formatWatchActivityDate}
-                  formatHomeMeta={formatHomeMeta}
-                  formatMetric={formatWatchActivityMetric}
-                  onMetricChange={setWatchActivityMetric}
-                  onOpenVideo={openVideoFromHome}
-                  onRangeChange={setWatchActivityRange}
-                  onSelectDate={setSelectedWatchActivityDate}
-                  onThumbnailError={markVideoThumbnailFailed}
-                  onToggle={() => setIsWatchActivityExpanded((current) => !current)}
-                />
-              ) : null}
+              {specialHomeSection === "overview" ? (
+                <div className="explore-overview">
+                  <header className="explore-overview-hero">
+                    <div>
+                      <span className="explore-overview-eyebrow">Private viewing archive</span>
+                      <h1>私人放映日志</h1>
+                      <p>沿着日期回看观看痕迹，再从影片、演员与标签里找到反复出现的偏好。</p>
+                    </div>
+                    <div className="explore-overview-period" aria-label="当前统计周期">
+                      <span>收录周期</span>
+                      <strong>{watchActivityRange} 天</strong>
+                    </div>
+                  </header>
 
-              {specialHomeSection === "creative" ? (
+                  {isRatingFilterEnabled ? (
+                    <WatchActivitySection
+                      carouselCardsByDate={watchActivityCarouselCardsByDate}
+                      carouselTick={watchActivityCarouselTick}
+                      cards={selectedWatchActivityCards}
+                      insights={watchActivityInsights}
+                      metric={watchActivityMetric}
+                      metricOptions={watchActivityMetricOptions}
+                      monthGroups={watchActivityMonthGroups}
+                      range={watchActivityRange}
+                      rangeOptions={watchActivityRangeOptions}
+                      selectedDay={selectedWatchActivityDay}
+                      watchActivityStore={watchActivityRef.current}
+                      formatCumulativeDuration={formatCumulativeDuration}
+                      formatDate={formatWatchActivityDate}
+                      formatHomeMeta={formatHomeMeta}
+                      formatMetric={formatWatchActivityMetric}
+                      onMetricChange={setWatchActivityMetric}
+                      onOpenVideo={openVideoFromHome}
+                      onRangeChange={setWatchActivityRange}
+                      onSelectDate={setSelectedWatchActivityDate}
+                      onThumbnailError={markVideoThumbnailFailed}
+                    />
+                  ) : null}
+
+                  <HomeSpecialInsightsSection
+                    activeTab={specialInsightTab}
+                    actors={actorInsights.actors}
+                    createCard={createHomeVideoCard}
+                    formatDuration={formatCumulativeDuration}
+                    formatRelativeTime={formatRelativeTime}
+                    formatVideoMetric={formatSpecialInsightMetric}
+                    insights={specialModeInsights}
+                    onOpenVideo={openVideoFromHome}
+                    onTabChange={setSpecialInsightTab}
+                    onThumbnailError={markVideoThumbnailFailed}
+                    rankingVideos={specialInsightRankingVideos}
+                    videoComments={videoComments}
+                    videoRatings={videoRatings}
+                  />
+                </div>
+              ) : specialHomeSection === "creative" ? (
                 <section className={`creative-feature-shell${creativeFeature ? " has-feature" : ""}`}>
                   {creativeFeature ? (
                     <button className="creative-feature-back" type="button" onClick={() => openCreativeFeatureRoute(null)}>
@@ -6854,25 +6878,7 @@ export default function App() {
                     onActorThumbnailVideosChange={updateActorThumbnailVideos}
                   />
                 </LazyFeatureBoundary>
-              ) : (
-                <HomeSpecialInsightsSection
-                  activeTab={specialInsightTab}
-                  actors={actorInsights.actors}
-                  createCard={createHomeVideoCard}
-                  formatDuration={formatCumulativeDuration}
-                  formatRelativeTime={formatRelativeTime}
-                  formatVideoMetric={formatSpecialInsightMetric}
-                  insights={specialModeInsights}
-                  isExpanded={isSpecialInsightsExpanded}
-                  onOpenVideo={openVideoFromHome}
-                  onTabChange={setSpecialInsightTab}
-                  onThumbnailError={markVideoThumbnailFailed}
-                  onToggle={() => setIsSpecialInsightsExpanded((current) => !current)}
-                  rankingVideos={specialInsightRankingVideos}
-                  videoComments={videoComments}
-                  videoRatings={videoRatings}
-                />
-              )}
+              ) : null}
             </div>
           </section>
         ) : null}
