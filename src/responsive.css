@@ -84,8 +84,8 @@ button,
 
   .home-resume-metadata .tag-chip-row {
     max-width: 100%;
-    overflow: hidden;
-    flex-wrap: nowrap;
+    overflow: visible;
+    flex-wrap: wrap;
   }
 
   .home-resume-frame-timecode {

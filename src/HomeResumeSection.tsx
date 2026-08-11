@@ -49,6 +49,9 @@ export function HomeResumeSection({
       ? `上次停在 ${formatTime(currentTime)}`
       : "从片头开始";
   const seriesTitle = card?.seriesTitle?.trim();
+  const videoName = card?.video.name ?? "";
+  const extensionIndex = videoName.lastIndexOf(".");
+  const displayTitle = extensionIndex > 0 ? videoName.slice(0, extensionIndex) : videoName;
 
   return (
     <section className={`home-resume-card ${card ? "" : "empty"} ${card?.video.thumbnailUrl ? "has-thumbnail" : ""}`}>
@@ -75,13 +78,22 @@ export function HomeResumeSection({
               <span>{lastWatchedLabel}</span>
             </div>
             <div className="home-resume-identity">
-              <h2>{seriesTitle || card.video.name}</h2>
-              {seriesTitle ? <p>{card.video.name}</p> : null}
+              <h2>{displayTitle}</h2>
             </div>
-            {card.mediaRootLabel ? <span className="home-resume-source">{card.mediaRootLabel}</span> : null}
+            {card.mediaRootLabel || seriesTitle ? (
+              <div className="home-resume-context">
+                {card.mediaRootLabel ? <span className="home-resume-source">{card.mediaRootLabel}</span> : null}
+                {seriesTitle ? (
+                  <span className="home-resume-folder">
+                    <FolderOpen size={14} />
+                    <span>文件夹 · {seriesTitle}</span>
+                  </span>
+                ) : null}
+              </div>
+            ) : null}
             {hasMetadata ? (
               <div className="home-resume-metadata">
-                <TagChips tags={card.tags ?? []} actorTags={card.actorTags} systemTags={card.systemTags} limit={4} />
+                <TagChips tags={card.tags ?? []} actorTags={card.actorTags} systemTags={card.systemTags} limit={10} />
                 <RatingChip rating={card.rating} comment={card.ratingComment} />
               </div>
             ) : null}
