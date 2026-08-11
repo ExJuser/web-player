@@ -210,7 +210,8 @@ export function ActorDashboardSection({
     sort,
     sortDirection,
   }), [actors, discoveryDateKey, discoveryScope, discoveryState.batch, discoveryState.recentActorIds, query, sort, sortDirection]);
-  const actorPageCount = Math.max(1, Math.ceil(filteredActors.length / actorPageSize));
+  const actorPageItemCount = actorPageSize + (sort === "explore" ? 1 : 0);
+  const actorPageCount = Math.max(1, Math.ceil(filteredActors.length / actorPageItemCount));
   const unresolvedPageCount = Math.max(1, Math.ceil(unresolvedVideos.length / unresolvedPageSize));
   useEffect(() => setActorPage(1), [actorPageSize, discoveryState.batch, query, sort, sortDirection]);
   useEffect(() => {
@@ -266,7 +267,7 @@ export function ActorDashboardSection({
     observer.observe(target);
     return () => observer.disconnect();
   }, [selected?.videos.length, visibleActorVideoCount]);
-  const visibleActors = useMemo(() => filteredActors.slice((actorPage - 1) * actorPageSize, actorPage * actorPageSize), [actorPage, actorPageSize, filteredActors]);
+  const visibleActors = useMemo(() => filteredActors.slice((actorPage - 1) * actorPageItemCount, actorPage * actorPageItemCount), [actorPage, actorPageItemCount, filteredActors]);
   const actorCoverSeed = `${discoveryScope}:${discoveryDateKey}:${sort === "explore" ? discoveryState.batch : 0}`;
   const visibleActorCards = useMemo(() => visibleActors.map((entry) => ({
     entry,
