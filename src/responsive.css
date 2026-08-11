@@ -212,9 +212,9 @@ button,
   .timeline {
     height: 28px;
     background-color: transparent;
-    background-position: center;
+    background-position: center calc(50% - 3px), center;
     background-repeat: no-repeat;
-    background-size: 100% 7px;
+    background-size: 100% 2px, 100% 7px;
   }
 
   .timeline-preview {

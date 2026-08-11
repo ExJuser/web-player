@@ -3,7 +3,7 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { readJsonFile } from "./jsonFiles.mjs";
 
-const schemaVersion = 5;
+const schemaVersion = 6;
 const playerStoreVersion = 6;
 const photoAlbumStoreVersion = 1;
 
@@ -136,6 +136,7 @@ export class LocalDataSqliteStore {
         "current_time" REAL NOT NULL,
         duration REAL NOT NULL,
         completed INTEGER NOT NULL,
+        history_json TEXT,
         updated_at INTEGER NOT NULL,
         PRIMARY KEY (library_id, video_id)
       );
@@ -460,6 +461,7 @@ export class LocalDataSqliteStore {
       );
     `);
     this.migrateLegacyPhotoAlbumScanCache();
+    this.ensureColumn("video_progress", "history_json", "TEXT");
     this.ensureColumn("video_highlights", "tag_label", "TEXT");
     this.ensureColumn("photo_album_scan_albums", "folder_modified_at", "INTEGER");
     this.setMeta("schema_version", String(schemaVersion));
@@ -613,8 +615,8 @@ export class LocalDataSqliteStore {
     }
 
     const progressInsert = this.db.prepare(`
-      INSERT INTO video_progress (library_id, video_id, "current_time", duration, completed, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO video_progress (library_id, video_id, "current_time", duration, completed, history_json, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
     for (const [videoId, item] of Object.entries(asObject(store.items ?? store.progress))) {
       if (!item || typeof item !== "object") continue;
@@ -622,7 +624,7 @@ export class LocalDataSqliteStore {
       const duration = Number(item.duration);
       const updatedAt = Number(item.updatedAt);
       if (!Number.isFinite(currentTime) || !Number.isFinite(duration) || !Number.isFinite(updatedAt)) continue;
-      progressInsert.run(libraryId, videoId, currentTime, duration, item.completed ? 1 : 0, updatedAt);
+      progressInsert.run(libraryId, videoId, currentTime, duration, item.completed ? 1 : 0, item.history ? stringifyJson(item.history) : null, updatedAt);
     }
 
     const favoriteInsert = this.db.prepare("INSERT INTO video_favorites (library_id, video_id, created_at) VALUES (?, ?, ?)");
@@ -850,12 +852,14 @@ export class LocalDataSqliteStore {
     if (!hasData) return null;
 
     const progress = {};
-    for (const row of allRows(this.db.prepare('SELECT video_id, "current_time", duration, completed, updated_at FROM video_progress WHERE library_id = ?'), libraryId)) {
+    for (const row of allRows(this.db.prepare('SELECT video_id, "current_time", duration, completed, history_json, updated_at FROM video_progress WHERE library_id = ?'), libraryId)) {
+      const history = parseJson(row.history_json, undefined);
       progress[row.video_id] = {
-      currentTime: row.current_time,
+        currentTime: row.current_time,
         duration: row.duration,
         completed: Boolean(row.completed),
         updatedAt: row.updated_at,
+        ...(history ? { history } : {}),
       };
     }
 
@@ -1024,8 +1028,8 @@ export class LocalDataSqliteStore {
       }
       this.db
         .prepare(`
-          INSERT INTO video_progress (library_id, video_id, "current_time", duration, completed, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?)
+          INSERT INTO video_progress (library_id, video_id, "current_time", duration, completed, history_json, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT(library_id, video_id) DO UPDATE SET
             "current_time" = excluded."current_time",
             duration = CASE
@@ -1033,10 +1037,11 @@ export class LocalDataSqliteStore {
               ELSE video_progress.duration
             END,
             completed = excluded.completed,
+            history_json = COALESCE(excluded.history_json, video_progress.history_json),
             updated_at = excluded.updated_at
           WHERE excluded.updated_at >= video_progress.updated_at
         `)
-        .run(libraryId, videoId, Number(progress.currentTime) || 0, Number(progress.duration) || 0, progress.completed ? 1 : 0, Number(progress.updatedAt) || now());
+        .run(libraryId, videoId, Number(progress.currentTime) || 0, Number(progress.duration) || 0, progress.completed ? 1 : 0, progress.history ? stringifyJson(progress.history) : null, Number(progress.updatedAt) || now());
     });
   }
 
@@ -1052,8 +1057,8 @@ export class LocalDataSqliteStore {
   upsertProgressSync(libraryId, videoId, progress) {
     this.db
       .prepare(`
-        INSERT INTO video_progress (library_id, video_id, "current_time", duration, completed, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO video_progress (library_id, video_id, "current_time", duration, completed, history_json, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(library_id, video_id) DO UPDATE SET
           "current_time" = excluded."current_time",
           duration = CASE
@@ -1061,10 +1066,11 @@ export class LocalDataSqliteStore {
             ELSE video_progress.duration
           END,
           completed = excluded.completed,
+          history_json = COALESCE(excluded.history_json, video_progress.history_json),
           updated_at = excluded.updated_at
         WHERE excluded.updated_at >= video_progress.updated_at
       `)
-      .run(libraryId, videoId, Number(progress.currentTime) || 0, Number(progress.duration) || 0, progress.completed ? 1 : 0, Number(progress.updatedAt) || now());
+      .run(libraryId, videoId, Number(progress.currentTime) || 0, Number(progress.duration) || 0, progress.completed ? 1 : 0, progress.history ? stringifyJson(progress.history) : null, Number(progress.updatedAt) || now());
   }
 
   replaceFavorites(libraryId, favorites) {

@@ -1,4 +1,4 @@
-import type { FocusEventHandler, MouseEventHandler, PointerEventHandler, Ref } from "react";
+import type { CSSProperties, FocusEventHandler, MouseEventHandler, PointerEventHandler, Ref } from "react";
 
 import { PlayerMediaActionControls } from "./PlayerMediaActionControls";
 import { PlayerOptionControls } from "./PlayerOptionControls";
@@ -7,8 +7,9 @@ import { PlayerTimelineControls } from "./PlayerTimelineControls";
 import { PlayerViewControls } from "./PlayerViewControls";
 import { SpecialStatsControl } from "./SpecialStatsControl";
 import { usePlaybackSnapshot, type PlaybackRuntimeApi } from "./playbackRuntime";
+import { createPlaybackHistoryGradient } from "./playbackHistory";
 import type { HomeMediaMode } from "./playerUiState";
-import type { PlaybackMode, SubtitleStylePreferences, VideoEditSegment, VideoHighlightSegment } from "./playerTypes";
+import type { PlaybackHistory, PlaybackMode, SubtitleStylePreferences, VideoEditSegment, VideoHighlightSegment } from "./playerTypes";
 
 type PlaybackSourceChoice = "compatible" | "original";
 
@@ -38,6 +39,7 @@ type PlayerControlBarProps = {
   controlBarRef: Ref<HTMLDivElement>;
   currentVideoHasCompatibleMedia: boolean;
   currentVideoHighlights: VideoHighlightSegment[];
+  currentVideoHistory?: PlaybackHistory;
   currentVideoEditSegments: VideoEditSegment[];
   currentVideoRating: number | null | undefined;
   currentVideoSpecialStats: SpecialVideoStats;
@@ -133,6 +135,7 @@ export function PlayerControlBar({
   controlBarRef,
   currentVideoHasCompatibleMedia,
   currentVideoHighlights,
+  currentVideoHistory,
   currentVideoEditSegments,
   currentVideoRating,
   currentVideoSpecialStats,
@@ -219,6 +222,8 @@ export function PlayerControlBar({
 }: PlayerControlBarProps) {
   const { currentTime, duration, isPlaying } = usePlaybackSnapshot(playbackRuntime);
   const progressPercent = duration ? Math.min(100, (currentTime / duration) * 100) : 0;
+  const visibleHistory = isPrivacyMode ? undefined : currentVideoHistory;
+  const historyGradient = createPlaybackHistoryGradient(visibleHistory, duration);
   const handleMouseMove: MouseEventHandler<HTMLDivElement> = (event) => {
     event.stopPropagation();
     onKeepControlsVisible();
@@ -246,7 +251,11 @@ export function PlayerControlBar({
       onPointerDown={onKeepControlsVisible}
       onPointerUp={handlePointerUp}
     >
-      <div className="control-progress-rail" aria-hidden="true">
+      <div
+        className="control-progress-rail"
+        aria-hidden="true"
+        style={{ "--history-gradient": historyGradient } as CSSProperties}
+      >
         <span style={{ width: `${progressPercent}%` }} />
       </div>
       <PlayerTimelineControls
@@ -255,6 +264,7 @@ export function PlayerControlBar({
         formatTime={formatTime}
         hasCurrentVideo={hasCurrentVideo}
         highlights={currentVideoHighlights}
+        history={visibleHistory}
         editSegments={currentVideoEditSegments}
         canGenerateMontage={canGenerateMontage}
         montageDisabledReason={montageDisabledReason}

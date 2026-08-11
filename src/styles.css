@@ -1332,6 +1332,11 @@ button {
 }
 
 .control-progress-rail {
+  --timeline-history-0: #343b45;
+  --timeline-history-1: #36546a;
+  --timeline-history-2: #287da0;
+  --timeline-history-3: #18a9d6;
+  --timeline-history-4: #72ddf7;
   position: absolute;
   right: 0;
   bottom: 0;
@@ -1339,13 +1344,17 @@ button {
   display: none;
   height: 3px;
   overflow: hidden;
-  background: rgba(220, 226, 223, 0.18);
+  background: var(--history-gradient, var(--timeline-history-0));
 }
 
 .control-progress-rail span {
+  position: absolute;
+  bottom: 0;
+  left: 0;
   display: block;
-  height: 100%;
-  background: var(--archive-amber);
+  height: 1px;
+  background: #dff7ff;
+  box-shadow: 0 0 4px rgba(114, 221, 247, 0.72);
 }
 
 .app-shell.privacy-mode .control-bar {
@@ -5531,6 +5540,12 @@ button {
 
 .timeline-track {
   --preview-left: 0%;
+  --timeline-history-empty: #343b45;
+  --timeline-history-0: #343b45;
+  --timeline-history-1: #36546a;
+  --timeline-history-2: #287da0;
+  --timeline-history-3: #18a9d6;
+  --timeline-history-4: #72ddf7;
   position: relative;
   display: flex;
   flex: 1;
@@ -5581,6 +5596,7 @@ button {
 }
 
 .timeline-preview-frame {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -5624,6 +5640,14 @@ button {
   transform: translateX(-50%);
 }
 
+.timeline-preview-history {
+  display: block;
+  padding: 6px 4px 2px;
+  color: #a9dceb;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
 .timeline-preview-video,
 .timeline-preview-canvas {
   position: fixed;
@@ -5640,9 +5664,32 @@ button {
   height: 5px;
   margin: 0;
   accent-color: #00a1d6;
-  background: linear-gradient(90deg, #00a1d6 var(--progress), #343b45 var(--progress));
+  background-color: var(--timeline-history-empty);
+  background-image:
+    linear-gradient(90deg, #dff7ff var(--progress), transparent var(--progress)),
+    var(--history-gradient, var(--timeline-history-empty));
+  background-position: center calc(50% - 2px), center;
+  background-repeat: no-repeat;
+  background-size: 100% 2px, 100% 5px;
   border-radius: 99px;
   cursor: pointer;
+}
+
+.app-shell.theme-light .timeline-track,
+:root[data-theme="light"] .timeline-track,
+.app-shell.theme-light .control-progress-rail,
+:root[data-theme="light"] .control-progress-rail {
+  --timeline-history-empty: #cfd8df;
+  --timeline-history-0: #cfd8df;
+  --timeline-history-1: #9cb8c7;
+  --timeline-history-2: #599ab5;
+  --timeline-history-3: #168cb8;
+  --timeline-history-4: #006d99;
+}
+
+.app-shell.theme-light .timeline-preview-history,
+:root[data-theme="light"] .timeline-preview-history {
+  color: #27677f;
 }
 
 .timeline-highlights {

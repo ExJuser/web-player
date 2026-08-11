@@ -6,6 +6,7 @@ import type {
   DanmakuPreferences,
   DanmakuSelectionStore,
   HomeMediaMode,
+  PlaybackHistory,
   PlaybackProgress,
   TagMergeDecisionStore,
   PlayerDataStore,
@@ -37,6 +38,7 @@ import type {
   WatchActivityStore
 } from "./playerTypes";
 import { isUnknownActorName, normalizeActorKey } from "./actorNfoCore.mjs";
+import { playbackHistoryBucketCount } from "./playbackHistory";
 import { normalizeTagKey as normalizeVideoTagKey } from "./tagUtils";
 
 export function isPlayerGlobalMetadata(
@@ -82,6 +84,18 @@ export function createProgress(currentTime: number, duration: number, completed 
   };
 }
 
+function parsePlaybackHistory(source: unknown): PlaybackHistory | undefined {
+  if (!source || typeof source !== "object" || Array.isArray(source)) return undefined;
+  const history = source as Partial<PlaybackHistory>;
+  if (!Number.isFinite(history.duration) || !Number.isFinite(history.updatedAt) || !Array.isArray(history.buckets)) return undefined;
+  const duration = history.duration;
+  const updatedAt = history.updatedAt;
+  if (typeof duration !== "number" || duration <= 0 || typeof updatedAt !== "number") return undefined;
+  const buckets = history.buckets.map((value) => Number(value));
+  if (buckets.length !== playbackHistoryBucketCount || buckets.some((value) => !Number.isFinite(value) || value < 0)) return undefined;
+  return { duration, buckets, updatedAt };
+}
+
 export function parseProgressItems(source: unknown): ProgressStore {
   if (!source || typeof source !== "object" || Array.isArray(source)) return {};
 
@@ -96,7 +110,14 @@ export function parseProgressItems(source: unknown): ProgressStore {
       typeof progress.completed === "boolean"
     ) {
       if (!progress.completed && progress.currentTime < 0.5) continue;
-      store[key] = progress;
+      const history = parsePlaybackHistory(progress.history);
+      store[key] = {
+        currentTime: progress.currentTime,
+        duration: progress.duration,
+        updatedAt: progress.updatedAt,
+        completed: progress.completed,
+        ...(history ? { history } : {}),
+      };
     }
   }
   return store;

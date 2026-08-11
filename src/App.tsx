@@ -3445,6 +3445,7 @@ export default function App() {
     currentVideo,
     currentVideoId,
     favoriteVideoIdsRef,
+    isPrivacyMode,
     progressStoreRef,
     setCurrentTime,
     setFavoriteVideoIds,
@@ -7045,6 +7046,7 @@ export default function App() {
             controlBarRef={controlBarRef}
             currentVideoHasCompatibleMedia={currentVideoHasCompatibleMedia}
             currentVideoHighlights={currentVideoHighlights}
+            currentVideoHistory={currentVideo ? progressStore[currentVideo.id]?.history : undefined}
             currentVideoEditSegments={currentVideoEditSegments}
             currentVideoRating={currentVideoRating}
             currentVideoSpecialStats={currentVideoSpecialStats}

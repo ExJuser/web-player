@@ -2,8 +2,9 @@ import { Pencil, X, Zap } from "lucide-react";
 import { useEffect, useRef, useState, type CSSProperties, type ChangeEvent, type PointerEvent as ReactPointerEvent, type Ref } from "react";
 
 import { clamp } from "./playerInteractionUtils";
+import { createPlaybackHistoryGradient, getPlaybackHistoryAtTime } from "./playbackHistory";
 import { PlayerEditSegmentMenu } from "./PlayerEditSegmentMenu";
-import type { VideoEditSegment, VideoHighlightSegment } from "./playerTypes";
+import type { PlaybackHistory, VideoEditSegment, VideoHighlightSegment } from "./playerTypes";
 
 type TimelinePreviewState = {
   time: number;
@@ -20,6 +21,7 @@ type PlayerTimelineControlsProps = {
   formatTime: (time: number) => string;
   hasCurrentVideo: boolean;
   highlights: VideoHighlightSegment[];
+  history?: PlaybackHistory;
   editSegments: VideoEditSegment[];
   canGenerateMontage: boolean;
   montageDisabledReason: string;
@@ -50,6 +52,7 @@ export function PlayerTimelineControls({
   formatTime,
   hasCurrentVideo,
   highlights,
+  history,
   editSegments,
   canGenerateMontage,
   montageDisabledReason,
@@ -78,6 +81,11 @@ export function PlayerTimelineControls({
   const [selectedMarker, setSelectedMarker] = useState<{ type: "highlight" | "edit"; id: string } | null>(null);
   const displayTime = timelinePreview.isDragging ? timelinePreview.time : currentTime;
   const displayProgressPercent = duration ? clamp((displayTime / duration) * 100, 0, 100) : progressPercent;
+  const historyGradient = createPlaybackHistoryGradient(history, duration);
+  const previewHistory = getPlaybackHistoryAtTime(history, timelinePreview.time, duration);
+  const previewHistoryLabel = previewHistory
+    ? `${previewHistory.passes >= 1.5 ? `重复观看约 ${previewHistory.passes.toFixed(1)} 遍` : "已看过"} · 累计 ${formatTime(previewHistory.watchedSeconds)}`
+    : "这一段还没看过";
   const selectedHighlight = selectedMarker?.type === "highlight"
     ? highlights.find((highlight) => highlight.id === selectedMarker.id) ?? null
     : null;
@@ -171,8 +179,9 @@ export function PlayerTimelineControls({
                 {timelinePreview.isLoadingFrame ? "" : formatTime(timelinePreview.time)}
               </span>
             )}
+            <span className="timeline-preview-time">{formatTime(timelinePreview.time)}</span>
           </span>
-          <span className="timeline-preview-time">{formatTime(timelinePreview.time)}</span>
+          {history ? <span className="timeline-preview-history">{previewHistoryLabel}</span> : null}
         </output>
         {duration && highlights.length ? (
           <div className="timeline-highlights" aria-label="高能片段">
@@ -260,7 +269,10 @@ export function PlayerTimelineControls({
           onPointerLeave={() => {
             if (!isPrivacyMode) onHideTimelinePreview();
           }}
-          style={{ "--progress": `${displayProgressPercent}%` } as CSSProperties}
+          style={{
+            "--history-gradient": historyGradient,
+            "--progress": `${displayProgressPercent}%`,
+          } as CSSProperties}
           disabled={!hasCurrentVideo || isPrivacyMode}
         />
       </div>

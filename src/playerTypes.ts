@@ -201,6 +201,13 @@ export type PlaybackProgress = {
   duration: number;
   updatedAt: number;
   completed: boolean;
+  history?: PlaybackHistory;
+};
+
+export type PlaybackHistory = {
+  duration: number;
+  buckets: number[];
+  updatedAt: number;
 };
 
 export type ProgressStore = Record<string, PlaybackProgress>;

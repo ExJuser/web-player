@@ -89,6 +89,34 @@ test("sqlite player data patch updates selected fields without clearing deferred
   }
 });
 
+test("sqlite progress preserves playback history across incremental writes", async () => {
+  const context = await createTempStore();
+  try {
+    await context.store.initialize();
+    const history = { duration: 100, buckets: Array(200).fill(0), updatedAt: 10 };
+    history.buckets[20] = 0.5;
+    context.store.upsertProgress("global", "video1", {
+      currentTime: 11,
+      duration: 100,
+      completed: false,
+      history,
+      updatedAt: 10,
+    });
+    assert.deepEqual(context.store.loadPlayerDataStore("global").items.video1.history, history);
+
+    context.store.upsertProgress("global", "video1", {
+      currentTime: 12,
+      duration: 100,
+      completed: false,
+      updatedAt: 20,
+    });
+    assert.deepEqual(context.store.loadPlayerDataStore("global").items.video1.history, history);
+  } finally {
+    context.store.close();
+    await rm(context.root, { recursive: true, force: true });
+  }
+});
+
 test("sqlite store imports legacy player and photo album json once", async () => {
   const context = await createTempStore();
   try {
@@ -659,7 +687,7 @@ test("sqlite initialization migrates the legacy photo album scan json", async ()
   try {
     await context.store.initialize();
     assert.equal(context.store.hasTable("photo_album_scan_caches"), false);
-    assert.equal(context.store.getMeta("schema_version"), "5");
+    assert.equal(context.store.getMeta("schema_version"), "6");
     assert.deepEqual(context.store.loadPhotoAlbumScanCacheImages("legacy-album"), [legacyImage]);
   } finally {
     context.store.close();

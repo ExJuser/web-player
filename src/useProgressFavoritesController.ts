@@ -1,6 +1,7 @@
 import { useCallback, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
 
 import { createProgress, deletePlayerProgress, savePlayerFavorite, savePlayerProgress } from "./playerStorage";
+import { addPlaybackHistoryInterval } from "./playbackHistory";
 import type { ProgressStore, VideoItem } from "./playerTypes";
 
 type UseProgressFavoritesControllerOptions = {
@@ -8,6 +9,7 @@ type UseProgressFavoritesControllerOptions = {
   currentVideo: VideoItem | null;
   currentVideoId: string | null;
   favoriteVideoIdsRef: MutableRefObject<Set<string>>;
+  isPrivacyMode: boolean;
   progressStoreRef: MutableRefObject<ProgressStore>;
   setFavoriteVideoIds: Dispatch<SetStateAction<Set<string>>>;
   setCurrentTime: Dispatch<SetStateAction<number>>;
@@ -22,6 +24,7 @@ export function useProgressFavoritesController({
   currentVideo,
   currentVideoId,
   favoriteVideoIdsRef,
+  isPrivacyMode,
   progressStoreRef,
   setCurrentTime,
   setFavoriteVideoIds,
@@ -48,6 +51,10 @@ export function useProgressFavoritesController({
               : 0;
       const progress = createProgress(currentTime, nextDuration, completed ?? previous?.completed ?? false);
       if (!progress) return;
+      const history = isPrivacyMode
+        ? previous?.history
+        : addPlaybackHistoryInterval(previous?.history, previous?.currentTime ?? 0, currentTime, nextDuration, progress.updatedAt);
+      if (history) progress.history = history;
 
       const nextStore = {
         ...progressStoreRef.current,
@@ -64,7 +71,7 @@ export function useProgressFavoritesController({
         setMessage("无法写入项目数据目录，请确认通过 npm run dev 或 npm run preview 启动。");
       });
     },
-    [clearedProgressVideoIdsRef, progressStoreRef, setMessage, setProgressStore, updateWatchActivity],
+    [clearedProgressVideoIdsRef, isPrivacyMode, progressStoreRef, setMessage, setProgressStore, updateWatchActivity],
   );
 
   const replaceProgressStore = useCallback((nextStore: ProgressStore, successMessage?: string) => {
