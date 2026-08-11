@@ -26,6 +26,7 @@ type LibraryStats = {
 };
 
 type PlayerTopBarProps = {
+  arePlayerControlsVisible: boolean;
   currentVideoId: string | null;
   canShowExplore: boolean;
   homeMediaModeLabel: string;
@@ -53,10 +54,12 @@ type PlayerTopBarProps = {
   onChangeHomeSearch: (query: string) => void;
   onClearHomeSearch: () => void;
   onFocusHomeSearch: () => void;
+  onKeepPlayerControlsVisible: () => void;
   onSelectHomeSearchResult: (videoId: string) => void;
   onShowExplore: () => void;
   onShowHome: () => void;
   onShowPhotoAlbums: () => void;
+  onSchedulePlayerControlsHide: () => void;
   onPreloadExplore?: () => void;
   onPreloadPhotoAlbums?: () => void;
   onToggleTheme: () => void;
@@ -64,6 +67,7 @@ type PlayerTopBarProps = {
 
 export const PlayerTopBar = forwardRef<HTMLElement, PlayerTopBarProps>(function PlayerTopBar(
   {
+    arePlayerControlsVisible,
     currentVideoId,
     canShowExplore,
     homeMediaModeLabel,
@@ -91,10 +95,12 @@ export const PlayerTopBar = forwardRef<HTMLElement, PlayerTopBarProps>(function 
     onChangeHomeSearch,
     onClearHomeSearch,
     onFocusHomeSearch,
+    onKeepPlayerControlsVisible,
     onSelectHomeSearchResult,
     onShowExplore,
     onShowHome,
     onShowPhotoAlbums,
+    onSchedulePlayerControlsHide,
     onPreloadExplore,
     onPreloadPhotoAlbums,
     onToggleTheme,
@@ -107,6 +113,7 @@ export const PlayerTopBar = forwardRef<HTMLElement, PlayerTopBarProps>(function 
   const libraryStatsRef = useRef<HTMLDivElement>(null);
   const metadataCardRef = useRef<HTMLButtonElement>(null);
   const shouldShowMetadata = Boolean(currentVideoId) && !isPrivacyMode && !isNonPlayerViewVisible;
+  const isPlayerOverlay = !isNonPlayerViewVisible;
   const hasHomeSearchQuery = Boolean(homeSearchQuery.trim());
   const themeToggleLabel = theme === "dark" ? "切换到白天模式" : "切换到黑夜模式";
 
@@ -139,7 +146,17 @@ export const PlayerTopBar = forwardRef<HTMLElement, PlayerTopBarProps>(function 
   }, [isHomeViewVisible]);
 
   return (
-    <header className="top-bar" ref={ref}>
+    <header
+      className={`top-bar${isPlayerOverlay ? ` player-top-overlay${!arePlayerControlsVisible && !isMetadataPinnedOpen ? " is-controls-hidden" : ""}` : ""}`}
+      ref={ref}
+      onMouseEnter={isPlayerOverlay ? onKeepPlayerControlsVisible : undefined}
+      onMouseLeave={isPlayerOverlay ? onSchedulePlayerControlsHide : undefined}
+      onFocus={isPlayerOverlay ? onKeepPlayerControlsVisible : undefined}
+      onBlur={isPlayerOverlay ? (event) => {
+        if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return;
+        onSchedulePlayerControlsHide();
+      } : undefined}
+    >
       <div className={`video-summary${shouldShowMetadata ? " has-metadata" : ""}`}>
         {shouldShowMetadata ? (
           <button

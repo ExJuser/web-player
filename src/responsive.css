@@ -102,6 +102,39 @@ button,
     min-height: 44px;
   }
 
+  .app-shell:not(.home-view) .player-top-overlay {
+    align-items: center;
+    flex-flow: row nowrap;
+    padding:
+      max(10px, env(safe-area-inset-top))
+      max(12px, env(safe-area-inset-right))
+      24px
+      max(12px, env(safe-area-inset-left));
+  }
+
+  .app-shell:not(.home-view) .player-top-overlay .video-summary,
+  .app-shell:not(.home-view) .player-top-overlay .top-actions {
+    width: auto;
+  }
+
+  .app-shell:not(.home-view) .player-top-overlay .video-summary {
+    flex: 1;
+  }
+
+  .app-shell:not(.home-view) .player-top-overlay .top-actions {
+    flex-wrap: nowrap;
+    justify-content: flex-end;
+  }
+
+  .app-shell:not(.home-view) .player-top-overlay .video-metadata-card {
+    min-height: 44px;
+    max-height: 44px;
+  }
+
+  .player-top-overlay .highlight-montage-top-status small {
+    display: none;
+  }
+
   .top-library-stats-popover {
     position: fixed;
     top: max(68px, calc(env(safe-area-inset-top) + 68px));
