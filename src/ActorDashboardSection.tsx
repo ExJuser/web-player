@@ -1,4 +1,4 @@
-import { ArrowLeft, Clock3, Film, History, ImageMinus, ImagePlus, Pencil, Play, Rocket, Search, Shuffle, Upload, UserRound, Users } from "lucide-react";
+import { ArrowLeft, Clock3, Film, History, ImageMinus, ImagePlus, Pencil, Play, Rocket, Search, Shuffle, Upload, UserRound } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { filterAndSortActors, selectActorCoverVideo, type ActorSort } from "./actorDiscovery";
@@ -136,6 +136,22 @@ function StoredActorCover({ actorId, actorName, fallbackVideo, libraryId, onAvai
       onThumbnailError(fallbackVideo.id);
     }
   }} /> : <UserRound size={32} aria-label={`${actorName}暂无封面`} />}{hasResolvedCover && visibleCoverUrl ? <small className={`actor-cover-source${coverUrl ? " stored" : " automatic"}`}>{coverUrl ? "独立封面" : "自动封面"}</small> : null}</span>;
+}
+
+function ActorCreditStrip({ entry, formatDuration, formatRelativeTime }: {
+  entry: ActorInsight;
+  formatDuration: (seconds: number) => string;
+  formatRelativeTime: (timestamp: number) => string;
+}) {
+  return (
+    <span className="actor-credit-strip" aria-label={`${entry.actor.name}观看统计`}>
+      <span><small>影片</small><strong>{entry.videos.length}</strong></span>
+      <span><small>播放</small><strong>{entry.stats.playCount}</strong></span>
+      <span><small>时长</small><strong>{formatDuration(entry.stats.totalPlayedSeconds)}</strong></span>
+      <span><small>发射</small><strong>{entry.stats.emissionCount}</strong></span>
+      <span><small>最近</small><strong>{entry.stats.lastWatchedAt ? formatRelativeTime(entry.stats.lastWatchedAt) : "暂无"}</strong></span>
+    </span>
+  );
 }
 
 export function ActorDashboardSection({
@@ -298,9 +314,9 @@ export function ActorDashboardSection({
 
   if (selected) {
     return (
-      <section ref={actorDashboardRef} className="actor-dashboard actor-detail" aria-label={`${selected.actor.name}演员详情`}>
-        <div className="actor-dashboard-header">
-          <button className="secondary-button" type="button" onClick={() => onSelectActor(null)}><ArrowLeft size={16} /> 返回演员列表</button>
+      <section ref={actorDashboardRef} className="actor-dashboard actor-archive actor-detail" aria-label={`${selected.actor.name}演员详情`}>
+        <div className="actor-detail-toolbar">
+          <button className="secondary-button" type="button" onClick={() => onSelectActor(null)}><ArrowLeft size={16} /> 返回演员档案</button>
           <span className="actor-cover-header-actions">
             <input ref={actorCoverFileInputRef} type="file" accept="image/*" hidden onChange={(event) => {
               const file = event.target.files?.[0];
@@ -310,9 +326,26 @@ export function ActorDashboardSection({
             <button className="secondary-button" type="button" disabled={Boolean(actorCoverPendingAction)} onClick={() => { setPendingCoverRemovalActorId(null); actorCoverFileInputRef.current?.click(); }}><Upload size={15} /> {actorCoverPendingAction === `upload:${selected.actor.id}` ? "上传中..." : "上传封面"}</button>
             {actorCoverAvailability[selected.actor.id] ? <button className="secondary-button" type="button" disabled={Boolean(actorCoverPendingAction)} onClick={() => setPendingCoverRemovalActorId(selected.actor.id)}><ImageMinus size={15} /> 移除独立封面</button> : null}
           </span>
-          <div><h2>{selected.actor.name}</h2><p>{selected.videos.length} 部影片</p></div>
         </div>
-        <div className="actor-video-grid">
+        <header className="actor-profile-hero">
+          <div className="actor-profile-cover">
+            <StoredActorCover actorId={selected.actor.id} actorName={selected.actor.name} fallbackVideo={selected.representativeVideo} libraryId={libraryId} onAvailabilityChange={handleActorCoverAvailabilityChange} onThumbnailError={onThumbnailError} version={selectedActorCoverVersion} />
+          </div>
+          <div className="actor-profile-copy">
+            <span className="actor-archive-eyebrow">Cast profile</span>
+            <h1>{selected.actor.name}</h1>
+            <p>由 {selected.videos.length} 部影片组成的个人放映档案。</p>
+            <span className="actor-card-tags actor-profile-tags">
+              {selected.commonTags.length ? selected.commonTags.map((tag) => <span key={tag}>{tag}</span>) : <em>暂无常用标签</em>}
+            </span>
+            <ActorCreditStrip entry={selected} formatDuration={formatDuration} formatRelativeTime={formatRelativeTime} />
+          </div>
+        </header>
+        <div className="actor-section-heading">
+          <div><span className="actor-archive-eyebrow">Filmography ledger</span><h2>出演目录</h2></div>
+          <p>点击影片开始播放；维护操作保留在卡片底部。</p>
+        </div>
+        <div className="actor-video-grid actor-filmography-grid">
           {visibleActorVideos.map(({ video, source, lastWatchedAt }) => {
             const stats = videoStats[createVideoStatsKey(video)];
             const tags = videoTags[video.id] ?? [];
@@ -360,32 +393,39 @@ export function ActorDashboardSection({
 
   if (showUnresolved) {
     return (
-      <section className="actor-dashboard" aria-label="未识别影片">
-        <div className="actor-dashboard-header"><button className="secondary-button" type="button" onClick={() => setShowUnresolved(false)}><ArrowLeft size={16} /> 返回演员列表</button><div><h2>未识别影片</h2><p>{unresolvedVideos.length} 部影片</p></div></div>
-        <div className="actor-video-grid">
+      <section className="actor-dashboard actor-archive actor-unresolved" aria-label="待归档片目">
+        <div className="actor-detail-toolbar"><button className="secondary-button" type="button" onClick={() => setShowUnresolved(false)}><ArrowLeft size={16} /> 返回演员档案</button></div>
+        <header className="actor-archive-hero actor-unresolved-hero">
+          <div><span className="actor-archive-eyebrow">Unfiled titles</span><h1>待归档片目</h1><p>这些影片尚未关联演员，可逐一补全人物资料。</p></div>
+          <div className="actor-unresolved-count"><span>等待整理</span><strong>{unresolvedVideos.length}</strong><small>部影片</small></div>
+        </header>
+        <div className="actor-video-grid actor-unresolved-grid">
           {pagedUnresolvedVideos.map((video) => {
             const stats = videoStats[createVideoStatsKey(video)];
             const tags = videoTags[video.id] ?? [];
             const rating = videoRatings[video.id];
             const comment = videoComments[video.id];
             const hasRating = typeof rating === "number" || Boolean(comment?.trim());
-            return <article className="actor-video-card" key={video.id}>
+            return <article className="actor-video-card actor-unresolved-card" key={video.id}>
               <button type="button" onClick={() => onOpenVideo(video)} title={`播放 ${video.name}`}>
                 <span className={`actor-cover ${video.thumbnailUrl ? "has-image" : ""} ${video.thumbnailUrl && !hasNamedVideoArtwork(video) ? "generated-thumbnail" : ""}`}>{video.thumbnailUrl ? <img src={video.thumbnailUrl} alt="" decoding="async" loading="lazy" draggable={false} onError={() => onThumbnailError(video.id)} /> : <Film size={28} />}</span>
-                <strong>{video.name}</strong>
-                <span className="actor-video-metadata">
-                  <span className="actor-video-rating-tags">
-                    {hasRating ? <RatingChip rating={rating} comment={comment} /> : <span className="rating-chip actor-video-empty-chip">暂无评分</span>}
-                    {tags.length ? <TagChips tags={tags} systemTags={systemVideoTags[video.id]} limit={8} compact /> : <span className="tag-chip-row compact"><span className="tag-chip actor-video-empty-chip">暂无标签</span></span>}
-                  </span>
-                  <span className="actor-video-playback-stats">
-                    <small title={`播放次数：${stats?.playCount ?? 0}`}><Play size={13} /> {stats?.playCount ?? 0} 次播放</small>
-                    <small title={`累计播放时长：${formatDuration(stats?.totalPlayedSeconds ?? 0)}`}><Clock3 size={13} /> {formatDuration(stats?.totalPlayedSeconds ?? 0)}</small>
-                    <small title={`发射次数：${stats?.emissionCount ?? 0}`}><Rocket size={13} /> {stats?.emissionCount ?? 0} 次</small>
+                <span className="actor-video-copy">
+                  <span className="actor-archive-eyebrow">Needs actor</span>
+                  <strong>{video.name}</strong>
+                  <span className="actor-video-metadata">
+                    <span className="actor-video-rating-tags">
+                      {hasRating ? <RatingChip rating={rating} comment={comment} /> : <span className="rating-chip actor-video-empty-chip">暂无评分</span>}
+                      {tags.length ? <TagChips tags={tags} systemTags={systemVideoTags[video.id]} limit={8} compact /> : <span className="tag-chip-row compact"><span className="tag-chip actor-video-empty-chip">暂无标签</span></span>}
+                    </span>
+                    <span className="actor-video-playback-stats">
+                      <small title={`播放次数：${stats?.playCount ?? 0}`}><Play size={13} /> {stats?.playCount ?? 0} 次播放</small>
+                      <small title={`累计播放时长：${formatDuration(stats?.totalPlayedSeconds ?? 0)}`}><Clock3 size={13} /> {formatDuration(stats?.totalPlayedSeconds ?? 0)}</small>
+                      <small title={`发射次数：${stats?.emissionCount ?? 0}`}><Rocket size={13} /> {stats?.emissionCount ?? 0} 次</small>
+                    </span>
                   </span>
                 </span>
               </button>
-              <div><span className="actor-source">未识别</span><button className="primary-button actor-correction-button" type="button" onClick={() => onEditVideoActors(video)}><Pencil size={13} /> 指定演员</button></div>
+              <div><span className="actor-source">待归档</span><button className="primary-button actor-correction-button" type="button" onClick={() => onEditVideoActors(video)}><Pencil size={13} /> 指定演员</button></div>
             </article>;
           })}
         </div>
@@ -395,11 +435,33 @@ export function ActorDashboardSection({
   }
 
   return (
-    <section className="actor-dashboard" aria-label="演员视图">
-      <div className="actor-dashboard-header"><div><h2>演员视图</h2><p>{actors.length} 名演员 · {unresolvedVideos.length} 部未识别影片</p></div><button className="secondary-button" type="button" onClick={() => { setUnresolvedPage(1); setShowUnresolved(true); }}><Film size={15} /> 未识别影片</button></div>
-      <div className="actor-toolbar"><label><Search size={16} /><input value={query} placeholder="搜索演员姓名或别名" onChange={(event) => setQuery(event.target.value)} /></label><div className="actor-sort-controls"><ControlSelect label="" ariaLabel="演员排序字段" value={sort} options={[{ value: "explore", label: "每日探索" }, { value: "count", label: "影片数" }, { value: "playCount", label: "播放次数" }, { value: "duration", label: "时长" }, { value: "emissionCount", label: "发射次数" }, { value: "name", label: "姓名" }, { value: "recent", label: "最近影片" }]} onChange={setSort} className="actor-sort-control" />{sort === "explore" ? <button className="secondary-button actor-shuffle-button" type="button" disabled={!visibleActorCards.length} title="更换演员顺序和自动封面" onClick={showNextActorBatch}><Shuffle size={15} /> 换一批</button> : <ControlSelect label="" ariaLabel="演员排序方向" value={sortDirection} options={[{ value: "desc", label: "降序" }, { value: "asc", label: "升序" }]} onChange={setSortDirection} className="actor-sort-direction-control" />}<ControlSelect label="" ariaLabel="演员每页数量" value={actorPageSize} options={actorPageSizeOptions.map((pageSize) => ({ value: pageSize, label: `每页 ${pageSize} 名` }))} onChange={setActorPageSize} className="actor-page-size-control" /></div></div>
-      {visibleActorCards.length ? <div className="actor-card-grid">{visibleActorCards.map(({ entry, coverVideo }) => <button className="actor-card" type="button" key={entry.actor.id} onClick={() => onSelectActor(entry.actor.id)}><StoredActorCover actorId={entry.actor.id} actorName={entry.actor.name} fallbackVideo={coverVideo} libraryId={libraryId} onAvailabilityChange={handleActorCoverAvailabilityChange} onThumbnailError={onThumbnailError} version={actorCoverVersions[entry.actor.id] ?? 0} /><span className="actor-card-details"><span className="actor-card-heading"><strong>{entry.actor.name}</strong><small><Users size={13} /> {entry.videos.length} 部影片</small></span><span className="actor-card-tags">{entry.commonTags.length ? entry.commonTags.map((tag) => <span key={tag}>{tag}</span>) : <em>暂无常用标签</em>}</span><span className="actor-card-stats"><small title={`播放次数：${entry.stats.playCount}`}><Play size={13} /> {entry.stats.playCount} 次</small><small title={`累计播放时长：${formatDuration(entry.stats.totalPlayedSeconds)}`}><Clock3 size={13} /> {formatDuration(entry.stats.totalPlayedSeconds)}</small><small title={`发射次数：${entry.stats.emissionCount}`}><Rocket size={13} /> {entry.stats.emissionCount} 次</small><small title={`上次观看：${entry.stats.lastWatchedAt ? formatRelativeTime(entry.stats.lastWatchedAt) : "暂无"}`}><History size={13} /> {entry.stats.lastWatchedAt ? formatRelativeTime(entry.stats.lastWatchedAt) : "暂无观看"}</small></span></span></button>)}</div> : <div className="ai-empty-state">没有符合条件的演员。</div>}
-      {actorPageCount > 1 ? <div className="pagination-controls"><button className="secondary-button" type="button" disabled={actorPage <= 1} onClick={() => setActorPage((value) => value - 1)}>上一页</button><span>{actorPage} / {actorPageCount}</span><button className="secondary-button" type="button" disabled={actorPage >= actorPageCount} onClick={() => setActorPage((value) => value + 1)}>下一页</button></div> : null}
+    <section className="actor-dashboard actor-archive" aria-label="演员档案">
+      <header className="actor-archive-hero">
+        <div><span className="actor-archive-eyebrow">Cast archive</span><h1>银幕人物档案</h1><p>从反复出现的面孔，辨认自己的观看轨迹。</p></div>
+        <div className="actor-archive-index" aria-label="演员档案摘要">
+          <div><span>收录演员</span><strong>{actors.length}</strong><small>名演员</small></div>
+          <button type="button" onClick={() => { setUnresolvedPage(1); setShowUnresolved(true); }}><span>待归档片目</span><strong>{unresolvedVideos.length}</strong><small>进入整理 <span aria-hidden="true">→</span></small></button>
+        </div>
+      </header>
+      <div className="actor-toolbar">
+        <div className="actor-toolbar-copy"><span className="actor-archive-eyebrow">Directory search</span><strong>目录检索</strong></div>
+        <label><Search size={16} /><input value={query} aria-label="搜索演员姓名或别名" placeholder="搜索演员姓名或别名" onChange={(event) => setQuery(event.target.value)} /></label>
+        <div className="actor-sort-controls"><ControlSelect label="" ariaLabel="演员排序字段" value={sort} options={[{ value: "explore", label: "每日探索" }, { value: "count", label: "影片数" }, { value: "playCount", label: "播放次数" }, { value: "duration", label: "时长" }, { value: "emissionCount", label: "发射次数" }, { value: "name", label: "姓名" }, { value: "recent", label: "最近影片" }]} onChange={setSort} className="actor-sort-control" />{sort === "explore" ? <button className="secondary-button actor-shuffle-button" type="button" disabled={!visibleActorCards.length} title="更换演员顺序和自动封面" onClick={showNextActorBatch}><Shuffle size={15} /> 换一批</button> : <ControlSelect label="" ariaLabel="演员排序方向" value={sortDirection} options={[{ value: "desc", label: "降序" }, { value: "asc", label: "升序" }]} onChange={setSortDirection} className="actor-sort-direction-control" />}<ControlSelect label="" ariaLabel="演员每页数量" value={actorPageSize} options={actorPageSizeOptions.map((pageSize) => ({ value: pageSize, label: `每页 ${pageSize} 名` }))} onChange={setActorPageSize} className="actor-page-size-control" /></div>
+      </div>
+      {visibleActorCards.length ? <div className={`actor-card-grid${sort === "explore" ? " is-exploring" : ""}`}>{visibleActorCards.map(({ entry, coverVideo }, index) => {
+        const isFeatured = sort === "explore" && index === 0;
+        const sortedPosition = (actorPage - 1) * actorPageSize + index + 1;
+        return <button className={`actor-card${isFeatured ? " actor-card-featured" : ""}`} type="button" key={entry.actor.id} onClick={() => onSelectActor(entry.actor.id)}>
+          <StoredActorCover actorId={entry.actor.id} actorName={entry.actor.name} fallbackVideo={coverVideo} libraryId={libraryId} onAvailabilityChange={handleActorCoverAvailabilityChange} onThumbnailError={onThumbnailError} version={actorCoverVersions[entry.actor.id] ?? 0} />
+          <span className="actor-card-details">
+            <span className="actor-card-index">{isFeatured ? "今日主档案" : sort === "explore" ? "本次探索" : `排序 ${String(sortedPosition).padStart(2, "0")}`}</span>
+            <span className="actor-card-heading"><strong>{entry.actor.name}</strong><small>打开档案 <span aria-hidden="true">→</span></small></span>
+            <span className="actor-card-tags">{entry.commonTags.length ? entry.commonTags.map((tag) => <span key={tag}>{tag}</span>) : <em>暂无常用标签</em>}</span>
+            <ActorCreditStrip entry={entry} formatDuration={formatDuration} formatRelativeTime={formatRelativeTime} />
+          </span>
+        </button>;
+      })}</div> : <div className="actor-empty-state"><span className="actor-archive-eyebrow">No matching records</span><h2>没有找到演员</h2><p>尝试缩短关键词，或清空搜索后浏览全部档案。</p></div>}
+      {actorPageCount > 1 ? <div className="pagination-controls actor-pagination"><button className="secondary-button" type="button" disabled={actorPage <= 1} onClick={() => setActorPage((value) => value - 1)}>上一页</button><span>第 {actorPage} / {actorPageCount} 页</span><button className="secondary-button" type="button" disabled={actorPage >= actorPageCount} onClick={() => setActorPage((value) => value + 1)}>下一页</button></div> : null}
     </section>
   );
 }

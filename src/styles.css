@@ -15456,6 +15456,840 @@ button {
   border-radius: 0;
 }
 
+/* Explore actors: cast archive */
+.actor-archive {
+  display: grid;
+  min-width: 0;
+  gap: 18px;
+  color: var(--archive-paper);
+  animation: actor-archive-reveal 240ms ease-out both;
+}
+
+@keyframes actor-archive-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.actor-archive-eyebrow,
+.actor-card-index {
+  color: var(--archive-cyan);
+  font-family: ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.actor-archive-hero {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 28px;
+  overflow: hidden;
+  padding: 24px 28px 26px;
+  border: 1px solid color-mix(in srgb, var(--archive-paper) 12%, transparent);
+  border-left: 3px solid var(--archive-amber);
+  border-radius: 12px;
+  background: var(--archive-night);
+}
+
+.actor-archive-hero > div:first-child {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+}
+
+.actor-archive-hero h1,
+.actor-profile-copy h1,
+.actor-section-heading h2,
+.actor-empty-state h2 {
+  margin: 0;
+  color: var(--archive-paper);
+  font-family: "Songti SC", "STSong", "Noto Serif CJK SC", SimSun, serif;
+  font-weight: 700;
+}
+
+.actor-archive-hero h1 {
+  font-size: clamp(30px, 3.2vw, 48px);
+  letter-spacing: -0.035em;
+  line-height: 1.05;
+}
+
+.actor-archive-hero p,
+.actor-profile-copy p,
+.actor-section-heading p,
+.actor-empty-state p {
+  margin: 0;
+  color: color-mix(in srgb, var(--archive-paper) 62%, transparent);
+  font-size: 15px;
+  line-height: 1.65;
+}
+
+.actor-archive-index {
+  display: grid;
+  min-width: 292px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border: 1px solid color-mix(in srgb, var(--archive-paper) 12%, transparent);
+  background: var(--archive-shelf);
+}
+
+.actor-archive-index > div,
+.actor-archive-index > button,
+.actor-unresolved-count {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  padding: 12px 14px;
+  color: color-mix(in srgb, var(--archive-paper) 58%, transparent);
+  text-align: left;
+}
+
+.actor-archive-index > button {
+  border: 0;
+  border-left: 1px solid color-mix(in srgb, var(--archive-paper) 12%, transparent);
+  border-radius: 0;
+  background: color-mix(in srgb, var(--archive-amber) 7%, var(--archive-shelf));
+  cursor: pointer;
+}
+
+.actor-archive-index > button:hover,
+.actor-archive-index > button:focus-visible {
+  color: var(--archive-paper);
+  background: color-mix(in srgb, var(--archive-amber) 14%, var(--archive-shelf));
+  outline: 2px solid var(--archive-amber);
+  outline-offset: -2px;
+}
+
+.actor-archive-index span,
+.actor-unresolved-count span {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+}
+
+.actor-archive-index strong,
+.actor-unresolved-count strong {
+  color: var(--archive-amber);
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: 26px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.actor-archive-index small,
+.actor-unresolved-count small {
+  color: color-mix(in srgb, var(--archive-paper) 48%, transparent);
+  font-size: 11px;
+}
+
+.actor-archive .actor-toolbar {
+  display: grid;
+  grid-template-columns: auto minmax(240px, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border: 1px solid color-mix(in srgb, var(--archive-paper) 12%, transparent);
+  border-radius: 12px;
+  background: var(--archive-shelf);
+}
+
+.actor-toolbar-copy {
+  display: grid;
+  gap: 3px;
+  padding-right: 2px;
+}
+
+.actor-toolbar-copy strong {
+  color: var(--archive-paper);
+  font-family: "Songti SC", "STSong", "Noto Serif CJK SC", SimSun, serif;
+  font-size: 18px;
+}
+
+.actor-archive .actor-toolbar label {
+  min-height: 42px;
+  border: 1px solid color-mix(in srgb, var(--archive-paper) 14%, transparent);
+  border-radius: 7px;
+  color: color-mix(in srgb, var(--archive-paper) 56%, transparent);
+  background: var(--archive-night);
+}
+
+.actor-archive .actor-toolbar label:focus-within {
+  border-color: var(--archive-cyan);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--archive-cyan) 16%, transparent);
+}
+
+.actor-archive .actor-toolbar input {
+  color: var(--archive-paper);
+}
+
+.actor-archive .actor-toolbar input::placeholder {
+  color: color-mix(in srgb, var(--archive-paper) 40%, transparent);
+}
+
+.actor-archive .actor-sort-controls .control-select-trigger,
+.actor-archive .actor-shuffle-button {
+  border: 1px solid color-mix(in srgb, var(--archive-paper) 14%, transparent);
+  border-radius: 7px;
+  color: color-mix(in srgb, var(--archive-paper) 72%, transparent);
+  background: var(--archive-night);
+}
+
+.actor-archive .actor-sort-controls .control-select-trigger:hover,
+.actor-archive .actor-sort-controls .control-select-trigger:focus-visible,
+.actor-archive .actor-sort-controls .control-select-trigger[aria-expanded="true"],
+.actor-archive .actor-shuffle-button:hover,
+.actor-archive .actor-shuffle-button:focus-visible {
+  border-color: var(--archive-amber);
+  color: var(--archive-amber);
+  background: color-mix(in srgb, var(--archive-amber) 9%, var(--archive-night));
+  box-shadow: none;
+}
+
+.actor-archive .actor-sort-controls .control-select-list {
+  border-color: color-mix(in srgb, var(--archive-paper) 15%, transparent);
+  background: var(--archive-card);
+}
+
+.actor-archive .actor-sort-controls .control-select-list button {
+  color: var(--archive-paper);
+  background: var(--archive-card);
+}
+
+.actor-archive .actor-sort-controls .control-select-list button:hover,
+.actor-archive .actor-sort-controls .control-select-list button:focus-visible,
+.actor-archive .actor-sort-controls .control-select-list button.active {
+  color: var(--archive-amber);
+  background: color-mix(in srgb, var(--archive-amber) 12%, var(--archive-card));
+}
+
+.actor-archive .actor-card-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.actor-archive .actor-card,
+.actor-archive .actor-video-card {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--archive-paper) 12%, transparent);
+  border-radius: 12px;
+  color: var(--archive-paper);
+  background: var(--archive-card);
+}
+
+.actor-archive .actor-card {
+  display: grid;
+  gap: 0;
+  padding: 0;
+  text-align: left;
+  transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
+}
+
+.actor-archive .actor-card::after {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  background: var(--archive-amber);
+  content: "";
+  opacity: 0;
+  transform: scaleX(0.35);
+  transform-origin: left;
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+
+.actor-archive .actor-card:hover,
+.actor-archive .actor-card:focus-visible {
+  border-color: color-mix(in srgb, var(--archive-amber) 68%, transparent);
+  background: color-mix(in srgb, var(--archive-amber) 5%, var(--archive-card));
+  box-shadow: 0 16px 34px color-mix(in srgb, var(--archive-night) 48%, transparent);
+  outline: none;
+}
+
+.actor-archive .actor-card:hover::after,
+.actor-archive .actor-card:focus-visible::after {
+  opacity: 1;
+  transform: scaleX(1);
+}
+
+.actor-archive .actor-cover {
+  color: var(--archive-cyan);
+  background: var(--archive-card);
+}
+
+.actor-archive .actor-card .actor-cover-source {
+  border-color: color-mix(in srgb, var(--archive-paper) 22%, transparent);
+  border-radius: 3px;
+  color: var(--archive-paper);
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  background: color-mix(in srgb, var(--archive-night) 86%, transparent);
+  backdrop-filter: blur(8px);
+}
+
+.actor-archive .actor-card .actor-cover-source.stored {
+  border-color: color-mix(in srgb, var(--archive-cyan) 56%, transparent);
+  color: var(--archive-cyan);
+  background: color-mix(in srgb, var(--archive-night) 88%, transparent);
+}
+
+.actor-archive .actor-card-details {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: 12px;
+  padding: 16px;
+}
+
+.actor-archive .actor-card-heading {
+  align-items: baseline;
+}
+
+.actor-archive .actor-card-heading strong {
+  color: var(--archive-paper);
+  font-family: "Songti SC", "STSong", "Noto Serif CJK SC", SimSun, serif;
+  font-size: clamp(21px, 1.7vw, 27px);
+  letter-spacing: -0.025em;
+  line-height: 1.1;
+}
+
+.actor-archive .actor-card-heading small {
+  color: color-mix(in srgb, var(--archive-paper) 48%, transparent);
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+}
+
+.actor-archive .actor-card-tags {
+  min-height: 24px;
+  flex-wrap: wrap;
+  gap: 5px;
+  overflow: visible;
+}
+
+.actor-archive .actor-card-tags > span {
+  padding: 3px 7px;
+  border: 1px solid color-mix(in srgb, var(--archive-cyan) 24%, transparent);
+  border-radius: 3px;
+  color: var(--archive-cyan);
+  background: color-mix(in srgb, var(--archive-cyan) 7%, transparent);
+}
+
+.actor-credit-strip {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  border-top: 1px solid color-mix(in srgb, var(--archive-paper) 12%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--archive-paper) 12%, transparent);
+}
+
+.actor-credit-strip > span {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  padding: 9px 7px;
+  border-left: 1px solid color-mix(in srgb, var(--archive-paper) 10%, transparent);
+}
+
+.actor-credit-strip > span:first-child {
+  border-left: 0;
+}
+
+.actor-credit-strip small,
+.actor-credit-strip strong {
+  overflow: hidden;
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.actor-credit-strip small {
+  color: color-mix(in srgb, var(--archive-paper) 42%, transparent);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+}
+
+.actor-credit-strip strong {
+  color: var(--archive-paper);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.actor-archive .actor-card-featured {
+  grid-column: span 2;
+  grid-template-columns: minmax(0, 1.45fr) minmax(280px, 0.85fr);
+  background: var(--archive-night);
+}
+
+.actor-archive .actor-card-featured .actor-cover {
+  height: 100%;
+  background: var(--archive-night);
+}
+
+.actor-archive .actor-card-featured .actor-card-details {
+  align-content: center;
+  gap: 16px;
+  padding: 24px;
+  border-left: 1px solid color-mix(in srgb, var(--archive-paper) 11%, transparent);
+}
+
+.actor-archive .actor-card-featured .actor-card-heading {
+  align-items: flex-start;
+  flex-direction: column;
+}
+
+.actor-archive .actor-card-featured .actor-card-heading strong {
+  font-size: clamp(30px, 3vw, 44px);
+}
+
+.actor-detail-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.actor-detail-toolbar > .secondary-button,
+.actor-cover-header-actions .secondary-button {
+  width: auto;
+  min-width: 0;
+  min-height: 36px;
+  border-color: color-mix(in srgb, var(--archive-paper) 14%, transparent);
+  border-radius: 7px;
+  color: color-mix(in srgb, var(--archive-paper) 72%, transparent);
+  background: var(--archive-night);
+}
+
+.actor-detail-toolbar > .secondary-button:hover,
+.actor-detail-toolbar > .secondary-button:focus-visible,
+.actor-cover-header-actions .secondary-button:hover,
+.actor-cover-header-actions .secondary-button:focus-visible {
+  border-color: var(--archive-amber);
+  color: var(--archive-amber);
+  background: color-mix(in srgb, var(--archive-amber) 9%, var(--archive-night));
+}
+
+.actor-profile-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.22fr) minmax(320px, 0.78fr);
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--archive-paper) 12%, transparent);
+  border-left: 3px solid var(--archive-amber);
+  border-radius: 12px;
+  background: var(--archive-night);
+}
+
+.actor-profile-cover {
+  min-width: 0;
+  border-right: 1px solid color-mix(in srgb, var(--archive-paper) 11%, transparent);
+}
+
+.actor-profile-cover .actor-cover {
+  height: 100%;
+  background: var(--archive-night);
+}
+
+.actor-profile-copy {
+  display: grid;
+  min-width: 0;
+  align-content: center;
+  gap: 14px;
+  padding: clamp(22px, 3vw, 42px);
+}
+
+.actor-profile-copy h1 {
+  font-size: clamp(36px, 4vw, 62px);
+  letter-spacing: -0.045em;
+  line-height: 1;
+}
+
+.actor-profile-tags {
+  display: flex;
+}
+
+.actor-section-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 20px;
+  padding-top: 6px;
+}
+
+.actor-section-heading > div {
+  display: grid;
+  gap: 5px;
+}
+
+.actor-section-heading h2 {
+  font-size: clamp(24px, 2.2vw, 32px);
+  letter-spacing: -0.025em;
+}
+
+.actor-archive .actor-video-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.actor-archive .actor-video-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.actor-archive .actor-video-card > button {
+  display: grid;
+  width: 100%;
+  flex: 1;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 10px;
+  padding: 0 0 12px;
+  border: 0;
+  border-radius: 0;
+  color: inherit;
+  text-align: left;
+  background: transparent;
+}
+
+.actor-archive .actor-video-card > button:hover,
+.actor-archive .actor-video-card > button:focus-visible {
+  background: color-mix(in srgb, var(--archive-cyan) 6%, transparent);
+  outline: none;
+}
+
+.actor-archive .actor-video-card > button > strong,
+.actor-video-copy > strong {
+  color: var(--archive-paper);
+  font-family: "Songti SC", "STSong", "Noto Serif CJK SC", SimSun, serif;
+  font-size: 18px;
+  line-height: 1.35;
+}
+
+.actor-archive .actor-video-metadata {
+  gap: 9px;
+}
+
+.actor-archive .actor-video-playback-stats {
+  gap: 6px 14px;
+  color: color-mix(in srgb, var(--archive-paper) 50%, transparent);
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+}
+
+.actor-archive .actor-video-card > div {
+  min-height: 46px;
+  padding: 9px 12px 11px;
+  border-top: 1px solid color-mix(in srgb, var(--archive-paper) 10%, transparent);
+  background: var(--archive-night);
+}
+
+.actor-archive .actor-source {
+  border: 1px solid color-mix(in srgb, var(--archive-cyan) 28%, transparent);
+  border-radius: 3px;
+  color: var(--archive-cyan);
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  background: color-mix(in srgb, var(--archive-cyan) 8%, transparent);
+}
+
+.actor-archive .actor-source.manual {
+  border-color: color-mix(in srgb, var(--archive-amber) 34%, transparent);
+  color: var(--archive-amber);
+  background: color-mix(in srgb, var(--archive-amber) 9%, transparent);
+}
+
+.actor-unresolved-hero {
+  align-items: center;
+}
+
+.actor-unresolved-count {
+  min-width: 132px;
+  border: 1px dashed color-mix(in srgb, var(--archive-amber) 58%, transparent);
+  background: color-mix(in srgb, var(--archive-amber) 6%, transparent);
+}
+
+.actor-archive .actor-unresolved-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.actor-archive .actor-unresolved-card > button {
+  grid-template-columns: minmax(170px, 220px) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  gap: 0;
+  padding: 0;
+}
+
+.actor-unresolved-card .actor-cover {
+  height: 100%;
+  border-right: 1px solid color-mix(in srgb, var(--archive-paper) 10%, transparent);
+}
+
+.actor-video-copy {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: 10px;
+  padding: 16px;
+}
+
+.actor-video-copy .actor-video-metadata {
+  padding: 0;
+}
+
+.actor-empty-state {
+  display: grid;
+  min-height: 260px;
+  place-content: center;
+  gap: 8px;
+  padding: 28px;
+  border: 1px dashed color-mix(in srgb, var(--archive-paper) 18%, transparent);
+  border-radius: 12px;
+  text-align: center;
+  background: var(--archive-shelf);
+}
+
+.actor-empty-state h2 {
+  font-size: 28px;
+}
+
+.actor-pagination {
+  padding-top: 4px;
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+}
+
+.actor-archive .actor-infinite-loader {
+  border-top: 1px solid color-mix(in srgb, var(--archive-paper) 10%, transparent);
+  color: color-mix(in srgb, var(--archive-paper) 48%, transparent);
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+}
+
+.app-shell.theme-light .actor-archive .actor-card,
+.app-shell.theme-light .actor-archive .actor-video-card,
+.app-shell.theme-light .actor-archive .actor-toolbar label,
+:root[data-theme="light"] .actor-archive .actor-card,
+:root[data-theme="light"] .actor-archive .actor-video-card,
+:root[data-theme="light"] .actor-archive .actor-toolbar label {
+  border-color: color-mix(in srgb, var(--archive-paper) 12%, transparent);
+  color: var(--archive-paper);
+  background: var(--archive-card);
+}
+
+.app-shell.theme-light .actor-archive .actor-toolbar label,
+:root[data-theme="light"] .actor-archive .actor-toolbar label {
+  background: var(--archive-night);
+}
+
+.app-shell.theme-light .actor-archive .actor-toolbar label:focus-within,
+:root[data-theme="light"] .actor-archive .actor-toolbar label:focus-within {
+  border-color: var(--archive-cyan);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--archive-cyan) 16%, transparent);
+}
+
+.app-shell.theme-light .actor-archive .actor-sort-controls .control-select-trigger,
+.app-shell.theme-light .actor-archive .actor-shuffle-button,
+:root[data-theme="light"] .actor-archive .actor-sort-controls .control-select-trigger,
+:root[data-theme="light"] .actor-archive .actor-shuffle-button {
+  border-color: color-mix(in srgb, var(--archive-paper) 14%, transparent);
+  color: color-mix(in srgb, var(--archive-paper) 72%, transparent);
+  background: var(--archive-night);
+}
+
+.app-shell.theme-light .actor-archive .actor-sort-controls .control-select-trigger:hover,
+.app-shell.theme-light .actor-archive .actor-sort-controls .control-select-trigger:focus-visible,
+.app-shell.theme-light .actor-archive .actor-sort-controls .control-select-trigger[aria-expanded="true"],
+.app-shell.theme-light .actor-archive .actor-shuffle-button:hover,
+.app-shell.theme-light .actor-archive .actor-shuffle-button:focus-visible,
+:root[data-theme="light"] .actor-archive .actor-sort-controls .control-select-trigger:hover,
+:root[data-theme="light"] .actor-archive .actor-sort-controls .control-select-trigger:focus-visible,
+:root[data-theme="light"] .actor-archive .actor-sort-controls .control-select-trigger[aria-expanded="true"],
+:root[data-theme="light"] .actor-archive .actor-shuffle-button:hover,
+:root[data-theme="light"] .actor-archive .actor-shuffle-button:focus-visible {
+  border-color: var(--archive-amber);
+  color: var(--archive-amber);
+  background: color-mix(in srgb, var(--archive-amber) 9%, var(--archive-night));
+  box-shadow: none;
+}
+
+.app-shell.theme-light .actor-archive .actor-sort-controls .control-select-list,
+:root[data-theme="light"] .actor-archive .actor-sort-controls .control-select-list {
+  border-color: color-mix(in srgb, var(--archive-paper) 15%, transparent);
+  background: var(--archive-card);
+}
+
+.app-shell.theme-light .actor-archive .actor-sort-controls .control-select-list button,
+:root[data-theme="light"] .actor-archive .actor-sort-controls .control-select-list button {
+  color: var(--archive-paper);
+  background: var(--archive-card);
+}
+
+.app-shell.theme-light .actor-archive .actor-sort-controls .control-select-list button:hover,
+.app-shell.theme-light .actor-archive .actor-sort-controls .control-select-list button:focus-visible,
+.app-shell.theme-light .actor-archive .actor-sort-controls .control-select-list button.active,
+:root[data-theme="light"] .actor-archive .actor-sort-controls .control-select-list button:hover,
+:root[data-theme="light"] .actor-archive .actor-sort-controls .control-select-list button:focus-visible,
+:root[data-theme="light"] .actor-archive .actor-sort-controls .control-select-list button.active {
+  color: var(--archive-amber);
+  background: color-mix(in srgb, var(--archive-amber) 12%, var(--archive-card));
+}
+
+.app-shell.theme-light .actor-archive .actor-card-tags > span,
+:root[data-theme="light"] .actor-archive .actor-card-tags > span {
+  border-color: color-mix(in srgb, var(--archive-cyan) 24%, transparent);
+  color: var(--archive-cyan);
+  background: color-mix(in srgb, var(--archive-cyan) 7%, transparent);
+}
+
+@media (max-width: 1280px) {
+  .actor-archive .actor-card-grid,
+  .actor-archive .actor-video-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 980px) {
+  .actor-archive .actor-toolbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .actor-toolbar-copy {
+    grid-column: 1 / -1;
+  }
+
+  .actor-profile-hero {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .actor-profile-cover {
+    border-right: 0;
+    border-bottom: 1px solid color-mix(in srgb, var(--archive-paper) 11%, transparent);
+  }
+}
+
+@media (max-width: 760px) {
+  .actor-archive {
+    gap: 12px;
+  }
+
+  .actor-archive-hero {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 18px;
+    padding: 20px 18px;
+  }
+
+  .actor-archive-index {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .actor-archive .actor-toolbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+    padding: 12px;
+  }
+
+  .actor-archive .actor-sort-controls {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .actor-archive .actor-sort-controls .control-group:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .actor-archive .actor-sort-controls .control-group,
+  .actor-archive .actor-sort-controls .control-select,
+  .actor-archive .actor-shuffle-button {
+    width: 100%;
+  }
+
+  .actor-archive .actor-card-grid,
+  .actor-archive .actor-video-grid,
+  .actor-archive .actor-unresolved-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .actor-archive .actor-card-featured {
+    grid-column: auto;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .actor-archive .actor-card-featured .actor-cover {
+    height: auto;
+  }
+
+  .actor-archive .actor-card-featured .actor-card-details {
+    padding: 16px;
+    border-top: 1px solid color-mix(in srgb, var(--archive-paper) 11%, transparent);
+    border-left: 0;
+  }
+
+  .actor-credit-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .actor-credit-strip > span {
+    border-top: 1px solid color-mix(in srgb, var(--archive-paper) 10%, transparent);
+  }
+
+  .actor-credit-strip > span:nth-child(-n + 2) {
+    border-top: 0;
+  }
+
+  .actor-credit-strip > span:nth-child(odd) {
+    border-left: 0;
+  }
+
+  .actor-credit-strip > span:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .actor-detail-toolbar,
+  .actor-section-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .actor-cover-header-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .actor-section-heading {
+    gap: 8px;
+  }
+
+  .actor-archive .actor-unresolved-card > button {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .actor-unresolved-card .actor-cover {
+    height: auto;
+    border-right: 0;
+    border-bottom: 1px solid color-mix(in srgb, var(--archive-paper) 10%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .actor-archive {
+    animation: none;
+  }
+
+  .actor-archive .actor-card,
+  .actor-archive .actor-card::after {
+    transition: none;
+  }
+}
+
 /* Explore overview: private viewing ledger */
 .explore-dashboard > .special-view-switch {
   width: 100%;
