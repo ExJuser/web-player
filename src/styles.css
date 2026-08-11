@@ -15832,19 +15832,19 @@ button {
 
 .actor-archive .actor-card-featured {
   grid-column: span 2;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
   background: var(--archive-night);
 }
 
 .actor-archive .actor-card-featured .actor-cover {
-  height: 100%;
+  height: auto;
   background: var(--archive-night);
 }
 
 .actor-archive .actor-card-featured .actor-card-details {
-  align-content: center;
-  gap: 16px;
-  padding: 24px;
+  align-content: start;
+  gap: 12px;
+  padding: 18px 20px;
   border-left: 1px solid color-mix(in srgb, var(--archive-paper) 11%, transparent);
 }
 
@@ -15886,7 +15886,7 @@ button {
 
 .actor-profile-hero {
   display: grid;
-  grid-template-columns: minmax(320px, 0.78fr) minmax(0, 1.22fr);
+  grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--archive-paper) 12%, transparent);
   border-left: 3px solid var(--archive-amber);
@@ -15900,16 +15900,16 @@ button {
 }
 
 .actor-profile-cover .actor-cover {
-  height: 100%;
+  height: auto;
   background: var(--archive-night);
 }
 
 .actor-profile-copy {
   display: grid;
   min-width: 0;
-  align-content: center;
-  gap: 14px;
-  padding: clamp(22px, 3vw, 42px);
+  align-content: start;
+  gap: 12px;
+  padding: 22px 24px;
 }
 
 .actor-profile-copy h1 {
@@ -16223,34 +16223,21 @@ button {
     width: 100%;
   }
 
-  .actor-archive .actor-card-grid,
-  .actor-archive .actor-video-grid,
   .actor-archive .actor-unresolved-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .actor-profile-hero {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .actor-profile-cover {
-    border-right: 0;
-    border-bottom: 1px solid color-mix(in srgb, var(--archive-paper) 11%, transparent);
-  }
-
   .actor-archive .actor-card-featured {
-    grid-column: auto;
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .actor-archive .actor-card-featured .actor-cover {
-    height: auto;
+    grid-column: 1 / -1;
+    grid-template-columns: minmax(220px, 340px) minmax(0, 1fr);
   }
 
   .actor-archive .actor-card-featured .actor-card-details {
     padding: 16px;
-    border-top: 1px solid color-mix(in srgb, var(--archive-paper) 11%, transparent);
-    border-left: 0;
+  }
+
+  .actor-profile-copy h1 {
+    font-size: clamp(32px, 6vw, 46px);
   }
 
   .actor-credit-strip {
@@ -16297,6 +16284,34 @@ button {
     height: auto;
     border-right: 0;
     border-bottom: 1px solid color-mix(in srgb, var(--archive-paper) 10%, transparent);
+  }
+}
+
+@media (max-width: 560px) {
+  .actor-archive .actor-card-grid,
+  .actor-archive .actor-video-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .actor-profile-hero,
+  .actor-archive .actor-card-featured {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .actor-profile-cover {
+    border-right: 0;
+    border-bottom: 1px solid color-mix(in srgb, var(--archive-paper) 11%, transparent);
+  }
+
+  .actor-profile-cover .actor-cover,
+  .actor-archive .actor-card-featured .actor-cover {
+    width: min(100%, 340px);
+    margin: 0 auto;
+  }
+
+  .actor-archive .actor-card-featured .actor-card-details {
+    border-top: 1px solid color-mix(in srgb, var(--archive-paper) 11%, transparent);
+    border-left: 0;
   }
 }
 
