@@ -7570,6 +7570,7 @@ button {
 .playlist-item {
   position: relative;
   display: grid;
+  flex-shrink: 0;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
