@@ -1748,6 +1748,35 @@ button {
   object-fit: contain;
 }
 
+.home-resume-thumbnail-loading {
+  background: #11151a;
+  color: #657282;
+}
+
+.home-resume-thumbnail-loading svg {
+  animation: home-resume-thumbnail-spin 900ms linear infinite;
+}
+
+.home-resume-visual.resume-ready > .home-card-thumbnail.has-image img {
+  animation: home-resume-thumbnail-reveal 180ms ease-out both;
+}
+
+@keyframes home-resume-thumbnail-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes home-resume-thumbnail-reveal {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
 .home-resume-visual:focus-visible {
   z-index: 1;
   outline: 3px solid #18b8e6;
@@ -13940,6 +13969,11 @@ button {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .home-resume-thumbnail-loading svg,
+  .home-resume-visual.resume-ready > .home-card-thumbnail.has-image img {
+    animation: none;
+  }
+
   .home-resume-timeline-fill {
     animation: none;
   }

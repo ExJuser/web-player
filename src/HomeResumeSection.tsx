@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { FolderOpen, Play, RotateCcw } from "lucide-react";
+import { FolderOpen, LoaderCircle, Play, RotateCcw } from "lucide-react";
 
 import { revokeObjectUrl } from "./appResourceCleanup";
 import { HomeCardThumbnail } from "./HomeVideoCards";
@@ -23,6 +23,42 @@ type HomeResumeSectionProps = {
   onThumbnailError: (videoId: string) => void;
 };
 
+type ResumeThumbnailState = {
+  key: string | null;
+  status: "idle" | "loading" | "ready" | "failed";
+  url: string | null;
+};
+
+function waitForThumbnailImage(url: string, signal: AbortSignal) {
+  return new Promise<void>((resolve, reject) => {
+    const image = new Image();
+    const cleanup = () => {
+      image.onload = null;
+      image.onerror = null;
+      signal.removeEventListener("abort", handleAbort);
+    };
+    const handleAbort = () => {
+      cleanup();
+      image.src = "";
+      reject(new DOMException("Thumbnail loading aborted.", "AbortError"));
+    };
+    image.onload = () => {
+      cleanup();
+      resolve();
+    };
+    image.onerror = () => {
+      cleanup();
+      reject(new Error("Unable to load resume thumbnail."));
+    };
+    signal.addEventListener("abort", handleAbort, { once: true });
+    if (signal.aborted) {
+      handleAbort();
+      return;
+    }
+    image.src = url;
+  });
+}
+
 export function HomeResumeSection({
   actionLabel,
   card,
@@ -37,7 +73,7 @@ export function HomeResumeSection({
   onOpenVideo,
   onThumbnailError,
 }: HomeResumeSectionProps) {
-  const [resumeThumbnailUrl, setResumeThumbnailUrl] = useState<string | null>(null);
+  const [resumeThumbnail, setResumeThumbnail] = useState<ResumeThumbnailState>({ key: null, status: "idle", url: null });
   const hasMetadata = Boolean(
     card && (card.actorTags?.length || card.systemTags?.length || card.tags?.length || typeof card.rating === "number" || card.ratingComment?.trim()),
   );
@@ -59,39 +95,51 @@ export function HomeResumeSection({
   const extensionIndex = videoName.lastIndexOf(".");
   const displayTitle = extensionIndex > 0 ? videoName.slice(0, extensionIndex) : videoName;
   const resumeVideo = card?.video;
+  const resumeThumbnailKey = resumeVideo && currentTime > 0 ? `${resumeVideo.id}:${currentTime}` : null;
 
   useEffect(() => {
-    setResumeThumbnailUrl(null);
-    if (!resumeVideo || currentTime <= 0) return undefined;
+    if (!resumeVideo || !resumeThumbnailKey) {
+      setResumeThumbnail({ key: null, status: "idle", url: null });
+      return undefined;
+    }
 
     let isCancelled = false;
     let generatedUrl: string | null = null;
     const abortController = new AbortController();
+    setResumeThumbnail({ key: resumeThumbnailKey, status: "loading", url: null });
     void generateResumeVideoThumbnail(libraryId, resumeVideo, currentTime, abortController.signal)
-      .then((url) => {
+      .then(async (url) => {
         generatedUrl = url;
         if (isCancelled) {
           revokeObjectUrl(url);
           return;
         }
-        setResumeThumbnailUrl(url);
+        await waitForThumbnailImage(url, abortController.signal);
+        if (isCancelled) return;
+        setResumeThumbnail({ key: resumeThumbnailKey, status: "ready", url });
       })
-      .catch(() => undefined);
+      .catch(() => {
+        if (!isCancelled) setResumeThumbnail({ key: resumeThumbnailKey, status: "failed", url: null });
+      });
 
     return () => {
       isCancelled = true;
       abortController.abort();
       revokeObjectUrl(generatedUrl);
     };
-  }, [currentTime, libraryId, resumeVideo]);
+  }, [currentTime, libraryId, resumeThumbnailKey, resumeVideo]);
 
+  const isResumeThumbnailReady = resumeThumbnail.key === resumeThumbnailKey && resumeThumbnail.status === "ready" && Boolean(resumeThumbnail.url);
+  const didResumeThumbnailFail = resumeThumbnail.key === resumeThumbnailKey && resumeThumbnail.status === "failed";
+  const isResumeThumbnailLoading = Boolean(resumeThumbnailKey) && !isResumeThumbnailReady && !didResumeThumbnailFail;
+  const resumeThumbnailUrl = isResumeThumbnailReady ? resumeThumbnail.url : null;
   const displayedCard = card && resumeThumbnailUrl
     ? { ...card, video: { ...card.video, thumbnailUrl: resumeThumbnailUrl } }
     : card;
   const handleDisplayedThumbnailError = (videoId: string) => {
     if (resumeThumbnailUrl) {
       revokeObjectUrl(resumeThumbnailUrl);
-      setResumeThumbnailUrl(null);
+      setResumeThumbnail({ key: resumeThumbnailKey, status: "failed", url: null });
       return;
     }
     onThumbnailError(videoId);
@@ -102,19 +150,27 @@ export function HomeResumeSection({
       {card ? (
         <>
           <button
-            className="home-resume-visual"
+            className={`home-resume-visual ${isResumeThumbnailReady ? "resume-ready" : ""}`}
             type="button"
             aria-label={`${actionLabel}：${card.video.name}`}
             onClick={() => onOpenVideo(card.video)}
           >
-            <HomeCardThumbnail card={displayedCard ?? card} onThumbnailError={handleDisplayedThumbnailError} />
+            {isResumeThumbnailLoading ? (
+              <span className="home-card-thumbnail home-resume-thumbnail-loading" aria-hidden="true">
+                <LoaderCircle size={28} />
+              </span>
+            ) : (
+              <HomeCardThumbnail card={displayedCard ?? card} onThumbnailError={handleDisplayedThumbnailError} />
+            )}
             <span className="home-resume-frame-timecode" aria-hidden="true">
-              <span>{resumeThumbnailUrl ? "断点" : "预览"}</span>
+              <span>{resumeThumbnailUrl ? "断点" : isResumeThumbnailLoading ? "定位断点" : "预览"}</span>
               {resumeThumbnailUrl ? <strong>{formatTime(currentTime)}</strong> : null}
             </span>
-            <span className="home-resume-frame-play" aria-hidden="true">
-              <Play size={22} fill="currentColor" />
-            </span>
+            {!isResumeThumbnailLoading ? (
+              <span className="home-resume-frame-play" aria-hidden="true">
+                <Play size={22} fill="currentColor" />
+              </span>
+            ) : null}
           </button>
           <div className="home-resume-copy">
             <div className="home-resume-status">
