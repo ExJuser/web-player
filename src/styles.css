@@ -16050,6 +16050,7 @@ button {
 .special-facet-card {
   display: grid;
   min-width: 0;
+  align-content: start;
   gap: 11px;
   padding: 13px;
   border: 1px solid color-mix(in srgb, var(--archive-paper) 10%, transparent);
