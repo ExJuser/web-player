@@ -56,6 +56,7 @@ import {
   PHOTO_ALBUM_FOLDERS_KEY,
   thumbnailCacheVersion,
   playlistThumbnailCacheVersion,
+  resumeThumbnailCacheVersion,
   danmakuSpeedMin,
   danmakuSpeedMax,
   defaultDanmakuPreferences,
@@ -1217,11 +1218,15 @@ async function runObjectStoreRequest<T>(
   });
 }
 
-export type ThumbnailVariant = "standard" | "playlist";
+export type ThumbnailVariant = "standard" | "playlist" | "resume";
 
 function createThumbnailId(libraryId: string, videoId: string, variant: ThumbnailVariant = "standard") {
   let hash = 2166136261;
-  const version = variant === "playlist" ? playlistThumbnailCacheVersion : thumbnailCacheVersion;
+  const version = variant === "playlist"
+    ? playlistThumbnailCacheVersion
+    : variant === "resume"
+      ? resumeThumbnailCacheVersion
+      : thumbnailCacheVersion;
   const value = `${version}|${libraryId}|${videoId}`;
   for (let index = 0; index < value.length; index += 1) {
     hash ^= value.charCodeAt(index);
@@ -1258,7 +1263,7 @@ function createMosaicTargetThumbnailId(rootId: string, videoId: string, size: nu
 
 function createThumbnailIds(libraryId: string, videoId: string, variant: ThumbnailVariant) {
   const thumbnailIds = [createThumbnailId(libraryId, videoId, variant)];
-  if (variant === "playlist") return thumbnailIds;
+  if (variant !== "standard") return thumbnailIds;
   const legacyVideoId = libraryId === "global" ? createLegacyVideoIdCandidate(videoId) : null;
   if (legacyVideoId) thumbnailIds.push(createThumbnailId(libraryId, legacyVideoId));
   return thumbnailIds;
@@ -1287,6 +1292,7 @@ export async function generateServerThumbnail(
   relativePath: string,
   signal?: AbortSignal,
   variant: ThumbnailVariant = "standard",
+  seekTime?: number,
 ) {
   if (!libraryId) return null;
   const thumbnailId = createThumbnailId(libraryId, videoId, variant);
@@ -1294,11 +1300,18 @@ export async function generateServerThumbnail(
   const response = await fetch(`${thumbnailUrl}/generate`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ rootId, relativePath, ...(variant === "playlist" ? { variant } : {}) }),
+    body: JSON.stringify({
+      rootId,
+      relativePath,
+      ...(variant !== "standard" ? { variant } : {}),
+      ...(variant === "resume" && Number.isFinite(seekTime) ? { seekTime } : {}),
+    }),
     signal,
   });
   if (!response.ok) return null;
-  return thumbnailUrl;
+  return variant === "resume" && Number.isFinite(seekTime)
+    ? `${thumbnailUrl}?revision=${Math.max(0, Math.round((seekTime ?? 0) * 1000))}`
+    : thumbnailUrl;
 }
 
 export async function generateServerMosaicTarget(

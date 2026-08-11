@@ -1677,9 +1677,21 @@ export function playerDataApiPlugin({ projectRoot, env }) {
         }
         const sourcePath = resolveVideoPathFromConfig(config, root.id, payload?.relativePath);
         await ensureFileExists(sourcePath);
-        const variant = payload?.variant === "mosaic-target" || payload?.variant === "playlist" ? payload.variant : "standard";
-        const generated = await videoThumbnailService.generate({ thumbnailId, sourcePath, variant });
+        const variant = payload?.variant === "mosaic-target" || payload?.variant === "playlist" || payload?.variant === "resume"
+          ? payload.variant
+          : "standard";
+        const seekTime = variant === "resume" && Number.isFinite(payload?.seekTime)
+          ? Math.max(0, payload.seekTime)
+          : undefined;
+        const generated = await videoThumbnailService.generate({
+          force: variant === "resume",
+          seekTime,
+          thumbnailId,
+          sourcePath,
+          variant,
+        });
         store.recordCacheEntry("thumbnail", thumbnailId, generated.filePath, "image/jpeg", generated.size);
+        if (variant === "resume") thumbnailMemoryCache.invalidate(thumbnailId);
         await thumbnailMemoryCache.getOrLoad({ thumbnailId, filePath: generated.filePath, contentType: "image/jpeg" });
         sendJson(response, 200, {
           thumbnailUrl: `/api/player-data/thumbnails/${encodeURIComponent(thumbnailId)}`,

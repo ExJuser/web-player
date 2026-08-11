@@ -114,3 +114,35 @@ test("playlist thumbnail generation uses a separate cache id and variant", async
     globalThis.fetch = originalFetch;
   }
 });
+
+test("resume thumbnail generation uses a stable cache slot and progress revision", async () => {
+  const originalFetch = globalThis.fetch;
+  try {
+    let request;
+    globalThis.fetch = async (url, init) => {
+      request = { url, init };
+      return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { "Content-Type": "application/json" } });
+    };
+
+    const thumbnailUrl = await storage.generateServerThumbnail(
+      "global",
+      "video",
+      "root",
+      "video.mp4",
+      undefined,
+      "resume",
+      143.25,
+    );
+
+    assert.deepEqual(JSON.parse(request.init.body), {
+      rootId: "root",
+      relativePath: "video.mp4",
+      variant: "resume",
+      seekTime: 143.25,
+    });
+    assert.match(request.url, /\.resume1\./u);
+    assert.match(thumbnailUrl, /\?revision=143250$/u);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

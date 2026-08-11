@@ -7,15 +7,16 @@ const thumbnailHeight = 540;
 const playlistThumbnailWidth = 240;
 const playlistThumbnailHeight = 135;
 
-export function createVideoThumbnailFfmpegArgs(sourcePath, outputPath, { highQuality = false, variant = "standard" } = {}) {
+export function createVideoThumbnailFfmpegArgs(sourcePath, outputPath, { highQuality = false, seekTime, variant = "standard" } = {}) {
   const targetWidth = variant === "playlist" ? playlistThumbnailWidth : thumbnailWidth;
   const targetHeight = variant === "playlist" ? playlistThumbnailHeight : thumbnailHeight;
+  const isResumeFrame = variant === "resume";
   const filter = highQuality
     ? "thumbnail=60,scale='min(3840,iw)':'min(2160,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2"
-    : `thumbnail=60,scale=${targetWidth}:${targetHeight}:force_original_aspect_ratio=decrease,pad=${targetWidth}:${targetHeight}:(ow-iw)/2:(oh-ih)/2:color=0x050607`;
+    : `${isResumeFrame ? "" : "thumbnail=60,"}scale=${targetWidth}:${targetHeight}:force_original_aspect_ratio=decrease,pad=${targetWidth}:${targetHeight}:(ow-iw)/2:(oh-ih)/2:color=0x050607`;
   return [
     "-v", "error",
-    "-ss", "2",
+    "-ss", String(isResumeFrame && Number.isFinite(seekTime) ? Math.max(0, seekTime) : 2),
     "-i", sourcePath,
     "-frames:v", "1",
     "-an",
@@ -48,15 +49,25 @@ export function createVideoThumbnailService({ cacheRoot, runProcess, maxConcurre
     while (activeJobs < concurrency && pendingJobs.length) {
       const job = pendingJobs.shift();
       activeJobs += 1;
-      void job.run().then(job.resolve, job.reject).finally(() => {
+      const finishJob = () => {
         activeJobs -= 1;
         inFlightJobs.delete(job.thumbnailId);
         runNextJobs();
-      });
+      };
+      void job.run().then(
+        (result) => {
+          finishJob();
+          job.resolve(result);
+        },
+        (error) => {
+          finishJob();
+          job.reject(error);
+        },
+      );
     }
   };
 
-  const generate = ({ thumbnailId, sourcePath, variant = "standard" }) => {
+  const generate = ({ force = false, seekTime, thumbnailId, sourcePath, variant = "standard" }) => {
     const existingJob = inFlightJobs.get(thumbnailId);
     if (existingJob) return existingJob;
 
@@ -68,7 +79,7 @@ export function createVideoThumbnailService({ cacheRoot, runProcess, maxConcurre
         run: async () => {
           await mkdir(cacheRoot, { recursive: true });
           const filePath = path.join(cacheRoot, `${thumbnailId}.blob`);
-          const existingThumbnail = await readExistingThumbnail(filePath);
+          const existingThumbnail = force ? null : await readExistingThumbnail(filePath);
           if (existingThumbnail) {
             return { filePath, size: existingThumbnail.size, cached: true };
           }
@@ -76,7 +87,7 @@ export function createVideoThumbnailService({ cacheRoot, runProcess, maxConcurre
           const temporaryPath = path.join(cacheRoot, `.${thumbnailId}.${randomUUID()}.jpg`);
           try {
             const highQuality = variant === "mosaic-target";
-            await runProcess("ffmpeg", createVideoThumbnailFfmpegArgs(sourcePath, temporaryPath, { highQuality, variant }), {
+            await runProcess("ffmpeg", createVideoThumbnailFfmpegArgs(sourcePath, temporaryPath, { highQuality, seekTime, variant }), {
               timeoutMs: highQuality ? 60_000 : 30_000,
               timeoutMessage: highQuality ? "生成高清目标图超时。" : "生成视频缩略图超时。",
               killTree: true,
@@ -84,6 +95,7 @@ export function createVideoThumbnailService({ cacheRoot, runProcess, maxConcurre
             });
             const generatedThumbnail = await readExistingThumbnail(temporaryPath);
             if (!generatedThumbnail) throw new Error("ffmpeg 未生成有效的视频缩略图。");
+            if (force) await rm(filePath, { force: true });
             try {
               await rename(temporaryPath, filePath);
             } catch (error) {

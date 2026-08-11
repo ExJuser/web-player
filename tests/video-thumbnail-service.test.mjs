@@ -22,6 +22,15 @@ test("playlist thumbnail ffmpeg args use the smaller list dimensions", () => {
   assert.ok(args.includes("thumbnail=60,scale=240:135:force_original_aspect_ratio=decrease,pad=240:135:(ow-iw)/2:(oh-ih)/2:color=0x050607"));
 });
 
+test("resume thumbnail ffmpeg args seek to the playback position without representative-frame sampling", () => {
+  const args = createVideoThumbnailFfmpegArgs("source.mp4", "thumbnail.jpg", { seekTime: 143.25, variant: "resume" });
+  const filter = args[args.indexOf("-vf") + 1];
+
+  assert.equal(args[args.indexOf("-ss") + 1], "143.25");
+  assert.ok(filter.includes("scale=960:540:force_original_aspect_ratio=decrease"));
+  assert.doesNotMatch(filter, /thumbnail=/u);
+});
+
 test("mosaic target ffmpeg args preserve a high resolution frame", () => {
   const args = createVideoThumbnailFfmpegArgs("source.mp4", "target.jpg", { highQuality: true });
 
@@ -62,6 +71,27 @@ test("video thumbnail service dedupes cache ids and serializes ffmpeg jobs", asy
     const cachedResult = await service.generate({ thumbnailId: "first", sourcePath: "first.mp4" });
     assert.equal(cachedResult.cached, true);
     assert.equal(calls.length, 2);
+  } finally {
+    await rm(cacheRoot, { recursive: true, force: true });
+  }
+});
+
+test("resume thumbnail generation replaces the stable cached frame", async () => {
+  const cacheRoot = await mkdtemp(path.join(tmpdir(), "web-player-resume-thumbnail-"));
+  let callCount = 0;
+  const runProcess = async (_command, args) => {
+    callCount += 1;
+    await writeFile(args.at(-1), `resume-${callCount}`);
+  };
+
+  try {
+    const service = createVideoThumbnailService({ cacheRoot, runProcess });
+    await service.generate({ force: true, seekTime: 10, thumbnailId: "resume", sourcePath: "video.mp4", variant: "resume" });
+    const result = await service.generate({ force: true, seekTime: 20, thumbnailId: "resume", sourcePath: "video.mp4", variant: "resume" });
+
+    assert.equal(callCount, 2);
+    assert.equal(result.cached, false);
+    assert.equal(await readFile(result.filePath, "utf8"), "resume-2");
   } finally {
     await rm(cacheRoot, { recursive: true, force: true });
   }

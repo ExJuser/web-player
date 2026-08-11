@@ -56,6 +56,7 @@ export const mediaScanBatchDelay = 500;
 export const playlistActiveThumbnailRadius = 5;
 export const thumbnailCacheVersion = "v4";
 export const playlistThumbnailCacheVersion = "v3-list1";
+export const resumeThumbnailCacheVersion = "resume1";
 export const thumbnailWidth = 960;
 export const thumbnailHeight = 540;
 export const playlistThumbnailWidth = 240;

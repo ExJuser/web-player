@@ -1,15 +1,19 @@
+import { useEffect, useState } from "react";
 import { FolderOpen, Play, RotateCcw } from "lucide-react";
 
+import { revokeObjectUrl } from "./appResourceCleanup";
 import { HomeCardThumbnail } from "./HomeVideoCards";
 import { RatingChip, TagChips } from "./MetadataChips";
 import { formatRelativeTime, formatTime } from "./playerFormatUtils";
 import type { HomeVideoCard, VideoItem } from "./playerTypes";
+import { generateResumeVideoThumbnail } from "./videoThumbnail";
 
 type HomeResumeSectionProps = {
   actionLabel: string;
   card: HomeVideoCard | null;
   homeMediaModeLabel: string;
   isScanning: boolean;
+  libraryId: string | null;
   title: string;
   videoCount: number;
   formatHomeMeta: (card: HomeVideoCard) => string;
@@ -24,6 +28,7 @@ export function HomeResumeSection({
   card,
   homeMediaModeLabel,
   isScanning,
+  libraryId,
   title,
   videoCount,
   formatHomeMeta,
@@ -32,6 +37,7 @@ export function HomeResumeSection({
   onOpenVideo,
   onThumbnailError,
 }: HomeResumeSectionProps) {
+  const [resumeThumbnailUrl, setResumeThumbnailUrl] = useState<string | null>(null);
   const hasMetadata = Boolean(
     card && (card.actorTags?.length || card.systemTags?.length || card.tags?.length || typeof card.rating === "number" || card.ratingComment?.trim()),
   );
@@ -52,6 +58,44 @@ export function HomeResumeSection({
   const videoName = card?.video.name ?? "";
   const extensionIndex = videoName.lastIndexOf(".");
   const displayTitle = extensionIndex > 0 ? videoName.slice(0, extensionIndex) : videoName;
+  const resumeVideo = card?.video;
+
+  useEffect(() => {
+    setResumeThumbnailUrl(null);
+    if (!resumeVideo || currentTime <= 0) return undefined;
+
+    let isCancelled = false;
+    let generatedUrl: string | null = null;
+    const abortController = new AbortController();
+    void generateResumeVideoThumbnail(libraryId, resumeVideo, currentTime, abortController.signal)
+      .then((url) => {
+        generatedUrl = url;
+        if (isCancelled) {
+          revokeObjectUrl(url);
+          return;
+        }
+        setResumeThumbnailUrl(url);
+      })
+      .catch(() => undefined);
+
+    return () => {
+      isCancelled = true;
+      abortController.abort();
+      revokeObjectUrl(generatedUrl);
+    };
+  }, [currentTime, libraryId, resumeVideo]);
+
+  const displayedCard = card && resumeThumbnailUrl
+    ? { ...card, video: { ...card.video, thumbnailUrl: resumeThumbnailUrl } }
+    : card;
+  const handleDisplayedThumbnailError = (videoId: string) => {
+    if (resumeThumbnailUrl) {
+      revokeObjectUrl(resumeThumbnailUrl);
+      setResumeThumbnailUrl(null);
+      return;
+    }
+    onThumbnailError(videoId);
+  };
 
   return (
     <section className={`home-resume-card ${card ? "" : "empty"} ${card?.video.thumbnailUrl ? "has-thumbnail" : ""}`}>
@@ -63,10 +107,10 @@ export function HomeResumeSection({
             aria-label={`${actionLabel}：${card.video.name}`}
             onClick={() => onOpenVideo(card.video)}
           >
-            <HomeCardThumbnail card={card} onThumbnailError={onThumbnailError} />
+            <HomeCardThumbnail card={displayedCard ?? card} onThumbnailError={handleDisplayedThumbnailError} />
             <span className="home-resume-frame-timecode" aria-hidden="true">
-              <span>断点</span>
-              <strong>{formatTime(currentTime)}</strong>
+              <span>{resumeThumbnailUrl ? "断点" : "预览"}</span>
+              {resumeThumbnailUrl ? <strong>{formatTime(currentTime)}</strong> : null}
             </span>
             <span className="home-resume-frame-play" aria-hidden="true">
               <Play size={22} fill="currentColor" />

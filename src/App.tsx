@@ -6645,6 +6645,7 @@ export default function App() {
                 card={primaryHomeCard}
                 homeMediaModeLabel={homeMediaModeLabel}
                 isScanning={isScanning}
+                libraryId={libraryId}
                 title={primaryHomeTitle}
                 videoCount={videos.length}
                 formatHomeMeta={formatHomeMeta}

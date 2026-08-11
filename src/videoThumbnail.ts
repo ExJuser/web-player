@@ -308,7 +308,13 @@ function encodeCanvasAsJpeg(canvas: HTMLCanvasElement, signal?: AbortSignal, qua
   );
 }
 
-async function createVideoThumbnailBlob(video: VideoItem, signal?: AbortSignal, highQuality = false, variant: ThumbnailVariant = "standard") {
+async function createVideoThumbnailBlob(
+  video: VideoItem,
+  signal?: AbortSignal,
+  highQuality = false,
+  variant: ThumbnailVariant = "standard",
+  targetTime?: number,
+) {
   const element = document.createElement("video");
   const canvas = document.createElement("canvas");
   const sampleCanvas = document.createElement("canvas");
@@ -354,8 +360,9 @@ async function createVideoThumbnailBlob(video: VideoItem, signal?: AbortSignal, 
     const drawLeft = (canvas.width - drawWidth) / 2;
     const drawTop = (canvas.height - drawHeight) / 2;
     const duration = Number.isFinite(element.duration) ? element.duration : 0;
-    const targetTimes =
-      duration > 0
+    const targetTimes = Number.isFinite(targetTime)
+      ? [Math.min(Math.max(targetTime ?? 0, 0.1), Math.max(0.1, duration - 0.1))]
+      : duration > 0
         ? [duration * 0.1, duration * 0.25, duration * 0.5, duration * 0.75, 2]
             .map((time) => Math.min(Math.max(time, 0.1), Math.max(0.1, duration - 0.1)))
             .filter((time, index, times) => times.findIndex((other) => Math.abs(other - time) < 0.05) === index)
@@ -388,6 +395,56 @@ async function createVideoThumbnailBlob(video: VideoItem, signal?: AbortSignal, 
 
 export async function createHighQualityVideoTarget(video: VideoItem, signal?: AbortSignal) {
   return (await createVideoThumbnailBlob(video, signal, true)).thumbnailBlob;
+}
+
+export async function generateResumeVideoThumbnail(
+  libraryId: string | null,
+  video: VideoItem,
+  currentTime: number,
+  signal?: AbortSignal,
+) {
+  throwIfAborted(signal);
+  if (video.mediaRootId) {
+    const serverController = new AbortController();
+    const abortServerRequest = () => serverController.abort();
+    signal?.addEventListener("abort", abortServerRequest, { once: true });
+    try {
+      const serverThumbnailUrl = await withTimeout(
+        generateServerThumbnail(
+          libraryId,
+          video.id,
+          video.mediaRootId,
+          video.relativePath,
+          serverController.signal,
+          "resume",
+          currentTime,
+        ),
+        thumbnailServerGenerationTimeout,
+        "Timed out generating resume thumbnail.",
+        abortServerRequest,
+      );
+      if (serverThumbnailUrl) return serverThumbnailUrl;
+    } catch (error) {
+      throwIfAborted(signal);
+    } finally {
+      signal?.removeEventListener("abort", abortServerRequest);
+    }
+  }
+
+  const generationController = new AbortController();
+  const abortGeneration = () => generationController.abort();
+  signal?.addEventListener("abort", abortGeneration, { once: true });
+  try {
+    const { thumbnailBlob } = await withTimeout(
+      createVideoThumbnailBlob(video, generationController.signal, false, "resume", currentTime),
+      thumbnailGenerationTimeout,
+      "Timed out creating resume thumbnail.",
+      abortGeneration,
+    );
+    return URL.createObjectURL(thumbnailBlob);
+  } finally {
+    signal?.removeEventListener("abort", abortGeneration);
+  }
 }
 
 export async function loadAvailableVideoThumbnail(libraryId: string | null, video: VideoItem, signal?: AbortSignal, variant: ThumbnailVariant = "standard") {
