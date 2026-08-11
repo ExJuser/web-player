@@ -2,8 +2,8 @@ import { mkdir, rename, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 
-const thumbnailWidth = 480;
-const thumbnailHeight = 270;
+const thumbnailWidth = 960;
+const thumbnailHeight = 540;
 const playlistThumbnailWidth = 240;
 const playlistThumbnailHeight = 135;
 

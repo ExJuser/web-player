@@ -55,6 +55,7 @@ import {
   PHOTO_ALBUM_FOLDER_KEY,
   PHOTO_ALBUM_FOLDERS_KEY,
   thumbnailCacheVersion,
+  playlistThumbnailCacheVersion,
   danmakuSpeedMin,
   danmakuSpeedMax,
   defaultDanmakuPreferences,
@@ -1220,7 +1221,7 @@ export type ThumbnailVariant = "standard" | "playlist";
 
 function createThumbnailId(libraryId: string, videoId: string, variant: ThumbnailVariant = "standard") {
   let hash = 2166136261;
-  const version = variant === "playlist" ? `${thumbnailCacheVersion}-list1` : thumbnailCacheVersion;
+  const version = variant === "playlist" ? playlistThumbnailCacheVersion : thumbnailCacheVersion;
   const value = `${version}|${libraryId}|${videoId}`;
   for (let index = 0; index < value.length; index += 1) {
     hash ^= value.charCodeAt(index);

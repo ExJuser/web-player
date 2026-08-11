@@ -1628,7 +1628,7 @@ button {
 
 .home-resume-card {
   display: grid;
-  grid-template-columns: minmax(0, 58%) minmax(360px, 42%);
+  grid-template-columns: minmax(0, min(58%, 960px)) minmax(360px, 1fr);
   height: 540px;
   min-height: 540px;
   overflow: hidden;
@@ -1639,7 +1639,7 @@ button {
 }
 
 .home-resume-card.has-thumbnail {
-  grid-template-columns: minmax(0, 58%) minmax(360px, 42%);
+  grid-template-columns: minmax(0, min(58%, 960px)) minmax(360px, 1fr);
 }
 
 .home-resume-card.empty {
@@ -1745,7 +1745,7 @@ button {
   max-width: none;
   height: 100%;
   max-height: none;
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .home-resume-visual:focus-visible {

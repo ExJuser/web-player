@@ -13,7 +13,7 @@ test("video thumbnail ffmpeg args produce a bounded jpeg frame", () => {
   const args = createVideoThumbnailFfmpegArgs("source.mp4", "thumbnail.jpg");
 
   assert.deepEqual(args.slice(-4), ["-f", "image2", "-y", "thumbnail.jpg"]);
-  assert.ok(args.includes("thumbnail=60,scale=480:270:force_original_aspect_ratio=decrease,pad=480:270:(ow-iw)/2:(oh-ih)/2:color=0x050607"));
+  assert.ok(args.includes("thumbnail=60,scale=960:540:force_original_aspect_ratio=decrease,pad=960:540:(ow-iw)/2:(oh-ih)/2:color=0x050607"));
 });
 
 test("playlist thumbnail ffmpeg args use the smaller list dimensions", () => {
