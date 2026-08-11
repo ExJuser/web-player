@@ -15831,7 +15831,7 @@ button {
 }
 
 .actor-archive .actor-card-featured {
-  grid-column: span 2;
+  grid-column: 1 / -1;
   grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
   background: var(--archive-night);
 }
