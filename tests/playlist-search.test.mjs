@@ -54,6 +54,18 @@ test("matches actor aliases, comments, highlight descriptions, library names, an
   ]);
 });
 
+test("supports pipe-separated alternatives while keeping space-separated terms required", () => {
+  const videos = [{ id: "first" }, { id: "second" }, { id: "third" }];
+  const documents = search.createPlaylistSearchDocuments([
+    { id: "first", title: "孤独摇滚", path: "Anime/Bocchi.mkv", tags: ["喜剧"] },
+    { id: "second", title: "轻音少女", path: "Anime/K-On.mkv", tags: ["喜剧"] },
+    { id: "third", title: "轻音少女", path: "Anime/K-On.mkv", tags: ["音乐"] },
+  ]);
+
+  assert.deepEqual(search.searchPlaylistVideos(videos, documents, "孤独|轻音 喜剧").videos, [videos[0], videos[1]]);
+  assert.deepEqual(search.searchPlaylistVideos(videos, documents, "孤独 | 轻音 喜剧").videos, [videos[0], videos[1]]);
+});
+
 test("returns non-title reasons but suppresses redundant path reasons for title matches", () => {
   const videos = [{ id: "video" }];
   const documents = search.createPlaylistSearchDocuments([

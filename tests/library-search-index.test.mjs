@@ -17,6 +17,7 @@ test("trigram candidates preserve exact search behavior and record order", () =>
   assert.deepEqual(index.search("孤独 08").videos.map((video) => video.id), ["a"]);
   assert.deepEqual(index.search("動畫").videos.map((video) => video.id), ["b"]);
   assert.deepEqual(index.search(">=8 -高清").videos.map((video) => video.id), ["a"]);
+  assert.deepEqual(index.search("孤独|最终").videos.map((video) => video.id), ["a", "c"]);
 });
 
 test("search index supports scope and incremental patches", () => {

@@ -59,20 +59,28 @@ export class LibrarySearchIndex {
   search(query: string) {
     const tokens = parsePlaylistSearchQuery(query);
     let candidates: Set<string> | null = null;
+    const tokenGroups = new Map<number, typeof tokens>();
+    tokens.forEach((token) => tokenGroups.set(token.orGroup, [...(tokenGroups.get(token.orGroup) ?? []), token]));
 
-    tokens.forEach((token) => {
-      const trigrams = createTrigrams(token.normalized);
-      if (!trigrams.length) return;
-      let tokenCandidates: Set<string> | null = null;
-      trigrams.forEach((trigram) => {
-        const posting = this.videoIdsByTrigram.get(trigram) ?? new Set<string>();
-        tokenCandidates = tokenCandidates === null
-          ? new Set(posting)
-          : new Set(Array.from(tokenCandidates).filter((videoId) => posting.has(videoId)));
-      });
+    tokenGroups.forEach((groupTokens) => {
+      let groupCandidates = new Set<string>();
+      for (const token of groupTokens) {
+        const trigrams = createTrigrams(token.normalized);
+        if (!trigrams.length) {
+          groupCandidates = new Set();
+          return;
+        }
+        let tokenCandidates = new Set(this.videoIdsByTrigram.get(trigrams[0]) ?? []);
+        trigrams.slice(1).forEach((trigram) => {
+          const posting = this.videoIdsByTrigram.get(trigram) ?? new Set<string>();
+          tokenCandidates = new Set(Array.from(tokenCandidates).filter((videoId) => posting.has(videoId)));
+        });
+        tokenCandidates.forEach((videoId) => groupCandidates.add(videoId));
+      }
+      if (!groupCandidates.size && groupTokens.some((token) => createTrigrams(token.normalized).length === 0)) return;
       candidates = candidates === null
-        ? tokenCandidates
-        : new Set(Array.from(candidates).filter((videoId) => tokenCandidates?.has(videoId)));
+        ? groupCandidates
+        : new Set(Array.from(candidates).filter((videoId) => groupCandidates.has(videoId)));
     });
 
     const videos = this.orderedVideoIds

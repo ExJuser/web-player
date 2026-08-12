@@ -42,6 +42,7 @@ export type PlaylistSearchDocument = {
 export type PlaylistSearchToken = {
   raw: string;
   normalized: string;
+  orGroup: number;
 };
 
 const fieldLabels: Record<Exclude<PlaylistSearchField, "title">, string> = {
@@ -67,18 +68,32 @@ export function normalizePlaylistSearchText(value: string) {
 export function parsePlaylistSearchQuery(query: string): PlaylistSearchToken[] {
   const tokens: PlaylistSearchToken[] = [];
   const seen = new Set<string>();
-  const pattern = /"([^"]*)"|([^\s"]+)/gu;
+  const pattern = /"([^"]*)"|(\|)|([^\s"|]+)/gu;
   let match: RegExpExecArray | null;
+  let joinPreviousGroup = false;
+  let nextGroup = 0;
 
   while ((match = pattern.exec(query)) !== null) {
-    const raw = (match[1] ?? match[2] ?? "").trim();
+    if (match[2]) {
+      joinPreviousGroup = tokens.length > 0;
+      continue;
+    }
+    const raw = (match[1] ?? match[3] ?? "").trim();
     const normalized = normalizePlaylistSearchText(raw);
     const scoreMatch = /^(?:>=|<=|>|<)(\d+(?:\.\d+)?)$/u.exec(normalized);
     const isValidScoreFilter = scoreMatch && Number(scoreMatch[1]) >= 0 && Number(scoreMatch[1]) <= 10;
-    if (match[1] === undefined && (/^-(?!$).+/u.test(normalized) || isValidScoreFilter)) continue;
-    if (!normalized || seen.has(normalized)) continue;
+    if (match[1] === undefined && (/^-(?!$).+/u.test(normalized) || isValidScoreFilter)) {
+      joinPreviousGroup = false;
+      continue;
+    }
+    if (!normalized || seen.has(normalized)) {
+      joinPreviousGroup = false;
+      continue;
+    }
     seen.add(normalized);
-    tokens.push({ raw, normalized });
+    const orGroup = joinPreviousGroup ? tokens[tokens.length - 1].orGroup : nextGroup++;
+    tokens.push({ raw, normalized, orGroup });
+    joinPreviousGroup = false;
   }
 
   return tokens;
@@ -164,20 +179,23 @@ export function searchPlaylistVideos<Video extends { id: string }>(
   const { excludedTags, scoreFilters } = parsePlaylistSearchFilters(query);
   const matchesByVideoId = new Map<string, PlaylistSearchMatch>();
   if (!tokens.length && !excludedTags.length && !scoreFilters.length) return { videos, matchesByVideoId, tokens };
+  const requiredGroupCount = new Set(tokens.map((token) => token.orGroup)).size;
 
   const matchingVideos = videos.filter((video) => {
     const document = documentsByVideoId.get(video.id);
     if (!document) return false;
     if (excludedTags.some((tag) => document.normalizedTags.includes(tag))) return false;
     if (!matchesScoreFilters(document.score, scoreFilters)) return false;
-    const matchesByToken = tokens.map((token) =>
-      document.entries.filter((entry) => entry.normalizedValue.includes(token.normalized)),
-    );
-    if (matchesByToken.some((matches) => !matches.length)) return false;
+    const matchesByToken = tokens.map((token) => ({
+      entries: document.entries.filter((entry) => entry.normalizedValue.includes(token.normalized)),
+      orGroup: token.orGroup,
+    }));
+    const matchedGroups = new Set(matchesByToken.filter(({ entries }) => entries.length).map(({ orGroup }) => orGroup));
+    if (matchedGroups.size < requiredGroupCount) return false;
 
     const reasons: PlaylistSearchReason[] = [];
     const seenReasons = new Set<string>();
-    matchesByToken.forEach((entries) => {
+    matchesByToken.forEach(({ entries }) => {
       if (entries.some((entry) => entry.field === "title")) return;
       entries.forEach((entry) => {
         if (entry.field === "title") return;
