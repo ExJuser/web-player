@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { controlsAutoHideDelay } from "./playerConstants";
 import type { VideoItem } from "./playerTypes";
@@ -12,16 +12,10 @@ type UsePlayerControlsVisibilityOptions = {
 
 export function usePlayerControlsVisibility({
   currentVideo,
-  isCinemaMode,
-  isFullscreen,
-  isPlaying,
 }: UsePlayerControlsVisibilityOptions) {
   const controlsHideTimerRef = useRef<number | null>(null);
   const [areControlsVisible, setAreControlsVisible] = useState(true);
-  const shouldAutoHideControls = useMemo(
-    () => isPlaying && Boolean(currentVideo),
-    [currentVideo, isCinemaMode, isFullscreen, isPlaying],
-  );
+  const shouldAutoHideControls = Boolean(currentVideo);
 
   const clearControlsHideTimer = useCallback(() => {
     if (!controlsHideTimerRef.current) return;
@@ -48,6 +42,11 @@ export function usePlayerControlsVisibility({
     clearControlsHideTimer();
   }, [clearControlsHideTimer]);
 
+  const hideControls = useCallback(() => {
+    setAreControlsVisible(false);
+    clearControlsHideTimer();
+  }, [clearControlsHideTimer]);
+
   const showControls = useCallback(() => {
     setAreControlsVisible(true);
     scheduleControlsHide();
@@ -66,6 +65,7 @@ export function usePlayerControlsVisibility({
 
   return {
     areControlsVisible,
+    hideControls,
     keepControlsVisible,
     revealControls,
     scheduleControlsHide,

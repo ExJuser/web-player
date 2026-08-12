@@ -2895,6 +2895,7 @@ export default function App() {
 
   const {
     areControlsVisible,
+    hideControls,
     keepControlsVisible,
     revealControls,
     scheduleControlsHide,
@@ -6986,6 +6987,7 @@ export default function App() {
         <div
           className={`player-frame ${isNonPlayerViewVisible ? "home-hidden" : ""} ${isFullscreen ? "fullscreen" : ""} ${areControlsVisible ? "" : "controls-hidden"}`}
           ref={playerRef}
+          onMouseEnter={revealControls}
           onMouseMove={revealControls}
           onContextMenu={handlePlayerContextMenu}
           onPointerDownCapture={handlePlayerPointerDown}
@@ -6994,7 +6996,7 @@ export default function App() {
           onDoubleClick={handlePlayerDoubleClick}
           onWheel={handlePlayerWheel}
           onMouseLeave={() => {
-            if (isFullscreen || isCinemaMode) scheduleControlsHide();
+            hideControls();
             stopRightMouseHoldSpeed();
           }}
           tabIndex={-1}
