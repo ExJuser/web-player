@@ -1342,9 +1342,10 @@ button {
   bottom: 0;
   left: 0;
   display: none;
-  height: 3px;
+  height: 5px;
   overflow: hidden;
   background: var(--history-gradient, var(--timeline-history-0));
+  box-shadow: 0 -1px 4px rgba(0, 0, 0, 0.58);
 }
 
 .control-progress-rail span {
@@ -1352,9 +1353,9 @@ button {
   bottom: 0;
   left: 0;
   display: block;
-  height: 1px;
-  background: #dff7ff;
-  box-shadow: 0 0 4px rgba(114, 221, 247, 0.72);
+  height: 100%;
+  background: #55dfff;
+  box-shadow: 0 0 6px rgba(85, 223, 255, 0.82);
 }
 
 .app-shell.privacy-mode .control-bar {
@@ -1376,8 +1377,8 @@ button {
 }
 
 .player-frame.controls-hidden .control-bar {
-  min-height: 3px;
-  height: 3px;
+  min-height: 5px;
+  height: 5px;
   padding: 0;
   border-top: 0;
   gap: 0;
@@ -5961,6 +5962,12 @@ button {
   --timeline-history-4: #006d99;
   --timeline-history-wave-peak: rgba(0, 109, 153, 0.72);
   --timeline-history-wave-base: rgba(89, 154, 181, 0.46);
+}
+
+.app-shell.theme-light .control-progress-rail span,
+:root[data-theme="light"] .control-progress-rail span {
+  background: #007fa8;
+  box-shadow: 0 0 5px rgba(0, 127, 168, 0.62);
 }
 
 .app-shell.theme-light .timeline-preview-history,
