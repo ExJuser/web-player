@@ -120,7 +120,7 @@ export const PlaylistItemCard = memo(function PlaylistItemCard({
         <span className="episode-main">
           <strong>{highlightSearchTerms(video.name, searchTerms)}</strong>
           <small className="episode-parent-path">{parentPath}</small>
-          <TagChips tags={tags} actorTags={actorTags} systemTags={systemTags} compact userTagsFirst adaptive />
+          <TagChips tags={tags} actorTags={actorTags} systemTags={systemTags} compact adaptive />
           {searchMatch?.reasons.length ? <SearchMatchReasons match={searchMatch} /> : null}
           {duplicateMeta ? (
             <small className={`episode-duplicate-meta severity-${duplicateMeta.severity}`}>
