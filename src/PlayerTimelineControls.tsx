@@ -2,7 +2,7 @@ import { Pencil, X, Zap } from "lucide-react";
 import { useEffect, useRef, useState, type CSSProperties, type ChangeEvent, type PointerEvent as ReactPointerEvent, type Ref } from "react";
 
 import { clamp } from "./playerInteractionUtils";
-import { createPlaybackHistoryGradient, getPlaybackHistoryAtTime } from "./playbackHistory";
+import { createPlaybackHistoryGradient, createPlaybackHistoryWaveform, getPlaybackHistoryAtTime } from "./playbackHistory";
 import { PlayerEditSegmentMenu } from "./PlayerEditSegmentMenu";
 import type { PlaybackHistory, VideoEditSegment, VideoHighlightSegment } from "./playerTypes";
 
@@ -82,6 +82,7 @@ export function PlayerTimelineControls({
   const displayTime = timelinePreview.isDragging ? timelinePreview.time : currentTime;
   const displayProgressPercent = duration ? clamp((displayTime / duration) * 100, 0, 100) : progressPercent;
   const historyGradient = createPlaybackHistoryGradient(history, duration);
+  const historyWaveform = createPlaybackHistoryWaveform(history, duration);
   const previewHistory = getPlaybackHistoryAtTime(history, timelinePreview.time, duration);
   const previewHistoryLabel = previewHistory
     ? `${previewHistory.passes >= 1.5 ? `重复观看约 ${previewHistory.passes.toFixed(1)} 遍` : "已看过"} · 累计 ${formatTime(previewHistory.watchedSeconds)}`
@@ -251,6 +252,13 @@ export function PlayerTimelineControls({
               </button>
             </div>
           </div>
+        ) : null}
+        {historyWaveform ? (
+          <span
+            className="timeline-history-wave"
+            aria-hidden="true"
+            style={{ "--history-waveform": historyWaveform } as CSSProperties}
+          />
         ) : null}
         <input
           ref={timelineRef}

@@ -34,6 +34,25 @@ export function createPlaybackHistoryGradient(history: PlaybackHistory | undefin
   return `linear-gradient(90deg, ${stops.join(", ")})`;
 }
 
+export function createPlaybackHistoryWaveform(history: PlaybackHistory | undefined, duration: number) {
+  if (!history?.buckets.length) return null;
+  const effectiveDuration = duration > 0 ? duration : history.duration;
+  const bucketDuration = effectiveDuration / history.buckets.length;
+  if (bucketDuration <= 0) return null;
+  const heights = [0, 38, 58, 78, 100];
+  const points = ["0% 100%"];
+
+  history.buckets.forEach((watchedSeconds, index) => {
+    const height = heights[getPlaybackHistoryLevel(watchedSeconds, bucketDuration)];
+    const top = 100 - height;
+    const start = (index / history.buckets.length) * 100;
+    const end = ((index + 1) / history.buckets.length) * 100;
+    points.push(`${start}% ${top}%`, `${end}% ${top}%`);
+  });
+  points.push("100% 100%");
+  return `polygon(${points.join(", ")})`;
+}
+
 export function getPlaybackHistoryAtTime(history: PlaybackHistory | undefined, time: number, duration: number) {
   if (!history?.buckets.length || duration <= 0) return null;
   const index = Math.min(history.buckets.length - 1, Math.max(0, Math.floor((time / duration) * history.buckets.length)));
