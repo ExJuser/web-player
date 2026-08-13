@@ -1,183 +1,127 @@
-# Local Web Player
+# Local Web Player（本地 Web 播放器）
 
-Local Web Player is a browser-based local video player built with React, TypeScript, and Vite. It scans videos from a folder selected by the user, plays them directly in the browser, and stores playback progress and preferences in the project data folder.
+一个运行在浏览器里的本地视频播放器与个人媒体管理应用，基于 React 19 + TypeScript + Vite。选择本地文件夹或拖入文件即可扫描并播放视频，播放进度、收藏、标签、评分等数据保存在项目目录下，**视频文件不会上传到任何远程服务器**。
 
-The app is designed for personal local media libraries. It does not upload video files to a remote server.
+除了视频播放，项目还扩展了看图（图片媒体库）、千图成像（马赛克拼图）、演员视图、观看统计、AI 字幕问答、弹幕、精彩混剪、追番匹配等能力，适合个人本地媒体库的整理与观看。
 
-## Features
+## 功能特性
 
-- Select a local folder and scan playable videos.
-- Drag and drop video files or folders into the player.
-- Play common video formats: `.mp4`, `.webm`, `.ogg`, `.mov`, `.m4v`, `.mkv`.
-- Load subtitle files: `.srt`, `.vtt`.
-- Automatically match subtitles by video filename, with support for manually adding subtitles.
-- Save playback progress, completed status, favorites, shortcuts, and preferences.
-- Generate and cache video thumbnails in the browser.
-- Sort playlists by name, path, modified time, or size.
-- Filter and play favorites.
-- Series mode for grouping videos by inferred series title.
-- Playback modes: sequential, single loop, list loop, shuffle, and favorites only.
-- Keyboard shortcut customization.
-- Privacy mode for quickly hiding playback content.
-- Cinema mode, fullscreen, picture-in-picture, volume control, playback speed, seeking, and video rotation.
-- Optional local file deletion when the selected folder grants write permission.
+### 视频播放
 
-## Tech Stack
+- 支持格式：`.mp4` `.webm` `.ogg` `.mov` `.m4v` `.mkv`；字幕 `.srt` / `.vtt`
+- 字幕自动匹配：按影片文件名匹配同目录字幕；同目录 `-translated` 中文字幕自动关联为只读的"中文字幕"系统标签
+- 内嵌字幕提取（需 ffmpeg）：提取容器内文本字幕；PGS / VobSub 等图片字幕仅检测、不做 OCR
+- 播放模式：顺序播放、单集循环、列表循环、随机播放、只看收藏
+- 倍速、音量、静音、画中画、全屏、影院模式、画面旋转、快捷键自定义
+- 播放进度保存与断点续看；隐私模式一键快速隐藏播放内容；浅色 / 深色主题
 
-- React 19
-- TypeScript
-- Vite
-- lucide-react
+### 媒体库与首页
 
-## Requirements
+- 通过 File System Access API 选择本地文件夹（浏览器媒体库），或为媒体库配置服务端可读的本机路径（`localPath`）由本地服务扫描
+- 全局媒体库：多个媒体根合并为一个播放列表、搜索索引、进度、收藏与标签
+- 首页：继续观看（按已保存进度精确取断点帧）、最近观看、收藏 / 稍后看、全局搜索实时浮层、媒体库卡片
+- 媒体模式：追番 / 特殊 / 全部，片库搜索范围为当前模式内的全局搜索
+- 系列模式：按推断剧名分组；追番模式接入 Bangumi 剧集匹配
+- 排序（名称 / 路径 / 修改时间 / 大小）、收藏筛选、播放列表分页
+- 标签系统：手动标签、标签合并与统计、标签探索；评分
+- 重复视频检测（名称相似度 + AI 辅助）
+- 兼容性处理：ffprobe 探测编码 / 容器兼容性；对可安全 remux 的文件（如 H.264 + AAC/MP3 的非友好容器）生成兼容 MP4；HEVC、10-bit、DTS/TrueHD 等需转码的格式只提示、不处理
 
-- Node.js
-- npm
-- A modern browser with local file APIs.
+### AI 与在线能力（本地服务代理）
 
-For the best experience, use a Chromium-based browser such as Chrome or Edge. Folder selection and persistent local folder access depend on the File System Access API, which is not supported equally across all browsers.
+- AI 字幕摘要与字幕问答、无剧透回顾（DeepSeek，流式输出）
+- AI 标签合并建议、重复检测名称相似度辅助
+- 弹幕：Bilibili、巴哈姆特动画疯（通过本机代理抓取并缓存）
+- Bangumi 系列匹配
 
-## Getting Started
+### 创作与处理
 
-Install dependencies:
+- 精彩混剪：播放时标记片段，用 ffmpeg 硬件编码（NVENC / QSV / AMF）或 libx264 生成剪辑视频
+- 持久化媒体处理任务：remux、混剪等后台任务带进度，重启后可继续
+- LADA 马赛克修复：调用本机 lada-cli 修复指定区域（安装路径见 `server/ladaRestoration.mjs`）
+- 缩略图：浏览器端生成 + 服务端 ffmpeg 生成，磁盘缓存 + 内存 LRU
+
+### 看图模式
+
+- 独立于影片媒体库的图片媒体库：可手动添加多个本地文件夹并合并展示，新增目录为追加模式
+- 分页 / 窗口化渲染，避免一次性渲染全部图片；按需创建并回收 blob URL（封面、当前页、可见缩略图）
+- 连续阅读（竖向）：方向键单次滚动当前视口高度的 5%，按住方向键逐帧连续滚动
+- 图片删除：应用内确认弹窗，只用 `queryPermission` 检查权限；无权限时保留媒体库身份并支持逐库重新授权
+- 图片标签、收藏、标记已读 / 重读、搜索、统计
+
+### 千图成像
+
+- 马赛克拼图创作：目标图 + 素材图库生成"千图"作品
+- 局部素材详情：点击小图在旁展开大图，回源原始文件、按原比例完整显示、自动避让视口边缘
+- 旋转 / 缩放 / 高清细节保持一致；已保存作品可重新选择目标图并覆盖保存（不转为新建）
+- 作品持久化；从千图跳转图集阅读页可返回原视图并保留状态
+
+### 演员视图与统计
+
+- 演员视图：解析同目录 NFO（演员名、别名）、演员封面与发现；缩略图统一 800:538 容器
+- 观看活动：观看日历（月度网格）、最近观看统计、观看时长趋势
+- 成长环：把观看记录可视化为"树木年轮"（活跃天数、观看时长、播放次数等）
+- 特殊洞察：特殊媒体模式的播放统计（播放过 / 数量 / 发射 / 活跃度）
+
+## 技术栈
+
+- 前端：React 19、TypeScript、Vite 7、lucide-react、opencc-js（简繁转换）、pinyin-pro（拼音排序 / 搜索）
+- 后端：Node.js 原生 http/https、`node:sqlite`（本地存储）、ffmpeg / ffprobe（可选，子进程调用）
+- 测试：`node --test`
+
+## 环境要求
+
+- Node.js ≥ 22.12（推荐 24；本地存储使用 `node:sqlite`，Node 22.5+ 可用，23.4+ 起无需实验标志）
+- npm（或 pnpm）
+- 现代浏览器：推荐 Chromium 系（Chrome / Edge）。目录选择与持久化目录访问依赖 File System Access API（`showDirectoryPicker`），并非所有浏览器都支持
+- 可选外部依赖：
+  - ffmpeg / ffprobe：内嵌字幕提取、兼容性探测、混剪、服务端缩略图（媒体库需有服务端可读路径）
+  - lada-cli：马赛克修复（本机安装，路径见 `server/ladaRestoration.mjs`）
+
+## 快速开始
 
 ```bash
 npm install
-```
-
-Start the development server:
-
-```bash
 npm run dev
 ```
 
-By default, the app runs on:
+默认地址 `http://127.0.0.1:3001`（端口在 `config/app.json` 的 `server.port` 配置）。
 
-```text
-http://127.0.0.1:3001
-```
+使用步骤：
 
-The port is configured in:
+1. 打开应用，在首页添加媒体库：选择浏览器文件夹，或为已有媒体库配置本机路径（`localPath`）
+2. 等待扫描完成，从播放列表选择视频播放
+3. 可按需加载字幕、启用弹幕、标记混剪片段、查看 AI 摘要等
+4. 看图模式从首页"看图"入口进入，可单独添加图片媒体库
 
-```text
-config/app.json
-```
+## 常用命令
 
-## Available Scripts
+| 命令 | 说明 |
+| --- | --- |
+| `npm run dev` | 启动 Vite 开发服务器（绑定 127.0.0.1，端口见配置） |
+| `npm run build` | `tsc --noEmit` 类型检查 + Vite 生产构建到 `dist/` |
+| `npm run preview` | 本地预览生产构建（本地 API 同样可用） |
+| `npm test` | 运行 `node --test` 单元测试 |
+| `npm run benchmark:large-library` | 大媒体库性能基准 |
 
-```bash
-npm run dev
-```
+## 配置
 
-Starts the Vite development server. The custom dev script reads the port from `config/app.json` and binds to `127.0.0.1`.
+### config/app.json
 
-```bash
-npm run build
-```
-
-Runs TypeScript checking with `tsc --noEmit`, then builds the production assets with Vite.
-
-```bash
-npm run preview
-```
-
-Serves the production build locally through Vite preview, using the configured local port.
-
-## Usage
-
-1. Open the app in a supported browser.
-2. Choose a local folder that contains video files.
-3. Allow folder access when the browser asks for permission.
-4. Select a video from the playlist.
-5. Optionally add matching subtitle files or manually load a subtitle.
-6. Use the playlist tools to sort, filter favorites, enable series mode, or switch playback modes.
-
-The app ignores very small local video files and common non-episode names such as `theme_video` and `trailer`.
-
-## Local Data and Privacy
-
-This app works with local browser APIs and local files:
-
-- Video files are played from the folder or files selected by the user.
-- Video files are not uploaded by this app.
-- Playback progress, favorites, player preferences, volume, folder prompt preferences, and generated thumbnails are saved under `.local-web-player-data/` in this project folder.
-- The selected media folder is not written to for playback progress, favorites, preferences, or thumbnails.
-- Recent folder handles are still stored in the browser's IndexedDB because browsers do not expose a serializable file-system handle format.
-
-The app must be opened through `npm run dev` or `npm run preview` so the local project-data API can write `.local-web-player-data/`. Opening the built HTML directly cannot persist project-folder data.
-
-## Browser Permissions
-
-The app requests read access to scan and play the selected folder. Write access to the media folder is only used for:
-
-- Deleting a local video file when the user confirms deletion.
-- Importing and removing the legacy `.local-web-player-progress.json` file after project-folder data has been saved.
-
-Deletion is only attempted after user confirmation and only when the browser grants the required folder permission.
-
-## Project Structure
-
-```text
-.
-+-- config/
-|   +-- app.json              # Local server configuration
-+-- scripts/
-|   +-- dev-server.mjs        # Vite wrapper that applies local host and port settings
-+-- src/
-|   +-- App.tsx               # Main player application
-|   +-- main.tsx              # React entry point
-|   +-- styles.css            # Application styles
-|   +-- vite-assets.d.ts      # Vite asset type declarations
-+-- index.html
-+-- package.json
-+-- package-lock.json
-+-- tsconfig.json
-+-- vite.config.ts
-```
-
-## Configuration
-
-The development and preview server port is configured in `config/app.json`:
+本地服务端口与媒体根配置（`config/app.json` 已被 git 忽略，属于个人数据）。示例：
 
 ```json
 {
-  "server": {
-    "port": 3001
-  },
-  "media": {
-    "roots": []
-  }
-}
-```
-
-Change `server.port` if port `3001` is already in use.
-
-To enable embedded subtitle extraction, install `ffmpeg` and `ffprobe` on your system path, then add the local media folders that the app is allowed to read from:
-
-```json
-{
-  "server": {
-    "port": 3001
-  },
+  "server": { "port": 3001 },
   "media": {
     "roots": [
-      {
-        "id": "anime",
-        "label": "Anime",
-        "path": "D:\\Media\\Anime"
-      }
+      { "id": "anime", "label": "Anime", "path": "D:\\Media\\Anime" }
     ]
   }
 }
 ```
 
-The home view uses a global media library: every configured media root is scanned into one playlist, search index, progress store, favorites list, and tag store. Local roots and browser roots with `localPath` are scanned automatically by the local dev server. Browser roots without `localPath` stay visible in the media library card as needing access/configuration and are not auto-scanned.
-
-When a video's media root has a server-readable path, the player can use `ffprobe` on the selected video to detect codec/container compatibility, extract embedded text subtitles, and offer a manual compatible MP4 generation action for files that can be remuxed without transcoding. Image subtitle formats such as PGS and VobSub are detected but not OCR'd.
-
-The compatible MP4 action is intentionally limited to safe remux candidates, such as H.264 video with AAC/MP3 audio in a browser-unfriendly container. HEVC, 10-bit video, DTS/TrueHD audio, and other formats that require transcoding are reported with an explanation and are not processed automatically.
-
-Browser-added media libraries keep their browser folder name in `path`. To let the local Vite server use `ffmpeg`/`ffprobe` for that same library, configure its server-readable absolute path in `localPath` or use the in-app “配置本机路径” dialog:
+浏览器添加的媒体库保留浏览器文件夹名在 `path` 中；如需让本地服务使用 ffmpeg / ffprobe，请为其配置服务端可读的 `localPath`（可在应用内"配置本机路径"对话框设置）：
 
 ```json
 {
@@ -189,69 +133,98 @@ Browser-added media libraries keep their browser folder name in `path`. To let t
 }
 ```
 
-Subtitle summaries and Q&A use DeepSeek through the local Vite API proxy. Configure the API key in your shell or `.env.local` before starting the dev server:
+### 环境变量（.env.local）
+
+AI 与联网功能通过本地服务代理调用，密钥只保存在本机环境文件，不会暴露给浏览器。在项目根目录创建 `.env.local`：
 
 ```text
+# AI（字幕摘要 / 问答 / 回顾 / 标签建议 / 重复检测辅助）
 DEEPSEEK_API_KEY=your_api_key
 DEEPSEEK_BASE_URL=https://api.deepseek.com
 DEEPSEEK_MODEL=deepseek-chat
-```
 
-Bangumi matching in series mode uses the local Vite API proxy. Configure these values in your shell or `.env.local` before starting the dev server:
-
-```text
+# Bangumi 追番匹配
 BANGUMI_USER_AGENT=local/bangumi-lens/0.1.0 (https://github.com/local/web-player)
 BANGUMI_ACCESS_TOKEN=your_bangumi_access_token
 BANGUMI_LENS_PROXY=http://127.0.0.1:7897
-```
 
-Keep `BANGUMI_ACCESS_TOKEN` in local environment files only. The app exposes only Bangumi configuration status to the browser, not the token or request headers.
-
-Remote danmaku fetching can reuse the same proxy. You can also use the app-specific alias:
-
-```text
+# 远程抓取通用代理（弹幕等）
 LOCAL_WEB_PLAYER_PROXY=http://127.0.0.1:7897
-```
 
-Bahamut Anime Crazy may require the same browser identity that passed Cloudflare. If danmaku fetching still fails, copy the browser User-Agent and `cf_clearance` cookie from `ani.gamer.com.tw` into local environment variables before starting the server:
-
-```text
+# 巴哈姆特动画疯弹幕（可能需要通过 Cloudflare 的浏览器身份）
 BAHAMUT_USER_AGENT=your_browser_user_agent
 BAHAMUT_COOKIE=cf_clearance=...
 ```
 
-## Build
+> 应用只把"是否已配置"这类状态暴露给浏览器，不会下发 token 或请求头。
 
-Create a production build:
+## 数据存储与隐私
 
-```bash
-npm run build
-```
+- 视频文件只从你选择的文件夹 / 文件播放，**本应用不会上传视频**
+- 播放进度、收藏、标签、评分、偏好、观看活动、缩略图、AI 缓存、千图作品、兼容 MP4 等保存在项目目录 `.local-web-player-data/`：
+  - `web-player.sqlite`：进度、收藏、标签、评分、偏好、观看记录、重复检测、弹幕偏好等（`node:sqlite`）
+  - `thumbnails/`：视频缩略图缓存；`actor-covers/`：演员封面
+  - `ai/`、`bangumi/`、`danmaku/`：AI / Bangumi / 弹幕缓存
+  - `mosaics/`：千图作品；`compatible-media/`：兼容 MP4 产物
+- 不会向所选媒体文件夹写入进度 / 收藏 / 偏好 / 缩略图
+- 最近使用的文件夹句柄存于浏览器 IndexedDB（浏览器不提供可序列化的文件系统句柄格式）
+- 应用必须通过 `npm run dev` / `npm run preview` 启动，本地项目数据 API 才能写入 `.local-web-player-data/`；直接打开构建后的 HTML 无法持久化数据
 
-The generated files are written to `dist/`.
+## 本地 API（server/）
 
-## Git Ignore Notes
+本地服务以 Vite 插件形式实现（`vite.config.ts` 注册 `playerDataApiPlugin`），在 dev / preview 时挂载 `/api/*` 接口，覆盖：媒体库与看图扫描、播放数据读写、媒体探测与兼容 remux、媒体处理任务、精彩混剪、LADA 修复、内嵌字幕、弹幕抓取、AI 摘要 / 问答 / 回顾、Bangumi 匹配、千图作品、缓存状态与清理、缩略图服务等。
 
-The repository ignores local dependency folders, build output, npm cache, logs, and TypeScript build info:
+## 目录结构
 
 ```text
-node_modules/
-dist/
-.local-web-player-data/
-.npm-cache/
-*.log
-*.tsbuildinfo
+.
++-- config/
+|   +-- app.json              # 端口与媒体根配置（git 忽略，个人数据）
+|   +-- app.example.json      # 配置示例
++-- scripts/
+|   +-- dev-server.mjs        # Vite 包装：按配置绑定 127.0.0.1:port
+|   +-- performance-baseline.mjs / large-library-fixtures.mjs   # 大媒体库基准
++-- server/                   # 本地 Node 服务端（.mjs，Vite 插件形式）
+|   +-- playerDataApiPlugin.mjs   # /api/* 本地 API 插件
+|   +-- sqliteStorage.mjs         # SQLite 存储（node:sqlite）
+|   +-- mediaRoots.mjs            # 媒体库 / 看图扫描、NFO 解析
+|   +-- mediaCompatibility.mjs    # ffprobe 探测、兼容 MP4 remux
+|   +-- highlightMontage.mjs      # 精彩混剪（ffmpeg 硬件编码）
+|   +-- ladaRestoration.mjs       # LADA 马赛克修复
+|   +-- videoThumbnailService.mjs # 服务端视频缩略图
+|   +-- embeddedSubtitles.mjs     # 内嵌字幕提取
+|   +-- deepSeekClient.mjs / aiLibraryService.mjs / aiStreamCache.mjs
+|   +-- bangumiClient.mjs / bangumiMatchUtils.mjs
+|   +-- bilibiliDanmaku.mjs / bahamutDanmaku.mjs / remoteFetch.mjs
+|   +-- mosaicStore.mjs / mediaProcessingTask.mjs / cacheStatus.mjs ...
++-- src/                      # 前端（React 19 + TS）
+|   +-- App.tsx               # 主应用：路由、状态编排、控制器挂载
+|   +-- main.tsx / styles.css / responsive.css
+|   +-- playerTypes.ts / playerStorage.ts / playerUiState.ts / playerConstants.ts
+|   +-- useXxxController.ts   # 各功能控制器 hook（弹幕、AI、混剪、看图等）
+|   +-- *Section.tsx / *Dialog.tsx / *Card.tsx   # 各视图与组件
++-- tests/                    # node --test 单元测试（server 模块 + 前端逻辑）
++-- docs/                     # 设计文档与基准报告（含 superpowers specs / plans）
++-- public/                   # 静态资源（favicon 等）
++-- index.html / vite.config.ts / package.json
 ```
 
-Before publishing a fork or modified version, keep secrets such as API keys, tokens, and `.env` files out of Git.
+## 测试
 
-## Known Notes
+```bash
+npm test
+```
 
-- Folder selection depends on browser support for `showDirectoryPicker`.
-- Project-folder persistence depends on running the local Vite/Node service.
-- Some media formats may depend on the browser's built-in codec support.
-- Large folders may take time to scan and generate thumbnails.
+测试位于 `tests/`，覆盖服务端模块（媒体库扫描、sqlite 存储、AI / 弹幕 / 混剪 / LADA、兼容性等）与前端逻辑（播放器状态、标签、缩略图、看图 / 千图运行时等）。
+
+## 注意事项与已知限制
+
+- 目录选择依赖浏览器对 `showDirectoryPicker` 的支持；浏览器媒体库授权失效时需要重新授权（看图模式支持逐库重新授权）
+- 某些媒体格式可能取决于浏览器内置编解码器；无法直接播放时可用兼容 MP4 生成（仅限可安全 remux 的文件）
+- 大文件夹扫描与缩略图生成可能较慢；扫描结果与缩略图均有缓存
+- 弹幕抓取可能受目标站点风控影响；失败时按提示配置代理或浏览器身份（cf_clearance）
+- `node:sqlite` 需要较新 Node 版本；AI / Bangumi 功能需要配置对应密钥
 
 ## License
 
-No license file is currently included. Add a license before publishing the project if you want others to use, modify, or redistribute it under clear terms.
+暂未包含 License 文件。发布前请补充许可证。
