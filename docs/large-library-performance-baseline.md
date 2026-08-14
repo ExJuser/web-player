@@ -104,6 +104,7 @@ node scripts/benchmark-search-chain.mjs      # 搜索链路（含演员元数据
 node scripts/benchmark-thumbnail-warmup.mjs  # 缩略图预热封顶
 node scripts/benchmark-config-read.mjs       # config mtime 缓存
 node scripts/benchmark-route-dispatch.mjs    # API 路由正则惰性匹配
+node scripts/benchmark-home-cards.mjs        # 首页卡片候选优先（进度保存重算）
 ```
 
 ### 仍搁置的高价值项

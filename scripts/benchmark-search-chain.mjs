@@ -36,6 +36,15 @@ function measure(label, fn) {
   return result;
 }
 
+// 返回耗时（毫秒）而非结果对象，供后续百分比计算。
+function measureTimed(label, fn) {
+  const startedAt = performance.now();
+  fn();
+  const elapsedMs = performance.now() - startedAt;
+  console.log(`${label.padEnd(58)} ${elapsedMs.toFixed(1)} ms`);
+  return elapsedMs;
+}
+
 console.log(`视频规模: ${COUNT}`);
 console.log("-".repeat(72));
 const aliasIndex = actorUtils.createActorAliasIndex(actorProfiles);
@@ -76,14 +85,14 @@ measure("playlistSearchRecords（含 inferSeriesTitle + 标签过滤）", () => 
 // 逐视频缓存解析器：冷/暖两遍
 const resolver = actorUtils.createVideoActorMetadataResolver();
 const versionKey = "1";
-const cold = measure("缓存解析器冷构建（全量 20k）", () => {
+const cold = measureTimed("缓存解析器冷构建（全量 20k）", () => {
   const out = {};
   for (const video of videos) {
     out[video.id] = resolver({ video, profiles: actorProfiles, tagDefinitions: actorTagDefinitions, overrides: videoActorOverrides, tags: videoTags[video.id] ?? [], versionKey });
   }
   return out;
 });
-const warm = measure("缓存解析器暖遍历（依赖变化重跑）", () => {
+const warm = measureTimed("缓存解析器暖遍历（依赖变化重跑）", () => {
   const out = {};
   for (const video of videos) {
     out[video.id] = resolver({ video, profiles: actorProfiles, tagDefinitions: actorTagDefinitions, overrides: videoActorOverrides, tags: videoTags[video.id] ?? [], versionKey });
