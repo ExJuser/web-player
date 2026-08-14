@@ -97,3 +97,27 @@ test("stops selecting artwork when thumbnail loading is aborted", async () => {
   await assert.rejects(selection, (error) => error?.name === "AbortError");
   assert.equal(readCount, 1);
 });
+
+test("caches artwork size per file object across lookups", async () => {
+  const originalCreateObjectUrl = URL.createObjectURL;
+  URL.createObjectURL = (file) => `blob:${file.name}`;
+  try {
+    const posterFile = { name: "poster.jpg", size: 1, lastModified: 1 };
+    let readCount = 0;
+    const video = { posterFile };
+    const readSize = async () => {
+      readCount += 1;
+      return { width: 1600, height: 900 };
+    };
+
+    const first = await thumbnail.selectVideoArtworkThumbnail(video, readSize);
+    const second = await thumbnail.selectVideoArtworkThumbnail(video, readSize);
+
+    assert.equal(first, "blob:poster.jpg");
+    assert.equal(second, "blob:poster.jpg");
+    // 同一 File 对象的尺寸只解码一次
+    assert.equal(readCount, 1);
+  } finally {
+    URL.createObjectURL = originalCreateObjectUrl;
+  }
+});

@@ -132,6 +132,10 @@ function withAbort<T>(promise: Promise<T>, signal?: AbortSignal) {
   });
 }
 
+// 会话级海报尺寸缓存：同一 File 对象只解码一次尺寸。
+// 播放列表/标准缩略图等多个 variant 对同一海报重复解码时命中缓存，避免重复 Image 加载。
+const artworkSizeByFile = new WeakMap<File, ArtworkSize>();
+
 export async function selectVideoArtworkThumbnail(
   video: VideoItem,
   readSize: ArtworkSizeReader = readArtworkSize,
@@ -146,15 +150,19 @@ export async function selectVideoArtworkThumbnail(
 
   for (const candidate of candidates) {
     throwIfAborted(signal);
-    const url = candidate.file ? URL.createObjectURL(candidate.file) : candidate.url!;
-    let size: ArtworkSize;
-    try {
-      size = await withAbort(readSize(url), signal);
-    } catch {
-      revokeObjectUrl(url);
-      throwIfAborted(signal);
-      continue;
+    let size = candidate.file ? artworkSizeByFile.get(candidate.file) : undefined;
+    if (!size) {
+      const url = candidate.file ? URL.createObjectURL(candidate.file) : candidate.url!;
+      try {
+        size = await withAbort(readSize(url), signal);
+      } catch {
+        revokeObjectUrl(url);
+        throwIfAborted(signal);
+        continue;
+      }
+      if (candidate.file) artworkSizeByFile.set(candidate.file, size);
     }
+    const url = candidate.file ? URL.createObjectURL(candidate.file) : candidate.url!;
     if (size.width >= size.height) {
       revokeObjectUrl(fallbackUrl);
       return url;
