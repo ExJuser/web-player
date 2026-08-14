@@ -15,13 +15,26 @@ let activeFileOperations = 0;
 const pendingFileOperations = [];
 const ignoredVideoBasenames = new Set(["theme_video", "trailer"]);
 const mediaScanDirectoryCacheVersion = 2;
-const fixedPhotoAlbumsRoot = {
-  id: "photo-albums-local",
-  label: "写真集",
-  path: "I:\\写真集",
-  basename: "写真集",
-  source: "local",
-};
+
+// 看图根从 config.photoAlbums.roots 读取（与影片 media.roots 独立），
+// 不再在源码中硬编码本机绝对路径。
+function photoAlbumsRootsForConfig(config) {
+  const entries = Array.isArray(config?.photoAlbums?.roots) ? config.photoAlbums.roots : [];
+  return entries
+    .map((entry, index) => {
+      const rawPath = typeof entry?.path === "string" ? entry.path.trim() : "";
+      if (!rawPath) return null;
+      const basename = path.basename(rawPath);
+      return {
+        id: typeof entry?.id === "string" && entry.id.trim() ? entry.id.trim() : `photo-albums-${index}`,
+        label: typeof entry?.label === "string" && entry.label.trim() ? entry.label.trim() : basename || "看图",
+        path: rawPath,
+        basename,
+        source: "local",
+      };
+    })
+    .filter(Boolean);
+}
 
 function runWithFileOperationSlot(operation) {
   return new Promise((resolve, reject) => {
@@ -122,7 +135,7 @@ export function normalizeMediaRoots(config) {
 }
 
 function mediaRootsForPathResolution(config) {
-  return [fixedPhotoAlbumsRoot, ...normalizeMediaRoots(config)];
+  return [...photoAlbumsRootsForConfig(config), ...normalizeMediaRoots(config)];
 }
 
 function createMediaRootId(rootPath, existingRoots) {
@@ -594,7 +607,22 @@ async function scanPhotoAlbumsRoot(root) {
 }
 
 export async function scanConfiguredPhotoAlbums(config) {
-  const roots = [fixedPhotoAlbumsRoot];
+  const roots = photoAlbumsRootsForConfig(config);
+  if (!roots.length) {
+    return {
+      roots: [],
+      albums: [],
+      scannedFiles: 0,
+      metadata: {
+        id: "photo-albums",
+        name: "看图",
+        albumCount: 0,
+        scannedFiles: 0,
+        updatedAt: Date.now(),
+        mediaRoots: [],
+      },
+    };
+  }
   const rootsResult = await Promise.all(roots.map((root) => scanPhotoAlbumsRoot(root)));
   const albums = [];
   let scannedFiles = 0;

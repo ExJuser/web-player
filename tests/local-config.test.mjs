@@ -4,7 +4,7 @@ import test from "node:test";
 import { createPublicLocalConfig, defaultAppConfig } from "../server/localConfig.mjs";
 
 test("default app config keeps the local server fallback", () => {
-  assert.deepEqual(defaultAppConfig, { server: { port: 3001 }, media: { roots: [] } });
+  assert.deepEqual(defaultAppConfig, { server: { port: 3001 }, media: { roots: [] }, photoAlbums: { roots: [] } });
 });
 
 test("public local config exposes safe media roots and service status", () => {

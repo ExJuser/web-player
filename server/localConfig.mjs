@@ -1,6 +1,6 @@
 import { normalizeMediaRoots } from "./mediaRoots.mjs";
 
-export const defaultAppConfig = { server: { port: 3001 }, media: { roots: [] } };
+export const defaultAppConfig = { server: { port: 3001 }, media: { roots: [] }, photoAlbums: { roots: [] } };
 
 export function createPublicLocalConfig(config, tools, env = {}, ladaAvailable = false) {
   const roots = normalizeMediaRoots(config).map((root) => ({
