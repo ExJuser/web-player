@@ -71,6 +71,36 @@ import { createVideoThumbnailService } from "./videoThumbnailService.mjs";
 import { createThumbnailMemoryCache } from "./thumbnailMemoryCache.mjs";
 import { createMosaicStore } from "./mosaicStore.mjs";
 
+// 参数化路由模式集中在模块顶层：正则只编译一次，且 middleware 中按需惰性匹配
+// （静态路径路由完全不执行正则；参数路由只执行到命中的那一条为止）。
+const routePatterns = {
+  library: /^\/api\/player-data\/libraries\/([^/]+)$/,
+  thumbnailGenerate: /^\/api\/player-data\/thumbnails\/([^/]+)\/generate$/,
+  thumbnail: /^\/api\/player-data\/thumbnails\/([^/]+)$/,
+  actorCover: /^\/api\/player-data\/actor-covers\/([^/]+)$/,
+  mosaicAsset: /^\/api\/mosaics\/([^/]+)\/(target|preview)$/,
+  mosaicProject: /^\/api\/mosaics\/([^/]+)$/,
+  media: /^\/api\/media\/([^/]+)\/(.+)$/,
+  compatibleMedia: /^\/api\/media-compatible\/([a-f0-9]{64})\.mp4$/,
+  progress: /^\/api\/player-data\/progress\/(.+)$/,
+  favorite: /^\/api\/player-data\/favorites\/(.+)$/,
+  tags: /^\/api\/player-data\/tags\/(.+)$/,
+  rating: /^\/api\/player-data\/ratings\/(.+)$/,
+  comment: /^\/api\/player-data\/comments\/(.+)$/,
+  stats: /^\/api\/player-data\/stats\/(.+)$/,
+  highlights: /^\/api\/player-data\/highlights\/(.+)$/,
+  editSegments: /^\/api\/player-data\/edit-segments\/(.+)$/,
+  preference: /^\/api\/player-data\/preferences\/([^/]+)$/,
+  setting: /^\/api\/player-data\/settings\/([^/]+)$/,
+  danmakuSelection: /^\/api\/player-data\/danmaku-selection\/(.+)$/,
+  photoAlbumProgress: /^\/api\/photo-albums\/progress\/(.+)$/,
+  photoAlbumFavorite: /^\/api\/photo-albums\/favorites\/(.+)$/,
+  photoAlbumCover: /^\/api\/photo-albums\/cover\/(.+)$/,
+  photoAlbumTags: /^\/api\/photo-albums\/tags\/(.+)$/,
+  photoAlbumScanImages: /^\/api\/photo-albums\/scan-cache\/albums\/(.+)\/images$/,
+  photoAlbumScanAlbum: /^\/api\/photo-albums\/scan-cache\/albums\/(.+)$/,
+};
+
 let dataRoot;
 let librariesRoot;
 let thumbnailsRoot;
@@ -966,31 +996,16 @@ export function playerDataApiPlugin({ projectRoot, env }) {
     }
 
     const url = new URL(request.url, "http://127.0.0.1");
-    const libraryMatch = url.pathname.match(/^\/api\/player-data\/libraries\/([^/]+)$/);
-    const thumbnailGenerateMatch = url.pathname.match(/^\/api\/player-data\/thumbnails\/([^/]+)\/generate$/);
-    const thumbnailMatch = url.pathname.match(/^\/api\/player-data\/thumbnails\/([^/]+)$/);
-    const actorCoverMatch = url.pathname.match(/^\/api\/player-data\/actor-covers\/([^/]+)$/);
-    const mosaicAssetMatch = url.pathname.match(/^\/api\/mosaics\/([^/]+)\/(target|preview)$/);
-    const mosaicProjectMatch = url.pathname.match(/^\/api\/mosaics\/([^/]+)$/);
-    const mediaMatch = url.pathname.match(/^\/api\/media\/([^/]+)\/(.+)$/);
-    const compatibleMediaMatch = url.pathname.match(/^\/api\/media-compatible\/([a-f0-9]{64})\.mp4$/);
-    const progressMatch = url.pathname.match(/^\/api\/player-data\/progress\/(.+)$/);
-    const favoriteMatch = url.pathname.match(/^\/api\/player-data\/favorites\/(.+)$/);
-    const tagsMatch = url.pathname.match(/^\/api\/player-data\/tags\/(.+)$/);
-    const ratingMatch = url.pathname.match(/^\/api\/player-data\/ratings\/(.+)$/);
-    const commentMatch = url.pathname.match(/^\/api\/player-data\/comments\/(.+)$/);
-    const statsMatch = url.pathname.match(/^\/api\/player-data\/stats\/(.+)$/);
-    const highlightsMatch = url.pathname.match(/^\/api\/player-data\/highlights\/(.+)$/);
-    const editSegmentsMatch = url.pathname.match(/^\/api\/player-data\/edit-segments\/(.+)$/);
-    const preferenceMatch = url.pathname.match(/^\/api\/player-data\/preferences\/([^/]+)$/);
-    const settingMatch = url.pathname.match(/^\/api\/player-data\/settings\/([^/]+)$/);
-    const danmakuSelectionMatch = url.pathname.match(/^\/api\/player-data\/danmaku-selection\/(.+)$/);
-    const photoAlbumProgressMatch = url.pathname.match(/^\/api\/photo-albums\/progress\/(.+)$/);
-    const photoAlbumFavoriteMatch = url.pathname.match(/^\/api\/photo-albums\/favorites\/(.+)$/);
-    const photoAlbumCoverMatch = url.pathname.match(/^\/api\/photo-albums\/cover\/(.+)$/);
-    const photoAlbumTagsMatch = url.pathname.match(/^\/api\/photo-albums\/tags\/(.+)$/);
-    const photoAlbumScanImagesMatch = url.pathname.match(/^\/api\/photo-albums\/scan-cache\/albums\/(.+)\/images$/);
-    const photoAlbumScanAlbumMatch = url.pathname.match(/^\/api\/photo-albums\/scan-cache\/albums\/(.+)$/);
+    // 参数化路由按需惰性匹配：每个分支在需要时才执行一次正则（结果按请求缓存）。
+    const matchResults = new Map();
+    const match = (patternName) => {
+      let result = matchResults.get(patternName);
+      if (result === undefined) {
+        result = url.pathname.match(routePatterns[patternName]);
+        matchResults.set(patternName, result);
+      }
+      return result;
+    };
 
     try {
       const store = await getLocalDataStore();
@@ -1017,6 +1032,7 @@ export function playerDataApiPlugin({ projectRoot, env }) {
         }
       }
 
+      const mosaicAssetMatch = match("mosaicAsset");
       if (mosaicAssetMatch) {
         const projectId = sanitizeStorageId(decodeURIComponent(mosaicAssetMatch[1]));
         const kind = mosaicAssetMatch[2];
@@ -1042,6 +1058,7 @@ export function playerDataApiPlugin({ projectRoot, env }) {
         }
       }
 
+      const mosaicProjectMatch = match("mosaicProject");
       if (mosaicProjectMatch) {
         const projectId = sanitizeStorageId(decodeURIComponent(mosaicProjectMatch[1]));
         if (!projectId) {
@@ -1168,6 +1185,7 @@ export function playerDataApiPlugin({ projectRoot, env }) {
         return;
       }
 
+      const mediaMatch = match("media");
       if (mediaMatch && request.method === "GET") {
         const rootId = decodeURIComponent(mediaMatch[1]);
         const relativePath = mediaMatch[2].split("/").map((segment) => decodeURIComponent(segment)).join("/");
@@ -1176,6 +1194,7 @@ export function playerDataApiPlugin({ projectRoot, env }) {
         return;
       }
 
+      const compatibleMediaMatch = match("compatibleMedia");
       if (compatibleMediaMatch && request.method === "GET") {
         const filePath = resolveCompatibleMediaPath(compatibleMediaRoot, compatibleMediaMatch[1]);
         await sendMediaFile(request, response, filePath);
@@ -1427,6 +1446,7 @@ export function playerDataApiPlugin({ projectRoot, env }) {
         }
       }
 
+      const progressMatch = match("progress");
       if (progressMatch) {
         const videoId = decodeURIComponent(progressMatch[1]);
         if (request.method === "PUT") {
@@ -1442,6 +1462,7 @@ export function playerDataApiPlugin({ projectRoot, env }) {
         }
       }
 
+      const favoriteMatch = match("favorite");
       if (favoriteMatch) {
         const videoId = decodeURIComponent(favoriteMatch[1]);
         if (request.method === "PUT" || request.method === "DELETE") {
@@ -1451,6 +1472,7 @@ export function playerDataApiPlugin({ projectRoot, env }) {
         }
       }
 
+      const tagsMatch = match("tags");
       if (tagsMatch && request.method === "PUT") {
         const videoId = decodeURIComponent(tagsMatch[1]);
         const payload = await parseJsonBody(request);
@@ -1459,6 +1481,7 @@ export function playerDataApiPlugin({ projectRoot, env }) {
         return;
       }
 
+      const ratingMatch = match("rating");
       if (ratingMatch) {
         const videoId = decodeURIComponent(ratingMatch[1]);
         if (request.method === "PUT") {
@@ -1474,6 +1497,7 @@ export function playerDataApiPlugin({ projectRoot, env }) {
         }
       }
 
+      const commentMatch = match("comment");
       if (commentMatch) {
         const videoId = decodeURIComponent(commentMatch[1]);
         if (request.method === "PUT") {
@@ -1496,6 +1520,7 @@ export function playerDataApiPlugin({ projectRoot, env }) {
         return;
       }
 
+      const statsMatch = match("stats");
       if (statsMatch && request.method === "PUT") {
         const videoId = decodeURIComponent(statsMatch[1]);
         const payload = await parseJsonBody(request);
@@ -1511,6 +1536,7 @@ export function playerDataApiPlugin({ projectRoot, env }) {
         return;
       }
 
+      const highlightsMatch = match("highlights");
       if (highlightsMatch && request.method === "PUT") {
         const videoId = decodeURIComponent(highlightsMatch[1]);
         const payload = await parseJsonBody(request);
@@ -1519,6 +1545,7 @@ export function playerDataApiPlugin({ projectRoot, env }) {
         return;
       }
 
+      const editSegmentsMatch = match("editSegments");
       if (editSegmentsMatch && request.method === "PUT") {
         const videoId = decodeURIComponent(editSegmentsMatch[1]);
         const payload = await parseJsonBody(request);
@@ -1527,6 +1554,7 @@ export function playerDataApiPlugin({ projectRoot, env }) {
         return;
       }
 
+      const preferenceMatch = match("preference");
       if (preferenceMatch && request.method === "PUT") {
         const key = decodeURIComponent(preferenceMatch[1]);
         const payload = await parseJsonBody(request);
@@ -1535,6 +1563,7 @@ export function playerDataApiPlugin({ projectRoot, env }) {
         return;
       }
 
+      const settingMatch = match("setting");
       if (settingMatch && request.method === "PUT") {
         const key = decodeURIComponent(settingMatch[1]);
         const payload = await parseJsonBody(request);
@@ -1543,6 +1572,7 @@ export function playerDataApiPlugin({ projectRoot, env }) {
         return;
       }
 
+      const danmakuSelectionMatch = match("danmakuSelection");
       if (danmakuSelectionMatch) {
         const videoId = decodeURIComponent(danmakuSelectionMatch[1]);
         if (request.method === "PUT") {
@@ -1565,6 +1595,7 @@ export function playerDataApiPlugin({ projectRoot, env }) {
         return;
       }
 
+      const photoAlbumProgressMatch = match("photoAlbumProgress");
       if (photoAlbumProgressMatch && request.method === "PUT") {
         const albumId = decodeURIComponent(photoAlbumProgressMatch[1]);
         const payload = await parseJsonBody(request);
@@ -1573,6 +1604,7 @@ export function playerDataApiPlugin({ projectRoot, env }) {
         return;
       }
 
+      const photoAlbumFavoriteMatch = match("photoAlbumFavorite");
       if (photoAlbumFavoriteMatch) {
         const albumId = decodeURIComponent(photoAlbumFavoriteMatch[1]);
         if (request.method === "PUT" || request.method === "DELETE") {
@@ -1582,6 +1614,7 @@ export function playerDataApiPlugin({ projectRoot, env }) {
         }
       }
 
+      const photoAlbumCoverMatch = match("photoAlbumCover");
       if (photoAlbumCoverMatch) {
         const albumId = decodeURIComponent(photoAlbumCoverMatch[1]);
         if (request.method === "PUT") {
@@ -1597,6 +1630,7 @@ export function playerDataApiPlugin({ projectRoot, env }) {
         }
       }
 
+      const photoAlbumTagsMatch = match("photoAlbumTags");
       if (photoAlbumTagsMatch && request.method === "PUT") {
         const albumId = decodeURIComponent(photoAlbumTagsMatch[1]);
         const payload = await parseJsonBody(request);
@@ -1631,6 +1665,7 @@ export function playerDataApiPlugin({ projectRoot, env }) {
         }
       }
 
+      const photoAlbumScanImagesMatch = match("photoAlbumScanImages");
       if (photoAlbumScanImagesMatch && request.method === "GET") {
         const albumId = decodeURIComponent(photoAlbumScanImagesMatch[1]);
         const images = store.loadPhotoAlbumScanCacheImages(albumId);
@@ -1638,6 +1673,7 @@ export function playerDataApiPlugin({ projectRoot, env }) {
         return;
       }
 
+      const photoAlbumScanAlbumMatch = match("photoAlbumScanAlbum");
       if (photoAlbumScanAlbumMatch && request.method === "PUT") {
         const albumId = decodeURIComponent(photoAlbumScanAlbumMatch[1]);
         const payload = await parseJsonBody(request);
@@ -1664,6 +1700,7 @@ export function playerDataApiPlugin({ projectRoot, env }) {
         return;
       }
 
+      const libraryMatch = match("library");
       if (libraryMatch) {
         const libraryId = sanitizeStorageId(decodeURIComponent(libraryMatch[1]));
         if (!libraryId) {
@@ -1686,6 +1723,7 @@ export function playerDataApiPlugin({ projectRoot, env }) {
         }
       }
 
+      const thumbnailGenerateMatch = match("thumbnailGenerate");
       if (thumbnailGenerateMatch && request.method === "POST") {
         const thumbnailId = sanitizeStorageId(decodeURIComponent(thumbnailGenerateMatch[1]));
         if (!thumbnailId) {
@@ -1732,6 +1770,7 @@ export function playerDataApiPlugin({ projectRoot, env }) {
         return;
       }
 
+      const thumbnailMatch = match("thumbnail");
       if (thumbnailMatch) {
         const thumbnailId = sanitizeStorageId(decodeURIComponent(thumbnailMatch[1]));
         if (!thumbnailId) {
@@ -1789,6 +1828,7 @@ export function playerDataApiPlugin({ projectRoot, env }) {
         }
       }
 
+      const actorCoverMatch = match("actorCover");
       if (actorCoverMatch) {
         const coverId = sanitizeStorageId(decodeURIComponent(actorCoverMatch[1]));
         if (!coverId) {
