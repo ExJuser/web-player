@@ -37,6 +37,12 @@ export function useThumbnailQueueController({
   videosRef,
 }: UseThumbnailQueueControllerOptions) {
   const thumbnailLoadRunIdRef = useRef(0);
+  // 滚动状态通过 ref 感知：滚动中挂起加载而不是 abort 重来，
+  // 避免每次滚动开始/停止都重新 fetch/解码全部未就绪缩略图。
+  const isPlaylistScrollingRef = useRef(isPlaylistScrolling);
+  useEffect(() => {
+    isPlaylistScrollingRef.current = isPlaylistScrolling;
+  }, [isPlaylistScrolling]);
 
   useEffect(() => {
     const runId = thumbnailLoadRunIdRef.current + 1;
@@ -46,7 +52,7 @@ export function useThumbnailQueueController({
     const orderedVideoIds = thumbnailQueueVideoIdsKey ? thumbnailQueueVideoIdsKey.split("\n") : [];
     const videoById = new Map(videosRef.current.map((video) => [video.id, video]));
 
-    if (isScanning || isMainVideoLoading || isPlaylistScrolling || !orderedVideoIds.length) {
+    if (isScanning || isMainVideoLoading || !orderedVideoIds.length) {
       return () => {
         isCancelled = true;
         abortController.abort();
@@ -54,6 +60,11 @@ export function useThumbnailQueueController({
     }
 
     const isCurrentRun = () => !isCancelled && thumbnailLoadRunIdRef.current === runId;
+    const waitIfSuspended = async () => {
+      while (!isCancelled && isPlaylistScrollingRef.current) {
+        await new Promise<void>((resolve) => window.setTimeout(resolve, 60));
+      }
+    };
     const commitUpdates = (updates: ThumbnailQueueUpdate[]) => {
       if (!updates.length) return;
       if (!isCurrentRun()) {
@@ -71,6 +82,7 @@ export function useThumbnailQueueController({
 
     const lookupWorker = async (workerIndex: number) => {
       for (let index = workerIndex; index < orderedVideoIds.length; index += thumbnailLookupConcurrency) {
+        await waitIfSuspended();
         if (!isCurrentRun()) return;
         const video = videoById.get(orderedVideoIds[index]);
         if (!video || getThumbnailStatus(video) === "ready") continue;
@@ -110,11 +122,15 @@ export function useThumbnailQueueController({
     };
 
     const loadQueuedThumbnails = async () => {
+      await waitIfSuspended();
+      if (!isCurrentRun()) return;
       await Promise.all(Array.from({ length: Math.min(thumbnailLookupConcurrency, orderedVideoIds.length) }, (_, index) => lookupWorker(index)));
       await commitUpdatesAcrossFrames(lookupUpdates.filter((update): update is ThumbnailQueueUpdate => Boolean(update)));
       if (!isCurrentRun()) return;
       const videos = pendingGeneration.filter((video): video is VideoItem => Boolean(video));
       for (let index = 0; index < videos.length && isCurrentRun(); index += thumbnailGenerationConcurrency) {
+        await waitIfSuspended();
+        if (!isCurrentRun()) break;
         await generateBatch(videos.slice(index, index + thumbnailGenerationConcurrency));
       }
     };
@@ -125,5 +141,5 @@ export function useThumbnailQueueController({
       isCancelled = true;
       abortController.abort();
     };
-  }, [applyVideoThumbnailUpdates, getThumbnailStatus, isMainVideoLoading, isPlaylistScrolling, isScanning, libraryIdRef, thumbnailQueueVideoIdsKey, thumbnailVariant, videosRef]);
+  }, [applyVideoThumbnailUpdates, getThumbnailStatus, isMainVideoLoading, isScanning, libraryIdRef, thumbnailQueueVideoIdsKey, thumbnailVariant, videosRef]);
 }
