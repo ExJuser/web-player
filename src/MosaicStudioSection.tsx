@@ -30,6 +30,7 @@ import type {
   MosaicTileFit,
 } from "./mosaicTypes";
 import type { PhotoAlbum, VideoItem } from "./playerTypes";
+import { playlistThumbnailStore } from "./playlistThumbnailStore";
 import { MosaicViewport } from "./MosaicViewport";
 
 type RuntimeTarget = { ref: MosaicTargetRef; file?: Blob; url: string; persistFile?: boolean };
@@ -59,7 +60,8 @@ function createOriginalPhotoUrl(mediaRootId: string, relativePath: string) {
 
 function createRuntimeSources(videos: VideoItem[], albums: PhotoAlbum[]) {
   const videoSources: MosaicRuntimeSource[] = videos.flatMap((video) => {
-    const url = video.posterUrl || video.thumbnailUrl || video.thumbUrl || "";
+    // 缩略图状态在外部队列 store；进入工作台时同步读取最新值
+    const url = video.posterUrl || playlistThumbnailStore.get(video.id)?.url || video.thumbUrl || "";
     if (!url) return [];
     return [{
       id: `video:${video.id}`,

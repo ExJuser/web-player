@@ -2,6 +2,7 @@ import { useEffect, useMemo, type CSSProperties, type KeyboardEvent } from "reac
 import { Clock3, Film, History, Layers3, Play, Search, Sparkles, TreePine } from "lucide-react";
 
 import type { VideoItem } from "./playerTypes";
+import { useVideoThumbnail } from "./useVideoThumbnail";
 import {
   createOrganicGrowthRingPath,
   sortVideoGrowthRings,
@@ -91,7 +92,8 @@ function GrowthRingArtwork({
   onThumbnailError,
 }: GrowthRingArtworkProps) {
   const geometry = useMemo(() => createLayerGeometry(layers, size), [layers, size]);
-  const imageUrl = ring.video.posterUrl ?? ring.video.thumbnailUrl ?? ring.video.thumbUrl ?? ring.video.fanartUrl;
+  const { url: generatedThumbnailUrl } = useVideoThumbnail(ring.video.id);
+  const imageUrl = ring.video.posterUrl ?? generatedThumbnailUrl ?? ring.video.thumbUrl ?? ring.video.fanartUrl;
   const style = {
     "--growth-ring-hue": 25 + (ring.seed % 22),
     "--growth-ring-cool-hue": 184 + (ring.seed % 24),
@@ -162,7 +164,7 @@ function GrowthRingArtwork({
               draggable={false}
               onError={(event) => {
                 event.currentTarget.style.display = "none";
-                if (imageUrl === ring.video.thumbnailUrl) onThumbnailError(ring.video.id);
+                if (imageUrl === generatedThumbnailUrl) onThumbnailError(ring.video.id);
               }}
             />
           </>

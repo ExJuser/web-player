@@ -4,6 +4,23 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { HomeVideoCard } from "./playerTypes";
 import { matchesTagExplorerSelection, type TagExplorerSelection } from "./tagExplorer";
 import { normalizeTagKey } from "./tagUtils";
+import { useVideoThumbnail } from "./useVideoThumbnail";
+
+function TagExplorerThumbnail({ videoId, progressPercent, onThumbnailError }: {
+  videoId: string;
+  progressPercent: number;
+  onThumbnailError: (videoId: string) => void;
+}) {
+  const { url } = useVideoThumbnail(videoId);
+  return (
+    <span className={`home-tag-explorer-thumbnail ${url ? "has-image" : ""}`} aria-hidden="true">
+      {url ? (
+        <img src={url} alt="" loading="lazy" decoding="async" draggable={false} onError={() => onThumbnailError(videoId)} />
+      ) : <Film size={24} />}
+      {progressPercent > 0 ? <span className="home-tag-explorer-progress" style={{ width: `${progressPercent}%` }} /> : null}
+    </span>
+  );
+}
 
 type HomeTagExplorerDialogProps = {
   initialTagKey: string | null;
@@ -247,12 +264,7 @@ export function HomeTagExplorerDialog({
                   onClick={() => openPlaylist(card.video.id)}
                   title={`播放《${card.video.name}》`}
                 >
-                  <span className={`home-tag-explorer-thumbnail ${card.video.thumbnailUrl ? "has-image" : ""}`} aria-hidden="true">
-                    {card.video.thumbnailUrl ? (
-                      <img src={card.video.thumbnailUrl} alt="" loading="lazy" decoding="async" draggable={false} onError={() => onThumbnailError(card.video.id)} />
-                    ) : <Film size={24} />}
-                    {card.progressPercent > 0 ? <span className="home-tag-explorer-progress" style={{ width: `${card.progressPercent}%` }} /> : null}
-                  </span>
+                  <TagExplorerThumbnail videoId={card.video.id} progressPercent={card.progressPercent} onThumbnailError={onThumbnailError} />
                   <span className="home-tag-explorer-video-copy">
                     <strong>{card.video.name}</strong>
                     <small>

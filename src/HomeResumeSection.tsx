@@ -6,6 +6,7 @@ import { HomeCardThumbnail } from "./HomeVideoCards";
 import { RatingChip, TagChips } from "./MetadataChips";
 import { formatRelativeTime, formatTime } from "./playerFormatUtils";
 import type { HomeVideoCard, VideoItem } from "./playerTypes";
+import { useVideoThumbnail } from "./useVideoThumbnail";
 import { generateResumeVideoThumbnail } from "./videoThumbnail";
 
 type HomeResumeSectionProps = {
@@ -74,6 +75,8 @@ export function HomeResumeSection({
   onThumbnailError,
 }: HomeResumeSectionProps) {
   const [resumeThumbnail, setResumeThumbnail] = useState<ResumeThumbnailState>({ key: null, status: "idle", url: null });
+  const { url: standardThumbnailUrl } = useVideoThumbnail(card?.video.id ?? null);
+  const hasThumbnail = Boolean(standardThumbnailUrl);
   const hasMetadata = Boolean(
     card && (card.actorTags?.length || card.systemTags?.length || card.tags?.length || typeof card.rating === "number" || card.ratingComment?.trim()),
   );
@@ -133,9 +136,6 @@ export function HomeResumeSection({
   const didResumeThumbnailFail = resumeThumbnail.key === resumeThumbnailKey && resumeThumbnail.status === "failed";
   const isResumeThumbnailLoading = Boolean(resumeThumbnailKey) && !isResumeThumbnailReady && !didResumeThumbnailFail;
   const resumeThumbnailUrl = isResumeThumbnailReady ? resumeThumbnail.url : null;
-  const displayedCard = card && resumeThumbnailUrl
-    ? { ...card, video: { ...card.video, thumbnailUrl: resumeThumbnailUrl } }
-    : card;
   const handleDisplayedThumbnailError = (videoId: string) => {
     if (resumeThumbnailUrl) {
       revokeObjectUrl(resumeThumbnailUrl);
@@ -146,7 +146,7 @@ export function HomeResumeSection({
   };
 
   return (
-    <section className={`home-resume-card ${card ? "" : "empty"} ${card?.video.thumbnailUrl ? "has-thumbnail" : ""}`}>
+    <section className={`home-resume-card ${card ? "" : "empty"} ${hasThumbnail ? "has-thumbnail" : ""}`}>
       {card ? (
         <>
           <button
@@ -160,7 +160,7 @@ export function HomeResumeSection({
                 <LoaderCircle size={28} />
               </span>
             ) : (
-              <HomeCardThumbnail card={displayedCard ?? card} onThumbnailError={handleDisplayedThumbnailError} />
+              <HomeCardThumbnail card={card} thumbnailUrlOverride={resumeThumbnailUrl} onThumbnailError={handleDisplayedThumbnailError} />
             )}
             <span className="home-resume-frame-timecode" aria-hidden="true">
               <span>{resumeThumbnailUrl ? "断点" : isResumeThumbnailLoading ? "定位断点" : "预览"}</span>

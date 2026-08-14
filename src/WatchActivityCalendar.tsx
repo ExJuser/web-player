@@ -1,12 +1,36 @@
 import type { CSSProperties } from "react";
 
 import type { HomeVideoCard } from "./playerTypes";
+import { useVideoThumbnail } from "./useVideoThumbnail";
 import type {
   WatchActivityDayInsight,
   WatchActivityMetric,
   WatchActivityMonthGroup,
   WatchActivityTagInsight,
 } from "./watchActivityInsights";
+
+function ActivityDaySlideThumbnail({ card, isActive, onThumbnailError }: {
+  card: HomeVideoCard;
+  isActive: boolean;
+  onThumbnailError: (videoId: string) => void;
+}) {
+  const { url } = useVideoThumbnail(card.video.id);
+  return (
+    <span
+      className={`watch-activity-day-slide ${isActive ? "active" : ""} ${url ? "has-image" : ""}`}
+      key={card.video.id}
+    >
+      {url ? (
+        <img
+          src={url}
+          alt=""
+          draggable={false}
+          onError={() => onThumbnailError(card.video.id)}
+        />
+      ) : null}
+    </span>
+  );
+}
 
 type WatchActivityDayProps = {
   day: WatchActivityDayInsight;
@@ -54,19 +78,7 @@ function WatchActivityDay({
       {carouselCount ? (
         <span className="watch-activity-day-carousel" aria-hidden="true">
           {carouselCards.map((card, index) => (
-            <span
-              className={`watch-activity-day-slide ${index === carouselActiveIndex ? "active" : ""} ${card.video.thumbnailUrl ? "has-image" : ""}`}
-              key={card.video.id}
-            >
-              {card.video.thumbnailUrl ? (
-                <img
-                  src={card.video.thumbnailUrl}
-                  alt=""
-                  draggable={false}
-                  onError={() => onThumbnailError(card.video.id)}
-                />
-              ) : null}
-            </span>
+            <ActivityDaySlideThumbnail card={card} isActive={index === carouselActiveIndex} onThumbnailError={onThumbnailError} />
           ))}
         </span>
       ) : null}

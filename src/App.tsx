@@ -3,7 +3,6 @@ import {
 } from "lucide-react";
 import {
   lazy,
-  startTransition,
   useCallback,
   useDeferredValue,
   useEffect,
@@ -396,7 +395,7 @@ import { PhotoAlbumTagDialog } from "./PhotoAlbumTagDialog";
 import type { PhotoAlbumViewFilter } from "./PhotoAlbumToolbar";
 import { PlaylistPanel } from "./PlaylistPanel";
 import type { PlaylistArchiveTab } from "./PlaylistArchiveTabs";
-import { createPlaylistThumbnailStore } from "./playlistThumbnailStore";
+import { playlistThumbnailStore } from "./playlistThumbnailStore";
 import { PlayerControlBar } from "./PlayerControlBar";
 import { PlayerStage } from "./PlayerStage";
 import { PlayerTopBar } from "./PlayerTopBar";
@@ -455,9 +454,6 @@ export default function App() {
   initialAppRouteRef.current ??= parseAppRoute(window.location.hash);
   const initialAppRoute = initialAppRouteRef.current;
   const appRouteRef = useRef<AppRoute>(initialAppRoute);
-  const playlistThumbnailStoreRef = useRef<ReturnType<typeof createPlaylistThumbnailStore> | null>(null);
-  playlistThumbnailStoreRef.current ??= createPlaylistThumbnailStore();
-  const playlistThumbnailStore = playlistThumbnailStoreRef.current;
   const initialVolumeRef = useRef(readStoredVolume());
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const previewVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -3267,59 +3263,6 @@ export default function App() {
     return () => window.clearTimeout(timer);
   }, [activeView, homeMediaMode, hydrateDeferredPlayerData, libraryId]);
 
-  const setVideoThumbnailState = useCallback((videoId: string, status: VideoItem["thumbnailStatus"], url?: string) => {
-    setVideos((previous) => {
-      let didChange = false;
-      const nextVideos = previous.map((video) => {
-        if (video.id !== videoId) return video;
-        didChange = true;
-        const nextThumbnailUrl = url ?? (status === "failed" || status === "idle" ? undefined : video.thumbnailUrl);
-        if (url && video.thumbnailUrl && video.thumbnailUrl !== url) {
-          revokeObjectUrl(video.thumbnailUrl);
-        } else if (!url && nextThumbnailUrl !== video.thumbnailUrl && video.thumbnailUrl) {
-          revokeObjectUrl(video.thumbnailUrl);
-        }
-        return { ...video, thumbnailStatus: status, thumbnailUrl: nextThumbnailUrl };
-      });
-      if (didChange) videosRef.current = nextVideos;
-      return didChange ? nextVideos : previous;
-    });
-  }, []);
-
-  const applyVideoThumbnailUpdates = useCallback((updates: ThumbnailQueueUpdate[]) => {
-    if (!updates.length) return;
-    if (!isThumbnailDashboardVisible) {
-      playlistThumbnailStore.setMany(updates);
-      return;
-    }
-    const updatesById = new Map(updates.map((update) => [update.videoId, update]));
-    const previousVideos = videosRef.current;
-    let didChange = false;
-    const nextVideos = previousVideos.map((video) => {
-      const update = updatesById.get(video.id);
-      if (!update) return video;
-      didChange = true;
-      const nextThumbnailUrl = update.url ?? (update.status === "failed" || update.status === "idle" ? undefined : video.thumbnailUrl);
-      if (update.url && video.thumbnailUrl && video.thumbnailUrl !== update.url) {
-        revokeObjectUrl(video.thumbnailUrl);
-      } else if (!update.url && nextThumbnailUrl !== video.thumbnailUrl && video.thumbnailUrl) {
-        revokeObjectUrl(video.thumbnailUrl);
-      }
-      const metadata = update.metadata;
-      return {
-        ...video,
-        duration: metadata?.duration && Number.isFinite(metadata.duration) ? metadata.duration : video.duration,
-        width: metadata?.width && metadata.width > 0 ? metadata.width : video.width,
-        height: metadata?.height && metadata.height > 0 ? metadata.height : video.height,
-        thumbnailStatus: update.status,
-        thumbnailUrl: nextThumbnailUrl,
-      };
-    });
-    if (!didChange) return;
-    videosRef.current = nextVideos;
-    startTransition(() => setVideos(nextVideos));
-  }, [isThumbnailDashboardVisible, playlistThumbnailStore]);
-
   const updateVideoMetadata = useCallback(
     (videoId: string, metadata: VideoMetadata) => {
       setVideos((previous) => {
@@ -3347,15 +3290,26 @@ export default function App() {
     [],
   );
 
+  const applyVideoThumbnailUpdates = useCallback((updates: ThumbnailQueueUpdate[]) => {
+    if (!updates.length) return;
+    // 缩略图状态只写外部 store，不再 setVideos：
+    // 每批缩略图提交不再改变 videos 数组引用，避免触发全库过滤/重排（大库单次排序可达数百毫秒）。
+    playlistThumbnailStore.setMany(updates);
+    // 罕见的元数据（时长/分辨率）仍合并进 videos 状态（有变化才触发一次渲染）。
+    updates.forEach((update) => {
+      if (update.metadata) updateVideoMetadata(update.videoId, update.metadata);
+    });
+  }, [updateVideoMetadata]);
+
   const saveActorCoverFromVideo = useCallback(async (actorId: string, video: VideoItem) => {
     setActorCoverPendingAction(`set:${video.id}`);
     try {
-      let thumbnailUrl = video.thumbnailUrl;
+      let thumbnailUrl = playlistThumbnailStore.get(video.id)?.url;
       if (!thumbnailUrl) {
         const loaded = await loadVideoThumbnail(libraryIdRef.current, video);
         thumbnailUrl = loaded.thumbnailUrl;
         if (loaded.metadata) updateVideoMetadata(video.id, loaded.metadata);
-        setVideoThumbnailState(video.id, "ready", thumbnailUrl);
+        playlistThumbnailStore.setMany([{ videoId: video.id, status: "ready", url: thumbnailUrl }]);
       }
       const thumbnailResponse = await fetch(thumbnailUrl);
       if (!thumbnailResponse.ok) throw new Error("无法读取影片缩略图。");
@@ -3367,7 +3321,7 @@ export default function App() {
     } finally {
       setActorCoverPendingAction(null);
     }
-  }, [libraryIdRef, setVideoThumbnailState, updateVideoMetadata]);
+  }, [libraryIdRef, updateVideoMetadata]);
 
   const removeStoredActorCover = useCallback(async (actorId: string) => {
     setActorCoverPendingAction(`remove:${actorId}`);
@@ -3741,6 +3695,8 @@ export default function App() {
 
       revokeObjectUrl(video.thumbnailUrl);
       revokeObjectUrl(video.url);
+      // 同时清除外部缩略图 store 中该视频的条目（setMany 会 revoke 旧 URL）
+      playlistThumbnailStore.setMany([{ videoId: video.id, status: "idle" }]);
 
       videosRef.current = nextVideos;
       progressStoreRef.current = nextProgress;
@@ -5119,10 +5075,8 @@ export default function App() {
   });
 
   const getQueuedThumbnailStatus = useCallback(
-    (video: VideoItem) => isThumbnailDashboardVisible
-      ? video.thumbnailStatus
-      : playlistThumbnailStore.get(video.id)?.status ?? video.thumbnailStatus,
-    [isThumbnailDashboardVisible, playlistThumbnailStore],
+    (video: VideoItem) => playlistThumbnailStore.get(video.id)?.status ?? video.thumbnailStatus,
+    [playlistThumbnailStore],
   );
   const markPlaylistThumbnailFailed = useCallback(
     (videoId: string) => playlistThumbnailStore.setFailed(videoId),
@@ -6344,7 +6298,7 @@ export default function App() {
   const isMosaicExploreSection = specialHomeSection === "creative" && creativeFeature === "mosaic";
   const isGrowthRingsExploreSection = specialHomeSection === "creative"
     && creativeFeature === "rings";
-  const markVideoThumbnailFailed = useCallback((videoId: string) => setVideoThumbnailState(videoId, "failed"), []);
+  const markVideoThumbnailFailed = useCallback((videoId: string) => playlistThumbnailStore.setFailed(videoId), []);
   const updateActorThumbnailVideos = useCallback((videoIds: string[]) => {
     setActorThumbnailVideoIds((currentVideoIds) => currentVideoIds.length === videoIds.length
       && currentVideoIds.every((videoId, index) => videoId === videoIds[index])

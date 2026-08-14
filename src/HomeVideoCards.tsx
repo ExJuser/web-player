@@ -1,20 +1,24 @@
 import { Play } from "lucide-react";
 
 import { RatingChip, TagChips } from "./MetadataChips";
+import { useVideoThumbnail } from "./useVideoThumbnail";
 import type { HomeVideoCard, VideoItem } from "./playerTypes";
 
 type HomeCardThumbnailProps = {
   card: HomeVideoCard;
   fallbackIndex?: number;
+  thumbnailUrlOverride?: string | null;
   onThumbnailError: (videoId: string) => void;
 };
 
-export function HomeCardThumbnail({ card, fallbackIndex, onThumbnailError }: HomeCardThumbnailProps) {
+export function HomeCardThumbnail({ card, fallbackIndex, thumbnailUrlOverride, onThumbnailError }: HomeCardThumbnailProps) {
+  const { url } = useVideoThumbnail(card.video.id);
+  const thumbnailUrl = thumbnailUrlOverride ?? url;
   return (
-    <span className={`home-card-thumbnail ${card.video.thumbnailUrl ? "has-image" : ""}`} aria-hidden="true">
-      {card.video.thumbnailUrl ? (
+    <span className={`home-card-thumbnail ${thumbnailUrl ? "has-image" : ""}`} aria-hidden="true">
+      {thumbnailUrl ? (
         <img
-          src={card.video.thumbnailUrl}
+          src={thumbnailUrl}
           alt=""
           draggable={false}
           onError={() => onThumbnailError(card.video.id)}

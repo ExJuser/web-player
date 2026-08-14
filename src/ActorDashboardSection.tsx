@@ -9,6 +9,7 @@ import { RatingChip, TagChips } from "./MetadataChips";
 import { readActorCover } from "./playerStorage";
 import type { VideoCommentStore, VideoItem, VideoRatingStore, VideoStatsStore, VideoTagStore } from "./playerTypes";
 import { createVideoStatsKey } from "./playerUiState";
+import { useVideoThumbnail } from "./useVideoThumbnail";
 
 const defaultActorPageSize = 12;
 const actorPageSizeOptions = [12, 24, 48, 96] as const;
@@ -98,9 +99,21 @@ type ActorDashboardSectionProps = {
   onActorThumbnailVideosChange: (videoIds: string[]) => void;
 };
 
+function ActorVideoCover({ video, onThumbnailError }: { video: VideoItem; onThumbnailError: (videoId: string) => void }) {
+  const { url } = useVideoThumbnail(video.id);
+  return (
+    <span className={`actor-cover ${url ? "has-image" : ""} ${url && !hasNamedVideoArtwork(video) ? "generated-thumbnail" : ""}`}>
+      {url ? (
+        <img src={url} alt="" decoding="async" loading="lazy" draggable={false} onError={() => onThumbnailError(video.id)} />
+      ) : <Film size={28} />}
+    </span>
+  );
+}
+
 function StoredActorCover({ actorId, actorName, fallbackVideo, libraryId, onAvailabilityChange, onThumbnailError, version }: { actorId: string; actorName: string; fallbackVideo: VideoItem; libraryId: string | null; onAvailabilityChange: (actorId: string, isAvailable: boolean) => void; onThumbnailError: (videoId: string) => void; version: number }) {
   const [coverUrl, setCoverUrl] = useState<string | null>(null);
   const [hasResolvedCover, setHasResolvedCover] = useState(false);
+  const { url: fallbackThumbnailUrl } = useVideoThumbnail(fallbackVideo.id);
 
   useEffect(() => {
     let isCancelled = false;
@@ -126,7 +139,7 @@ function StoredActorCover({ actorId, actorName, fallbackVideo, libraryId, onAvai
     };
   }, [actorId, libraryId, onAvailabilityChange, version]);
 
-  const visibleCoverUrl = coverUrl ?? fallbackVideo.thumbnailUrl;
+  const visibleCoverUrl = coverUrl ?? fallbackThumbnailUrl;
   const isGeneratedThumbnail = Boolean(visibleCoverUrl && !coverUrl && !hasNamedVideoArtwork(fallbackVideo));
   return <span className={`actor-cover ${visibleCoverUrl ? "has-image" : ""} ${isGeneratedThumbnail ? "generated-thumbnail" : ""}`}>{visibleCoverUrl ? <img src={visibleCoverUrl} alt="" decoding="async" loading="lazy" draggable={false} onError={() => {
     if (coverUrl) {
@@ -355,7 +368,7 @@ export function ActorDashboardSection({
             const hasRating = typeof rating === "number" || Boolean(comment?.trim());
             return <article className="actor-video-card" key={video.id}>
               <button type="button" onClick={() => onOpenVideo(video)}>
-                <span className={`actor-cover ${video.thumbnailUrl ? "has-image" : ""} ${video.thumbnailUrl && !hasNamedVideoArtwork(video) ? "generated-thumbnail" : ""}`}>{video.thumbnailUrl ? <img src={video.thumbnailUrl} alt="" decoding="async" loading="lazy" draggable={false} onError={() => onThumbnailError(video.id)} /> : <Film size={28} />}</span>
+                <ActorVideoCover video={video} onThumbnailError={onThumbnailError} />
                 <strong>{video.name}</strong>
                 <span className="actor-video-metadata">
                   <span className="actor-video-rating-tags">
@@ -409,7 +422,7 @@ export function ActorDashboardSection({
             const hasRating = typeof rating === "number" || Boolean(comment?.trim());
             return <article className="actor-video-card actor-unresolved-card" key={video.id}>
               <button type="button" onClick={() => onOpenVideo(video)} title={`播放 ${video.name}`}>
-                <span className={`actor-cover ${video.thumbnailUrl ? "has-image" : ""} ${video.thumbnailUrl && !hasNamedVideoArtwork(video) ? "generated-thumbnail" : ""}`}>{video.thumbnailUrl ? <img src={video.thumbnailUrl} alt="" decoding="async" loading="lazy" draggable={false} onError={() => onThumbnailError(video.id)} /> : <Film size={28} />}</span>
+                <ActorVideoCover video={video} onThumbnailError={onThumbnailError} />
                 <span className="actor-video-copy">
                   <span className="actor-archive-eyebrow">Needs actor</span>
                   <strong>{video.name}</strong>

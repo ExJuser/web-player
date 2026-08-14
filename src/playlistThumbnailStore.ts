@@ -51,4 +51,8 @@ export function createPlaylistThumbnailStore() {
   };
 }
 
+// 模块级单例：缩略图状态全局唯一，组件直接订阅，避免 props 透传。
+// 生命周期由 App 在媒体库切换/卸载时 clear() 管理。
+export const playlistThumbnailStore = createPlaylistThumbnailStore();
+
 export type PlaylistThumbnailStore = ReturnType<typeof createPlaylistThumbnailStore>;
