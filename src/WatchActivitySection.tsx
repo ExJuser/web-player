@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { CalendarDays } from "lucide-react";
 
 import { HomeCardThumbnail } from "./HomeVideoCards";
@@ -16,7 +17,6 @@ import {
 
 type WatchActivitySectionProps = {
   carouselCardsByDate: Map<string, HomeVideoCard[]>;
-  carouselTick: number;
   cards: HomeVideoCard[];
   insights: WatchActivityInsights;
   metric: WatchActivityMetric;
@@ -39,7 +39,6 @@ type WatchActivitySectionProps = {
 
 export function WatchActivitySection({
   carouselCardsByDate,
-  carouselTick,
   cards,
   insights,
   metric,
@@ -59,6 +58,15 @@ export function WatchActivitySection({
   onSelectDate,
   onThumbnailError,
 }: WatchActivitySectionProps) {
+  // 轮播 tick 局部化到本区块：不再驱动 App 整树每 3.2s 重渲染，
+  // 区块挂载（探索概览可见）时自持定时器，卸载即停。
+  const [carouselTick, setCarouselTick] = useState(0);
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setCarouselTick((tick) => tick + 1);
+    }, 3200);
+    return () => window.clearInterval(timer);
+  }, []);
   const selectedMetricLabel = selectedDay
     ? formatMetric(getWatchActivityMetricValue(selectedDay, metric), metric)
     : "暂无记录";

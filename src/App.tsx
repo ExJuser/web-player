@@ -847,7 +847,6 @@ export default function App() {
   const [watchActivityRange, setWatchActivityRange] = useState<WatchActivityRange>(30);
   const [watchActivityMetric, setWatchActivityMetric] = useState<WatchActivityMetric>("watched");
   const [selectedWatchActivityDate, setSelectedWatchActivityDate] = useState<string | null>(null);
-  const [watchActivityCarouselTick, setWatchActivityCarouselTick] = useState(0);
   const [launchEffectKey, setLaunchEffectKey] = useState(0);
   const [isPlaylistSortReversed, setIsPlaylistSortReversed] = useState(
     defaultPlayerPreferences.isPlaylistSortReversed,
@@ -2066,13 +2065,6 @@ export default function App() {
     (activeView === "photos" || activeView === "photoViewer") && !isPrivacyMode && !isCinemaMode && !isFullscreen;
   const isThumbnailDashboardVisible = isHomeViewVisible || isExploreViewVisible;
   const isNonPlayerViewVisible = isHomeViewVisible || isExploreViewVisible || isPhotoAlbumViewVisible;
-  useEffect(() => {
-    if (!isExploreViewVisible || !shouldLoadWatchActivity) return undefined;
-    const timer = window.setInterval(() => {
-      setWatchActivityCarouselTick((tick) => tick + 1);
-    }, 3200);
-    return () => window.clearInterval(timer);
-  }, [isExploreViewVisible, shouldLoadWatchActivity]);
   const firstPlayableHomeCard = playlistVideos[0] ? createHomeVideoCard(playlistVideos[0]) : null;
   const primaryHomeCard = createPrimaryHomeCard(primaryResumeCard, firstPlayableHomeCard);
   const libraryStats = useMemo(
@@ -6767,7 +6759,6 @@ export default function App() {
                   {isRatingFilterEnabled ? (
                     <WatchActivitySection
                       carouselCardsByDate={watchActivityCarouselCardsByDate}
-                      carouselTick={watchActivityCarouselTick}
                       cards={selectedWatchActivityCards}
                       insights={watchActivityInsights}
                       metric={watchActivityMetric}
