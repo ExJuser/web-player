@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ZoomIn, ZoomOut } from "lucide-react";
 
 import {
@@ -34,6 +34,65 @@ type ContinuousViewportAnchor = {
   | { contentX: number; contentY: number }
 );
 
+type PhotoContinuousPageProps = {
+  image: PhotoAlbumImage;
+  imageUrl: string;
+  isNearActive: boolean;
+  pageRefCallback: (node: HTMLDivElement | null, index: number) => void;
+  onContentChange: () => void;
+};
+
+// 单页组件：加载/失败状态页内自持，避免大图集每次图片加载都整树重渲染
+// （页级 setState + memo 只重渲染当前页；zoom 变化不改变页 props，直接跳过）。
+const PhotoContinuousPage = memo(function PhotoContinuousPage({
+  image,
+  imageUrl,
+  isNearActive,
+  pageRefCallback,
+  onContentChange,
+}: PhotoContinuousPageProps) {
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [hasFailed, setHasFailed] = useState(() => hasCachedPhotoDecodeFailure(image));
+  const isLargeFile = isLargePhotoFile(image);
+  return (
+    <div
+      className={`photo-continuous-page ${isLoaded ? "loaded" : "loading"} ${hasFailed ? "failed" : ""}`}
+      data-index={image.index}
+      ref={(node) => pageRefCallback(node, image.index)}
+    >
+      {imageUrl && !hasFailed ? (
+        <img
+          src={imageUrl}
+          alt={image.name}
+          decoding="async"
+          loading={isNearActive ? "eager" : "lazy"}
+          draggable={false}
+          onLoad={() => {
+            setIsLoaded(true);
+            onContentChange();
+          }}
+          onError={() => {
+            cachePhotoDecodeFailure(image);
+            setHasFailed(true);
+            onContentChange();
+          }}
+        />
+      ) : null}
+      {hasFailed ? (
+        <div className="photo-file-error" role="alert">
+          <strong>无法显示图片</strong>
+          <span>{getPhotoDecodeFailureMessage(image)}</span>
+          <small>{image.name}</small>
+        </div>
+      ) : !imageUrl ? (
+        <span>加载中…</span>
+      ) : !isLoaded && isLargeFile ? (
+        <span className="photo-continuous-file-warning">超大文件（{formatPhotoFileSize(image.size)}），加载可能需要较长时间</span>
+      ) : null}
+    </div>
+  );
+});
+
 export function PhotoContinuousReader({
   album,
   currentIndex,
@@ -52,17 +111,13 @@ export function PhotoContinuousReader({
   const viewportAnchorRef = useRef<ContinuousViewportAnchor | null>(null);
   const lastScrollTopRef = useRef(0);
   const scrollDirectionRef = useRef<-1 | 0 | 1>(0);
-  const [loadedImageIds, setLoadedImageIds] = useState<Set<string>>(() => new Set());
-  const [failedImageIds, setFailedImageIds] = useState<Set<string>>(() => new Set(
-    album.images.filter(hasCachedPhotoDecodeFailure).map((image) => image.id),
-  ));
   const [readingProgress, setReadingProgress] = useState(0);
 
   currentIndexRef.current = currentIndex;
   onCurrentImageChangeRef.current = onCurrentImageChange;
   onScrollDirectionChangeRef.current = onScrollDirectionChange;
 
-  const updateReadingProgress = () => {
+  const updateReadingProgress = useCallback(() => {
     const container = containerRef.current;
     if (!container) return;
     const nextDirection = container.scrollTop > lastScrollTopRef.current
@@ -78,7 +133,12 @@ export function PhotoContinuousReader({
     const maxScrollTop = container.scrollHeight - container.clientHeight;
     const nextProgress = maxScrollTop <= 0 ? 100 : Math.round((container.scrollTop / maxScrollTop) * 100);
     setReadingProgress((progress) => progress === nextProgress ? progress : nextProgress);
-  };
+  }, []);
+
+  const registerPageRef = useCallback((node: HTMLDivElement | null, index: number) => {
+    if (node) pageRefs.current.set(index, node);
+    else pageRefs.current.delete(index);
+  }, []);
 
   useLayoutEffect(() => {
     visibleRatiosRef.current.clear();
@@ -86,12 +146,7 @@ export function PhotoContinuousReader({
     const page = pageRefs.current.get(currentIndexRef.current);
     if (container && page) container.scrollTop = page.offsetTop;
     updateReadingProgress();
-  }, [album.id]);
-
-  useEffect(() => {
-    setLoadedImageIds(new Set());
-    setFailedImageIds(new Set(album.images.filter(hasCachedPhotoDecodeFailure).map((image) => image.id)));
-  }, [album]);
+  }, [album.id, updateReadingProgress]);
 
   useEffect(() => () => onScrollDirectionChangeRef.current(0), []);
 
@@ -259,53 +314,16 @@ export function PhotoContinuousReader({
       </div>
       <div className="photo-continuous-reader" ref={containerRef} aria-label="连续竖向阅读" onScroll={updateReadingProgress}>
         <div className="photo-continuous-pages" style={{ width: `${zoom * 100}%`, maxWidth: `${1200 * zoom}px` }}>
-          {album.images.map((image) => {
-            const imageUrl = getImageUrl(image);
-            const isLoaded = loadedImageIds.has(image.id);
-            const hasFailed = failedImageIds.has(image.id);
-            const isLargeFile = isLargePhotoFile(image);
-            return (
-              <div
-                className={`photo-continuous-page ${isLoaded ? "loaded" : "loading"} ${hasFailed ? "failed" : ""}`}
-                data-index={image.index}
-                key={image.id}
-                ref={(node) => {
-                  if (node) pageRefs.current.set(image.index, node);
-                  else pageRefs.current.delete(image.index);
-                }}
-              >
-                {imageUrl && !hasFailed ? (
-                  <img
-                    src={imageUrl}
-                    alt={image.name}
-                    decoding="async"
-                    loading={Math.abs(image.index - currentIndex) <= 2 ? "eager" : "lazy"}
-                    draggable={false}
-                    onLoad={() => {
-                      setLoadedImageIds((ids) => ids.has(image.id) ? ids : new Set(ids).add(image.id));
-                      updateReadingProgress();
-                    }}
-                    onError={() => {
-                      cachePhotoDecodeFailure(image);
-                      setFailedImageIds((ids) => ids.has(image.id) ? ids : new Set(ids).add(image.id));
-                      updateReadingProgress();
-                    }}
-                  />
-                ) : null}
-                {hasFailed ? (
-                  <div className="photo-file-error" role="alert">
-                    <strong>无法显示图片</strong>
-                    <span>{getPhotoDecodeFailureMessage(image)}</span>
-                    <small>{image.name}</small>
-                  </div>
-                ) : !imageUrl ? (
-                  <span>加载中…</span>
-                ) : !isLoaded && isLargeFile ? (
-                  <span className="photo-continuous-file-warning">超大文件（{formatPhotoFileSize(image.size)}），加载可能需要较长时间</span>
-                ) : null}
-              </div>
-            );
-          })}
+          {album.images.map((image) => (
+            <PhotoContinuousPage
+              key={image.id}
+              image={image}
+              imageUrl={getImageUrl(image)}
+              isNearActive={Math.abs(image.index - currentIndex) <= 2}
+              pageRefCallback={registerPageRef}
+              onContentChange={updateReadingProgress}
+            />
+          ))}
         </div>
       </div>
       <div className="photo-continuous-progress" aria-label={`阅读进度 ${readingProgress}%`}>
