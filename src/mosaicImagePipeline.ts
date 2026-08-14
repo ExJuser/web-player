@@ -517,6 +517,10 @@ async function renderMosaicTiles(input: {
   const cellHeight = input.height / render.rows;
   const previewStep = Math.max(1, Math.ceil(entries.length / 8));
   let lastPreviewAt = Number.NEGATIVE_INFINITY;
+  // 进度回调节流：万级素材时每格一次 onProgress 会造成上万次 setState，
+  // 限制为约每 50ms 一次，最后一项保证上报完成。
+  const progressIntervalMs = 50;
+  let lastProgressAt = Number.NEGATIVE_INFINITY;
   const renderConcurrency = 6;
   for (let offset = 0; offset < entries.length; offset += renderConcurrency) {
     if (render.signal?.aborted) throw new DOMException("生成已取消。", "AbortError");
@@ -525,8 +529,11 @@ async function renderMosaicTiles(input: {
       const { cells, lease } = loaded[batchIndex];
       drawMosaicRenderEntry({ context: input.context, lease, cells, columns: render.columns, cellWidth, cellHeight, tileFit: render.tileFit });
       const completed = offset + batchIndex + 1;
-      render.onProgress?.(completed, entries.length);
       const now = performance.now();
+      if (render.onProgress && (completed === entries.length || now - lastProgressAt >= progressIntervalMs)) {
+        render.onProgress(completed, entries.length);
+        lastProgressAt = now;
+      }
       if (shouldCreateMosaicPreview({ hasPreviewHandler: Boolean(render.onPreview), completed, total: entries.length, previewStep, now, lastPreviewAt })) {
         const progressivePreview = await createProgressivePreview({ ...render, canvas: input.canvas, width: input.width, height: input.height, targetBitmap: input.targetBitmap });
         if (render.signal?.aborted) throw new DOMException("生成已取消。", "AbortError");
