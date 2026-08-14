@@ -767,6 +767,46 @@ test("sqlite full save preserves favorite and tag created_at ordering", async ()
   }
 });
 
+test("sqlite view loads only query their view tables", async () => {
+  const context = await createTempStore();
+  try {
+    await context.store.initialize();
+
+    // 空库：视图加载返回视图形状（空字段），全量加载返回 null
+    const emptyDeferred = context.store.loadPlayerDataStore("global", "deferred");
+    assert.equal(Object.hasOwn(emptyDeferred, "videoHighlights"), true);
+    assert.equal(context.store.loadPlayerDataStore("global"), null);
+
+    context.store.savePlayerDataStore("global", {
+      items: { "video-1": { currentTime: 1, duration: 10, completed: false, updatedAt: 1 } },
+      favorites: ["video-1"],
+      videoHighlights: { "video-1": [{ id: "h1", startTime: 1, endTime: 2, updatedAt: 1 }] },
+      embeddedSubtitles: [{ id: "sub1", videoId: "video-1", name: "字幕", relativePath: "a.mkv", format: "vtt" }],
+    });
+
+    const startup = context.store.loadPlayerDataStore("global", "startup");
+    assert.equal(startup.items["video-1"].currentTime, 1);
+    assert.deepEqual(startup.favorites, ["video-1"]);
+    assert.equal(Object.hasOwn(startup, "videoHighlights"), false);
+    assert.equal(Object.hasOwn(startup, "embeddedSubtitles"), false);
+
+    const deferred = context.store.loadPlayerDataStore("global", "deferred");
+    assert.deepEqual(deferred.videoHighlights["video-1"], [{ id: "h1", startTime: 1, endTime: 2, updatedAt: 1 }]);
+    assert.equal(deferred.embeddedSubtitles[0].id, "sub1");
+    assert.equal(Object.hasOwn(deferred, "items"), false);
+    assert.equal(Object.hasOwn(deferred, "favorites"), false);
+
+    // 全量加载仍返回全部字段
+    const full = context.store.loadPlayerDataStore("global");
+    assert.equal(full.items["video-1"].currentTime, 1);
+    assert.equal(full.videoHighlights["video-1"].length, 1);
+    assert.equal(full.embeddedSubtitles.length, 1);
+  } finally {
+    context.store.close();
+    await rm(context.root, { recursive: true, force: true });
+  }
+});
+
 test("sqlite patch only rewrites the patched field tables and preserves favorites order", async () => {
   const context = await createTempStore();
   try {

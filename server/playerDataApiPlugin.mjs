@@ -1352,7 +1352,8 @@ export function playerDataApiPlugin({ projectRoot, env }) {
       if (url.pathname === "/api/player-data/global") {
         if (request.method === "GET") {
           const startedAt = performance.now();
-          const payload = store.loadPlayerDataStore("global");
+          const view = url.searchParams.get("view");
+          const payload = store.loadPlayerDataStore("global", view === "startup" || view === "deferred" ? view : undefined);
           const view = url.searchParams.get("view");
           const responsePayload = view === "startup"
             ? createPlayerStartupData(payload)

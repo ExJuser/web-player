@@ -910,172 +910,221 @@ export class LocalDataSqliteStore {
       .run(libraryId, stringifyJson(normalizeDuplicateDetections(store)), now());
   }
 
-  loadPlayerDataStore(libraryId) {
+  // view 为 "startup" | "deferred" 时只查询对应视图需要的表，
+  // 避免启动阶段每次视图请求都全量加载 21+ 张表后再 JS 裁剪。
+  loadPlayerDataStore(libraryId, view) {
+    const wantsStartup = view !== "deferred";
+    const wantsDeferred = view !== "startup";
     const metadataRow = this.db.prepare("SELECT metadata_json FROM library_metadata WHERE library_id = ?").get(libraryId);
-    const hasData = Boolean(metadataRow)
-      || Boolean(this.db.prepare("SELECT 1 FROM actors WHERE library_id = ? LIMIT 1").get(libraryId))
-      || Boolean(this.db.prepare("SELECT 1 FROM video_actor_overrides WHERE library_id = ? LIMIT 1").get(libraryId))
-      || Boolean(this.db.prepare("SELECT 1 FROM video_progress WHERE library_id = ? LIMIT 1").get(libraryId))
-      || Boolean(this.db.prepare("SELECT 1 FROM video_ratings WHERE library_id = ? LIMIT 1").get(libraryId))
-      || Boolean(this.db.prepare("SELECT 1 FROM watch_activity WHERE library_id = ? LIMIT 1").get(libraryId))
-      || Boolean(this.db.prepare("SELECT 1 FROM video_highlights WHERE library_id = ? LIMIT 1").get(libraryId))
-      || Boolean(this.db.prepare("SELECT 1 FROM video_edit_segments WHERE library_id = ? LIMIT 1").get(libraryId))
-      || Boolean(this.db.prepare("SELECT 1 FROM duplicate_detections WHERE library_id = ? LIMIT 1").get(libraryId))
-      || Boolean(this.db.prepare("SELECT 1 FROM player_preferences WHERE library_id = ? LIMIT 1").get(libraryId));
-    if (!hasData) return null;
 
-    const progress = {};
-    for (const row of allRows(this.db.prepare('SELECT video_id, "current_time", duration, completed, history_json, updated_at FROM video_progress WHERE library_id = ?'), libraryId)) {
-      const history = parseJson(row.history_json, undefined);
-      progress[row.video_id] = {
-        currentTime: row.current_time,
-        duration: row.duration,
-        completed: Boolean(row.completed),
-        updatedAt: row.updated_at,
-        ...(history ? { history } : {}),
-      };
+    // 全量加载保留"是否有数据"门控（无数据返回 null → 404）；
+    // 视图加载始终返回视图形状（空字段即客户端默认值）。
+    if (!view) {
+      const hasData = Boolean(metadataRow)
+        || Boolean(this.db.prepare("SELECT 1 FROM actors WHERE library_id = ? LIMIT 1").get(libraryId))
+        || Boolean(this.db.prepare("SELECT 1 FROM video_actor_overrides WHERE library_id = ? LIMIT 1").get(libraryId))
+        || Boolean(this.db.prepare("SELECT 1 FROM video_progress WHERE library_id = ? LIMIT 1").get(libraryId))
+        || Boolean(this.db.prepare("SELECT 1 FROM video_ratings WHERE library_id = ? LIMIT 1").get(libraryId))
+        || Boolean(this.db.prepare("SELECT 1 FROM watch_activity WHERE library_id = ? LIMIT 1").get(libraryId))
+        || Boolean(this.db.prepare("SELECT 1 FROM video_highlights WHERE library_id = ? LIMIT 1").get(libraryId))
+        || Boolean(this.db.prepare("SELECT 1 FROM video_edit_segments WHERE library_id = ? LIMIT 1").get(libraryId))
+        || Boolean(this.db.prepare("SELECT 1 FROM duplicate_detections WHERE library_id = ? LIMIT 1").get(libraryId))
+        || Boolean(this.db.prepare("SELECT 1 FROM player_preferences WHERE library_id = ? LIMIT 1").get(libraryId));
+      if (!hasData) return null;
     }
 
-    const favorites = allRows(this.db.prepare("SELECT video_id FROM video_favorites WHERE library_id = ? ORDER BY created_at, video_id"), libraryId).map((row) => row.video_id);
+    const progress = {};
+    if (wantsStartup) {
+      for (const row of allRows(this.db.prepare('SELECT video_id, "current_time", duration, completed, history_json, updated_at FROM video_progress WHERE library_id = ?'), libraryId)) {
+        const history = parseJson(row.history_json, undefined);
+        progress[row.video_id] = {
+          currentTime: row.current_time,
+          duration: row.duration,
+          completed: Boolean(row.completed),
+          updatedAt: row.updated_at,
+          ...(history ? { history } : {}),
+        };
+      }
+    }
+
+    const favorites = [];
+    if (wantsStartup) {
+      for (const row of allRows(this.db.prepare("SELECT video_id FROM video_favorites WHERE library_id = ? ORDER BY created_at, video_id"), libraryId)) {
+        favorites.push(row.video_id);
+      }
+    }
 
     const videoTags = {};
-    for (const row of allRows(this.db.prepare("SELECT video_id, tag_label FROM video_tags WHERE library_id = ? ORDER BY created_at, tag_label"), libraryId)) {
-      videoTags[row.video_id] ??= [];
-      videoTags[row.video_id].push(row.tag_label);
+    if (wantsStartup) {
+      for (const row of allRows(this.db.prepare("SELECT video_id, tag_label FROM video_tags WHERE library_id = ? ORDER BY created_at, tag_label"), libraryId)) {
+        videoTags[row.video_id] ??= [];
+        videoTags[row.video_id].push(row.tag_label);
+      }
     }
 
     const actorProfiles = {};
-    for (const row of allRows(this.db.prepare("SELECT actor_id, actor_name, updated_at FROM actors WHERE library_id = ?"), libraryId)) {
-      actorProfiles[row.actor_id] = { id: row.actor_id, name: row.actor_name, aliases: [], updatedAt: row.updated_at };
-    }
-    for (const row of allRows(this.db.prepare("SELECT actor_id, alias_key, alias_label FROM actor_aliases WHERE library_id = ? ORDER BY alias_label"), libraryId)) {
-      if (!actorProfiles[row.actor_id]) continue;
-      actorProfiles[row.actor_id].aliases.push({ key: row.alias_key, label: row.alias_label });
+    if (wantsStartup) {
+      for (const row of allRows(this.db.prepare("SELECT actor_id, actor_name, updated_at FROM actors WHERE library_id = ?"), libraryId)) {
+        actorProfiles[row.actor_id] = { id: row.actor_id, name: row.actor_name, aliases: [], updatedAt: row.updated_at };
+      }
+      for (const row of allRows(this.db.prepare("SELECT actor_id, alias_key, alias_label FROM actor_aliases WHERE library_id = ? ORDER BY alias_label"), libraryId)) {
+        if (!actorProfiles[row.actor_id]) continue;
+        actorProfiles[row.actor_id].aliases.push({ key: row.alias_key, label: row.alias_label });
+      }
     }
 
     const actorTagDefinitions = {};
-    for (const row of allRows(this.db.prepare("SELECT tag_key, tag_label, updated_at FROM actor_tag_definitions WHERE library_id = ?"), libraryId)) {
-      actorTagDefinitions[row.tag_key] = { key: row.tag_key, label: row.tag_label, updatedAt: row.updated_at };
+    if (wantsStartup) {
+      for (const row of allRows(this.db.prepare("SELECT tag_key, tag_label, updated_at FROM actor_tag_definitions WHERE library_id = ?"), libraryId)) {
+        actorTagDefinitions[row.tag_key] = { key: row.tag_key, label: row.tag_label, updatedAt: row.updated_at };
+      }
     }
 
     const videoActorOverrides = {};
-    for (const row of allRows(this.db.prepare("SELECT video_id, updated_at FROM video_actor_overrides WHERE library_id = ?"), libraryId)) {
-      videoActorOverrides[row.video_id] = { actorIds: [], updatedAt: row.updated_at };
-    }
-    for (const row of allRows(this.db.prepare("SELECT video_id, actor_id FROM video_actor_override_members WHERE library_id = ? ORDER BY video_id, position"), libraryId)) {
-      if (videoActorOverrides[row.video_id]) videoActorOverrides[row.video_id].actorIds.push(row.actor_id);
+    if (wantsStartup) {
+      for (const row of allRows(this.db.prepare("SELECT video_id, updated_at FROM video_actor_overrides WHERE library_id = ?"), libraryId)) {
+        videoActorOverrides[row.video_id] = { actorIds: [], updatedAt: row.updated_at };
+      }
+      for (const row of allRows(this.db.prepare("SELECT video_id, actor_id FROM video_actor_override_members WHERE library_id = ? ORDER BY video_id, position"), libraryId)) {
+        if (videoActorOverrides[row.video_id]) videoActorOverrides[row.video_id].actorIds.push(row.actor_id);
+      }
     }
 
     const videoRatings = {};
-    for (const row of allRows(this.db.prepare("SELECT video_id, rating FROM video_ratings WHERE library_id = ?"), libraryId)) {
-      videoRatings[row.video_id] = row.rating;
+    if (wantsStartup) {
+      for (const row of allRows(this.db.prepare("SELECT video_id, rating FROM video_ratings WHERE library_id = ?"), libraryId)) {
+        videoRatings[row.video_id] = row.rating;
+      }
     }
 
     const videoComments = {};
-    for (const row of allRows(this.db.prepare("SELECT video_id, comment_text FROM video_comments WHERE library_id = ?"), libraryId)) {
-      videoComments[row.video_id] = row.comment_text;
+    if (wantsStartup) {
+      for (const row of allRows(this.db.prepare("SELECT video_id, comment_text FROM video_comments WHERE library_id = ?"), libraryId)) {
+        videoComments[row.video_id] = row.comment_text;
+      }
     }
 
     const videoStats = {};
-    for (const row of allRows(this.db.prepare("SELECT * FROM video_stats WHERE library_id = ?"), libraryId)) {
-      videoStats[row.video_id] = {
-        totalPlayedSeconds: row.total_played_seconds,
-        playCount: row.play_count,
-        durationSeconds: row.duration_seconds,
-        emissionCount: row.emission_count,
-        ...(row.last_emission_at ? { lastEmissionAt: row.last_emission_at } : {}),
-        updatedAt: row.updated_at,
-      };
+    if (wantsStartup) {
+      for (const row of allRows(this.db.prepare("SELECT * FROM video_stats WHERE library_id = ?"), libraryId)) {
+        videoStats[row.video_id] = {
+          totalPlayedSeconds: row.total_played_seconds,
+          playCount: row.play_count,
+          durationSeconds: row.duration_seconds,
+          emissionCount: row.emission_count,
+          ...(row.last_emission_at ? { lastEmissionAt: row.last_emission_at } : {}),
+          updatedAt: row.updated_at,
+        };
+      }
     }
 
     const watchActivity = {};
-    for (const row of allRows(this.db.prepare("SELECT * FROM watch_activity WHERE library_id = ?"), libraryId)) {
-      watchActivity[`${row.activity_date}::${row.video_id}`] = {
-        date: row.activity_date,
-        videoId: row.video_id,
-        watchedSeconds: row.watched_seconds,
-        playCount: row.play_count,
-        completedCount: row.completed_count,
-        emissionCount: row.emission_count,
-        updatedAt: row.updated_at,
-      };
+    if (wantsStartup) {
+      for (const row of allRows(this.db.prepare("SELECT * FROM watch_activity WHERE library_id = ?"), libraryId)) {
+        watchActivity[`${row.activity_date}::${row.video_id}`] = {
+          date: row.activity_date,
+          videoId: row.video_id,
+          watchedSeconds: row.watched_seconds,
+          playCount: row.play_count,
+          completedCount: row.completed_count,
+          emissionCount: row.emission_count,
+          updatedAt: row.updated_at,
+        };
+      }
     }
 
     const videoHighlights = {};
-    for (const row of allRows(this.db.prepare("SELECT * FROM video_highlights WHERE library_id = ? ORDER BY video_id, start_time, end_time"), libraryId)) {
-      videoHighlights[row.video_id] ??= [];
-      videoHighlights[row.video_id].push({
-        id: row.highlight_id,
-        startTime: row.start_time,
-        endTime: row.end_time,
-        ...(typeof row.tag_label === "string" && row.tag_label.trim() ? { tag: row.tag_label.trim() } : {}),
-        updatedAt: row.updated_at,
-      });
+    if (wantsDeferred) {
+      for (const row of allRows(this.db.prepare("SELECT * FROM video_highlights WHERE library_id = ? ORDER BY video_id, start_time, end_time"), libraryId)) {
+        videoHighlights[row.video_id] ??= [];
+        videoHighlights[row.video_id].push({
+          id: row.highlight_id,
+          startTime: row.start_time,
+          endTime: row.end_time,
+          ...(typeof row.tag_label === "string" && row.tag_label.trim() ? { tag: row.tag_label.trim() } : {}),
+          updatedAt: row.updated_at,
+        });
+      }
     }
 
     const videoEditSegments = {};
-    for (const row of allRows(this.db.prepare("SELECT * FROM video_edit_segments WHERE library_id = ? ORDER BY video_id, start_time, end_time"), libraryId)) {
-      videoEditSegments[row.video_id] ??= [];
-      videoEditSegments[row.video_id].push({
-        id: row.segment_id,
-        startTime: row.start_time,
-        endTime: row.end_time,
-        updatedAt: row.updated_at,
-      });
+    if (wantsDeferred) {
+      for (const row of allRows(this.db.prepare("SELECT * FROM video_edit_segments WHERE library_id = ? ORDER BY video_id, start_time, end_time"), libraryId)) {
+        videoEditSegments[row.video_id] ??= [];
+        videoEditSegments[row.video_id].push({
+          id: row.segment_id,
+          startTime: row.start_time,
+          endTime: row.end_time,
+          updatedAt: row.updated_at,
+        });
+      }
     }
 
     const tagMergeDecisions = {};
-    for (const row of allRows(this.db.prepare("SELECT * FROM tag_merge_decisions WHERE library_id = ?"), libraryId)) {
-      tagMergeDecisions[row.decision_key] = {
-        from: row.from_label,
-        to: row.to_label,
-        decision: row.decision,
-        updatedAt: row.updated_at,
-      };
+    if (wantsStartup) {
+      for (const row of allRows(this.db.prepare("SELECT * FROM tag_merge_decisions WHERE library_id = ?"), libraryId)) {
+        tagMergeDecisions[row.decision_key] = {
+          from: row.from_label,
+          to: row.to_label,
+          decision: row.decision,
+          updatedAt: row.updated_at,
+        };
+      }
     }
 
-    const embeddedSubtitles = allRows(this.db.prepare("SELECT * FROM embedded_subtitles WHERE library_id = ?"), libraryId).map((row) => ({
-      id: row.subtitle_id,
-      videoId: row.video_id,
-      name: row.name,
-      relativePath: row.relative_path,
-      format: row.format,
-      embeddedTrack: parseJson(row.track_json, null),
-    }));
+    const embeddedSubtitles = [];
+    if (wantsDeferred) {
+      for (const row of allRows(this.db.prepare("SELECT * FROM embedded_subtitles WHERE library_id = ?"), libraryId)) {
+        embeddedSubtitles.push({
+          id: row.subtitle_id,
+          videoId: row.video_id,
+          name: row.name,
+          relativePath: row.relative_path,
+          format: row.format,
+          embeddedTrack: parseJson(row.track_json, null),
+        });
+      }
+    }
 
     const danmakuSelections = {};
-    for (const row of allRows(this.db.prepare("SELECT * FROM danmaku_selections WHERE library_id = ?"), libraryId)) {
-      danmakuSelections[row.video_id] = {
-        sourceId: row.source_id,
-        sourceName: row.source_name,
-        provider: row.provider,
-        updatedAt: row.updated_at,
-      };
+    if (wantsDeferred) {
+      for (const row of allRows(this.db.prepare("SELECT * FROM danmaku_selections WHERE library_id = ?"), libraryId)) {
+        danmakuSelections[row.video_id] = {
+          sourceId: row.source_id,
+          sourceName: row.source_name,
+          provider: row.provider,
+          updatedAt: row.updated_at,
+        };
+      }
     }
 
     return {
       version: playerStoreVersion,
-      items: progress,
-      favorites,
-      videoRatings,
-      videoComments,
-      videoTags,
-      actorProfiles,
-      actorTagDefinitions,
-      videoActorOverrides,
-      videoStats,
-      watchActivity,
-      videoHighlights,
-      videoEditSegments,
-      tagMergeDecisions,
-      embeddedSubtitles,
-      danmakuSelections,
-      danmakuPreferences: parseJson(this.db.prepare("SELECT preferences_json FROM danmaku_preferences WHERE library_id = ?").get(libraryId)?.preferences_json, {}),
-      preferences: parseJson(this.db.prepare("SELECT preferences_json FROM player_preferences WHERE library_id = ?").get(libraryId)?.preferences_json, {}),
-      settings: parseJson(this.db.prepare("SELECT settings_json FROM player_settings WHERE library_id = ?").get(libraryId)?.settings_json, {}),
-      duplicateDetection: null,
-      duplicateDetections: parseJson(this.db.prepare("SELECT detections_json FROM duplicate_detections WHERE library_id = ?").get(libraryId)?.detections_json, {}),
-      metadata: parseJson(metadataRow?.metadata_json, undefined),
+      ...(wantsStartup ? {
+        items: progress,
+        favorites,
+        videoRatings,
+        videoComments,
+        videoTags,
+        actorProfiles,
+        actorTagDefinitions,
+        videoActorOverrides,
+        videoStats,
+        watchActivity,
+        tagMergeDecisions,
+        danmakuPreferences: parseJson(this.db.prepare("SELECT preferences_json FROM danmaku_preferences WHERE library_id = ?").get(libraryId)?.preferences_json, {}),
+        preferences: parseJson(this.db.prepare("SELECT preferences_json FROM player_preferences WHERE library_id = ?").get(libraryId)?.preferences_json, {}),
+        settings: parseJson(this.db.prepare("SELECT settings_json FROM player_settings WHERE library_id = ?").get(libraryId)?.settings_json, {}),
+        metadata: parseJson(metadataRow?.metadata_json, undefined),
+      } : {}),
+      ...(wantsDeferred ? {
+        videoHighlights,
+        videoEditSegments,
+        embeddedSubtitles,
+        danmakuSelections,
+        duplicateDetection: null,
+        duplicateDetections: parseJson(this.db.prepare("SELECT detections_json FROM duplicate_detections WHERE library_id = ?").get(libraryId)?.detections_json, {}),
+      } : {}),
     };
   }
 
