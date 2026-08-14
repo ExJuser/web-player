@@ -220,8 +220,27 @@ async function updateMediaRootLocalPath(payload) {
   return updateMediaRootLocalPathInConfig(appConfigPath, payload);
 }
 
+// config/app.json 按 mtime 缓存：避免每个请求都全量读盘 + JSON.parse。
+// 文件被 upsertMediaRoot/updateMediaRootLocalPath 或外部编辑后 mtime 变化即自动失效。
+// 注意：调用方均只读 config（写方自己重新读盘并写新对象），共享缓存对象是安全的。
+let cachedAppConfig = null; // { mtimeMs, config }
+
 async function loadAppConfig() {
-  return readJsonFile(appConfigPath, defaultAppConfig);
+  try {
+    const fileStat = await stat(appConfigPath);
+    if (cachedAppConfig && cachedAppConfig.mtimeMs === fileStat.mtimeMs) {
+      return cachedAppConfig.config;
+    }
+    const config = await readJsonFile(appConfigPath, defaultAppConfig);
+    cachedAppConfig = { mtimeMs: fileStat.mtimeMs, config };
+    return config;
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      cachedAppConfig = null;
+      return defaultAppConfig;
+    }
+    throw error;
+  }
 }
 
 function findMediaRoot(config, rootId) {
