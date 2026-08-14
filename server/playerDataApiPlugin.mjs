@@ -1060,17 +1060,6 @@ export function playerDataApiPlugin({ projectRoot, env }) {
         return;
       }
 
-      if (url.pathname === "/api/bootstrap" && request.method === "GET") {
-        const playerData = store.loadPlayerDataStore("global");
-        sendJson(response, 200, {
-          theme: playerData?.settings?.theme === "light" ? "light" : "dark",
-          settings: playerData?.settings ?? {},
-          preferences: playerData?.preferences ?? {},
-          metadata: playerData?.metadata ?? null,
-        });
-        return;
-      }
-
       if (url.pathname === "/api/media-roots/scan" && request.method === "GET") {
         sendJson(response, 200, await scanMediaRootsOnce());
         return;

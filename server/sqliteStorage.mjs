@@ -1596,12 +1596,16 @@ export class LocalDataSqliteStore {
   }
 
   loadPhotoAlbumStore() {
-    const hasData = Boolean(this.db.prepare("SELECT 1 FROM photo_album_preferences WHERE scope = 'global' LIMIT 1").get())
-      || Boolean(this.db.prepare("SELECT 1 FROM photo_album_favorites LIMIT 1").get())
-      || Boolean(this.db.prepare("SELECT 1 FROM photo_album_progress LIMIT 1").get())
-      || Boolean(this.db.prepare("SELECT 1 FROM photo_album_cover_preferences LIMIT 1").get())
-      || Boolean(this.db.prepare("SELECT 1 FROM photo_album_tags LIMIT 1").get());
-    if (!hasData) return null;
+    const hasDataRow = this.db.prepare(`
+      SELECT
+        EXISTS(SELECT 1 FROM photo_album_preferences WHERE scope = 'global')
+        OR EXISTS(SELECT 1 FROM photo_album_favorites)
+        OR EXISTS(SELECT 1 FROM photo_album_progress)
+        OR EXISTS(SELECT 1 FROM photo_album_cover_preferences)
+        OR EXISTS(SELECT 1 FROM photo_album_tags)
+      AS has_any
+    `).get();
+    if (!hasDataRow?.has_any) return null;
     const favorites = allRows(this.db.prepare("SELECT album_id FROM photo_album_favorites ORDER BY created_at, album_id")).map((row) => row.album_id);
     const progress = {};
     for (const row of allRows(this.db.prepare("SELECT * FROM photo_album_progress"))) {
