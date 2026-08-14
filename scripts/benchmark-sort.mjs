@@ -45,9 +45,13 @@ const sortStatsMs = measure("getSortedVideos playedDuration（stats 排序）", 
   for (let index = 0; index < COUNT; index += 1) stats[`v${index}`] = { totalPlayedSeconds: index, updatedAt: index };
   mediaUtils.getSortedVideos(videos, "playedDuration", false, stats);
 });
+const firstMs = measure("getFirstSortedVideo name（单遍求首元素）", () => {
+  mediaUtils.getFirstSortedVideo(videos, "name", false, {});
+});
 const batchMs = measure("合并后单次提交（filter+sort）", () => {
   uiState.filterVideosByHomeMediaMode(videos, modeRootIds, "anime");
   mediaUtils.getSortedVideos(videos, "name", false, {});
 });
 console.log("-".repeat(64));
 console.log(`按当前批次(2条/次)提交 25 次合计 ≈ ${(batchMs * 25).toFixed(0)} ms`);
+console.log(`只取首元素时（启动/切库初始选中），全量排序 → 单遍求值节省 ${(sortMs / Math.max(firstMs, 0.01)).toFixed(1)} 倍`);

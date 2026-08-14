@@ -51,6 +51,31 @@ test("sorts playlist entries by stats modes with path fallback", () => {
   );
 });
 
+test("getFirstSortedVideo matches the first element of getSortedVideos without sorting", () => {
+  const videos = [
+    createVideo({ id: "s10", name: "02.mp4", relativePath: "Show/S10/02.mp4", size: 300, lastModified: 30, duration: 100 }),
+    createVideo({ id: "s2", name: "10.mp4", relativePath: "Show/S2/10.mp4", size: 200, lastModified: 20, duration: 100 }),
+    createVideo({ id: "season-cn", name: "01.mp4", relativePath: "Show/第十季/01.mp4", size: 100, lastModified: 10, duration: 100 }),
+    createVideo({ id: "s1", name: "02.mp4", relativePath: "Show/S1/02.mp4", size: 400, lastModified: 40, duration: 100 }),
+  ];
+  const stats = {
+    "02.mp4|300|30": { totalPlayedSeconds: 20, playCount: 1, emissionCount: 4, durationSeconds: 100 },
+    "10.mp4|200|20": { totalPlayedSeconds: 40, playCount: 2, emissionCount: 3, durationSeconds: 100 },
+    "01.mp4|100|10": { totalPlayedSeconds: 10, playCount: 3, emissionCount: 2, durationSeconds: 100 },
+    "02.mp4|400|40": { totalPlayedSeconds: 30, playCount: 4, emissionCount: 1, durationSeconds: 100 },
+  };
+
+  for (const mode of ["path", "name", "size", "modified", "playedDuration", "playCount", "emissionCount", "playIntensity"]) {
+    for (const isReversed of [false, true]) {
+      const expected = mediaUtils.getSortedVideos(videos, mode, isReversed, stats)[0]?.id ?? null;
+      const actual = mediaUtils.getFirstSortedVideo(videos, mode, isReversed, stats)?.id ?? null;
+      assert.equal(actual, expected, `mode=${mode} reversed=${isReversed}`);
+    }
+  }
+
+  assert.equal(mediaUtils.getFirstSortedVideo([], "path", false), null);
+});
+
 test("finds latest resumable video while excluding completed and near-ended progress", () => {
   const videos = [createVideo({ id: "old" }), createVideo({ id: "done" }), createVideo({ id: "near-end" }), createVideo({ id: "latest" })];
   const result = mediaUtils.getLatestResumableVideo(videos, {

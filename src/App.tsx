@@ -219,6 +219,7 @@ import {
 } from "./playerFormatUtils";
 import {
   createEmptyMediaCollection,
+  getFirstSortedVideo,
   getLatestResumableVideo,
   getSortedVideos,
   isResumableProgress,
@@ -3192,13 +3193,13 @@ export default function App() {
     });
     performance.measure("startup:react-state-apply", { start: applyStartedAt, end: performance.now() });
 
-    const sortedVideos = getSortedVideos(
+    const firstVideo = getFirstSortedVideo(
       nextVideos,
       nextDataStore.preferences.playlistSortMode,
       nextDataStore.preferences.isPlaylistSortReversed,
     );
     const resumeTarget = getLatestResumableVideo(nextVideos, nextDataStore.progress);
-    setCurrentVideoId((currentId) => currentId ?? resumeTarget?.video.id ?? sortedVideos[0]?.id ?? null);
+    setCurrentVideoId((currentId) => currentId ?? resumeTarget?.video.id ?? firstVideo?.id ?? null);
     setMessage(`已加载上次媒体库结果：${nextVideos.length} 个视频，未重新扫描磁盘`);
     requestAnimationFrame(() => {
       performance.mark("startup:home-interactive");
@@ -3268,13 +3269,13 @@ export default function App() {
       }).catch(() => undefined);
       await saveCachedMediaRootScan(createCachedMediaRootScan(scan, nextVideos, scan.subtitles)).catch(() => undefined);
 
-      const sortedVideos = getSortedVideos(
+      const firstVideo = getFirstSortedVideo(
         nextVideos,
         nextDataStore.preferences.playlistSortMode,
         nextDataStore.preferences.isPlaylistSortReversed,
       );
       const resumeTarget = getLatestResumableVideo(nextVideos, nextDataStore.progress);
-      setCurrentVideoId((currentId) => currentId ?? resumeTarget?.video.id ?? sortedVideos[0]?.id ?? null);
+      setCurrentVideoId((currentId) => currentId ?? resumeTarget?.video.id ?? firstVideo?.id ?? null);
       requestAnimationFrame(() => {
         performance.mark("startup:home-interactive");
         performance.measure("startup:home-interactive", "startup:scan-start", "startup:home-interactive");
@@ -4986,12 +4987,12 @@ export default function App() {
 
         if (mergedVideos.length) {
           const resumeTarget = getLatestResumableVideo(media.videos, nextDataStore.progress);
-          const sortedVideos = getSortedVideos(
+          const firstVideo = getFirstSortedVideo(
             mergedVideos,
             nextDataStore.preferences.playlistSortMode,
             nextDataStore.preferences.isPlaylistSortReversed,
           );
-          setCurrentVideoId((currentId) => currentId ?? resumeTarget?.video.id ?? sortedVideos[0]?.id ?? null);
+          setCurrentVideoId((currentId) => currentId ?? resumeTarget?.video.id ?? firstVideo?.id ?? null);
         }
         setMessage(
           media.videos.length
@@ -5088,7 +5089,7 @@ export default function App() {
       setPlaylistFilter("all");
       setActiveView("home");
       updateAppRoute({ kind: "home" }, { replace: true });
-      setCurrentVideoId(getSortedVideos(media.videos, playlistSortMode, isPlaylistSortReversed)[0]?.id ?? null);
+      setCurrentVideoId(getFirstSortedVideo(media.videos, playlistSortMode, isPlaylistSortReversed)?.id ?? null);
       setMessage(
         media.videos.length
           ? `已加载 ${media.videos.length} 个视频，已过滤 ${media.filteredSmallVideos} 个小文件或特殊命名视频，${messageSuffix}`
