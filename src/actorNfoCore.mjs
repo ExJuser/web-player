@@ -10,8 +10,16 @@ const namedEntities = {
   quot: '"',
 };
 
+// 归一化结果缓存：演员名去重后数量有限，避免大媒体库重复执行 NFKC + 正则归一化。
+const normalizeActorKeyCache = new Map();
+
 export function normalizeActorKey(value) {
-  return String(value ?? "").normalize("NFKC").replace(/\s+/gu, " ").trim().toLowerCase();
+  const raw = String(value ?? "");
+  const cached = normalizeActorKeyCache.get(raw);
+  if (cached !== undefined) return cached;
+  const normalized = raw.normalize("NFKC").replace(/\s+/gu, " ").trim().toLowerCase();
+  normalizeActorKeyCache.set(raw, normalized);
+  return normalized;
 }
 
 export function isUnknownActorName(value) {

@@ -111,3 +111,56 @@ test("media scan cache preserves optional nfo actor hints and accepts old videos
   delete base.videos[0].actorHints;
   assert.equal(storage.parseCachedMediaRootScan(JSON.stringify(base)).videos[0].actorHints, undefined);
 });
+
+test("video actor metadata resolver caches per version and recomputes on version change", () => {
+  const profiles = { actor1: { id: "actor1", name: "演员甲", aliases: [], updatedAt: 1 } };
+  const tagDefinitions = { "演员甲": { key: "演员甲", label: "演员甲", updatedAt: 1 } };
+  const overrides = {};
+  const resolver = actors.createVideoActorMetadataResolver();
+  const target = video("v1", { size: 1, lastModified: 1 });
+
+  const first = resolver({
+    video: target,
+    profiles,
+    tagDefinitions,
+    overrides,
+    tags: ["演员甲"],
+    versionKey: "1",
+  });
+  assert.deepEqual(first.names, ["演员甲"]);
+
+  // 相同版本与输入：命中缓存，返回同一对象引用
+  const second = resolver({
+    video: target,
+    profiles,
+    tagDefinitions,
+    overrides,
+    tags: ["演员甲"],
+    versionKey: "1",
+  });
+  assert.equal(second, first);
+
+  // 标签变化：重新解析
+  const withTagChange = resolver({
+    video: target,
+    profiles,
+    tagDefinitions,
+    overrides,
+    tags: [],
+    versionKey: "1",
+  });
+  assert.deepEqual(withTagChange.names, []);
+  assert.notEqual(withTagChange, first);
+
+  // 版本变化（演员改名）：同一标签通过别名仍解析到该演员，但返回新名字
+  const updatedProfiles = { "演员甲": { id: "演员甲", name: "演员乙", aliases: [{ key: "演员甲", label: "演员甲" }], updatedAt: 2 } };
+  const withVersionChange = resolver({
+    video: target,
+    profiles: updatedProfiles,
+    tagDefinitions,
+    overrides,
+    tags: ["演员甲"],
+    versionKey: "2",
+  });
+  assert.deepEqual(withVersionChange.names, ["演员乙"]);
+});

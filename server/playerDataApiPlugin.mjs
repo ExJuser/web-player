@@ -1354,7 +1354,6 @@ export function playerDataApiPlugin({ projectRoot, env }) {
           const startedAt = performance.now();
           const view = url.searchParams.get("view");
           const payload = store.loadPlayerDataStore("global", view === "startup" || view === "deferred" ? view : undefined);
-          const view = url.searchParams.get("view");
           const responsePayload = view === "startup"
             ? createPlayerStartupData(payload)
             : view === "deferred"

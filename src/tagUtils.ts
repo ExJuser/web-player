@@ -104,12 +104,20 @@ const synonymGroups = [
   ["治愈", "温暖", "暖心"],
 ];
 
+// 归一化结果缓存：标签数量有限（通常几百到几千），Map 缓存避免
+// 大媒体库上对同一标签反复执行 NFKC + 正则归一化（万级视频 × 重复标签可差出数量级）。
+const normalizeTagKeyCache = new Map<string, string>();
+
 export function normalizeTagKey(tag: string) {
-  return tag
+  const cached = normalizeTagKeyCache.get(tag);
+  if (cached !== undefined) return cached;
+  const normalized = tag
     .normalize("NFKC")
     .toLowerCase()
     .replace(/[\s\p{P}\p{S}]+/gu, "")
     .trim();
+  normalizeTagKeyCache.set(tag, normalized);
+  return normalized;
 }
 
 const synonymGroupByTagKey = new Map(

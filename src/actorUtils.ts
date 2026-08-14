@@ -18,6 +18,46 @@ export type ResolvedVideoActors = {
   source: ActorSource | null;
 };
 
+export type VideoActorMetadata = {
+  names: string[];
+  aliases: string[];
+};
+
+/**
+ * 按 videoId 缓存的演员元数据解析器：大媒体库上每次"收藏切换/标签编辑"等都会
+ * 触发全量重算，逐视频缓存（key 含输入版本）后只有真正变化的视频才重新解析。
+ * 返回的 resolver 是状态ful 的，通常在组件内用 ref 持有一份。
+ */
+export function createVideoActorMetadataResolver() {
+  const cache = new Map<string, { key: string; value: VideoActorMetadata }>();
+  return function resolveVideoActorMetadata(input: {
+    video: VideoItem;
+    profiles: ActorProfileStore;
+    tagDefinitions: ActorTagDefinitionStore;
+    overrides: VideoActorOverrideStore;
+    tags: string[];
+    versionKey: string;
+  }): VideoActorMetadata {
+    const key = `${input.video.id}\u0000${input.versionKey}\u0000${input.tags.join("\u0000")}`;
+    const cached = cache.get(input.video.id);
+    if (cached && cached.key === key) return cached.value;
+    const resolved = resolveVideoActors({
+      video: input.video,
+      profiles: input.profiles,
+      videoTags: { [input.video.id]: input.tags },
+      actorTagDefinitions: input.tagDefinitions,
+      videoActorOverrides: input.overrides,
+    });
+    const profiles = resolved.actorIds.flatMap((actorId) => input.profiles[actorId] ? [input.profiles[actorId]] : []);
+    const value: VideoActorMetadata = {
+      names: profiles.map((profile) => profile.name),
+      aliases: profiles.flatMap((profile) => profile.aliases.map((alias) => alias.label)),
+    };
+    cache.set(input.video.id, { key, value });
+    return value;
+  };
+}
+
 export type ActorVideoEntry = {
   video: VideoItem;
   source: ActorSource;
