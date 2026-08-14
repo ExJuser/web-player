@@ -329,7 +329,9 @@ export async function scanMediaRoot(root, options = {}) {
       const cachedSubtitles = Array.isArray(cachedDirectory.subtitles) ? cachedDirectory.subtitles : [];
       videos.push(...cachedVideos);
       subtitles.push(...cachedSubtitles);
-      scannedFiles += Number(cachedDirectory.scannedFiles) || cachedVideos.length + cachedSubtitles.length;
+      // 合法为 0 时也要保留（不能用 || 兜底，否则把空目录算成有视频）
+      const cachedScannedFiles = typeof cachedDirectory.scannedFiles === "number" ? cachedDirectory.scannedFiles : NaN;
+      scannedFiles += Number.isFinite(cachedScannedFiles) ? cachedScannedFiles : cachedVideos.length + cachedSubtitles.length;
       filteredSmallVideos += Number(cachedDirectory.filteredSmallVideos) || 0;
       reusedDirectories += 1;
       const record = { ...cachedDirectory, rootId: root.id, relativeDirectory, fingerprint };
@@ -758,9 +760,17 @@ export async function deleteConfiguredPhotoAlbum(config, rootId, relativePath) {
   if (!albumStat.isDirectory()) throw new Error("Photo album path is not a directory.");
   const entries = await readdir(albumDirectory, { withFileTypes: true });
   const photoEntries = entries.filter((entry) => entry.isFile() && photoExtensions.has(path.extname(entry.name).toLowerCase()));
-  for (const entry of photoEntries) {
-    await rm(path.join(albumDirectory, entry.name), { force: false });
-  }
+  // 文件级有界并发删除，避免大图集逐文件串行 rm
+  const deleteConcurrency = Math.min(8, Math.max(1, photoEntries.length));
+  let nextDeleteIndex = 0;
+  const deleteWorker = async () => {
+    while (nextDeleteIndex < photoEntries.length) {
+      const entry = photoEntries[nextDeleteIndex];
+      nextDeleteIndex += 1;
+      await rm(path.join(albumDirectory, entry.name), { force: false });
+    }
+  };
+  await Promise.all(Array.from({ length: deleteConcurrency }, () => deleteWorker()));
 
   if (albumDirectory === realRoot) {
     return { deletedImages: photoEntries.length, directoryRemoved: false, directoryRetainedReason: "root-directory" };

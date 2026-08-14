@@ -4851,14 +4851,21 @@ export default function App() {
         setActiveView("home");
         updateAppRoute({ kind: "home" });
 
+        // 进度消息节流：批次可能很密集（每 150 视频或 500ms 一批），
+        // 避免每次 setMessage 触发整树重渲染。
+        let lastBatchMessageAt = 0;
         for await (const batch of collectVideos(directory, nextMediaRootId)) {
           media = mergeMediaBatch(media, {
             ...batch,
             videos: batch.videos.map((video) => ({ ...video, mediaRootId: nextMediaRootId ?? undefined })),
           });
-          setMessage(
-            `正在扫描，已找到 ${media.videos.length} 个视频，已过滤 ${media.filteredSmallVideos} 个小文件或特殊命名视频，已检查 ${media.scannedFiles} 个媒体文件`,
-          );
+          const now = Date.now();
+          if (now - lastBatchMessageAt >= 500) {
+            lastBatchMessageAt = now;
+            setMessage(
+              `正在扫描，已找到 ${media.videos.length} 个视频，已过滤 ${media.filteredSmallVideos} 个小文件或特殊命名视频，已检查 ${media.scannedFiles} 个媒体文件`,
+            );
+          }
         }
 
         media = sortMediaCollection(media);
