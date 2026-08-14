@@ -71,6 +71,11 @@ npm run benchmark:large-library
 | R20 | API 路由正则集中 + 惰性匹配 | 静态路由匹配 25 → 0 次；参数路由 25 → 9 次 | `benchmark-route-dispatch.mjs` |
 | R21 | 标签覆盖率统计共享函数 | App 内重复实现消除 | `tests/tag-utils.test.mjs` |
 | R22 | 缩略图/封面字节往返 + ETag 304 测试 | 成功路径回归保护 | `tests/player-data-api-plugin.test.mjs` |
+| R23 | 首页卡片构建纯函数 + 优化记录汇总 | 逻辑外移、测试锁定 | `tests/home-video-card.test.mjs` |
+| R24 | 搜索降级路径文档构建缓存 | Worker 不可用时每键 208ms → 每次激活 1 次 | `src/useLibrarySearch.ts` |
+| R25 | 视频元数据合并 O(1) 早退 | 2 万级整表 map → Map.get（无变化零分配） | `src/App.tsx` |
+| R26 | 首页卡片候选优先构建 | 进度保存重算 22.2 → 4.6 ms（-80%） | `benchmark-home-cards.mjs` |
+| R27 | 观看记录轮播 tick 局部化 | 探索视图重渲染范围：整树 → 单区块 | `src/WatchActivitySection.tsx` |
 
 当前验证基线：`node --test` 568 用例全绿、`tsc --noEmit` 0 错误、`vite build` 通过（首页入口 JS 504 KiB raw / 154.6 KiB gzip，CSS 338.8 KiB raw / 54.1 KiB gzip）。
 
@@ -103,4 +108,11 @@ node scripts/benchmark-route-dispatch.mjs    # API 路由正则惰性匹配
 
 ### 仍搁置的高价值项
 
-- **App.tsx（~7.6k 行）结构拆分**：需先合并约 20 组 ref/state 双镜像为外部 store，且为跨视图状态迁移；当前无浏览器验证手段，判定风险过高，以"纯逻辑外移 + 测试锁定"方式渐进推进（R21 标签统计、R23 首页卡片构建已先行抽离）。
+- **App.tsx（~7.6k 行）结构拆分**：需先合并约 20 组 ref/state 双镜像为外部 store，且为跨视图状态迁移；当前无浏览器验证手段，判定风险过高，以"纯逻辑外移 + 测试锁定 + 状态下沉"方式渐进推进（R21 标签统计、R23 首页卡片、R26 候选优先、R27 tick 下沉均已先行落地）。
+
+## 收尾总结（2026-09）
+
+- 累计 36 个修复提交，全部经 `node --test`（572 用例）、`tsc --noEmit`、`vite build` 验证。
+- 评审 Top 10 问题全部处理完毕：多数已修复并量化（SQLite 增量 17.4×、扫描 6.5×、deferred 视图 -73%、演员元数据 945→12ms、排序首元素 4.8×、进度保存卡片重算 -80%、config -61%、预热启动 0ms 阻塞等），结构性重构（App 拆分、API 路由表化）因无浏览器验证手段而明确搁置并说明理由，未出现未知遗留。
+- 大库预算持续满足：20k 暖搜索 P95 11.4ms（≤100ms）、增量扫描复用缓存、播放时钟不提交首页/探索/看图屏幕、千图素材窗口化有界。
+- 剩余低价值项：#13 连续阅读器预取半径微调（页组件 memo 已把重渲染限制在 ±2 边界页）、#11 createThumbnailTargetTimes 死导出（被测试引用，保留）。

@@ -2067,9 +2067,13 @@ export default function App() {
   const isNonPlayerViewVisible = isHomeViewVisible || isExploreViewVisible || isPhotoAlbumViewVisible;
   const firstPlayableHomeCard = playlistVideos[0] ? createHomeVideoCard(playlistVideos[0]) : null;
   const primaryHomeCard = createPrimaryHomeCard(primaryResumeCard, firstPlayableHomeCard);
+  // 仅首页可见时统计：播放器/看图视图下每次进度保存都会触发 O(20k) 统计重算，属于纯浪费
+  // （统计只被首页 JSX 消费，非首页时返回 null 不会被读取）。
   const libraryStats = useMemo(
-    () => createLibraryStats({ videos: modeFilteredVideos, progressStore, favoriteVideoIds, isResumableProgress }),
-    [favoriteVideoIds, modeFilteredVideos, progressStore],
+    () => (isHomeViewVisible
+      ? createLibraryStats({ videos: modeFilteredVideos, progressStore, favoriteVideoIds, isResumableProgress })
+      : null),
+    [favoriteVideoIds, isHomeViewVisible, modeFilteredVideos, progressStore],
   );
   const homeTagStats = useMemo(() => {
     if (homeMediaMode !== "special") return null;
@@ -6598,7 +6602,8 @@ export default function App() {
           isNonPlayerViewVisible={isNonPlayerViewVisible}
           isPrivacyMode={isPrivacyMode}
           isScanning={isScanning}
-          libraryStats={libraryStats}
+          // 仅首页可见时渲染本分支，此时 libraryStats 必非空（门控依赖 isHomeViewVisible）
+          libraryStats={libraryStats!}
           metadataRows={currentVideoMetadataRows}
           playabilityMessage={currentVideoPlayabilityMessage}
           summaryFallbackText={currentVideoSummaryFallbackText}
@@ -6649,7 +6654,7 @@ export default function App() {
 
               <FavoriteHomeSection
                 cards={favoriteHomeCards}
-                totalCount={libraryStats.favorites}
+                totalCount={libraryStats!.favorites}
                 onOpenAll={openFavoritePlaylist}
                 renderCard={renderHomeListCard}
               />
