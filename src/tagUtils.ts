@@ -1,7 +1,24 @@
-import { pinyin } from "pinyin-pro";
-
 import { getSubtitlePathMatchPriority } from "./playerLibraryUtils";
 import type { RecentVideoTag, SubtitleItem, VideoItem, VideoTagStore } from "./playerTypes";
+
+// pinyin-pro（约 550KB）按需加载：避免进入主包，仅在标签输入需要拼音匹配时
+// 动态 import 并缓存；未加载完成时拼音匹配降级为空（中文/文本匹配不受影响）。
+let cachedPinyin: ((text: string, options?: object) => string) | null = null;
+let pinyinModulePromise: Promise<boolean> | null = null;
+
+export function preloadPinyinSearch(): Promise<boolean> {
+  if (cachedPinyin) return Promise.resolve(true);
+  pinyinModulePromise ??= import("pinyin-pro")
+    .then((mod) => {
+      cachedPinyin = mod.pinyin;
+      return true;
+    })
+    .catch(() => {
+      pinyinModulePromise = null;
+      return false;
+    });
+  return pinyinModulePromise;
+}
 
 export type TagMergeDecision = {
   from: string;
@@ -346,7 +363,9 @@ export function getTagSearchScore(query: string, tags: string[]) {
 }
 
 function createPinyinSearchText(label: string, pattern: "pinyin" | "first") {
-  return normalizeTagKey(pinyin(label, {
+  const pinyinFn = cachedPinyin;
+  if (!pinyinFn) return "";
+  return normalizeTagKey(pinyinFn(label, {
     nonZh: "consecutive",
     pattern,
     separator: "",
@@ -359,6 +378,8 @@ export function createTagSearchIndex(
   allVideoTags: Record<string, string[] | undefined>,
   specialTags: TagInputSuggestion[] = [],
 ): TagSearchIndexEntry[] {
+  // 构建索引时触发拼音模块预加载；调用方在 preloadPinyinSearch 就绪后重建索引。
+  void preloadPinyinSearch();
   const candidatesByKey = new Map<string, TagInputSuggestion>();
   Object.values(allVideoTags).forEach((tags) => {
     const seenVideoTagKeys = new Set<string>();

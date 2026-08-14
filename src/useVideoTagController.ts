@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
+import { useCallback, useEffect, useMemo, useState, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
 
 import type { AiTagMergeSuggestionResponse, TagMergePrompt } from "./appTypes";
 import { fetchLocalJson as fetchJson } from "./localApiClient";
@@ -14,6 +14,7 @@ import {
   getActiveTagInputSegment,
   normalizeTagKey,
   parseTagInput,
+  preloadPinyinSearch,
 } from "./tagUtils";
 
 type UseVideoTagControllerOptions = {
@@ -69,6 +70,17 @@ export function useVideoTagController({
   tagUsageVideoTags,
   videoTagsRef,
 }: UseVideoTagControllerOptions) {
+  const [pinyinReady, setPinyinReady] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    void preloadPinyinSearch().then((ready) => {
+      if (ready && !cancelled) setPinyinReady(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const activeTagInputSegment = useMemo(() => getActiveTagInputSegment(tagInput), [tagInput]);
   const actorSpecialTags = useMemo(() => {
     const seen = new Set<string>();
@@ -84,7 +96,8 @@ export function useVideoTagController({
   }, [actorProfiles]);
   const tagSearchIndex = useMemo(
     () => createTagSearchIndex(videoTags, actorSpecialTags),
-    [actorSpecialTags, videoTags],
+    // pinyinReady 变化时重建索引，让拼音匹配在模块加载完成后生效
+    [actorSpecialTags, pinyinReady, videoTags],
   );
   const tagInputSuggestions = useMemo(() => {
     if (!isTagDialogOpen || !currentVideo || !activeTagInputSegment) return [];

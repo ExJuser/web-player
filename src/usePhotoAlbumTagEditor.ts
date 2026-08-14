@@ -22,6 +22,7 @@ import {
   mergeTags,
   normalizeTagKey,
   parseTagInput,
+  preloadPinyinSearch,
   splitTagsByExistingMatch,
   type TagMergeSuggestion,
 } from "./tagUtils";
@@ -48,6 +49,17 @@ export function usePhotoAlbumTagEditor({
   const [isSuggestionLoading, setIsSuggestionLoading] = useState(false);
   const [mergePrompt, setMergePrompt] = useState<TagMergePrompt | null>(null);
   const [preferencesRevision, setPreferencesRevision] = useState(0);
+  const [pinyinReady, setPinyinReady] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void preloadPinyinSearch().then((ready) => {
+      if (ready && !cancelled) setPinyinReady(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const editorAlbum = useMemo(
     () => photoAlbums.find((album) => album.id === editorAlbumId) ?? null,
@@ -61,7 +73,8 @@ export function usePhotoAlbumTagEditor({
       Object.entries(photoAlbumTagsRef.current).filter(([albumId]) => activeAlbumIds.has(albumId)),
     );
     return createTagSearchIndex(activeAlbumTags);
-  }, [photoAlbums, photoAlbumTagsRef, photoAlbumTagsRef.current]);
+    // pinyinReady 变化时重建索引，让拼音匹配在模块加载完成后生效
+  }, [photoAlbums, photoAlbumTagsRef, photoAlbumTagsRef.current, pinyinReady]);
   const tagInputSuggestions = useMemo(() => editorAlbum && activeInputSegment
     ? createTagInputSuggestions({ query: activeInputSegment, tagIndex: tagSearchIndex, currentTags })
     : [], [activeInputSegment, currentTags, editorAlbum, tagSearchIndex]);

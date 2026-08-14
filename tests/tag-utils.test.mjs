@@ -151,7 +151,9 @@ test("sorts tag input suggestions by match quality, usage, and label", () => {
   );
 });
 
-test("finds Chinese tags by full pinyin, spaced pinyin, and initials", () => {
+test("finds Chinese tags by full pinyin, spaced pinyin, and initials", async () => {
+  // 拼音匹配依赖按需加载的 pinyin-pro，先预加载
+  await tagUtils.preloadPinyinSearch();
   const tagIndex = tagUtils.createTagSearchIndex({
     a: ["黑丝", "黑色", "护士", "AI-字幕"],
     b: ["黑丝"],
@@ -180,7 +182,8 @@ test("finds Chinese tags by full pinyin, spaced pinyin, and initials", () => {
   })[0]?.label, "AI-字幕");
 });
 
-test("includes actor special tags in pinyin suggestions ahead of regular tags", () => {
+test("includes actor special tags in pinyin suggestions ahead of regular tags", async () => {
+  await tagUtils.preloadPinyinSearch();
   const tagIndex = tagUtils.createTagSearchIndex({
     a: ["奶妈"],
   }, [{
