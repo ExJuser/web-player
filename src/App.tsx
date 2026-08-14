@@ -275,6 +275,7 @@ import {
   shouldStartLegacyThumbnailMigration,
 } from "./appConfig";
 import type { PlaybackSourceChoice, TagMergePrompt } from "./appTypes";
+import { createHomeVideoCard as buildHomeVideoCard } from "./homeVideoCard";
 import {
   createPersistedEmbeddedSubtitles,
   createDuplicatePlaylistMetaByVideoId,
@@ -1996,25 +1997,17 @@ export default function App() {
     setPlaylistSearchQuery("");
   }, [tagPlaylistSelection, tagPlaylistVideos.length]);
   const createHomeVideoCard = useCallback(
-    (video: VideoItem): HomeVideoCard => {
-      const progress = progressStore[video.id];
-      const progressDuration = progress?.duration && progress.duration > 0 ? progress.duration : video.duration || 0;
-      const progressPercent = progressDuration
-        ? clamp(((progress?.currentTime ?? 0) / progressDuration) * 100, 0, 100)
-        : 0;
-      return {
-        video,
-        progress,
-        progressPercent,
-        seriesTitle: seriesTitleByVideoId.get(video.id) ?? inferSeriesTitle(video),
-        mediaRootLabel: (video.mediaRootId ? mediaRootLabelsById[video.mediaRootId] : "") || fallbackMediaRootLabelForVideo(video),
-        tags: effectiveVideoTags[video.id] ?? [],
-        actorTags: videoActorTags[video.id] ?? [],
-        systemTags: systemVideoTags[video.id] ?? [],
-        rating: videoRatings[video.id],
-        ratingComment: videoComments[video.id],
-      };
-    },
+    (video: VideoItem): HomeVideoCard =>
+      buildHomeVideoCard(video, {
+        progressStore,
+        seriesTitleByVideoId,
+        mediaRootLabelsById,
+        effectiveVideoTags,
+        videoActorTags,
+        systemVideoTags,
+        videoRatings,
+        videoComments,
+      }),
     [effectiveVideoTags, mediaRootLabelsById, progressStore, seriesTitleByVideoId, systemVideoTags, videoActorTags, videoComments, videoRatings],
   );
   const resumableHomeCards = useMemo(
