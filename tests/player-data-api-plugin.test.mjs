@@ -110,6 +110,17 @@ async function requestJson(middleware, { method = "GET", url, body = null }) {
   return { status: response.statusCode, payload, nextCalled, body: response.getBody() };
 }
 
+// 原始字节请求（缩略图/封面 PUT 使用 readBody 而非 parseJsonBody，不做 JSON 包装）。
+async function requestRaw(middleware, { method = "GET", url, body = null, headers = {} }) {
+  const response = createMockResponse();
+  await middleware(
+    createMockRequest({ method, url, body, headers: { "content-type": "application/octet-stream", ...headers } }),
+    response,
+    () => {},
+  );
+  return { status: response.statusCode, body: response.getBody() };
+}
+
 let fixture;
 
 test.before(async () => {
@@ -243,4 +254,41 @@ test("GET local config reflects external edits through the mtime cache", async (
 test("missing thumbnail file returns 404", async () => {
   const { status } = await requestJson(fixture.middleware, { url: "/api/player-data/thumbnails/root.1.zzzzzz" });
   assert.equal(status, 404);
+});
+
+test("thumbnail PUT then GET round trips bytes and serves ETag 304", async () => {
+  const thumbnailId = "root.1.abcdef";
+  const put = await requestRaw(fixture.middleware, {
+    method: "PUT",
+    url: `/api/player-data/thumbnails/${thumbnailId}`,
+    body: "thumbdata",
+  });
+  assert.equal(put.status, 200);
+
+  const get = await requestRaw(fixture.middleware, { url: `/api/player-data/thumbnails/${thumbnailId}` });
+  assert.equal(get.status, 200);
+  assert.equal(get.body, "thumbdata");
+
+  // 命中 ETag 返回 304
+  const response = createMockResponse();
+  await fixture.middleware(
+    createMockRequest({ method: "GET", url: `/api/player-data/thumbnails/${thumbnailId}`, headers: { "if-none-match": `"${thumbnailId}"` } }),
+    response,
+    () => {},
+  );
+  assert.equal(response.statusCode, 304);
+});
+
+test("actor cover PUT then GET round trips bytes", async () => {
+  const coverId = "actor-cover.1.abcdef";
+  const put = await requestRaw(fixture.middleware, {
+    method: "PUT",
+    url: `/api/player-data/actor-covers/${coverId}`,
+    body: "coverdata",
+  });
+  assert.equal(put.status, 200);
+
+  const get = await requestRaw(fixture.middleware, { url: `/api/player-data/actor-covers/${coverId}` });
+  assert.equal(get.status, 200);
+  assert.equal(get.body, "coverdata");
 });
