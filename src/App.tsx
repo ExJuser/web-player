@@ -1222,34 +1222,48 @@ export default function App() {
     scannedRootIds.forEach((rootId) => delete nextDirectories[rootId]);
 
     try {
-      for (const root of roots) {
-        if (!root.directory || !(await hasDirectoryWritePermission(root.directory))) {
-          if (root.directory) rootsWithoutWriteAccess.add(root.id);
-          nextStatuses.push(createPhotoAlbumLibraryRootStatus(
-            root,
-            [],
-            "needsAccess",
-            "需要重新授权浏览器目录。",
-          ));
-          continue;
+      // 多 root 并行扫描（限 3 路），按 root 原顺序汇总结果；单 root 失败不影响其他
+      const photoRootScanConcurrency = 3;
+      const rootScanResults = new Array<{ scan?: Awaited<ReturnType<typeof collectPhotoAlbumsFromDirectory>>; status: PlayerMediaRootStatus }>(roots.length);
+      let nextRootIndex = 0;
+      const rootScanWorker = async () => {
+        while (nextRootIndex < roots.length) {
+          const index = nextRootIndex;
+          nextRootIndex += 1;
+          const root = roots[index];
+          if (!root.directory || !(await hasDirectoryWritePermission(root.directory))) {
+            if (root.directory) rootsWithoutWriteAccess.add(root.id);
+            rootScanResults[index] = {
+              status: createPhotoAlbumLibraryRootStatus(root, [], "needsAccess", "需要重新授权浏览器目录。"),
+            };
+            continue;
+          }
+          nextDirectories[root.id] = root.directory;
+          try {
+            const scan = await collectPhotoAlbumsFromDirectory(root.directory, {
+              rootId: root.id,
+              rootLabel: root.label,
+            });
+            rootScanResults[index] = {
+              scan,
+              status: createPhotoAlbumLibraryRootStatus(root, scan.albums, "ready"),
+            };
+          } catch (error) {
+            rootScanResults[index] = {
+              status: createPhotoAlbumLibraryRootStatus(
+                root,
+                [],
+                "error",
+                error instanceof Error ? error.message : "扫描看图文件夹失败。",
+              ),
+            };
+          }
         }
-
-        nextDirectories[root.id] = root.directory;
-        try {
-          const scan = await collectPhotoAlbumsFromDirectory(root.directory, {
-            rootId: root.id,
-            rootLabel: root.label,
-          });
-          nextAlbums.push(...scan.albums);
-          nextStatuses.push(createPhotoAlbumLibraryRootStatus(root, scan.albums, "ready"));
-        } catch (error) {
-          nextStatuses.push(createPhotoAlbumLibraryRootStatus(
-            root,
-            [],
-            "error",
-            error instanceof Error ? error.message : "扫描看图文件夹失败。",
-          ));
-        }
+      };
+      await Promise.all(Array.from({ length: Math.min(photoRootScanConcurrency, roots.length) }, () => rootScanWorker()));
+      for (const result of rootScanResults) {
+        if (result.scan) nextAlbums.push(...result.scan.albums);
+        nextStatuses.push(result.status);
       }
 
       nextAlbums.sort((a, b) => b.updatedAt - a.updatedAt || a.title.localeCompare(b.title, "zh-Hans-CN", { numeric: true }));

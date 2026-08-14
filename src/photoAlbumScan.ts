@@ -1,6 +1,7 @@
 import type {
   CachedPhotoAlbumScan,
   FileSystemDirectoryHandle,
+  FileSystemFileHandle,
   PhotoAlbum,
   PhotoAlbumLibraryRoot,
   PlayerMediaRootStatus,
@@ -84,19 +85,40 @@ export async function collectPhotoAlbumsFromDirectory(
   options?: { rootId?: string; rootLabel?: string },
 ) {
   const photoFiles: BrowserPhotoFile[] = [];
+  // 图片文件读取并发上限：getFile() 是真实磁盘 I/O，串行会放大延迟到文件数倍。
+  const photoScanConcurrency = 8;
 
   async function walk(handle: FileSystemDirectoryHandle, segments: string[]) {
-    for await (const entry of handle.values()) {
+    const entries: Array<FileSystemDirectoryHandle | FileSystemFileHandle> = [];
+    for await (const entry of handle.values()) entries.push(entry);
+
+    // 先深度优先处理子目录（保持目录顺序）
+    for (const entry of entries) {
       if (entry.kind === "directory") {
         await walk(entry, [...segments, entry.name]);
-      } else if (isPhotoFile(entry.name)) {
+      }
+    }
+
+    // 图片文件级有界并发读取，结果按原顺序收集
+    const photoEntries = entries.filter((entry): entry is FileSystemFileHandle => entry.kind === "file" && isPhotoFile(entry.name));
+    const collected = new Array<BrowserPhotoFile | null>(photoEntries.length);
+    let nextIndex = 0;
+    const worker = async () => {
+      while (nextIndex < photoEntries.length) {
+        const index = nextIndex;
+        nextIndex += 1;
+        const entry = photoEntries[index];
         const file = await entry.getFile();
-        photoFiles.push({
+        collected[index] = {
           file,
           relativePath: [...segments, entry.name].join("/"),
           parentDirectory: handle,
-        });
+        };
       }
+    };
+    await Promise.all(Array.from({ length: Math.min(photoScanConcurrency, photoEntries.length) }, () => worker()));
+    for (const item of collected) {
+      if (item) photoFiles.push(item);
     }
   }
 
