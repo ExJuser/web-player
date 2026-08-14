@@ -3290,13 +3290,19 @@ export default function App() {
 
   const updateVideoMetadata = useCallback(
     (videoId: string, metadata: VideoMetadata) => {
+      const nextDuration = metadata.duration && Number.isFinite(metadata.duration) ? metadata.duration : undefined;
+      const nextWidth = metadata.width && metadata.width > 0 ? metadata.width : undefined;
+      const nextHeight = metadata.height && metadata.height > 0 ? metadata.height : undefined;
+      // 早退：多数缩略图元数据与扫描结果一致（时长/分辨率已知），
+      // 直接 Map 命中判断，避免 2 万级整表 map + 新数组分配 + setVideos。
+      const current = videoById.get(videoId);
+      if (!current || (current.duration === nextDuration && current.width === nextWidth && current.height === nextHeight)) {
+        return;
+      }
       setVideos((previous) => {
         let didChange = false;
         const nextVideos = previous.map((video) => {
           if (video.id !== videoId) return video;
-          const nextDuration = metadata.duration && Number.isFinite(metadata.duration) ? metadata.duration : undefined;
-          const nextWidth = metadata.width && metadata.width > 0 ? metadata.width : undefined;
-          const nextHeight = metadata.height && metadata.height > 0 ? metadata.height : undefined;
           if (video.duration === nextDuration && video.width === nextWidth && video.height === nextHeight) {
             return video;
           }
@@ -3312,7 +3318,7 @@ export default function App() {
         return didChange ? nextVideos : previous;
       });
     },
-    [],
+    [videoById],
   );
 
   const applyVideoThumbnailUpdates = useCallback((updates: ThumbnailQueueUpdate[]) => {
