@@ -67,7 +67,8 @@ import {
   playlistPageSizeOptions,
   playlistSortOptions,
   seekSteps,
-  defaultShortcuts
+  defaultShortcuts,
+  playerDataStoreVersion
 } from "./playerConstants";
 import { hashString, sanitizeLibraryName } from "./playerLibraryUtils";
 import { createWatchActivityKey, isValidWatchActivityDate } from "./watchActivityInsights";
@@ -780,7 +781,7 @@ export function parsePlayerDataStore(raw: string): PlayerDataStore {
 
 export function createDefaultPlayerDataStore(metadata?: PlayerDataStore["metadata"]): PlayerDataStore {
   return {
-    version: 6,
+    version: playerDataStoreVersion,
     progress: {},
     favorites: [],
     videoRatings: {},
@@ -1122,7 +1123,7 @@ export async function deleteLegacyPlayerDataStore(directory: FileSystemDirectory
 
 function createPersistedPlayerDataPayload(store: PlayerDataStore) {
   return {
-    version: 6,
+    version: playerDataStoreVersion,
     items: store.progress,
     favorites: store.favorites,
     videoRatings: parseVideoRatings(store.videoRatings),

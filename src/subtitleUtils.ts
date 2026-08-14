@@ -1,3 +1,5 @@
+import { formatTime as formatSubtitleTime } from "./playerFormatUtils";
+
 export type SubtitleCue = {
   start: number;
   end: number;
@@ -87,18 +89,6 @@ export function parseSubtitleCues(rawText: string): SubtitleCue[] {
       };
     })
     .filter((cue): cue is SubtitleCue => Boolean(cue));
-}
-
-function formatSubtitleTime(seconds: number) {
-  if (!Number.isFinite(seconds)) return "00:00";
-  const value = Math.max(0, Math.floor(seconds));
-  const hours = Math.floor(value / 3600);
-  const minutes = Math.floor((value % 3600) / 60);
-  const secs = value % 60;
-  if (hours > 0) {
-    return `${hours}:${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
-  }
-  return `${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
 }
 
 export function createSubtitleContextChunks(cues: SubtitleCue[]) {

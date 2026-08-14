@@ -737,3 +737,62 @@ test("sqlite media root scan cache stores the latest global scan", async () => {
     await rm(context.root, { recursive: true, force: true });
   }
 });
+
+test("sqlite full save preserves favorite and tag created_at ordering", async () => {
+  const context = await createTempStore();
+  try {
+    await context.store.initialize();
+    // 用 per-key 写入制造不同的 created_at：video-b 最早收藏，标签A 先于 标签B
+    context.store.setFavorite("global", "video-b", true);
+    await new Promise((resolve) => setTimeout(resolve, 2));
+    context.store.setFavorite("global", "video-a", true);
+    await new Promise((resolve) => setTimeout(resolve, 2));
+    context.store.setFavorite("global", "video-c", true);
+    context.store.replaceVideoTags("global", "video-a", ["标签A"]);
+    await new Promise((resolve) => setTimeout(resolve, 2));
+    context.store.replaceVideoTags("global", "video-a", ["标签A", "标签B"]);
+
+    // 全量保存不得把收藏/标签的 created_at 重置为同一时刻
+    context.store.savePlayerDataStore("global", {
+      favorites: ["video-b", "video-a", "video-c"],
+      videoTags: { "video-a": ["标签A", "标签B"] },
+    });
+
+    const stored = context.store.loadPlayerDataStore("global");
+    assert.deepEqual(stored.favorites, ["video-b", "video-a", "video-c"]);
+    assert.deepEqual(stored.videoTags["video-a"], ["标签A", "标签B"]);
+  } finally {
+    context.store.close();
+    await rm(context.root, { recursive: true, force: true });
+  }
+});
+
+test("sqlite patch only rewrites the patched field tables and preserves favorites order", async () => {
+  const context = await createTempStore();
+  try {
+    await context.store.initialize();
+    context.store.savePlayerDataStore("global", {
+      items: { "video-1": { currentTime: 1, duration: 10, completed: false, updatedAt: 1 } },
+      favorites: [],
+      videoTags: { "video-1": ["旧标签"] },
+      embeddedSubtitles: [{ id: "sub1", videoId: "video-1", name: "字幕", relativePath: "a.mkv", format: "vtt" }],
+    });
+    // 先收藏 video-2，稍后收藏 video-1 → 顺序应保持 video-2 在前
+    context.store.setFavorite("global", "video-2", true);
+    await new Promise((resolve) => setTimeout(resolve, 2));
+    context.store.setFavorite("global", "video-1", true);
+
+    context.store.patchPlayerDataStore("global", { favorites: ["video-2", "video-1"] });
+    const stored = context.store.loadPlayerDataStore("global");
+    assert.deepEqual(stored.favorites, ["video-2", "video-1"]);
+    // 未 patch 的字段原样保留
+    assert.equal(stored.items["video-1"].currentTime, 1);
+    assert.deepEqual(stored.videoTags["video-1"], ["旧标签"]);
+    assert.equal(stored.embeddedSubtitles[0].id, "sub1");
+    // 空 patch 是 no-op，不抛错
+    context.store.patchPlayerDataStore("global", {});
+  } finally {
+    context.store.close();
+    await rm(context.root, { recursive: true, force: true });
+  }
+});

@@ -3247,12 +3247,12 @@ export default function App() {
 
   useEffect(() => {
     if (!localConfig) return;
+    if (mediaRootCacheLoadAttemptedRef.current) return;
+    mediaRootCacheLoadAttemptedRef.current = true;
     if (shouldAutoScanGlobalMediaLibrary(localConfig)) {
       void loadGlobalMediaLibrary().finally(() => setHasInitialMediaLoadSettled(true));
       return;
     }
-    if (mediaRootCacheLoadAttemptedRef.current) return;
-    mediaRootCacheLoadAttemptedRef.current = true;
     void restoreCachedGlobalMediaLibrary().finally(() => setHasInitialMediaLoadSettled(true));
   }, [loadGlobalMediaLibrary, localConfig, restoreCachedGlobalMediaLibrary]);
 

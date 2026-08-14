@@ -62,6 +62,7 @@ export function usePlayerPreferencesController({
   videosRef,
 }: UsePlayerPreferencesControllerOptions) {
   const replacePlayerPreferences = useCallback((nextPreferences: PlayerPreferences) => {
+    const previousPreferences = playerPreferencesRef.current;
     playerPreferencesRef.current = nextPreferences;
     setPlaylistSortMode(nextPreferences.playlistSortMode);
     setIsPlaylistSortReversed(nextPreferences.isPlaylistSortReversed);
@@ -77,11 +78,10 @@ export function usePlayerPreferencesController({
     setStartFromHighEnergy(nextPreferences.startFromHighEnergy);
     setSubtitleStyle(nextPreferences.subtitleStyle);
 
-    Promise.all(
-      (Object.keys(nextPreferences) as Array<keyof PlayerPreferences>).map((key) =>
-        savePlayerPreference(key, nextPreferences[key]),
-      ),
-    ).catch(() => {
+    const changedKeys = (Object.keys(nextPreferences) as Array<keyof PlayerPreferences>).filter(
+      (key) => !Object.is(previousPreferences[key], nextPreferences[key]),
+    );
+    Promise.all(changedKeys.map((key) => savePlayerPreference(key, nextPreferences[key]))).catch(() => {
       setMessage("无法写入项目数据目录，请确认通过 npm run dev 或 npm run preview 启动。");
     });
   }, [

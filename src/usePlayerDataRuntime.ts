@@ -1,7 +1,7 @@
 import { useCallback, useRef, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
 
 import type { AppTheme } from "./appBrowserUtils";
-import { defaultDanmakuPreferences, defaultPlayerPreferences, defaultPlayerSettings } from "./playerConstants";
+import { defaultDanmakuPreferences, defaultPlayerPreferences, defaultPlayerSettings, playerDataStoreVersion } from "./playerConstants";
 import { patchGlobalPlayerDataStore } from "./playerStorage";
 import type {
   ActorProfileStore,
@@ -62,7 +62,7 @@ export function usePlayerDataRuntime(initialVolume: number) {
 
   const buildPlayerDataStore = useCallback(
     (overrides?: Partial<PlayerDataStore>): PlayerDataStore => ({
-      version: 6,
+      version: playerDataStoreVersion,
       progress: progressStoreRef.current,
       favorites: Array.from(favoriteVideoIdsRef.current),
       videoRatings: videoRatingsRef.current,

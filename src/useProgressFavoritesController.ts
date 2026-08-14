@@ -79,8 +79,14 @@ export function useProgressFavoritesController({
     progressStoreRef.current = nextStore;
     setProgressStore(nextStore);
 
+    const changedVideoIds = Array.from(new Set([...Object.keys(previousStore), ...Object.keys(nextStore)])).filter((videoId) => {
+      const previous = previousStore[videoId];
+      const next = nextStore[videoId];
+      if (previous === next) return false;
+      return JSON.stringify(previous ?? null) !== JSON.stringify(next ?? null);
+    });
     Promise.all(
-      Array.from(new Set([...Object.keys(previousStore), ...Object.keys(nextStore)])).map((videoId) =>
+      changedVideoIds.map((videoId) =>
         nextStore[videoId] ? savePlayerProgress(videoId, nextStore[videoId]) : deletePlayerProgress(videoId),
       ),
     )
@@ -97,8 +103,11 @@ export function useProgressFavoritesController({
     favoriteVideoIdsRef.current = nextFavorites;
     setFavoriteVideoIds(new Set(nextFavorites));
 
+    const changedVideoIds = Array.from(new Set([...previousFavorites, ...nextFavorites])).filter(
+      (videoId) => previousFavorites.has(videoId) !== nextFavorites.has(videoId),
+    );
     Promise.all(
-      Array.from(new Set([...previousFavorites, ...nextFavorites])).map((videoId) =>
+      changedVideoIds.map((videoId) =>
         savePlayerFavorite(videoId, nextFavorites.has(videoId)),
       ),
     )

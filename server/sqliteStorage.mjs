@@ -589,36 +589,37 @@ export class LocalDataSqliteStore {
 
   savePlayerDataStoreSync(libraryId, payload) {
     const store = asObject(payload);
-    const timestamp = now();
-
     this.saveMetadataSync(libraryId, store.metadata);
+    this.replaceProgressField(libraryId, store.items ?? store.progress);
+    this.replaceFavoritesField(libraryId, store.favorites);
+    this.replaceVideoTagsField(libraryId, store.videoTags);
+    this.replaceActorProfilesField(libraryId, store.actorProfiles);
+    this.replaceActorTagDefinitionsField(libraryId, store.actorTagDefinitions);
+    this.replaceVideoActorOverridesField(libraryId, store.videoActorOverrides);
+    this.replaceVideoRatingsField(libraryId, store.videoRatings);
+    this.replaceVideoCommentsField(libraryId, store.videoComments);
+    this.replaceVideoStatsField(libraryId, store.videoStats);
+    this.replaceWatchActivityField(libraryId, store.watchActivity);
+    this.replaceVideoHighlightsField(libraryId, store.videoHighlights);
+    this.replaceVideoEditSegmentsField(libraryId, store.videoEditSegments);
+    this.replaceTagMergeDecisionsField(libraryId, store.tagMergeDecisions);
+    this.replaceEmbeddedSubtitlesField(libraryId, store.embeddedSubtitles);
+    this.replaceDanmakuSelectionsField(libraryId, store.danmakuSelections);
+    this.replaceDanmakuPreferencesField(libraryId, store.danmakuPreferences);
+    this.replacePlayerPreferencesField(libraryId, store.preferences);
+    this.replacePlayerSettingsField(libraryId, store.settings);
+    this.replaceDuplicateDetectionsField(libraryId, store);
+  }
 
-    for (const table of [
-      "video_actor_override_members",
-      "video_actor_overrides",
-      "actor_aliases",
-      "actor_tag_definitions",
-      "actors",
-      "video_progress",
-      "video_favorites",
-      "video_tags",
-      "video_ratings",
-      "video_stats",
-      "watch_activity",
-      "video_highlights",
-      "video_edit_segments",
-      "tag_merge_decisions",
-      "embedded_subtitles",
-      "danmaku_selections",
-    ]) {
-      this.db.prepare(`DELETE FROM ${table} WHERE library_id = ?`).run(libraryId);
-    }
-
+  // 按字段整表替换。每个方法只删/写自己对应的表，供全量保存与增量 PATCH 复用；
+  // 调用方负责包事务（本类不嵌套事务）。
+  replaceProgressField(libraryId, progressStore) {
+    this.db.prepare("DELETE FROM video_progress WHERE library_id = ?").run(libraryId);
     const progressInsert = this.db.prepare(`
       INSERT INTO video_progress (library_id, video_id, "current_time", duration, completed, history_json, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
-    for (const [videoId, item] of Object.entries(asObject(store.items ?? store.progress))) {
+    for (const [videoId, item] of Object.entries(asObject(progressStore))) {
       if (!item || typeof item !== "object") continue;
       const currentTime = Number(item.currentTime);
       const duration = Number(item.duration);
@@ -626,26 +627,45 @@ export class LocalDataSqliteStore {
       if (!Number.isFinite(currentTime) || !Number.isFinite(duration) || !Number.isFinite(updatedAt)) continue;
       progressInsert.run(libraryId, videoId, currentTime, duration, item.completed ? 1 : 0, item.history ? stringifyJson(item.history) : null, updatedAt);
     }
+  }
 
+  replaceFavoritesField(libraryId, favorites) {
+    const existingTimestamps = new Map(
+      allRows(this.db.prepare("SELECT video_id, created_at FROM video_favorites WHERE library_id = ?"), libraryId)
+        .map((row) => [row.video_id, row.created_at]),
+    );
+    this.db.prepare("DELETE FROM video_favorites WHERE library_id = ?").run(libraryId);
     const favoriteInsert = this.db.prepare("INSERT INTO video_favorites (library_id, video_id, created_at) VALUES (?, ?, ?)");
-    for (const videoId of Array.isArray(store.favorites) ? store.favorites : []) {
-      if (typeof videoId === "string" && videoId) favoriteInsert.run(libraryId, videoId, timestamp);
+    for (const videoId of Array.isArray(favorites) ? favorites : []) {
+      if (typeof videoId === "string" && videoId) favoriteInsert.run(libraryId, videoId, existingTimestamps.get(videoId) ?? now());
     }
+  }
 
+  replaceVideoTagsField(libraryId, videoTags) {
+    const existingTimestamps = new Map(
+      allRows(this.db.prepare("SELECT video_id, tag_key, created_at FROM video_tags WHERE library_id = ?"), libraryId)
+        .map((row) => [`${row.video_id}\u0000${row.tag_key}`, row.created_at]),
+    );
+    this.db.prepare("DELETE FROM video_tags WHERE library_id = ?").run(libraryId);
     const tagInsert = this.db.prepare("INSERT INTO video_tags (library_id, video_id, tag_key, tag_label, created_at) VALUES (?, ?, ?, ?, ?)");
-    for (const [videoId, tags] of Object.entries(asObject(store.videoTags))) {
+    for (const [videoId, tags] of Object.entries(asObject(videoTags))) {
       if (!Array.isArray(tags)) continue;
       for (const tag of tags) {
         if (typeof tag !== "string") continue;
         const label = tag.trim();
         const key = normalizeTagKey(label);
-        if (label && key) tagInsert.run(libraryId, videoId, key, label, timestamp);
+        if (label && key) tagInsert.run(libraryId, videoId, key, label, existingTimestamps.get(`${videoId}\u0000${key}`) ?? now());
       }
     }
+  }
 
+  replaceActorProfilesField(libraryId, actorProfiles) {
+    const timestamp = now();
+    this.db.prepare("DELETE FROM actor_aliases WHERE library_id = ?").run(libraryId);
+    this.db.prepare("DELETE FROM actors WHERE library_id = ?").run(libraryId);
     const actorInsert = this.db.prepare("INSERT INTO actors (library_id, actor_id, actor_name, updated_at) VALUES (?, ?, ?, ?)");
     const aliasInsert = this.db.prepare("INSERT INTO actor_aliases (library_id, actor_id, alias_key, alias_label) VALUES (?, ?, ?, ?)");
-    for (const [actorId, profile] of Object.entries(asObject(store.actorProfiles))) {
+    for (const [actorId, profile] of Object.entries(asObject(actorProfiles))) {
       const actorName = String(profile?.name ?? "").trim();
       if (!actorId || !actorName) continue;
       actorInsert.run(libraryId, actorId, actorName, Number(profile.updatedAt) || timestamp);
@@ -655,41 +675,62 @@ export class LocalDataSqliteStore {
         if (aliasKey && aliasLabel) aliasInsert.run(libraryId, actorId, aliasKey, aliasLabel);
       }
     }
+  }
 
+  replaceActorTagDefinitionsField(libraryId, actorTagDefinitions) {
+    const timestamp = now();
+    this.db.prepare("DELETE FROM actor_tag_definitions WHERE library_id = ?").run(libraryId);
     const actorTagInsert = this.db.prepare("INSERT INTO actor_tag_definitions (library_id, tag_key, tag_label, updated_at) VALUES (?, ?, ?, ?)");
-    for (const definition of Object.values(asObject(store.actorTagDefinitions))) {
+    for (const definition of Object.values(asObject(actorTagDefinitions))) {
       const label = String(definition?.label ?? "").trim();
       const key = normalizeTagKey(definition?.key ?? label);
       if (key && label) actorTagInsert.run(libraryId, key, label, Number(definition.updatedAt) || timestamp);
     }
+  }
 
+  replaceVideoActorOverridesField(libraryId, videoActorOverrides) {
+    const timestamp = now();
+    this.db.prepare("DELETE FROM video_actor_override_members WHERE library_id = ?").run(libraryId);
+    this.db.prepare("DELETE FROM video_actor_overrides WHERE library_id = ?").run(libraryId);
     const actorOverrideInsert = this.db.prepare("INSERT INTO video_actor_overrides (library_id, video_id, updated_at) VALUES (?, ?, ?)");
     const actorOverrideMemberInsert = this.db.prepare("INSERT INTO video_actor_override_members (library_id, video_id, actor_id, position) VALUES (?, ?, ?, ?)");
-    for (const [videoId, override] of Object.entries(asObject(store.videoActorOverrides))) {
+    for (const [videoId, override] of Object.entries(asObject(videoActorOverrides))) {
       if (!videoId || !Array.isArray(override?.actorIds)) continue;
       actorOverrideInsert.run(libraryId, videoId, Number(override.updatedAt) || timestamp);
       Array.from(new Set(override.actorIds.filter((actorId) => typeof actorId === "string" && actorId))).forEach((actorId, position) => {
         actorOverrideMemberInsert.run(libraryId, videoId, actorId, position);
       });
     }
+  }
 
+  replaceVideoRatingsField(libraryId, videoRatings) {
+    const timestamp = now();
+    this.db.prepare("DELETE FROM video_ratings WHERE library_id = ?").run(libraryId);
     const ratingInsert = this.db.prepare("INSERT INTO video_ratings (library_id, video_id, rating, updated_at) VALUES (?, ?, ?, ?)");
-    for (const [videoId, ratingValue] of Object.entries(asObject(store.videoRatings))) {
+    for (const [videoId, ratingValue] of Object.entries(asObject(videoRatings))) {
       const rating = Number(ratingValue);
       if (videoId && Number.isFinite(rating)) ratingInsert.run(libraryId, videoId, Math.min(10, Math.max(0, rating)), timestamp);
     }
+  }
 
+  replaceVideoCommentsField(libraryId, videoComments) {
+    const timestamp = now();
+    this.db.prepare("DELETE FROM video_comments WHERE library_id = ?").run(libraryId);
     const commentInsert = this.db.prepare("INSERT INTO video_comments (library_id, video_id, comment_text, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(library_id, video_id) DO UPDATE SET comment_text = excluded.comment_text, updated_at = excluded.updated_at");
-    for (const [videoId, commentValue] of Object.entries(asObject(store.videoComments))) {
+    for (const [videoId, commentValue] of Object.entries(asObject(videoComments))) {
       const comment = String(commentValue ?? "").trim();
       if (videoId && comment) commentInsert.run(libraryId, videoId, comment, timestamp);
     }
+  }
 
+  replaceVideoStatsField(libraryId, videoStats) {
+    const timestamp = now();
+    this.db.prepare("DELETE FROM video_stats WHERE library_id = ?").run(libraryId);
     const statsInsert = this.db.prepare(`
       INSERT INTO video_stats (library_id, video_id, total_played_seconds, play_count, duration_seconds, emission_count, last_emission_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
-    for (const [videoId, stats] of Object.entries(asObject(store.videoStats))) {
+    for (const [videoId, stats] of Object.entries(asObject(videoStats))) {
       if (!stats || typeof stats !== "object") continue;
       statsInsert.run(
         libraryId,
@@ -702,12 +743,16 @@ export class LocalDataSqliteStore {
         Number.isFinite(Number(stats.updatedAt)) ? Number(stats.updatedAt) : timestamp,
       );
     }
+  }
 
+  replaceWatchActivityField(libraryId, watchActivity) {
+    const timestamp = now();
+    this.db.prepare("DELETE FROM watch_activity WHERE library_id = ?").run(libraryId);
     const activityInsert = this.db.prepare(`
       INSERT INTO watch_activity (library_id, activity_date, video_id, watched_seconds, play_count, completed_count, emission_count, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
-    for (const activity of Object.values(asObject(store.watchActivity))) {
+    for (const activity of Object.values(asObject(watchActivity))) {
       if (!activity || typeof activity !== "object") continue;
       if (!isValidActivityDate(activity.date) || typeof activity.videoId !== "string" || !activity.videoId) continue;
       activityInsert.run(
@@ -721,12 +766,15 @@ export class LocalDataSqliteStore {
         Number.isFinite(Number(activity.updatedAt)) ? Number(activity.updatedAt) : timestamp,
       );
     }
+  }
 
+  replaceVideoHighlightsField(libraryId, videoHighlights) {
+    this.db.prepare("DELETE FROM video_highlights WHERE library_id = ?").run(libraryId);
     const highlightInsert = this.db.prepare(`
       INSERT INTO video_highlights (library_id, video_id, highlight_id, start_time, end_time, tag_label, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
-    for (const [videoId, highlights] of Object.entries(asObject(store.videoHighlights))) {
+    for (const [videoId, highlights] of Object.entries(asObject(videoHighlights))) {
       if (!Array.isArray(highlights)) continue;
       for (const highlight of highlights) {
         const startTime = Number(highlight?.startTime);
@@ -749,12 +797,15 @@ export class LocalDataSqliteStore {
         highlightInsert.run(libraryId, videoId, highlight.id, startTime, endTime, tagLabel, updatedAt);
       }
     }
+  }
 
+  replaceVideoEditSegmentsField(libraryId, videoEditSegments) {
+    this.db.prepare("DELETE FROM video_edit_segments WHERE library_id = ?").run(libraryId);
     const editSegmentInsert = this.db.prepare(`
       INSERT INTO video_edit_segments (library_id, video_id, segment_id, start_time, end_time, updated_at)
       VALUES (?, ?, ?, ?, ?, ?)
     `);
-    for (const [videoId, segments] of Object.entries(asObject(store.videoEditSegments))) {
+    for (const [videoId, segments] of Object.entries(asObject(videoEditSegments))) {
       if (!Array.isArray(segments)) continue;
       for (const segment of segments) {
         const startTime = Number(segment?.startTime);
@@ -772,12 +823,16 @@ export class LocalDataSqliteStore {
         editSegmentInsert.run(libraryId, videoId, segment.id, startTime, endTime, updatedAt);
       }
     }
+  }
 
+  replaceTagMergeDecisionsField(libraryId, tagMergeDecisions) {
+    const timestamp = now();
+    this.db.prepare("DELETE FROM tag_merge_decisions WHERE library_id = ?").run(libraryId);
     const decisionInsert = this.db.prepare(`
       INSERT INTO tag_merge_decisions (library_id, decision_key, from_label, to_label, decision, updated_at)
       VALUES (?, ?, ?, ?, ?, ?)
     `);
-    for (const [key, decision] of Object.entries(asObject(store.tagMergeDecisions))) {
+    for (const [key, decision] of Object.entries(asObject(tagMergeDecisions))) {
       if (!decision || typeof decision !== "object") continue;
       if (decision.decision !== "merge" && decision.decision !== "keep") continue;
       decisionInsert.run(
@@ -789,12 +844,15 @@ export class LocalDataSqliteStore {
         Number.isFinite(Number(decision.updatedAt)) ? Number(decision.updatedAt) : timestamp,
       );
     }
+  }
 
+  replaceEmbeddedSubtitlesField(libraryId, embeddedSubtitles) {
+    this.db.prepare("DELETE FROM embedded_subtitles WHERE library_id = ?").run(libraryId);
     const subtitleInsert = this.db.prepare(`
       INSERT INTO embedded_subtitles (library_id, subtitle_id, video_id, name, relative_path, format, track_json)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
-    for (const subtitle of Array.isArray(store.embeddedSubtitles) ? store.embeddedSubtitles : []) {
+    for (const subtitle of Array.isArray(embeddedSubtitles) ? embeddedSubtitles : []) {
       if (!subtitle?.id || !subtitle?.videoId) continue;
       subtitleInsert.run(
         libraryId,
@@ -806,12 +864,16 @@ export class LocalDataSqliteStore {
         stringifyJson(subtitle.embeddedTrack ?? null),
       );
     }
+  }
 
+  replaceDanmakuSelectionsField(libraryId, danmakuSelections) {
+    const timestamp = now();
+    this.db.prepare("DELETE FROM danmaku_selections WHERE library_id = ?").run(libraryId);
     const selectionInsert = this.db.prepare(`
       INSERT INTO danmaku_selections (library_id, video_id, source_id, source_name, provider, updated_at)
       VALUES (?, ?, ?, ?, ?, ?)
     `);
-    for (const [videoId, selection] of Object.entries(asObject(store.danmakuSelections))) {
+    for (const [videoId, selection] of Object.entries(asObject(danmakuSelections))) {
       if (!selection || typeof selection !== "object" || !selection.sourceId) continue;
       selectionInsert.run(
         libraryId,
@@ -822,19 +884,30 @@ export class LocalDataSqliteStore {
         Number.isFinite(Number(selection.updatedAt)) ? Number(selection.updatedAt) : timestamp,
       );
     }
+  }
 
+  replaceDanmakuPreferencesField(libraryId, danmakuPreferences) {
     this.db
       .prepare("INSERT INTO danmaku_preferences (library_id, preferences_json, updated_at) VALUES (?, ?, ?) ON CONFLICT(library_id) DO UPDATE SET preferences_json = excluded.preferences_json, updated_at = excluded.updated_at")
-      .run(libraryId, stringifyJson(store.danmakuPreferences ?? {}), timestamp);
+      .run(libraryId, stringifyJson(danmakuPreferences ?? {}), now());
+  }
+
+  replacePlayerPreferencesField(libraryId, preferences) {
     this.db
       .prepare("INSERT INTO player_preferences (library_id, preferences_json, updated_at) VALUES (?, ?, ?) ON CONFLICT(library_id) DO UPDATE SET preferences_json = excluded.preferences_json, updated_at = excluded.updated_at")
-      .run(libraryId, stringifyJson(store.preferences ?? {}), timestamp);
+      .run(libraryId, stringifyJson(preferences ?? {}), now());
+  }
+
+  replacePlayerSettingsField(libraryId, settings) {
     this.db
       .prepare("INSERT INTO player_settings (library_id, settings_json, updated_at) VALUES (?, ?, ?) ON CONFLICT(library_id) DO UPDATE SET settings_json = excluded.settings_json, updated_at = excluded.updated_at")
-      .run(libraryId, stringifyJson(store.settings ?? {}), timestamp);
+      .run(libraryId, stringifyJson(settings ?? {}), now());
+  }
+
+  replaceDuplicateDetectionsField(libraryId, store) {
     this.db
       .prepare("INSERT INTO duplicate_detections (library_id, detections_json, updated_at) VALUES (?, ?, ?) ON CONFLICT(library_id) DO UPDATE SET detections_json = excluded.detections_json, updated_at = excluded.updated_at")
-      .run(libraryId, stringifyJson(normalizeDuplicateDetections(store)), timestamp);
+      .run(libraryId, stringifyJson(normalizeDuplicateDetections(store)), now());
   }
 
   loadPlayerDataStore(libraryId) {
@@ -1007,13 +1080,97 @@ export class LocalDataSqliteStore {
   }
 
   patchPlayerDataStore(libraryId, patch) {
-    const current = this.loadPlayerDataStore(libraryId) ?? {};
     const normalizedPatch = { ...asObject(patch) };
     if (Object.hasOwn(normalizedPatch, "progress")) {
       normalizedPatch.items = normalizedPatch.progress;
       delete normalizedPatch.progress;
     }
-    this.savePlayerDataStore(libraryId, { ...current, ...normalizedPatch });
+    return this.transaction(() => {
+      if (Object.hasOwn(normalizedPatch, "metadata")) {
+        this.saveMetadataSync(libraryId, normalizedPatch.metadata);
+        delete normalizedPatch.metadata;
+      }
+      if (Object.hasOwn(normalizedPatch, "items")) {
+        this.replaceProgressField(libraryId, normalizedPatch.items);
+        delete normalizedPatch.items;
+      }
+      if (Object.hasOwn(normalizedPatch, "favorites")) {
+        this.replaceFavoritesField(libraryId, normalizedPatch.favorites);
+        delete normalizedPatch.favorites;
+      }
+      if (Object.hasOwn(normalizedPatch, "videoTags")) {
+        this.replaceVideoTagsField(libraryId, normalizedPatch.videoTags);
+        delete normalizedPatch.videoTags;
+      }
+      if (Object.hasOwn(normalizedPatch, "actorProfiles")) {
+        this.replaceActorProfilesField(libraryId, normalizedPatch.actorProfiles);
+        delete normalizedPatch.actorProfiles;
+      }
+      if (Object.hasOwn(normalizedPatch, "actorTagDefinitions")) {
+        this.replaceActorTagDefinitionsField(libraryId, normalizedPatch.actorTagDefinitions);
+        delete normalizedPatch.actorTagDefinitions;
+      }
+      if (Object.hasOwn(normalizedPatch, "videoActorOverrides")) {
+        this.replaceVideoActorOverridesField(libraryId, normalizedPatch.videoActorOverrides);
+        delete normalizedPatch.videoActorOverrides;
+      }
+      if (Object.hasOwn(normalizedPatch, "videoRatings")) {
+        this.replaceVideoRatingsField(libraryId, normalizedPatch.videoRatings);
+        delete normalizedPatch.videoRatings;
+      }
+      if (Object.hasOwn(normalizedPatch, "videoComments")) {
+        this.replaceVideoCommentsField(libraryId, normalizedPatch.videoComments);
+        delete normalizedPatch.videoComments;
+      }
+      if (Object.hasOwn(normalizedPatch, "videoStats")) {
+        this.replaceVideoStatsField(libraryId, normalizedPatch.videoStats);
+        delete normalizedPatch.videoStats;
+      }
+      if (Object.hasOwn(normalizedPatch, "watchActivity")) {
+        this.replaceWatchActivityField(libraryId, normalizedPatch.watchActivity);
+        delete normalizedPatch.watchActivity;
+      }
+      if (Object.hasOwn(normalizedPatch, "videoHighlights")) {
+        this.replaceVideoHighlightsField(libraryId, normalizedPatch.videoHighlights);
+        delete normalizedPatch.videoHighlights;
+      }
+      if (Object.hasOwn(normalizedPatch, "videoEditSegments")) {
+        this.replaceVideoEditSegmentsField(libraryId, normalizedPatch.videoEditSegments);
+        delete normalizedPatch.videoEditSegments;
+      }
+      if (Object.hasOwn(normalizedPatch, "tagMergeDecisions")) {
+        this.replaceTagMergeDecisionsField(libraryId, normalizedPatch.tagMergeDecisions);
+        delete normalizedPatch.tagMergeDecisions;
+      }
+      if (Object.hasOwn(normalizedPatch, "embeddedSubtitles")) {
+        this.replaceEmbeddedSubtitlesField(libraryId, normalizedPatch.embeddedSubtitles);
+        delete normalizedPatch.embeddedSubtitles;
+      }
+      if (Object.hasOwn(normalizedPatch, "danmakuSelections")) {
+        this.replaceDanmakuSelectionsField(libraryId, normalizedPatch.danmakuSelections);
+        delete normalizedPatch.danmakuSelections;
+      }
+      if (Object.hasOwn(normalizedPatch, "danmakuPreferences")) {
+        this.replaceDanmakuPreferencesField(libraryId, normalizedPatch.danmakuPreferences);
+        delete normalizedPatch.danmakuPreferences;
+      }
+      if (Object.hasOwn(normalizedPatch, "preferences")) {
+        this.replacePlayerPreferencesField(libraryId, normalizedPatch.preferences);
+        delete normalizedPatch.preferences;
+      }
+      if (Object.hasOwn(normalizedPatch, "settings")) {
+        this.replacePlayerSettingsField(libraryId, normalizedPatch.settings);
+        delete normalizedPatch.settings;
+      }
+      if (Object.hasOwn(normalizedPatch, "duplicateDetections")) {
+        this.replaceDuplicateDetectionsField(libraryId, { duplicateDetections: normalizedPatch.duplicateDetections });
+        delete normalizedPatch.duplicateDetections;
+      }
+      if (Object.hasOwn(normalizedPatch, "duplicateDetection")) {
+        this.replaceDuplicateDetectionsField(libraryId, { duplicateDetection: normalizedPatch.duplicateDetection });
+        delete normalizedPatch.duplicateDetection;
+      }
+    });
   }
 
   updateIndex(libraryId, metadata) {
@@ -1046,12 +1203,7 @@ export class LocalDataSqliteStore {
   }
 
   replaceProgressStore(libraryId, progressStore) {
-    return this.transaction(() => {
-      this.db.prepare("DELETE FROM video_progress WHERE library_id = ?").run(libraryId);
-      for (const [videoId, progress] of Object.entries(asObject(progressStore))) {
-        this.upsertProgressSync(libraryId, videoId, progress);
-      }
-    });
+    return this.transaction(() => this.replaceProgressField(libraryId, progressStore));
   }
 
   upsertProgressSync(libraryId, videoId, progress) {
@@ -1074,13 +1226,7 @@ export class LocalDataSqliteStore {
   }
 
   replaceFavorites(libraryId, favorites) {
-    return this.transaction(() => {
-      this.db.prepare("DELETE FROM video_favorites WHERE library_id = ?").run(libraryId);
-      const insert = this.db.prepare("INSERT INTO video_favorites (library_id, video_id, created_at) VALUES (?, ?, ?)");
-      for (const videoId of Array.isArray(favorites) ? favorites : []) {
-        if (typeof videoId === "string" && videoId) insert.run(libraryId, videoId, now());
-      }
-    });
+    return this.transaction(() => this.replaceFavoritesField(libraryId, favorites));
   }
 
   setFavorite(libraryId, videoId, isFavorite) {
@@ -1097,28 +1243,22 @@ export class LocalDataSqliteStore {
 
   replaceVideoTags(libraryId, videoId, tags) {
     return this.transaction(() => {
+      const existingTimestamps = new Map(
+        allRows(this.db.prepare("SELECT tag_key, created_at FROM video_tags WHERE library_id = ? AND video_id = ?"), libraryId, videoId)
+          .map((row) => [row.tag_key, row.created_at]),
+      );
       this.db.prepare("DELETE FROM video_tags WHERE library_id = ? AND video_id = ?").run(libraryId, videoId);
       const insert = this.db.prepare("INSERT INTO video_tags (library_id, video_id, tag_key, tag_label, created_at) VALUES (?, ?, ?, ?, ?)");
       for (const tag of Array.isArray(tags) ? tags : []) {
         const label = String(tag ?? "").trim();
         const key = normalizeTagKey(label);
-        if (label && key) insert.run(libraryId, videoId, key, label, now());
+        if (label && key) insert.run(libraryId, videoId, key, label, existingTimestamps.get(key) ?? now());
       }
     });
   }
 
   replaceAllVideoTags(libraryId, videoTags) {
-    return this.transaction(() => {
-      this.db.prepare("DELETE FROM video_tags WHERE library_id = ?").run(libraryId);
-      for (const [videoId, tags] of Object.entries(asObject(videoTags))) {
-        const insert = this.db.prepare("INSERT INTO video_tags (library_id, video_id, tag_key, tag_label, created_at) VALUES (?, ?, ?, ?, ?)");
-        for (const tag of Array.isArray(tags) ? tags : []) {
-          const label = String(tag ?? "").trim();
-          const key = normalizeTagKey(label);
-          if (label && key) insert.run(libraryId, videoId, key, label, now());
-        }
-      }
-    });
+    return this.transaction(() => this.replaceVideoTagsField(libraryId, videoTags));
   }
 
   setVideoRating(libraryId, videoId, rating) {
@@ -1358,13 +1498,21 @@ export class LocalDataSqliteStore {
   savePhotoAlbumStoreSync(payload) {
     const store = asObject(payload);
     const timestamp = now();
+    const existingFavoriteTimestamps = new Map(
+      allRows(this.db.prepare("SELECT album_id, created_at FROM photo_album_favorites"))
+        .map((row) => [row.album_id, row.created_at]),
+    );
+    const existingCoverTimestamps = new Map(
+      allRows(this.db.prepare("SELECT album_id, updated_at FROM photo_album_cover_preferences"))
+        .map((row) => [row.album_id, row.updated_at]),
+    );
     this.db.prepare("DELETE FROM photo_album_favorites").run();
     this.db.prepare("DELETE FROM photo_album_progress").run();
     this.db.prepare("DELETE FROM photo_album_cover_preferences").run();
     this.db.prepare("DELETE FROM photo_album_tags").run();
     const favoriteInsert = this.db.prepare("INSERT INTO photo_album_favorites (album_id, created_at) VALUES (?, ?)");
     for (const albumId of Array.isArray(store.favorites) ? store.favorites : []) {
-      if (typeof albumId === "string" && albumId) favoriteInsert.run(albumId, timestamp);
+      if (typeof albumId === "string" && albumId) favoriteInsert.run(albumId, existingFavoriteTimestamps.get(albumId) ?? timestamp);
     }
     const progressInsert = this.db.prepare("INSERT INTO photo_album_progress (album_id, image_index, completed, updated_at) VALUES (?, ?, ?, ?)");
     for (const [albumId, progress] of Object.entries(asObject(store.progress))) {
@@ -1372,7 +1520,7 @@ export class LocalDataSqliteStore {
     }
     const coverInsert = this.db.prepare("INSERT INTO photo_album_cover_preferences (album_id, image_id, updated_at) VALUES (?, ?, ?)");
     for (const [albumId, imageId] of Object.entries(asObject(store.coverImageByAlbumId))) {
-      if (albumId && typeof imageId === "string" && imageId) coverInsert.run(albumId, imageId, timestamp);
+      if (albumId && typeof imageId === "string" && imageId) coverInsert.run(albumId, imageId, existingCoverTimestamps.get(albumId) ?? timestamp);
     }
     const tagInsert = this.db.prepare("INSERT INTO photo_album_tags (album_id, tag_key, tag_label, created_at) VALUES (?, ?, ?, ?)");
     for (const [albumId, tags] of Object.entries(asObject(store.albumTags))) {

@@ -3,6 +3,8 @@ import type { DanmakuPreferences, PlaybackMode, PlayerPreferences, PlaylistSortM
 export const VIDEO_EXTENSIONS = new Set([".mp4", ".webm", ".ogg", ".mov", ".m4v", ".mkv"]);
 export const SUBTITLE_EXTENSIONS = new Set([".srt", ".vtt"]);
 export const PHOTO_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif", ".bmp"]);
+// PlayerDataStore 的持久化版本；服务端 sqliteStorage.mjs 的 playerStoreVersion 必须与其保持一致。
+export const playerDataStoreVersion = 6;
 export const MIN_LOCAL_VIDEO_SIZE_BYTES = 50 * 1024 * 1024;
 export const IGNORED_VIDEO_BASENAMES = new Set(["theme_video", "trailer"]);
 export const PROGRESS_FILE_NAME = ".local-web-player-progress.json";
