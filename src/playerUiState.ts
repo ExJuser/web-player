@@ -376,15 +376,19 @@ export function createNextEpisodeCard<Video extends HomeCardVideoForUi, Progress
   currentVideo?: Video | null;
   playlistVideos: Video[];
   seriesTitleByVideoId: ReadonlyMap<string, string>;
+  // 可选：调用方预计算的 视频 id → 系列 key 映射，避免逐视频重复 inferSeriesTitle（大库下每次重算可省数十 ms）。
+  seriesKeyByVideoId?: ReadonlyMap<string, string>;
   createCard: (video: Video) => Card;
 }) {
   if (!input.enabled) return null;
   const sourceVideo = input.primaryResumeCard?.video ?? input.recentHomeCards[0]?.video ?? input.currentVideo;
   if (!sourceVideo) return null;
-  const sourceSeriesKey = scopedSeriesKeyForVideo(sourceVideo, input.seriesTitleByVideoId.get(sourceVideo.id) ?? inferSeriesTitle(sourceVideo));
+  const sourceSeriesKey = input.seriesKeyByVideoId?.get(sourceVideo.id)
+    ?? scopedSeriesKeyForVideo(sourceVideo, input.seriesTitleByVideoId.get(sourceVideo.id) ?? inferSeriesTitle(sourceVideo));
   let foundSource = false;
   for (const video of input.playlistVideos) {
-    const seriesKey = scopedSeriesKeyForVideo(video, input.seriesTitleByVideoId.get(video.id) ?? inferSeriesTitle(video));
+    const seriesKey = input.seriesKeyByVideoId?.get(video.id)
+      ?? scopedSeriesKeyForVideo(video, input.seriesTitleByVideoId.get(video.id) ?? inferSeriesTitle(video));
     if (seriesKey !== sourceSeriesKey) continue;
     if (foundSource) return input.createCard(video);
     if (video.id === sourceVideo.id) foundSource = true;

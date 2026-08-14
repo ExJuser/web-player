@@ -199,7 +199,7 @@ import {
   isObjectUrl,
   migrateMovedVideoData,
 } from "./playerLibraryUtils";
-import { inferSeriesTitle } from "./playerSeriesUtils";
+import { inferSeriesTitle, scopedSeriesKeyForVideo } from "./playerSeriesUtils";
 import {
   clamp,
   formatShortcutKey,
@@ -275,22 +275,24 @@ import {
   shouldStartLegacyThumbnailMigration,
 } from "./appConfig";
 import type { PlaybackSourceChoice, TagMergePrompt } from "./appTypes";
+import {
+  findPrimaryResumableVideo,
+  getFavoriteHomeCandidateVideos,
+  getRecentHomeCandidateVideos,
+} from "./homeCardCandidates";
 import { createHomeVideoCard as buildHomeVideoCard } from "./homeVideoCard";
 import {
   createPersistedEmbeddedSubtitles,
   createDuplicatePlaylistMetaByVideoId,
   createLibraryStats,
   createMediaRootIdSet,
-  createFavoriteHomeCards,
   createNextEpisodeCard,
   createPlaylistPanelLabels,
   createPlaylistPageLabels,
   createPlaylistPageSizeSelectOptions,
   createPlaylistThumbnailVideos,
   createPrimaryHomeCard,
-  createRecentHomeCards,
   createThumbnailQueueVideoIds,
-  createResumableHomeCards,
   createSeriesOptions,
   createSeriesOptionsKey,
   createSeriesTitleByVideoId,
@@ -1582,6 +1584,11 @@ export default function App() {
     [localConfig, playlistVideos],
   );
   const seriesTitleByVideoId = useMemo(() => createSeriesTitleByVideoId(playlistVideos), [playlistVideos]);
+  // 预计算播放列表每视频的系列 key：供下集卡片 O(1) 查表，避免其每次重算逐视频 inferSeriesTitle。
+  const playlistSeriesKeyByVideoId = useMemo(
+    () => new Map(playlistVideos.map((video) => [video.id, scopedSeriesKeyForVideo(video, seriesTitleByVideoId.get(video.id) ?? inferSeriesTitle(video))])),
+    [playlistVideos, seriesTitleByVideoId],
+  );
   const seriesFilteredVideos = useMemo(
     () => filterVideosBySeries(playlistVideos, seriesOptions, seriesTitleByVideoId, isSeriesMode, selectedSeriesKey),
     [isSeriesMode, playlistVideos, selectedSeriesKey, seriesOptions, seriesTitleByVideoId],
@@ -2010,28 +2017,23 @@ export default function App() {
       }),
     [effectiveVideoTags, mediaRootLabelsById, progressStore, seriesTitleByVideoId, systemVideoTags, videoActorTags, videoComments, videoRatings],
   );
-  const resumableHomeCards = useMemo(
-    () =>
-      createResumableHomeCards({
-        videos: modeFilteredVideos,
-        createCard: createHomeVideoCard,
-        isResumableProgress,
-      }),
-    [createHomeVideoCard, modeFilteredVideos],
+  // 首页卡片候选"先筛后建卡"：进度保存（播放中每 5s 一次）会重建这些 memo，
+  // 只对候选视频构建卡片对象，避免对全库 2 万视频建卡后丢弃（实测单次约 23ms → 亚毫秒级）。
+  const primaryResumeVideo = useMemo(
+    () => findPrimaryResumableVideo(modeFilteredVideos, progressStore, isResumableProgress),
+    [modeFilteredVideos, progressStore],
   );
-  const primaryResumeCard = resumableHomeCards[0] ?? null;
+  const primaryResumeCard = useMemo(
+    () => (primaryResumeVideo ? createHomeVideoCard(primaryResumeVideo) : null),
+    [createHomeVideoCard, primaryResumeVideo],
+  );
   const recentHomeCards = useMemo(
-    () => createRecentHomeCards(modeFilteredVideos, createHomeVideoCard),
-    [createHomeVideoCard, modeFilteredVideos],
+    () => getRecentHomeCandidateVideos(modeFilteredVideos, progressStore).map(createHomeVideoCard),
+    [createHomeVideoCard, modeFilteredVideos, progressStore],
   );
   const favoriteHomeCards = useMemo(
-    () =>
-      createFavoriteHomeCards({
-        videos: modeFilteredVideos,
-        favoriteVideoIds,
-        createCard: createHomeVideoCard,
-      }),
-    [createHomeVideoCard, favoriteVideoIds, modeFilteredVideos],
+    () => getFavoriteHomeCandidateVideos(modeFilteredVideos, favoriteVideoIds, progressStore).map(createHomeVideoCard),
+    [createHomeVideoCard, favoriteVideoIds, modeFilteredVideos, progressStore],
   );
   const nextEpisodeCard = useMemo(
     () =>
@@ -2042,9 +2044,10 @@ export default function App() {
         currentVideo,
         playlistVideos,
         seriesTitleByVideoId,
+        seriesKeyByVideoId: playlistSeriesKeyByVideoId,
         createCard: createHomeVideoCard,
       }),
-    [createHomeVideoCard, currentVideo, homeMediaMode, playlistVideos, primaryResumeCard, recentHomeCards, seriesTitleByVideoId],
+    [createHomeVideoCard, currentVideo, homeMediaMode, playlistVideos, primaryResumeCard, recentHomeCards, seriesTitleByVideoId, playlistSeriesKeyByVideoId],
   );
   const isHomeViewVisible = activeView === "home" && !isPrivacyMode && !isCinemaMode && !isFullscreen;
   const isExploreViewVisible = activeView === "explore" && !isPrivacyMode && !isCinemaMode && !isFullscreen;
