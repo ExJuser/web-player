@@ -22,6 +22,59 @@ test("normalizes tags for stable matching without replacing display text", () =>
   assert.equal(tagUtils.normalizeTagKey("美 腿"), "美腿");
 });
 
+test("createTagCoverageStats dedupes per item and sorts by usage", () => {
+  const items = [
+    { id: "a", tags: ["动作", "悬疑", "动作"] },
+    { id: "b", tags: ["动作", "科幻"] },
+    { id: "c", tags: [] },
+    { id: "d", tags: ["文艺"] },
+  ];
+  const stats = tagUtils.createTagCoverageStats(items, (item) => item.tags, { limit: 10 });
+
+  assert.equal(stats.taggedItems, 3);
+  assert.equal(stats.coverage, 0.75);
+  assert.equal(stats.totalTags, 4);
+  assert.equal(stats.tags[0].label, "动作");
+  assert.equal(stats.tags[0].count, 2);
+  // 计数相同的标签按 zh-Hans-CN 排序（collation 顺序不在此断言）
+  assert.deepEqual(
+    new Set(stats.tags.slice(1).map((entry) => entry.label)),
+    new Set(["悬疑", "科幻", "文艺"]),
+  );
+  assert.deepEqual(
+    stats.tags.slice(1).map((entry) => entry.count),
+    [1, 1, 1],
+  );
+});
+
+test("createTagCoverageStats honors the limit and label trimming", () => {
+  const items = [
+    { id: "a", tags: [" 动作 ", "悬疑"] },
+    { id: "b", tags: ["动作", "悬疑", "科幻"] },
+    { id: "c", tags: ["悬疑"] },
+  ];
+  const trimmed = tagUtils.createTagCoverageStats(items, (item) => item.tags, { limit: 2, trimLabel: true });
+  assert.equal(trimmed.totalTags, 3);
+  assert.equal(trimmed.tags.length, 2);
+  assert.deepEqual(trimmed.tags[0], { key: "悬疑", label: "悬疑", count: 3 });
+  assert.deepEqual(trimmed.tags[1], { key: "动作", label: "动作", count: 2 });
+
+  // 不裁剪时保留首个标签原文
+  const raw = tagUtils.createTagCoverageStats(items, (item) => item.tags, { limit: 10, trimLabel: false });
+  assert.deepEqual(raw.tags.find((entry) => entry.key === "动作"), { key: "动作", label: " 动作 ", count: 2 });
+});
+
+test("createTagCoverageStats handles empty input and empty tag lists", () => {
+  assert.deepEqual(tagUtils.createTagCoverageStats([], () => [], {}), {
+    coverage: 0,
+    taggedItems: 0,
+    totalTags: 0,
+    tags: [],
+  });
+  const stats = tagUtils.createTagCoverageStats([{ id: "x", tags: [] }], (item) => item.tags, {});
+  assert.deepEqual(stats, { coverage: 0, taggedItems: 0, totalTags: 0, tags: [] });
+});
+
 test("suggests merging known semantic synonyms", () => {
   const suggestion = tagUtils.findTagMergeSuggestion("腿玩年", ["美腿"], {});
   assert.equal(suggestion?.existingTag, "美腿");

@@ -297,8 +297,56 @@ export function doTagsSatisfyAllFilters(tags: string[], filters: string[]) {
   return filterKeys.every((key) => tagKeys.has(key));
 }
 
-export function buildGlobalTagUsageStats(videoTags: Record<string, string[]>): TagUsageStat[] {
-  const statsByKey = new Map<string, TagUsageStat>();
+export type TagCoverageEntry = {
+  key: string;
+  label: string;
+  count: number;
+};
+
+export type TagCoverageStats = {
+  coverage: number;
+  taggedItems: number;
+  totalTags: number;
+  tags: TagCoverageEntry[];
+};
+
+// 统计一批条目（视频/图集）的标签覆盖率：按归一化 key 去重计数，
+// 返回覆盖率、已标注条目数、标签总数和按使用量排序的前 N 个标签。
+// 首页"特殊模式标签"与看图"标签统计"共用同一逻辑，避免两份重复实现。
+export function createTagCoverageStats<T>(
+  items: readonly T[],
+  getTags: (item: T) => readonly string[],
+  options: { limit?: number; trimLabel?: boolean } = {},
+): TagCoverageStats {
+  const { limit = 10, trimLabel = false } = options;
+  const byKey = new Map<string, TagCoverageEntry>();
+  let taggedItems = 0;
+  items.forEach((item) => {
+    const seenKeys = new Set<string>();
+    getTags(item).forEach((tag) => {
+      const key = normalizeTagKey(tag);
+      if (!key || seenKeys.has(key)) return;
+      seenKeys.add(key);
+      const existing = byKey.get(key);
+      if (existing) {
+        existing.count += 1;
+        return;
+      }
+      byKey.set(key, { key, label: trimLabel ? tag.trim() : tag, count: 1 });
+    });
+    if (seenKeys.size) taggedItems += 1;
+  });
+  return {
+    coverage: items.length ? taggedItems / items.length : 0,
+    taggedItems,
+    totalTags: byKey.size,
+    tags: Array.from(byKey.values())
+      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, "zh-Hans-CN", { numeric: true }))
+      .slice(0, limit),
+  };
+}
+
+export function buildGlobalTagUsageStats(videoTags: Record<string, string[]>): TagUsageStat[] {  const statsByKey = new Map<string, TagUsageStat>();
 
   Object.entries(videoTags).forEach(([videoId, tags]) => {
     const seenKeysInVideo = new Set<string>();

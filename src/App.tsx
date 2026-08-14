@@ -328,7 +328,7 @@ import {
   type RatingFilterOperator,
   type RatingPlaylistMode,
 } from "./playerUiState";
-import { buildSubtitleSystemVideoTags, mergeVideoTagStores, normalizeTagKey } from "./tagUtils";
+import { buildSubtitleSystemVideoTags, createTagCoverageStats, mergeVideoTagStores, normalizeTagKey } from "./tagUtils";
 import { formatTagExplorerSearchQuery, matchesTagExplorerSelection, type TagExplorerSelection } from "./tagExplorer";
 import type { PlaylistSearchRecord } from "./playerPlaylistSearch";
 import { useLibrarySearch } from "./useLibrarySearch";
@@ -2085,27 +2085,16 @@ export default function App() {
   );
   const homeTagStats = useMemo(() => {
     if (homeMediaMode !== "special") return null;
-    const tagsByKey = new Map<string, { key: string; label: string; videoCount: number }>();
-    let taggedVideos = 0;
-    modeFilteredVideos.forEach((video) => {
-      const seenKeys = new Set<string>();
-      (effectiveVideoTags[video.id] ?? []).forEach((tag) => {
-        const key = normalizeTagKey(tag);
-        if (!key || seenKeys.has(key)) return;
-        seenKeys.add(key);
-        const existing = tagsByKey.get(key);
-        if (existing) existing.videoCount += 1;
-        else tagsByKey.set(key, { key, label: tag.trim(), videoCount: 1 });
-      });
-      if (seenKeys.size) taggedVideos += 1;
-    });
+    const stats = createTagCoverageStats(
+      modeFilteredVideos,
+      (video) => effectiveVideoTags[video.id] ?? [],
+      { limit: 10, trimLabel: true },
+    );
     return {
-      coverage: modeFilteredVideos.length ? taggedVideos / modeFilteredVideos.length : 0,
-      taggedVideos,
-      totalTags: tagsByKey.size,
-      tags: Array.from(tagsByKey.values())
-        .sort((a, b) => b.videoCount - a.videoCount || a.label.localeCompare(b.label, "zh-Hans-CN", { numeric: true }))
-        .slice(0, 10),
+      coverage: stats.coverage,
+      taggedVideos: stats.taggedItems,
+      totalTags: stats.totalTags,
+      tags: stats.tags.map((entry) => ({ key: entry.key, label: entry.label, videoCount: entry.count })),
     };
   }, [effectiveVideoTags, homeMediaMode, modeFilteredVideos]);
   const homeTagExplorerVideos = useMemo(
@@ -2507,24 +2496,16 @@ export default function App() {
   const isPhotoAlbumGridCompact = pagedPhotoAlbums.length <= 5;
   const photoAlbumStats = useMemo(() => createPhotoAlbumStats(photoAlbums, favoritePhotoAlbumIds, photoAlbumProgress), [favoritePhotoAlbumIds, photoAlbumProgress, photoAlbums]);
   const photoAlbumTagStats = useMemo(() => {
-    const byKey = new Map<string, { key: string; label: string; albumCount: number }>();
-    let taggedAlbums = 0;
-    photoAlbums.forEach((album) => {
-      const seen = new Set<string>();
-      (photoAlbumTags[album.id] ?? []).forEach((tag) => {
-        const key = normalizeTagKey(tag);
-        if (!key || seen.has(key)) return;
-        seen.add(key);
-        const existing = byKey.get(key);
-        byKey.set(key, { key, label: existing?.label ?? tag, albumCount: (existing?.albumCount ?? 0) + 1 });
-      });
-      if (seen.size) taggedAlbums += 1;
-    });
+    const stats = createTagCoverageStats(
+      photoAlbums,
+      (album) => photoAlbumTags[album.id] ?? [],
+      { limit: 20 },
+    );
     return {
-      coverage: photoAlbums.length ? taggedAlbums / photoAlbums.length : 0,
-      taggedAlbums,
-      totalTags: byKey.size,
-      tags: Array.from(byKey.values()).sort((a, b) => b.albumCount - a.albumCount || a.label.localeCompare(b.label, "zh-Hans-CN", { numeric: true })).slice(0, 20),
+      coverage: stats.coverage,
+      taggedAlbums: stats.taggedItems,
+      totalTags: stats.totalTags,
+      tags: stats.tags.map((entry) => ({ key: entry.key, label: entry.label, albumCount: entry.count })),
     };
   }, [photoAlbumTags, photoAlbums]);
   const visiblePhotoThumbnails = useMemo(
