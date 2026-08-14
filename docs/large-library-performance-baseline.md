@@ -72,7 +72,34 @@ npm run benchmark:large-library
 | R21 | 标签覆盖率统计共享函数 | App 内重复实现消除 | `tests/tag-utils.test.mjs` |
 | R22 | 缩略图/封面字节往返 + ETag 304 测试 | 成功路径回归保护 | `tests/player-data-api-plugin.test.mjs` |
 
-当前验证基线：`node --test` 564 用例全绿、`tsc --noEmit` 0 错误、`vite build` 通过（首页入口 JS 504 KiB raw / 154.6 KiB gzip，CSS 338.8 KiB raw / 54.1 KiB gzip）。
+当前验证基线：`node --test` 568 用例全绿、`tsc --noEmit` 0 错误、`vite build` 通过（首页入口 JS 504 KiB raw / 154.6 KiB gzip，CSS 338.8 KiB raw / 54.1 KiB gzip）。
+
+## 复测（2026-09，`node scripts/performance-baseline.mjs`）
+
+| 指标 | 2026-07-29 初始 | 当前 | 变化 |
+| --- | --- | --- | --- |
+| 搜索文档构建（20k） | 187.8 ms | 208.3 ms | ≈持平（Worker 内离线构建，不阻塞主线程） |
+| 暖搜索 P50 / P95 | 7.0 / 12.0 ms | 7.4 / 11.4 ms | P95 改善，预算 ≤100 ms 持续满足 |
+| 千图相册构造 / 素材展开 | 214.0 / 84.4 ms | 198.3 / 74.9 ms | **-7% / -11%** |
+| 千图合成堆内存增量 | 276.75 MiB | 276.70 MiB | ≈持平 |
+| 主业务入口 JS | 482.4 / 146.3 KiB（raw/gzip） | 492.6 / 151.0 KiB | +2%（功能增长） |
+| 全局 CSS | 201.8 / 33.2 KiB | 330.9 / 52.8 KiB | +64%（新增 UI 特性） |
+
+注：入口 JS/CSS 增长来自期间新增功能（看图、千图、演员、探索、弹幕等），非回归；各功能块已按需分包（lazy import + manualChunks），首页首屏仅加载入口 + vendor。
+
+### 运行全部基准
+
+```powershell
+node scripts/performance-baseline.mjs        # 大库搜索/千图/产物体积
+node scripts/benchmark-patch-write.mjs       # SQLite 增量写入
+node scripts/benchmark-sort.mjs              # 播放列表排序 vs 单遍首元素
+node scripts/benchmark-browser-scan.mjs      # 浏览器目录扫描并发
+node scripts/benchmark-load-views.mjs        # 启动/deferred 视图 SQL 次数
+node scripts/benchmark-search-chain.mjs      # 搜索链路（含演员元数据解析）
+node scripts/benchmark-thumbnail-warmup.mjs  # 缩略图预热封顶
+node scripts/benchmark-config-read.mjs       # config mtime 缓存
+node scripts/benchmark-route-dispatch.mjs    # API 路由正则惰性匹配
+```
 
 ### 仍搁置的高价值项
 

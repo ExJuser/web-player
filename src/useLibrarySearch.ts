@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import type {
+  PlaylistSearchDocument,
   PlaylistSearchMatch,
   PlaylistSearchRecord,
   PlaylistSearchToken,
@@ -33,6 +34,9 @@ export function useLibrarySearch<Video extends { id: string }>(
   const workerFailedRef = useRef(false);
   const recordsRef = useRef(records);
   const videosRef = useRef(videos);
+  // Worker 不可用时的主线程降级路径：文档构建（20k 记录约 200ms）按 records 身份缓存，
+  // 避免每次输入都重新构建（records 只在激活搜索/依赖变化时更换身份）。
+  const fallbackDocumentsRef = useRef<{ records: PlaylistSearchRecord[]; documents: Map<string, PlaylistSearchDocument> } | null>(null);
   const [backendRevision, setBackendRevision] = useState(0);
   const [result, setResult] = useState<SearchResult>(emptyResult);
   const [isPending, setIsPending] = useState(false);
@@ -125,7 +129,11 @@ export function useLibrarySearch<Video extends { id: string }>(
     let cancelled = false;
     void import("./playerPlaylistSearch").then((search) => {
       if (cancelled || latestRequestIdRef.current !== requestId) return;
-      const documents = search.createPlaylistSearchDocuments(recordsRef.current);
+      let documents = fallbackDocumentsRef.current?.documents;
+      if (!documents || fallbackDocumentsRef.current?.records !== recordsRef.current) {
+        documents = search.createPlaylistSearchDocuments(recordsRef.current);
+        fallbackDocumentsRef.current = { records: recordsRef.current, documents };
+      }
       const fallbackResult = search.searchPlaylistVideos(videosRef.current, documents, normalizedQuery);
       setResult({
         matchesByVideoId: fallbackResult.matchesByVideoId,
