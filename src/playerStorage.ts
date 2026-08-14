@@ -1193,12 +1193,23 @@ export function openRecentFolderDatabase() {
   });
 }
 
+// 复用 IndexedDB 连接：句柄/看图目录等操作较频繁，避免每次读写都 open/close。
+let sharedRecentFolderDatabasePromise: Promise<IDBDatabase> | null = null;
+
+function openSharedRecentFolderDatabase() {
+  sharedRecentFolderDatabasePromise ??= openRecentFolderDatabase().catch((error) => {
+    sharedRecentFolderDatabasePromise = null;
+    throw error;
+  });
+  return sharedRecentFolderDatabasePromise;
+}
+
 async function runObjectStoreRequest<T>(
   storeName: string,
   mode: IDBTransactionMode,
   operation: (store: IDBObjectStore) => IDBRequest<T>,
 ) {
-  const database = await openRecentFolderDatabase();
+  const database = await openSharedRecentFolderDatabase();
   return new Promise<T>((resolve, reject) => {
     let result: T;
     const transaction = database.transaction(storeName, mode);
@@ -1208,14 +1219,8 @@ async function runObjectStoreRequest<T>(
       result = request.result;
     };
     request.onerror = () => reject(request.error);
-    transaction.oncomplete = () => {
-      database.close();
-      resolve(result);
-    };
-    transaction.onerror = () => {
-      database.close();
-      reject(transaction.error);
-    };
+    transaction.oncomplete = () => resolve(result);
+    transaction.onerror = () => reject(transaction.error);
   });
 }
 
@@ -1543,9 +1548,8 @@ export async function saveDanmakuPreferences(preferences: DanmakuPreferences) {
 
 async function readLegacyIndexedDbThumbnails() {
   if (!("indexedDB" in window)) return [];
-  const database = await openRecentFolderDatabase();
+  const database = await openSharedRecentFolderDatabase();
   if (!database.objectStoreNames.contains(LEGACY_THUMBNAIL_STORE_NAME)) {
-    database.close();
     return [];
   }
 
@@ -1564,7 +1568,6 @@ async function readLegacyIndexedDbThumbnails() {
       values = valuesRequest.result;
     };
     transaction.oncomplete = () => {
-      database.close();
       resolve(
         keys.flatMap((key, index) => {
           const value = values[index];
@@ -1573,16 +1576,14 @@ async function readLegacyIndexedDbThumbnails() {
       );
     };
     transaction.onerror = () => {
-      database.close();
       reject(transaction.error);
     };
   });
 }
 
 async function clearLegacyIndexedDbThumbnails() {
-  const database = await openRecentFolderDatabase();
+  const database = await openSharedRecentFolderDatabase();
   if (!database.objectStoreNames.contains(LEGACY_THUMBNAIL_STORE_NAME)) {
-    database.close();
     return;
   }
 
@@ -1590,11 +1591,9 @@ async function clearLegacyIndexedDbThumbnails() {
     const transaction = database.transaction(LEGACY_THUMBNAIL_STORE_NAME, "readwrite");
     transaction.objectStore(LEGACY_THUMBNAIL_STORE_NAME).clear();
     transaction.oncomplete = () => {
-      database.close();
       resolve();
     };
     transaction.onerror = () => {
-      database.close();
       reject(transaction.error);
     };
   });

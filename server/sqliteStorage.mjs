@@ -920,17 +920,21 @@ export class LocalDataSqliteStore {
     // 全量加载保留"是否有数据"门控（无数据返回 null → 404）；
     // 视图加载始终返回视图形状（空字段即客户端默认值）。
     if (!view) {
-      const hasData = Boolean(metadataRow)
-        || Boolean(this.db.prepare("SELECT 1 FROM actors WHERE library_id = ? LIMIT 1").get(libraryId))
-        || Boolean(this.db.prepare("SELECT 1 FROM video_actor_overrides WHERE library_id = ? LIMIT 1").get(libraryId))
-        || Boolean(this.db.prepare("SELECT 1 FROM video_progress WHERE library_id = ? LIMIT 1").get(libraryId))
-        || Boolean(this.db.prepare("SELECT 1 FROM video_ratings WHERE library_id = ? LIMIT 1").get(libraryId))
-        || Boolean(this.db.prepare("SELECT 1 FROM watch_activity WHERE library_id = ? LIMIT 1").get(libraryId))
-        || Boolean(this.db.prepare("SELECT 1 FROM video_highlights WHERE library_id = ? LIMIT 1").get(libraryId))
-        || Boolean(this.db.prepare("SELECT 1 FROM video_edit_segments WHERE library_id = ? LIMIT 1").get(libraryId))
-        || Boolean(this.db.prepare("SELECT 1 FROM duplicate_detections WHERE library_id = ? LIMIT 1").get(libraryId))
-        || Boolean(this.db.prepare("SELECT 1 FROM player_preferences WHERE library_id = ? LIMIT 1").get(libraryId));
-      if (!hasData) return null;
+      const hasDataRow = this.db.prepare(`
+        SELECT
+          EXISTS(SELECT 1 FROM library_metadata WHERE library_id = ?1)
+          OR EXISTS(SELECT 1 FROM actors WHERE library_id = ?1)
+          OR EXISTS(SELECT 1 FROM video_actor_overrides WHERE library_id = ?1)
+          OR EXISTS(SELECT 1 FROM video_progress WHERE library_id = ?1)
+          OR EXISTS(SELECT 1 FROM video_ratings WHERE library_id = ?1)
+          OR EXISTS(SELECT 1 FROM watch_activity WHERE library_id = ?1)
+          OR EXISTS(SELECT 1 FROM video_highlights WHERE library_id = ?1)
+          OR EXISTS(SELECT 1 FROM video_edit_segments WHERE library_id = ?1)
+          OR EXISTS(SELECT 1 FROM duplicate_detections WHERE library_id = ?1)
+          OR EXISTS(SELECT 1 FROM player_preferences WHERE library_id = ?1)
+        AS has_any
+      `).get(libraryId);
+      if (!hasDataRow?.has_any) return null;
     }
 
     const progress = {};
