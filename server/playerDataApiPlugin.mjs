@@ -63,7 +63,7 @@ import { createPublicLocalConfig, defaultAppConfig } from "./localConfig.mjs";
 import { createMediaProcessingTaskApi, createMediaProcessingTaskManager } from "./mediaProcessingTask.mjs";
 import { detectTools, runProcess } from "./processRunner.mjs";
 import { formatRemoteFetchError, requestExternalJson, requestExternalText } from "./remoteFetch.mjs";
-import { parseJsonBody, readBody, sanitizeStorageId } from "./requestUtils.mjs";
+import { ApiError, createApiError, parseJsonBody, readBody, sanitizeStorageId } from "./requestUtils.mjs";
 import { LocalDataSqliteStore } from "./sqliteStorage.mjs";
 import { BoundedLruCache } from "./boundedLruCache.mjs";
 import { createPlayerDeferredData, createPlayerStartupData } from "./playerDataViews.mjs";
@@ -259,9 +259,33 @@ function isUsableMediaProbeCache(value) {
   return Boolean(value?.playability && typeof value.playability.canRemux === "boolean");
 }
 
+// 客户端可预期错误消息 → HTTP 状态码（400 参数错误 / 404 资源不存在），
+// 未知错误返回 null 由外层按 500 处理。这些错误来自路径解析/文件存在性校验（mediaRoots.mjs）。
+function classifyClientRequestError(error) {
+  if (!(error instanceof Error)) return null;
+  const message = error.message;
+  if (
+    message === "Unknown media root."
+    || message.startsWith("Invalid relative path.")
+    || message.startsWith("Unsupported media file.")
+    || message.startsWith("Unsupported video file.")
+    || message.startsWith("Unsupported photo file.")
+    || message.startsWith("Resolved video path is outside")
+    || message.startsWith("Resolved photo album path is outside")
+    || message.startsWith("Browser media libraries need a configured local absolute path")
+    || message.includes("需要先配置本机路径")
+  ) {
+    return 400;
+  }
+  if (message.includes("not found") || message.includes("Not found")) {
+    return 404;
+  }
+  return null;
+}
+
 async function probeMedia(config, payload, store) {
   const root = findMediaRoot(config, payload?.rootId);
-  if (!root) throw new Error("Unknown media root.");
+  if (!root) throw createApiError(400, "Unknown media root.");
   if (root.source === "browser" && !root.localPath) {
     return {
       playability: {
@@ -297,9 +321,9 @@ async function probeMedia(config, payload, store) {
 
 async function remuxMediaToCompatibleMp4(config, payload, options = {}) {
   const root = findMediaRoot(config, payload?.rootId);
-  if (!root) throw new Error("Unknown media root.");
+  if (!root) throw createApiError(400, "Unknown media root.");
   if (root.source === "browser" && !root.localPath) {
-    throw new Error("浏览器添加的媒体库需要先配置本机路径，才能生成兼容 MP4。");
+    throw createApiError(400, "浏览器添加的媒体库需要先配置本机路径，才能生成兼容 MP4。");
   }
 
   const videoPath = resolveVideoPathFromConfig(config, payload?.rootId, payload?.relativePath);
@@ -1808,7 +1832,12 @@ export function playerDataApiPlugin({ projectRoot, env }) {
 
       sendJson(response, 404, { error: "Not found." });
     } catch (error) {
-      sendJson(response, 500, { error: error instanceof Error ? error.message : "Internal server error." });
+      // 统一错误码：客户端可预期错误返回 400/404，其余视为服务端故障返回 500，
+      // 避免同类错误在 probe/缩略图等路径口径不一致。
+      const status = error instanceof ApiError
+        ? error.status
+        : classifyClientRequestError(error) ?? 500;
+      sendJson(response, status, { error: error instanceof Error ? error.message : "Internal server error." });
     }
   };
 
