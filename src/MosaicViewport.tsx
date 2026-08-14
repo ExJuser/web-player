@@ -1,5 +1,5 @@
 import { Maximize2, RotateCcw, ZoomIn, ZoomOut } from "lucide-react";
-import { useCallback, useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode, type WheelEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode, type WheelEvent } from "react";
 
 import { acquireMosaicBitmap, type MosaicBitmapLease } from "./mosaicImagePipeline";
 import type { MosaicRuntimeSource, MosaicTargetRotation, MosaicTileFit } from "./mosaicTypes";
@@ -126,13 +126,17 @@ export function MosaicViewport({ assignments, columns, rows, previewUrl, sources
   const [sourceAnchor, setSourceAnchor] = useState<ReturnType<typeof calculateMosaicPopoverAnchor> & { width: number; height: number; previewHeight: number } | null>(null);
   const sourceSelectionRef = useRef(0);
   const [backend, setBackend] = useState<"WebGL2" | "Canvas 2D">("WebGL2");
-  const sourceById = useRef(new Map(sources.map((source) => [source.id, source])));
-  sourceById.current = new Map(sources.map((source) => [source.id, source]));
+  const sourceById = useMemo(() => new Map(sources.map((source) => [source.id, source])), [sources]);
+  // transform 走 ref：拖拽/缩放每帧变化时不重建 draw/drawDetails 回调，
+  // 避免每帧重跑两个 ResizeObserver effect 与回调本身。
+  const transformRef = useRef(transform);
+  transformRef.current = transform;
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
     const bitmap = bitmapRef.current;
     if (!canvas || !bitmap) return;
+    const { scale, x, y } = transformRef.current;
     const ratio = window.devicePixelRatio || 1;
     const width = Math.max(1, Math.round(canvas.clientWidth * ratio));
     const height = Math.max(1, Math.round(canvas.clientHeight * ratio));
@@ -159,22 +163,22 @@ export function MosaicViewport({ assignments, columns, rows, previewUrl, sources
       }
       gl.uniform4f(
         webGl.transformLocation,
-        fit.x * transform.scale,
-        fit.y * transform.scale,
-        transform.x * ratio * 2 / width,
-        -transform.y * ratio * 2 / height,
+        fit.x * scale,
+        fit.y * scale,
+        x * ratio * 2 / width,
+        -y * ratio * 2 / height,
       );
       gl.drawArrays(gl.TRIANGLES, 0, 6);
       return;
     }
     const context = canvas.getContext("2d");
     if (!context) return;
-    const drawWidth = width * fit.x * transform.scale;
-    const drawHeight = height * fit.y * transform.scale;
+    const drawWidth = width * fit.x * scale;
+    const drawHeight = height * fit.y * scale;
     context.fillStyle = "#07070d";
     context.fillRect(0, 0, width, height);
-    context.drawImage(bitmap, (width - drawWidth) / 2 + transform.x * ratio, (height - drawHeight) / 2 + transform.y * ratio, drawWidth, drawHeight);
-  }, [transform]);
+    context.drawImage(bitmap, (width - drawWidth) / 2 + x * ratio, (height - drawHeight) / 2 + y * ratio, drawWidth, drawHeight);
+  }, []);
   drawRef.current = draw;
 
   const drawDetails = useCallback(() => {
@@ -182,6 +186,7 @@ export function MosaicViewport({ assignments, columns, rows, previewUrl, sources
     const baseCanvas = canvasRef.current;
     const previewBitmap = bitmapRef.current;
     if (!detailCanvas || !baseCanvas || !previewBitmap) return;
+    const transformValue = transformRef.current;
     const ratio = window.devicePixelRatio || 1;
     const viewportWidth = baseCanvas.clientWidth;
     const viewportHeight = baseCanvas.clientHeight;
@@ -195,7 +200,7 @@ export function MosaicViewport({ assignments, columns, rows, previewUrl, sources
     if (!context) return;
     context.setTransform(1, 0, 0, 1, 0, 0);
     context.clearRect(0, 0, width, height);
-    if (transform.scale < 3) return;
+    if (transformValue.scale < 3) return;
     if (targetColors.length < columns * rows) return;
 
     const geometry = calculateMosaicGeometry({
@@ -203,7 +208,7 @@ export function MosaicViewport({ assignments, columns, rows, previewUrl, sources
       viewportHeight,
       imageWidth: previewBitmap.width,
       imageHeight: previewBitmap.height,
-      transform,
+      transform: transformValue,
     });
     const cellWidth = geometry.width / columns;
     const cellHeight = geometry.height / rows;
@@ -236,7 +241,7 @@ export function MosaicViewport({ assignments, columns, rows, previewUrl, sources
     const tintOpacity = Math.max(0, Math.min(0.42, (1 - colorPreservation) * 0.42));
     detailCells.forEach((cell) => {
       const sourceId = assignments[cell.index];
-      const source = sourceById.current.get(sourceId);
+      const source = sourceById.get(sourceId);
       if (!source) return;
       const cachedLease = detailBitmapsRef.current.get(sourceId);
       if (cachedLease) {
@@ -293,7 +298,7 @@ export function MosaicViewport({ assignments, columns, rows, previewUrl, sources
       context.restore();
     }
     context.globalAlpha = 1;
-  }, [assignments, colorPreservation, columns, rows, targetClarity, targetColors, targetRotation, tileFit, transform]);
+  }, [assignments, colorPreservation, columns, rows, targetClarity, targetColors, targetRotation, tileFit]);
   detailDrawRef.current = drawDetails;
 
   useEffect(() => {
@@ -430,7 +435,7 @@ export function MosaicViewport({ assignments, columns, rows, previewUrl, sources
     const hit = locatePointerCell(event.clientX, event.clientY);
     if (!hit || hit.index >= assignments.length) return;
     updateCellHighlight(event.clientX, event.clientY);
-    const source = sourceById.current.get(assignments[hit.index]);
+    const source = sourceById.get(assignments[hit.index]);
     if (source && canvasRef.current) {
       const rect = canvasRef.current.getBoundingClientRect();
       const cellWidth = hit.geometry.width / columns;
