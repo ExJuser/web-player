@@ -1833,11 +1833,18 @@ export function playerDataApiPlugin({ projectRoot, env }) {
   return {
     name: "local-web-player-data-api",
     async configureServer(server) {
-      await thumbnailMemoryCache.warmDirectory({ cacheRoot: thumbnailsRoot });
+      // 预热改为后台执行：大媒体库的缩略图缓存可能成千上万份，
+      // 在 configureServer 里 await 会阻塞 dev server 启动直到全盘读完。
+      // 后台预热 + 容量封顶后，首次请求最多退化为一次磁盘读取（getOrLoad 会合并并缓存）。
+      void thumbnailMemoryCache.warmDirectory({ cacheRoot: thumbnailsRoot }).catch((error) => {
+        console.error(`[thumbnail-cache] 启动预热失败：${error?.message ?? error}`);
+      });
       server.middlewares.use(middleware);
     },
     async configurePreviewServer(server) {
-      await thumbnailMemoryCache.warmDirectory({ cacheRoot: thumbnailsRoot });
+      void thumbnailMemoryCache.warmDirectory({ cacheRoot: thumbnailsRoot }).catch((error) => {
+        console.error(`[thumbnail-cache] 启动预热失败：${error?.message ?? error}`);
+      });
       server.middlewares.use(middleware);
     },
   };

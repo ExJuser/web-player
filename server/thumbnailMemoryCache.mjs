@@ -6,6 +6,9 @@ import { BoundedLruCache } from "./boundedLruCache.mjs";
 export const defaultThumbnailMemoryCacheMaxEntries = 4096;
 export const defaultThumbnailMemoryCacheMaxBytes = 64 * 1024 * 1024;
 export const defaultThumbnailMemoryCacheWarmupConcurrency = 16;
+// 启动预热默认只读取缓存能容纳的文件数：超出容量的文件读入后也会被 LRU 立即淘汰，
+// 属于纯浪费的磁盘 I/O。按容量封顶后，预热 I/O 有界且不会把缓存目录全盘读一遍。
+export const defaultThumbnailMemoryCacheWarmupFileLimit = defaultThumbnailMemoryCacheMaxEntries;
 
 export function createThumbnailMemoryCache({
   maxEntries = defaultThumbnailMemoryCacheMaxEntries,
@@ -82,6 +85,7 @@ export function createThumbnailMemoryCache({
     cacheRoot,
     contentType = "image/jpeg",
     concurrency = defaultThumbnailMemoryCacheWarmupConcurrency,
+    maxFiles = defaultThumbnailMemoryCacheWarmupFileLimit,
   }) => {
     let directoryEntries;
     try {
@@ -90,7 +94,10 @@ export function createThumbnailMemoryCache({
       if (error?.code === "ENOENT") return { loaded: 0, failed: 0, ...cache.stats() };
       throw error;
     }
-    const files = directoryEntries.filter((entry) => entry.isFile() && entry.name.endsWith(".blob"));
+    const fileLimit = Math.max(0, Math.floor(maxFiles));
+    const files = directoryEntries
+      .filter((entry) => entry.isFile() && entry.name.endsWith(".blob"))
+      .slice(0, fileLimit);
     const workerCount = Math.min(Math.max(1, Math.floor(concurrency)), files.length);
     let nextIndex = 0;
     let loaded = 0;

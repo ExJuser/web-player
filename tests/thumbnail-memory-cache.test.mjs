@@ -45,6 +45,32 @@ test("thumbnail memory cache warms every persisted thumbnail before requests", a
   }
 });
 
+test("thumbnail memory cache warmup is bounded by the file limit", async () => {
+  const cacheRoot = await mkdtemp(path.join(tmpdir(), "web-player-thumbnail-memory-"));
+  try {
+    await Promise.all([
+      writeFile(path.join(cacheRoot, "one.blob"), "one"),
+      writeFile(path.join(cacheRoot, "two.blob"), "two"),
+      writeFile(path.join(cacheRoot, "three.blob"), "three"),
+    ]);
+
+    const cache = createThumbnailMemoryCache();
+    const result = await cache.warmDirectory({ cacheRoot, concurrency: 2, maxFiles: 2 });
+
+    assert.equal(result.loaded, 2);
+    assert.equal(result.failed, 0);
+    assert.equal(result.entries, 2);
+    // 目录枚举顺序不保证，只校验结果集大小：恰好 2 份命中、1 份未预热（首次读取仍走磁盘）。
+    const ids = ["one", "two", "three"];
+    const statuses = await Promise.all(ids.map((id) =>
+      cache.getOrLoad({ thumbnailId: id, filePath: path.join(cacheRoot, `${id}.blob`) }).then((entry) => entry.cacheStatus)));
+    assert.equal(statuses.filter((status) => status === "HIT").length, 2);
+    assert.equal(statuses.filter((status) => status === "MISS").length, 1);
+  } finally {
+    await rm(cacheRoot, { recursive: true, force: true });
+  }
+});
+
 test("thumbnail memory cache coalesces concurrent disk reads and obeys byte limits", async () => {
   let resolveRead;
   let readCount = 0;
