@@ -252,7 +252,23 @@ function drawRotatedTarget(
   context.restore();
 }
 
+type MosaicTargetGrid = { rows: number; descriptors: number[][]; colors: number[][] };
+
+// 目标图网格缓存：打开项目/更换目标图时避免重复解码与像素读取（大图成本高）。
+// 文件输入按对象（WeakMap，无跨文件碰撞）+ 列数/旋转角缓存；URL 输入按 URL 键缓存，容量小超限清空。
+const mosaicTargetGridByUrl = new Map<string, MosaicTargetGrid>();
+const mosaicTargetGridByFile = new WeakMap<Blob, Map<string, MosaicTargetGrid>>();
+const mosaicTargetGridCacheLimit = 24;
+
 export async function readMosaicTargetGrid(input: { file?: Blob; url?: string; columns: number; targetRotation?: MosaicTargetRotation }) {
+  const variantKey = `${input.columns}\u0000${input.targetRotation ?? 0}`;
+  let cached: MosaicTargetGrid | undefined;
+  if (input.file) {
+    cached = mosaicTargetGridByFile.get(input.file)?.get(variantKey);
+  } else {
+    cached = mosaicTargetGridByUrl.get(`url:${input.url ?? ""}\u0000${variantKey}`);
+  }
+  if (cached) return cached;
   const bitmap = await loadMosaicBitmap(input);
   const rotation = input.targetRotation ?? 0;
   const dimensions = getMosaicRotatedDimensions(bitmap.width, bitmap.height, rotation);
@@ -281,7 +297,19 @@ export async function readMosaicTargetGrid(input: { file?: Blob; url?: string; c
     }));
     descriptors.push(quantizeMosaicDescriptor(color[0], color[1], color[2], 0, regions));
   });
-  return { rows, descriptors, colors };
+  const result: MosaicTargetGrid = { rows, descriptors, colors };
+  if (input.file) {
+    let byFile = mosaicTargetGridByFile.get(input.file);
+    if (!byFile) {
+      byFile = new Map();
+      mosaicTargetGridByFile.set(input.file, byFile);
+    }
+    byFile.set(variantKey, result);
+  } else {
+    if (mosaicTargetGridByUrl.size >= mosaicTargetGridCacheLimit) mosaicTargetGridByUrl.clear();
+    mosaicTargetGridByUrl.set(`url:${input.url ?? ""}\u0000${variantKey}`, result);
+  }
+  return result;
 }
 
 export async function matchMosaic(input: {
