@@ -27,7 +27,7 @@ function parseJson(value, fallback) {
 function normalizeTagKey(value) {
   return String(value ?? "")
     .normalize("NFKC")
-    .toLocaleLowerCase()
+    .toLowerCase()
     .replace(/[\s\p{P}\p{S}]+/gu, "")
     .trim();
 }
