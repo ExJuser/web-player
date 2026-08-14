@@ -19,6 +19,9 @@ import { createMatchingNfoNameLookup, maxActorNfoBytes, parseActorNfoBytes } fro
 
 export { collectVideosFromFiles } from "./browserFileMedia";
 
+// 文件级扫描并发上限：getFile() 是真实磁盘 I/O，串行会放大延迟到文件数倍。
+const browserScanFileConcurrency = 8;
+
 export async function ensureDirectoryReadPermission(directory: FileSystemDirectoryHandle) {
   const descriptor = { mode: "read" as const };
   const currentPermission = await directory.queryPermission?.(descriptor);
@@ -175,21 +178,37 @@ export async function* collectVideos(
     const findMatchingNfoName = createMatchingNfoNameLookup(fileEntryNames);
     const context = { directory: handle, segments, rootId, fileEntryNames, fileEntriesByName, findMatchingNfoName };
 
+    // 先深度优先处理子目录（保持目录顺序与批次产出顺序）
     for (const entry of entries) {
       if (entry.kind === "directory") {
         yield* walk(entry, [...segments, entry.name]);
-      } else {
-        const result = await readBrowserMediaFile(entry, context);
-        if (result.kind === "filteredVideo") {
-          scannedFiles += 1;
-          filteredSmallVideos += 1;
-        } else if (result.kind === "video") {
-          scannedFiles += 1;
-          pendingVideos.push(result.video);
-        } else if (result.kind === "subtitle") {
-          scannedFiles += 1;
-          pendingSubtitles.push(result.subtitle);
-        }
+      }
+    }
+
+    // 文件级有界并发：File System Access API 的 getFile() 是真实异步磁盘 I/O，
+    // 全串行会把延迟放大到文件数倍；固定 worker 数并行读取并按原顺序汇总。
+    const results = new Array<BrowserMediaFileResult>(fileEntries.length);
+    let nextFileIndex = 0;
+    const workerCount = Math.min(browserScanFileConcurrency, fileEntries.length);
+    const worker = async () => {
+      while (nextFileIndex < fileEntries.length) {
+        const index = nextFileIndex;
+        nextFileIndex += 1;
+        results[index] = await readBrowserMediaFile(fileEntries[index], context);
+      }
+    };
+    await Promise.all(Array.from({ length: workerCount }, () => worker()));
+
+    for (const result of results) {
+      if (result.kind === "filteredVideo") {
+        scannedFiles += 1;
+        filteredSmallVideos += 1;
+      } else if (result.kind === "video") {
+        scannedFiles += 1;
+        pendingVideos.push(result.video);
+      } else if (result.kind === "subtitle") {
+        scannedFiles += 1;
+        pendingSubtitles.push(result.subtitle);
       }
 
       if (shouldFlushMediaScan(lastFlushAt, pendingVideos, pendingSubtitles)) {
