@@ -567,12 +567,6 @@ button {
   cursor: default;
 }
 
-.recommendation-feed-actions button.is-active {
-  border-color: rgba(217, 166, 90, 0.48);
-  background: rgba(217, 166, 90, 0.12);
-  color: #f0c77f;
-}
-
 .recommendation-feed-actions .recommendation-feed-dismiss {
   color: #aeb8c1;
 }

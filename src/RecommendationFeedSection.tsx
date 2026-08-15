@@ -1,4 +1,4 @@
-import { ArrowLeft, Film, Heart, LoaderCircle, Play, SkipForward, Volume2, VolumeX, X } from "lucide-react";
+import { ArrowLeft, Film, LoaderCircle, Play, SkipForward, Volume2, VolumeX, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 
@@ -139,14 +139,6 @@ export function RecommendationFeedSection({ active, mode, modeLabel, onActiveTit
     : 0;
   const positionLabel = useMemo(() => items.length ? `${activeIndex + 1} / ${items.length}${nextCursor ? "+" : ""}` : "", [activeIndex, items.length, nextCursor]);
 
-  const toggleLike = useCallback((item: RecommendationFeedItem) => {
-    const liked = !item.liked;
-    setItems((current) => current.map((candidate) => candidate.id === item.id ? { ...candidate, liked } : candidate));
-    void sendRecommendationFeedback(item.videoId, liked ? "like" : "unlike").catch(() => {
-      setItems((current) => current.map((candidate) => candidate.id === item.id ? { ...candidate, liked: !liked } : candidate));
-    });
-  }, []);
-
   const dismiss = useCallback((item: RecommendationFeedItem) => {
     void sendRecommendationFeedback(item.videoId, "dismiss").catch(() => undefined);
     setItems((current) => current.filter((candidate) => candidate.videoId !== item.videoId));
@@ -252,7 +244,6 @@ export function RecommendationFeedSection({ active, mode, modeLabel, onActiveTit
                   {item.tags.length ? <div className="recommendation-feed-tags">{item.tags.slice(0, 6).map((tag) => <span key={tag}>{tag}</span>)}</div> : null}
                 </div>
                 <div className="recommendation-feed-actions">
-                  <button type="button" className={item.liked ? "is-active" : ""} onClick={() => toggleLike(item)}><Heart size={18} fill={item.liked ? "currentColor" : "none"} />{item.liked ? "已喜欢" : "喜欢"}</button>
                   <button type="button" onClick={() => onOpenOriginal(item.videoId, Math.max(0, item.startTime - 10))}><Play size={18} />看原片</button>
                   <button
                     type="button"

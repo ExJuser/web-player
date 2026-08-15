@@ -16,7 +16,6 @@ export type RecommendationFeedItem = {
   reasons: string[];
   tags: string[];
   rating?: number;
-  liked: boolean;
 };
 
 export type RecommendationFeedResponse = {
@@ -34,7 +33,7 @@ export function loadRecommendationFeed(mode: HomeMediaMode, cursor?: string | nu
   return fetchLocalJson<RecommendationFeedResponse>(`/api/recommendations/feed?${params}`);
 }
 
-export function sendRecommendationFeedback(videoId: string, action: "like" | "unlike" | "skip" | "complete" | "replay" | "dismiss") {
+export function sendRecommendationFeedback(videoId: string, action: "skip" | "complete" | "replay" | "dismiss") {
   return fetchLocalJson<{ ok: true }>("/api/recommendations/feedback", {
     method: "POST",
     body: JSON.stringify({ videoId, action }),

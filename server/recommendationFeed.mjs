@@ -123,8 +123,7 @@ function normalizeManualSegment(highlight, duration) {
 }
 
 function feedbackScore(feedback) {
-  return (feedback?.liked ? 1.5 : 0)
-    + Math.min(1.2, (feedback?.completed ?? 0) * 0.25)
+  return Math.min(1.2, (feedback?.completed ?? 0) * 0.25)
     + Math.min(0.8, (feedback?.replayed ?? 0) * 0.2)
     - Math.min(1.5, (feedback?.skipped ?? 0) * 0.18);
 }
@@ -368,7 +367,6 @@ export function createRecommendationFeedService({
           reasons: segment.reasons,
           tags: store.videoTags?.[video.id] ?? [],
           rating: store.videoRatings?.[video.id],
-          liked: Boolean(cache.feedback[video.id]?.liked),
         };
       }));
       queueAnalysis(page
@@ -387,14 +385,12 @@ export function createRecommendationFeedService({
     async recordFeedback(payload) {
       const videoId = typeof payload?.videoId === "string" ? payload.videoId.trim() : "";
       const action = typeof payload?.action === "string" ? payload.action : "";
-      if (!videoId || !["like", "unlike", "skip", "complete", "replay", "dismiss"].includes(action)) {
+      if (!videoId || !["skip", "complete", "replay", "dismiss"].includes(action)) {
         throw new Error("Invalid recommendation feedback.");
       }
       const cache = await loadCache();
       const feedback = cache.feedback[videoId] ?? {};
-      if (action === "like") feedback.liked = true;
-      else if (action === "unlike") feedback.liked = false;
-      else if (action === "dismiss") feedback.dismissed = true;
+      if (action === "dismiss") feedback.dismissed = true;
       else if (action === "skip") feedback.skipped = (feedback.skipped ?? 0) + 1;
       else if (action === "complete") feedback.completed = (feedback.completed ?? 0) + 1;
       else if (action === "replay") feedback.replayed = (feedback.replayed ?? 0) + 1;
