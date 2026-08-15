@@ -110,9 +110,9 @@ export function HomeSideColumn({
     event.currentTarget.setPointerCapture(event.pointerId);
   }, []);
 
-  const handlePointerMove = useCallback((event: ReactPointerEvent<HTMLButtonElement>) => {
+  const moveDrag = useCallback((pointerId: number, clientY: number) => {
     const state = dragRef.current;
-    if (!state || event.pointerId !== state.pointerId) return;
+    if (!state || pointerId !== state.pointerId) return;
 
     // 依据指针纵向位置计算插入索引：逐卡比较中线，指针越过某卡中线则插到其后。
     const prevOrder = orderRef.current;
@@ -122,7 +122,7 @@ export function HomeSideColumn({
       const el = cardRefs.current.get(key);
       if (!el) continue;
       const rect = el.getBoundingClientRect();
-      if (event.clientY > rect.top + rect.height / 2) insertIndex += 1;
+      if (clientY > rect.top + rect.height / 2) insertIndex += 1;
       else break;
     }
     const next = [...rest.slice(0, insertIndex), state.key, ...rest.slice(insertIndex)];
@@ -130,22 +130,40 @@ export function HomeSideColumn({
 
     setDrag((prev) =>
       prev && prev.pointerId === state.pointerId
-        ? { ...prev, top: event.clientY - prev.offsetY }
+        ? { ...prev, top: clientY - prev.offsetY }
         : prev,
     );
   }, [commitOrder]);
 
-  const endDrag = useCallback((event: ReactPointerEvent<HTMLButtonElement>) => {
+  const finishDrag = useCallback((pointerId?: number) => {
     const state = dragRef.current;
-    if (!state || event.pointerId !== state.pointerId) return;
+    if (!state || (pointerId !== undefined && pointerId !== state.pointerId)) return;
     dragRef.current = null;
     setDrag(null);
-    try {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    } catch {
-      // 指针已丢失捕获时忽略。
-    }
   }, []);
+
+  useEffect(() => {
+    const handlePointerMove = (event: PointerEvent) => moveDrag(event.pointerId, event.clientY);
+    const handlePointerEnd = (event: PointerEvent) => finishDrag(event.pointerId);
+    const handleVisibilityChange = () => {
+      if (document.hidden) finishDrag();
+    };
+    const handleWindowBlur = () => finishDrag();
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerEnd);
+    window.addEventListener("pointercancel", handlePointerEnd);
+    window.addEventListener("blur", handleWindowBlur);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerEnd);
+      window.removeEventListener("pointercancel", handlePointerEnd);
+      window.removeEventListener("blur", handleWindowBlur);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      dragRef.current = null;
+    };
+  }, [finishDrag, moveDrag]);
 
   const moveCardByKey = useCallback((key: HomeSideCardKey, direction: -1 | 1) => {
     const prevOrder = orderRef.current;
@@ -178,9 +196,7 @@ export function HomeSideColumn({
             aria-label={`拖动排序“${entry.label}”卡片（按住左侧拖拽条，或按上下方向键移动）`}
             title={`按住左侧拖拽条排序“${entry.label}”，或按上下方向键移动`}
             onPointerDown={(event) => startDrag(event, entry.key)}
-            onPointerMove={handlePointerMove}
-            onPointerUp={endDrag}
-            onPointerCancel={endDrag}
+            onLostPointerCapture={(event) => finishDrag(event.pointerId)}
             onKeyDown={(event) => {
               if (event.key === "ArrowUp") {
                 event.preventDefault();
