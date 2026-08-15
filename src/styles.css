@@ -362,7 +362,8 @@ button {
   content: "LOCAL SIGNAL CUT";
 }
 
-.recommendation-feed-stage video {
+.recommendation-feed-stage video,
+.recommendation-feed-poster {
   display: block;
   width: calc(100% - 36px);
   height: calc(100% - 36px);
@@ -373,6 +374,9 @@ button {
   object-fit: contain;
   background: #000;
   box-shadow: 0 12px 36px rgba(0, 0, 0, 0.42);
+}
+
+.recommendation-feed-stage video {
   cursor: pointer;
 }
 

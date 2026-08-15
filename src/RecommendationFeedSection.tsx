@@ -1,5 +1,5 @@
 import { ArrowLeft, Film, LoaderCircle, Play, SkipForward, Volume2, VolumeX, X } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 
 import { formatTime } from "./playerFormatUtils";
@@ -19,6 +19,9 @@ type RecommendationFeedSectionProps = {
   onActiveTitleChange: (title: string) => void;
   onOpenOriginal: (videoId: string, startTime: number) => void;
 };
+
+const MAX_RETAINED_ITEMS = 40;
+const VIDEO_WINDOW_RADIUS = 2;
 
 export function RecommendationFeedSection({ active, mode, modeLabel, onActiveTitleChange, onClose, onOpenOriginal }: RecommendationFeedSectionProps) {
   const [items, setItems] = useState<RecommendationFeedItem[]>([]);
@@ -125,6 +128,17 @@ export function RecommendationFeedSection({ active, mode, modeLabel, onActiveTit
     void loadPage(nextCursor, true);
   }, [active, activeIndex, isLoading, items.length, loadPage, nextCursor]);
 
+  useLayoutEffect(() => {
+    const overflow = items.length - MAX_RETAINED_ITEMS;
+    if (overflow <= 0) return;
+    const scroll = scrollRef.current;
+    const viewport = scroll?.clientHeight || 1;
+    previousActiveIndexRef.current = Math.max(0, previousActiveIndexRef.current - overflow);
+    setItems((current) => current.slice(Math.max(0, current.length - MAX_RETAINED_ITEMS)));
+    setActiveIndex((index) => Math.max(0, index - overflow));
+    scroll?.scrollTo({ top: Math.max(0, scroll.scrollTop - overflow * viewport) });
+  }, [items.length]);
+
   useEffect(() => {
     if (activeIndex < items.length) return;
     setActiveIndex(Math.max(0, items.length - 1));
@@ -204,31 +218,37 @@ export function RecommendationFeedSection({ active, mode, modeLabel, onActiveTit
           {items.map((item, index) => (
             <article className="recommendation-feed-card" key={item.id} aria-current={index === activeIndex ? "true" : undefined}>
               <div className="recommendation-feed-stage">
-                <video
-                  ref={(element) => {
-                    if (element) videoRefs.current.set(item.id, element);
-                    else videoRefs.current.delete(item.id);
-                  }}
-                  src={Math.abs(index - activeIndex) <= 1 ? item.playbackUrl : undefined}
-                  poster={item.thumbnailUrl}
-                  preload={index === activeIndex ? "auto" : "metadata"}
-                  playsInline
-                  muted={isMuted}
-                  onLoadedMetadata={(event) => {
-                    event.currentTarget.currentTime = Math.min(item.startTime, Math.max(0, event.currentTarget.duration - 0.1));
-                    if (index === activeIndex && active) void event.currentTarget.play().catch(() => undefined);
-                  }}
-                  onTimeUpdate={(event) => {
-                    if (index !== activeIndex) return;
-                    setCurrentTime(event.currentTarget.currentTime);
-                    if (event.currentTarget.currentTime >= item.endTime - 0.15) finishItem(item);
-                  }}
-                  onEnded={() => finishItem(item)}
-                  onClick={(event) => {
-                    if (event.currentTarget.paused) void event.currentTarget.play().catch(() => undefined);
-                    else event.currentTarget.pause();
-                  }}
-                />
+                {Math.abs(index - activeIndex) <= VIDEO_WINDOW_RADIUS ? (
+                  <video
+                    ref={(element) => {
+                      if (element) videoRefs.current.set(item.id, element);
+                      else videoRefs.current.delete(item.id);
+                    }}
+                    src={item.playbackUrl}
+                    poster={item.thumbnailUrl}
+                    preload={index === activeIndex ? "auto" : "metadata"}
+                    playsInline
+                    muted={isMuted}
+                    onLoadedMetadata={(event) => {
+                      event.currentTarget.currentTime = Math.min(item.startTime, Math.max(0, event.currentTarget.duration - 0.1));
+                      if (index === activeIndex && active) void event.currentTarget.play().catch(() => undefined);
+                    }}
+                    onTimeUpdate={(event) => {
+                      if (index !== activeIndex) return;
+                      setCurrentTime(event.currentTarget.currentTime);
+                      if (event.currentTarget.currentTime >= item.endTime - 0.15) finishItem(item);
+                    }}
+                    onEnded={() => finishItem(item)}
+                    onClick={(event) => {
+                      if (event.currentTarget.paused) void event.currentTarget.play().catch(() => undefined);
+                      else event.currentTarget.pause();
+                    }}
+                  />
+                ) : item.thumbnailUrl ? (
+                  <img className="recommendation-feed-poster" src={item.thumbnailUrl} alt="" loading="lazy" />
+                ) : (
+                  <div className="recommendation-feed-poster" aria-hidden="true" />
+                )}
                 <input
                   className="recommendation-feed-progress"
                   type="range"
