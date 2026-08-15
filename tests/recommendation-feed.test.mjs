@@ -74,7 +74,46 @@ test("returns cold feed fallbacks without waiting for ffprobe and limits backgro
   assert.equal(feed.items.length, 3);
   assert.ok(feed.items.every((item) => item.source === "fallback" && item.duration === 0));
   await new Promise((resolve) => setImmediate(resolve));
-  assert.equal(probeCalls, 2);
+  assert.equal(probeCalls, 3);
+});
+
+test("cold feed falls back to a mid-video window when progress records the duration", async () => {
+  const videos = [{
+    id: "root:v",
+    mediaRootId: "root",
+    relativePath: "v.mp4",
+    name: "v.mp4",
+    size: 1,
+    lastModified: 1,
+    url: "/media/v.mp4",
+  }];
+  const recommendationCache = { segments: {}, feedback: {} };
+  const recommendationStore = {
+    loadRecommendationCache: () => recommendationCache,
+    saveRecommendationSegment: (videoId, segment) => { recommendationCache.segments[videoId] = segment; },
+  };
+  const service = createRecommendationFeedService({
+    loadConfig: async () => ({}),
+    loadPlayerStore: async () => ({ items: { "root:v": { currentTime: 100, duration: 3600, completed: false } } }),
+    loadRecommendationStore: async () => recommendationStore,
+    resolveMediaPath: () => "",
+    resolveVideoPath: () => "",
+    runProcess: async () => "",
+    scanMediaRoots: async () => ({
+      roots: [{ root: { id: "root", label: "Anime" } }],
+      videos,
+      subtitles: [],
+    }),
+  });
+
+  const feed = await service.getFeed({ mode: "anime", limit: 1 });
+  const item = feed.items[0];
+
+  assert.equal(item.source, "fallback");
+  assert.equal(item.duration, 3600);
+  assert.ok(item.startTime > 0, "兜底不应从片头开始");
+  assert.ok(item.endTime > item.startTime && item.endTime <= 3600, "兜底窗口应在时长范围内");
+  assert.ok(item.startTime < 3600 * 0.8, "兜底应落在影片中前段");
 });
 
 test("diversify keeps adjacent series distinct unless unavoidable", () => {
@@ -157,5 +196,17 @@ test("rankVideos prefers never-watched over in-progress over completed", () => {
     const order = rankVideos(videos, store, {}).map((video) => video.id);
     assert.ok(order.indexOf("never") < order.indexOf("half"), `never 应在 half 前: ${order.join(",")}`);
     assert.ok(order.indexOf("half") < order.indexOf("done"), `half 应在 done 前: ${order.join(",")}`);
+  }
+});
+
+test("rankVideos prefers videos with an analyzed segment over cold fallbacks", () => {
+  const videos = [makeVideo("cold", "c/a.mp4"), makeVideo("ready", "r/a.mp4")];
+  const segments = {
+    ready: { fingerprint: `ready|1|1|1`, startTime: 100, endTime: 152, analysisPending: false },
+    cold: { fingerprint: `cold|1|1|1`, startTime: 0, analysisPending: true },
+  };
+  for (let round = 0; round < 5; round += 1) {
+    const order = rankVideos(videos, {}, {}, segments).map((video) => video.id);
+    assert.ok(order.indexOf("ready") < order.indexOf("cold"), `已分析应排前: ${order.join(",")}`);
   }
 });

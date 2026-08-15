@@ -5,7 +5,7 @@ import { probeMediaFile } from "./mediaCompatibility.mjs";
 
 const CACHE_VERSION = 1;
 const ANALYZER_VERSION = 1;
-const ANALYSIS_CONCURRENCY = 2;
+const ANALYSIS_CONCURRENCY = 3;
 const ANALYSIS_RETRY_BACKOFF_MS = 60 * 60 * 1000;
 const STORE_SNAPSHOT_TTL_MS = 30_000;
 const DEFAULT_SEGMENT_SECONDS = 52;
@@ -131,7 +131,13 @@ function feedbackScore(feedback) {
     - Math.min(1.5, (feedback?.skipped ?? 0) * 0.18);
 }
 
-function rankVideos(videos, store, feedbackByVideoId) {
+function hasValidSegment(segmentsByVideoId, video) {
+  const cached = segmentsByVideoId?.[video.id];
+  if (!cached) return false;
+  return cached.fingerprint === videoFingerprint(video) && !cached.analysisPending && !cached.analysisFailedAt;
+}
+
+function rankVideos(videos, store, feedbackByVideoId, segmentsByVideoId) {
   const favorites = new Set(store?.favorites ?? []);
   return videos
     .filter((video) => !feedbackByVideoId[video.id]?.dismissed)
@@ -142,10 +148,13 @@ function rankVideos(videos, store, feedbackByVideoId) {
       let progressScore = 0;
       if (progress?.completed) progressScore = -0.4;
       else if (!progress || !Number.isFinite(progress.currentTime) || (progress.currentTime ?? 0) <= 0) progressScore = 0.35;
+      // 片段分析感知：已产出推荐片段的影片优先展示，未分析的兜底靠后，避免刷片流长时间停留在"从片头播放"。
+      const analyzedScore = hasValidSegment(segmentsByVideoId, video) ? 0.3 : -0.35;
       const score = (favorites.has(video.id) ? 1.4 : 0)
         + rating * 0.12
         + progressScore
         + feedbackScore(feedbackByVideoId[video.id])
+        + analyzedScore
         + ((stableNumber(`${video.id}:${new Date().toISOString().slice(0, 10)}`) % 600) / 1000 - 0.3);
       return { video, score };
     })
@@ -451,7 +460,7 @@ export function createRecommendationFeedService({
         sortedSnapshot = {
           mode: normalizedMode,
           dateKey,
-          videos: rankVideos(modeVideos, store, cache.feedback),
+          videos: rankVideos(modeVideos, store, cache.feedback, cache.segments),
         };
       }
       // 洗牌在去重之前执行：vary 提供会话内随机性，diversify 最后保证相邻不同系列。
@@ -466,7 +475,14 @@ export function createRecommendationFeedService({
         const cached = cache.segments[video.id];
         let segment = cached?.fingerprint === videoFingerprint(video) ? cached : null;
         if (!segment) {
-          segment = { startTime: 0, endTime: DEFAULT_SEGMENT_SECONDS, duration: 0, score: 0, source: "fallback", reasons: ["从影片开头开始预览"] };
+          // 还没有分析结果时的兜底：优先用播放进度里已知的时长生成片中段位置，
+          // 避免"从片头播放"（片头通常没有有效内容）；时长未知时交给前端加载后修正。
+          const knownDuration = Number(store?.items?.[video.id]?.duration);
+          if (Number.isFinite(knownDuration) && knownDuration > 0) {
+            segment = { ...createFallbackSegment(video, knownDuration), duration: knownDuration };
+          } else {
+            segment = { startTime: 0, endTime: DEFAULT_SEGMENT_SECONDS, duration: 0, score: 0, source: "fallback", reasons: ["正在分析这部影片，先播放一个代表性片段"] };
+          }
         }
         return {
           id: `${video.id}@${Math.round(segment.startTime * 10)}:${sequence}`,

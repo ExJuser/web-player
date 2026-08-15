@@ -22,6 +22,27 @@ type RecommendationFeedSectionProps = {
 
 const MAX_RETAINED_ITEMS = 40;
 const VIDEO_WINDOW_RADIUS = 2;
+const FEED_PAGE_SIZE = 8;
+
+/**
+ * 解析条目实际播放窗口。服务端在影片尚未分析且时长未知时给出的兜底
+ * （startTime=0、duration=0）会命中这里：等前端拿到真实时长后，把起点挪到
+ * 片内 35% 处，避开通常没有有效内容的片头。
+ */
+function resolveSegmentWindow(item: RecommendationFeedItem, videoDuration: number) {
+  if (
+    item.source === "fallback"
+    && item.duration <= 0
+    && item.startTime === 0
+    && Number.isFinite(videoDuration)
+    && videoDuration > 0
+  ) {
+    const span = Math.max(1, item.endTime - item.startTime);
+    const start = Math.min(Math.max(videoDuration * 0.35, 0), Math.max(0, videoDuration - 1));
+    return { start, end: Math.min(videoDuration, start + span) };
+  }
+  return { start: item.startTime, end: item.endTime };
+}
 
 export function RecommendationFeedSection({ active, mode, modeLabel, onActiveTitleChange, onClose, onOpenOriginal }: RecommendationFeedSectionProps) {
   const [items, setItems] = useState<RecommendationFeedItem[]>([]);
@@ -36,6 +57,7 @@ export function RecommendationFeedSection({ active, mode, modeLabel, onActiveTit
   const scrollRef = useRef<HTMLDivElement>(null);
   const videoRefs = useRef(new Map<string, HTMLVideoElement>());
   const requestIdRef = useRef(0);
+  const lastQueuedRef = useRef<number | null>(null);
   const completedItemIdsRef = useRef(new Set<string>());
   const skippedItemIdsRef = useRef(new Set<string>());
   const previousActiveIndexRef = useRef(0);
@@ -65,12 +87,30 @@ export function RecommendationFeedSection({ active, mode, modeLabel, onActiveTit
     }
   }, [isLoading, mode]);
 
+  // 后台分析完成后，把当前页里仍是兜底的条目按 videoId 原位替换为正式片段；
+  // 不重置 activeIndex，也不改动列表长度，避免打断用户正在看的位置。
+  const refreshCurrentPage = useCallback(async () => {
+    const cursor = String(Math.floor(activeIndex / FEED_PAGE_SIZE) * FEED_PAGE_SIZE);
+    const requestId = ++requestIdRef.current;
+    try {
+      const response = await loadRecommendationFeed(mode, cursor, sessionSeedRef.current);
+      if (requestId !== requestIdRef.current) return;
+      setItems((current) => current.map((existing) => {
+        const fresh = response.items.find((item) => item.videoId === existing.videoId);
+        return fresh ?? existing;
+      }));
+    } catch {
+      // 刷新失败保留现有条目，等待下一次轮询。
+    }
+  }, [activeIndex, mode]);
+
   useEffect(() => {
     if (!active) return;
     sessionSeedRef.current = crypto.randomUUID();
     setItems([]);
     setNextCursor(null);
     setActiveIndex(0);
+    lastQueuedRef.current = null;
     scrollRef.current?.scrollTo({ top: 0 });
     void loadPage(null, false);
     // mode is the reset boundary; loadPage intentionally stays out to avoid resetting after loading state changes.
@@ -83,7 +123,12 @@ export function RecommendationFeedSection({ active, mode, modeLabel, onActiveTit
     const intervalId = window.setInterval(() => {
       void loadRecommendationFeedStatus()
         .then((status) => {
-          if (!cancelled) setAnalysisQueued(status.queued);
+          if (cancelled) return;
+          setAnalysisQueued(status.queued);
+          const last = lastQueuedRef.current;
+          lastQueuedRef.current = status.queued;
+          // 队列从非空变为清空，说明本轮兜底条目基本都有正式片段了，刷新当前页替换。
+          if (last != null && last > 0 && status.queued === 0) void refreshCurrentPage();
         })
         .catch(() => undefined);
     }, 3_000);
@@ -91,7 +136,7 @@ export function RecommendationFeedSection({ active, mode, modeLabel, onActiveTit
       cancelled = true;
       window.clearInterval(intervalId);
     };
-  }, [active]);
+  }, [active, refreshCurrentPage]);
 
   useEffect(() => {
     onActiveTitleChange(active ? activeItem?.title ?? "刷片" : "");
@@ -230,13 +275,23 @@ export function RecommendationFeedSection({ active, mode, modeLabel, onActiveTit
                     playsInline
                     muted={isMuted}
                     onLoadedMetadata={(event) => {
-                      event.currentTarget.currentTime = Math.min(item.startTime, Math.max(0, event.currentTarget.duration - 0.1));
-                      if (index === activeIndex && active) void event.currentTarget.play().catch(() => undefined);
+                      const video = event.currentTarget;
+                      const window = resolveSegmentWindow(item, video.duration);
+                      video.currentTime = Math.min(window.start, Math.max(0, video.duration - 0.1));
+                      // 把修正后的窗口持久化到条目上，让进度条与时间文案与实际播放一致。
+                      if (window.start !== item.startTime || window.end !== item.endTime) {
+                        setItems((current) => current.map((candidate) => candidate.id === item.id
+                          ? { ...candidate, startTime: window.start, endTime: window.end, duration: video.duration }
+                          : candidate));
+                      }
+                      if (index === activeIndex && active) void video.play().catch(() => undefined);
                     }}
                     onTimeUpdate={(event) => {
                       if (index !== activeIndex) return;
-                      setCurrentTime(event.currentTarget.currentTime);
-                      if (event.currentTarget.currentTime >= item.endTime - 0.15) finishItem(item);
+                      const video = event.currentTarget;
+                      setCurrentTime(video.currentTime);
+                      const window = resolveSegmentWindow(item, video.duration);
+                      if (video.currentTime >= window.end - 0.15) finishItem(item);
                     }}
                     onEnded={() => finishItem(item)}
                     onClick={(event) => {
