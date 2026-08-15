@@ -548,6 +548,31 @@ button {
   line-height: 1.3;
 }
 
+/* 个人信号理由（你反复回看/你标记过）视觉置顶：琥珀高亮 + 心形图标。 */
+.recommendation-feed-reasons .recommendation-feed-reason {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.recommendation-feed-reasons .recommendation-feed-reason.reason-personal {
+  border-color: rgba(217, 166, 90, 0.4);
+  background: rgba(217, 166, 90, 0.12);
+  color: #e5c893;
+  font-weight: 800;
+}
+
+/* 片段时长预期：无边框、等宽字体，弱化在理由之后。 */
+.recommendation-feed-reasons .recommendation-feed-segment {
+  border-color: transparent;
+  background: transparent;
+  color: var(--feed-muted);
+  font-family: "Cascadia Mono", "SFMono-Regular", monospace;
+  font-size: 11px;
+  padding-left: 2px;
+  padding-right: 2px;
+}
+
 .recommendation-feed-tags span {
   border-color: rgba(217, 166, 90, 0.18);
   background: rgba(217, 166, 90, 0.06);
@@ -654,6 +679,20 @@ button {
   color: #aeb8c1;
 }
 
+/* "不感兴趣"展开菜单：选项与取消按钮纵向排列，紧贴触发按钮下方。 */
+.recommendation-feed-dismiss-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.recommendation-feed-dismiss-menu .recommendation-feed-dismiss-cancel {
+  min-height: 30px;
+  color: var(--feed-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
 .recommendation-feed-state {
   display: grid;
   min-height: 0;
@@ -743,6 +782,13 @@ button {
 
 .app-shell.theme-light .recommendation-feed-actions .recommendation-feed-favorite.active,
 :root[data-theme="light"] .recommendation-feed-actions .recommendation-feed-favorite.active {
+  border-color: rgba(169, 108, 32, 0.4);
+  background: rgba(169, 108, 32, 0.1);
+  color: #8a5a1d;
+}
+
+.app-shell.theme-light .recommendation-feed-reasons .recommendation-feed-reason.reason-personal,
+:root[data-theme="light"] .recommendation-feed-reasons .recommendation-feed-reason.reason-personal {
   border-color: rgba(169, 108, 32, 0.4);
   background: rgba(169, 108, 32, 0.1);
   color: #8a5a1d;

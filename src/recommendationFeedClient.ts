@@ -41,9 +41,20 @@ export function loadRecommendationFeedStatus() {
   return fetchLocalJson<{ analyzed: number; queued: number; analyzing: boolean }>("/api/recommendations/status");
 }
 
-export function sendRecommendationFeedback(videoId: string, action: "skip" | "complete" | "replay" | "dismiss", startTime?: number) {
+export function sendRecommendationFeedback(
+  videoId: string,
+  action: "skip" | "complete" | "replay" | "dismiss",
+  startTime?: number,
+  extra?: { scope?: "video" | "tags"; tags?: string[] },
+) {
   return fetchLocalJson<{ ok: true }>("/api/recommendations/feedback", {
     method: "POST",
-    body: JSON.stringify({ videoId, action, ...(startTime !== undefined ? { startTime } : {}) }),
+    body: JSON.stringify({
+      videoId,
+      action,
+      ...(startTime !== undefined ? { startTime } : {}),
+      ...(extra?.scope ? { scope: extra.scope } : {}),
+      ...(extra?.tags?.length ? { tags: extra.tags } : {}),
+    }),
   });
 }

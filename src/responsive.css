@@ -622,6 +622,10 @@ button,
     min-height: 42px;
   }
 
+  .recommendation-feed-dismiss-menu {
+    grid-column: span 3;
+  }
+
   .recommendation-feed-actions button,
   .recommendation-feed-volume {
     min-height: 42px;

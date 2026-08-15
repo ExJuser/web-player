@@ -624,7 +624,15 @@ export function createRecommendationFeedService({
       ]);
       const rootIds = new Set(scan.roots.filter((item) => modeMatchesRoot(item.root, normalizedMode)).map((item) => item.root.id));
       const modeVideos = scan.videos.filter((video) => rootIds.has(video.mediaRootId));
-      const eligibleVideos = modeVideos.filter((video) => !cache.feedback[video.id]?.dismissed);
+      // 负反馈过滤：单片屏蔽（dismissed）与标签级屏蔽（recommendationDismissedTags，来自"不感兴趣：这类标签"）。
+      const dismissedTags = new Set(
+        Array.isArray(store?.settings?.recommendationDismissedTags) ? store.settings.recommendationDismissedTags : [],
+      );
+      const eligibleVideos = modeVideos.filter((video) => {
+        if (cache.feedback[video.id]?.dismissed) return false;
+        const tags = store?.videoTags?.[video.id];
+        return !(Array.isArray(tags) && tags.some((tag) => dismissedTags.has(tag)));
+      });
       const dateKey = new Date().toISOString().slice(0, 10);
       const now = Date.now();
       if (!sortedSnapshot || sortedSnapshot.mode !== normalizedMode || sortedSnapshot.dateKey !== dateKey) {
@@ -711,9 +719,26 @@ export function createRecommendationFeedService({
       if (!videoId || !["skip", "complete", "replay", "dismiss"].includes(action)) {
         throw new Error("Invalid recommendation feedback.");
       }
+      const scope = payload?.scope === "tags" ? "tags" : "video";
+      const tags = Array.isArray(payload?.tags)
+        ? Array.from(new Set(payload.tags.filter((tag) => typeof tag === "string" && Boolean(tag.trim())))).slice(0, 20)
+        : [];
       const cache = await loadCache();
       const feedback = cache.feedback[videoId] ?? {};
-      if (action === "dismiss") feedback.dismissed = true;
+      if (action === "dismiss") {
+        feedback.dismissed = true;
+        // 标签级屏蔽是全局信号：把本次标签并入 settings 的屏蔽名单，后续所有带这些标签的影片都不再进入推荐流。
+        if (scope === "tags" && tags.length) {
+          const store = await loadRecommendationStore();
+          const current = Array.isArray(store?.settings?.recommendationDismissedTags)
+            ? store.settings.recommendationDismissedTags
+            : [];
+          const merged = Array.from(new Set([...current, ...tags]));
+          store.setSettingValue("global", "recommendationDismissedTags", merged);
+          // 强制下次 getFeed 重新加载 store 快照，避免 TTL 内读到旧 settings。
+          storeSnapshot = null;
+        }
+      }
       else if (action === "skip") feedback.skipped = (feedback.skipped ?? 0) + 1;
       else if (action === "complete") feedback.completed = (feedback.completed ?? 0) + 1;
       else if (action === "replay") feedback.replayed = (feedback.replayed ?? 0) + 1;

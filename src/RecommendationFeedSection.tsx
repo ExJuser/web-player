@@ -1,4 +1,4 @@
-import { ArrowLeft, Film, LoaderCircle, Play, SkipForward, Star, Volume2, VolumeX, X } from "lucide-react";
+import { ArrowLeft, Film, Heart, LoaderCircle, Play, SkipForward, Star, Volume2, VolumeX, X } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 
@@ -60,6 +60,22 @@ function viewStateLabel(item: RecommendationFeedItem): string {
   return "未观看";
 }
 
+/** 片段时长预期文案：让用户一眼知道这段很快能刷完。 */
+function segmentDurationLabel(startTime: number, endTime: number): string {
+  const seconds = Math.max(0, Math.round(endTime - startTime));
+  if (seconds >= 60) {
+    const minutes = Math.floor(seconds / 60);
+    const rest = seconds % 60;
+    return rest > 0 ? `约 ${minutes} 分 ${rest} 秒` : `约 ${minutes} 分钟`;
+  }
+  return `约 ${seconds} 秒`;
+}
+
+/** 个人信号来源（行为回看 / 人工高能片段）的推荐理由需要视觉置顶。 */
+function isPersonalReason(item: RecommendationFeedItem, reasonIndex: number): boolean {
+  return reasonIndex === 0 && (item.source === "behavior" || item.source === "manual");
+}
+
 export function RecommendationFeedSection({ active, mode, modeLabel, onActiveTitleChange, onClose, onOpenOriginal }: RecommendationFeedSectionProps) {
   const [items, setItems] = useState<RecommendationFeedItem[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -70,6 +86,7 @@ export function RecommendationFeedSection({ active, mode, modeLabel, onActiveTit
   const [volume, setVolume] = useState(0.8);
   const [currentTime, setCurrentTime] = useState(0);
   const [analysisQueued, setAnalysisQueued] = useState(0);
+  const [openDismissId, setOpenDismissId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const videoRefs = useRef(new Map<string, HTMLVideoElement>());
   const requestIdRef = useRef(0);
@@ -211,6 +228,11 @@ export function RecommendationFeedSection({ active, mode, modeLabel, onActiveTit
     setActiveIndex(Math.max(0, items.length - 1));
   }, [activeIndex, items.length]);
 
+  // 切换条目时收起"不感兴趣"菜单，避免菜单悬在错误的卡片上。
+  useEffect(() => {
+    setOpenDismissId(null);
+  }, [activeIndex]);
+
   const moveTo = useCallback((index: number) => {
     const nextIndex = Math.max(0, Math.min(items.length - 1, index));
     scrollRef.current?.scrollTo({ top: nextIndex * (scrollRef.current.clientHeight || 1), behavior: "smooth" });
@@ -239,6 +261,15 @@ export function RecommendationFeedSection({ active, mode, modeLabel, onActiveTit
 
   const dismiss = useCallback((item: RecommendationFeedItem) => {
     void sendRecommendationFeedback(item.videoId, "dismiss").catch(() => undefined);
+    setOpenDismissId(null);
+    setItems((current) => current.filter((candidate) => candidate.videoId !== item.videoId));
+  }, []);
+
+  /** 不感兴趣：这类标签 —— 屏蔽当前影片及其全部标签，其他带同标签的影片也不再推荐。 */
+  const dismissTags = useCallback((item: RecommendationFeedItem) => {
+    const tags = item.tags.filter(Boolean);
+    void sendRecommendationFeedback(item.videoId, "dismiss", undefined, { scope: "tags", tags }).catch(() => undefined);
+    setOpenDismissId(null);
     setItems((current) => current.filter((candidate) => candidate.videoId !== item.videoId));
   }, []);
 
@@ -369,8 +400,13 @@ export function RecommendationFeedSection({ active, mode, modeLabel, onActiveTit
                     ) : null}
                   </div>
                   <div className="recommendation-feed-reasons">
-                    {item.reasons.map((reason) => <span key={reason}>{reason}</span>)}
-                    <span>{formatTime(item.startTime)} – {formatTime(item.endTime)}</span>
+                    {item.reasons.map((reason, reasonIndex) => (
+                      <span key={reason} className={`recommendation-feed-reason${isPersonalReason(item, reasonIndex) ? " reason-personal" : ""}`}>
+                        {isPersonalReason(item, reasonIndex) ? <Heart size={12} fill="currentColor" /> : null}
+                        {reason}
+                      </span>
+                    ))}
+                    <span className="recommendation-feed-segment">{formatTime(item.startTime)} – {formatTime(item.endTime)} · {segmentDurationLabel(item.startTime, item.endTime)}</span>
                   </div>
                   {item.tags.length ? <div className="recommendation-feed-tags">{item.tags.slice(0, 6).map((tag) => <span key={tag}>{tag}</span>)}</div> : null}
                 </div>
@@ -421,8 +457,20 @@ export function RecommendationFeedSection({ active, mode, modeLabel, onActiveTit
                   </button>
                   <div className="recommendation-feed-actions-row">
                     <button type="button" className="recommendation-feed-ghost" onClick={() => onOpenOriginal(item.videoId, Math.max(0, item.startTime - 10))}><Play size={16} />看原片</button>
-                    <button type="button" className="recommendation-feed-ghost recommendation-feed-dismiss" onClick={() => dismiss(item)}><X size={16} />不再推荐</button>
+                    {openDismissId === item.id ? (
+                      <>
+                        <button type="button" className="recommendation-feed-ghost recommendation-feed-dismiss" title="不再推荐这部片" onClick={() => dismiss(item)}><X size={16} />这部片</button>
+                      </>
+                    ) : (
+                      <button type="button" className="recommendation-feed-ghost recommendation-feed-dismiss" title="不感兴趣" onClick={() => setOpenDismissId(item.id)}><X size={16} />不感兴趣</button>
+                    )}
                   </div>
+                  {openDismissId === item.id ? (
+                    <div className="recommendation-feed-dismiss-menu">
+                      <button type="button" className="recommendation-feed-ghost recommendation-feed-dismiss" title="不再推荐带这些标签的影片" disabled={!item.tags.length} onClick={() => dismissTags(item)}><X size={16} />这类标签</button>
+                      <button type="button" className="recommendation-feed-ghost recommendation-feed-dismiss-cancel" onClick={() => setOpenDismissId(null)}>取消</button>
+                    </div>
+                  ) : null}
                 </div>
               </aside>
             </article>
