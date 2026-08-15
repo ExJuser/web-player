@@ -1025,6 +1025,7 @@ export function playerDataApiPlugin({ projectRoot, env }) {
           mode: url.searchParams.get("mode"),
           cursor: url.searchParams.get("cursor"),
           limit: url.searchParams.get("limit"),
+          seed: url.searchParams.get("seed"),
         }));
         return;
       }

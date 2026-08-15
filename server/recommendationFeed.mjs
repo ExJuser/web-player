@@ -158,6 +158,25 @@ function diversify(videos) {
   return result;
 }
 
+function varyRecommendationOrder(videos, seed) {
+  if (!seed) return videos;
+  let state = stableNumber(seed) || 1;
+  const random = () => {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+    return state / 4294967296;
+  };
+  const result = [];
+  for (let offset = 0; offset < videos.length; offset += 4) {
+    const group = videos.slice(offset, offset + 4);
+    for (let index = group.length - 1; index > 0; index -= 1) {
+      const swapIndex = Math.floor(random() * (index + 1));
+      [group[index], group[swapIndex]] = [group[swapIndex], group[index]];
+    }
+    result.push(...group);
+  }
+  return result;
+}
+
 export function createRecommendationFeedService({
   cachePath,
   loadConfig,
@@ -304,18 +323,18 @@ export function createRecommendationFeedService({
   };
 
   return {
-    async getFeed({ mode, cursor = 0, limit = 8 }) {
+    async getFeed({ mode, cursor = 0, limit = 8, seed = "" }) {
       const normalizedMode = mode === "special" ? "special" : "anime";
       const [config, scan, cache, startupStore, deferredStore] = await Promise.all([
         loadConfig(), scanMediaRoots(), loadCache(), loadPlayerStore("startup"), loadPlayerStore("deferred"),
       ]);
       const store = { ...(startupStore ?? {}), ...(deferredStore ?? {}) };
       const rootIds = new Set(scan.roots.filter((item) => modeMatchesRoot(item.root, normalizedMode)).map((item) => item.root.id));
-      const ranked = diversify(rankVideos(
+      const ranked = varyRecommendationOrder(diversify(rankVideos(
         scan.videos.filter((video) => rootIds.has(video.mediaRootId)),
         store,
         cache.feedback,
-      ));
+      )), seed);
       const start = Math.max(0, Math.floor(Number(cursor) || 0));
       const pageSize = Math.min(ranked.length, clamp(Math.floor(Number(limit) || 8), 1, 20));
       const page = Array.from({ length: pageSize }, (_, index) => ({

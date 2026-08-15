@@ -27,9 +27,10 @@ export type RecommendationFeedResponse = {
   analysis: { queued: number; analyzing: boolean };
 };
 
-export function loadRecommendationFeed(mode: HomeMediaMode, cursor?: string | null) {
+export function loadRecommendationFeed(mode: HomeMediaMode, cursor?: string | null, sessionSeed?: string) {
   const params = new URLSearchParams({ mode, limit: "8" });
   if (cursor) params.set("cursor", cursor);
+  if (sessionSeed) params.set("seed", sessionSeed);
   return fetchLocalJson<RecommendationFeedResponse>(`/api/recommendations/feed?${params}`);
 }
 

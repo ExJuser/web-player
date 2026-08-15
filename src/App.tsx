@@ -590,6 +590,7 @@ export default function App() {
   const [appRoute, setAppRoute] = useState<AppRoute>(initialAppRoute);
   const [hasInitialMediaLoadSettled, setHasInitialMediaLoadSettled] = useState(false);
   const [hasOpenedRecommendationFeed, setHasOpenedRecommendationFeed] = useState(initialAppRoute.kind === "feed");
+  const [recommendationFeedTitle, setRecommendationFeedTitle] = useState("");
 
   const updateAppRoute = useCallback((nextRoute: AppRoute, options?: { replace?: boolean }) => {
     const nextHash = serializeAppRoute(nextRoute);
@@ -6628,6 +6629,7 @@ export default function App() {
           libraryStats={libraryStats!}
           metadataRows={currentVideoMetadataRows}
           playabilityMessage={currentVideoPlayabilityMessage}
+          recommendationFeedTitle={isRecommendationFeedVisible ? recommendationFeedTitle : ""}
           summaryFallbackText={currentVideoSummaryFallbackText}
           theme={theme}
           videoCount={videos.length}
@@ -6755,6 +6757,7 @@ export default function App() {
               active={isRecommendationFeedVisible}
               mode={homeMediaMode}
               modeLabel={homeMediaModeLabel}
+              onActiveTitleChange={setRecommendationFeedTitle}
               onClose={showHomeView}
               onOpenOriginal={openVideoFromRecommendation}
             />

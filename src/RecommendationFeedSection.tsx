@@ -14,16 +14,18 @@ type RecommendationFeedSectionProps = {
   mode: HomeMediaMode;
   modeLabel: string;
   onClose: () => void;
+  onActiveTitleChange: (title: string) => void;
   onOpenOriginal: (videoId: string, startTime: number) => void;
 };
 
-export function RecommendationFeedSection({ active, mode, modeLabel, onClose, onOpenOriginal }: RecommendationFeedSectionProps) {
+export function RecommendationFeedSection({ active, mode, modeLabel, onActiveTitleChange, onClose, onOpenOriginal }: RecommendationFeedSectionProps) {
   const [items, setItems] = useState<RecommendationFeedItem[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [isMuted, setIsMuted] = useState(true);
+  const [volume, setVolume] = useState(0.8);
   const [isFillMode, setIsFillMode] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [analysisQueued, setAnalysisQueued] = useState(0);
@@ -33,6 +35,7 @@ export function RecommendationFeedSection({ active, mode, modeLabel, onClose, on
   const completedItemIdsRef = useRef(new Set<string>());
   const skippedItemIdsRef = useRef(new Set<string>());
   const previousActiveIndexRef = useRef(0);
+  const sessionSeedRef = useRef("");
   const activeItem = items[activeIndex] ?? null;
 
   const loadPage = useCallback(async (cursor?: string | null, append = false) => {
@@ -41,7 +44,7 @@ export function RecommendationFeedSection({ active, mode, modeLabel, onClose, on
     setIsLoading(true);
     setError("");
     try {
-      const response = await loadRecommendationFeed(mode, cursor);
+      const response = await loadRecommendationFeed(mode, cursor, sessionSeedRef.current);
       if (requestId !== requestIdRef.current) return;
       setItems((current) => append
         ? [...current, ...response.items.filter((item) => !current.some((existing) => existing.id === item.id))]
@@ -60,6 +63,7 @@ export function RecommendationFeedSection({ active, mode, modeLabel, onClose, on
 
   useEffect(() => {
     if (!active) return;
+    sessionSeedRef.current = crypto.randomUUID();
     setItems([]);
     setNextCursor(null);
     setActiveIndex(0);
@@ -68,6 +72,10 @@ export function RecommendationFeedSection({ active, mode, modeLabel, onClose, on
     // mode is the reset boundary; loadPage intentionally stays out to avoid resetting after loading state changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, mode]);
+
+  useEffect(() => {
+    onActiveTitleChange(active ? activeItem?.title ?? "刷片" : "");
+  }, [active, activeItem?.title, onActiveTitleChange]);
 
   useEffect(() => {
     const previousIndex = previousActiveIndexRef.current;
@@ -83,6 +91,7 @@ export function RecommendationFeedSection({ active, mode, modeLabel, onClose, on
     videoRefs.current.forEach((video, id) => {
       const shouldPlay = active && id === activeItem?.id;
       video.muted = isMuted;
+      video.volume = volume;
       if (shouldPlay) {
         if (video.readyState >= HTMLMediaElement.HAVE_METADATA && activeItem && (video.currentTime < activeItem.startTime || video.currentTime >= activeItem.endTime)) {
           video.currentTime = activeItem.startTime;
@@ -92,7 +101,7 @@ export function RecommendationFeedSection({ active, mode, modeLabel, onClose, on
         video.pause();
       }
     });
-  }, [active, activeItem, isMuted]);
+  }, [active, activeItem, isMuted, volume]);
 
   useEffect(() => {
     if (!active || !nextCursor || activeIndex < items.length - 3 || isLoading) return;
@@ -156,7 +165,7 @@ export function RecommendationFeedSection({ active, mode, modeLabel, onClose, on
       <header className="recommendation-feed-header">
         <button className="recommendation-feed-back" type="button" onClick={onClose} aria-label="返回首页"><ArrowLeft size={20} /></button>
         <div>
-          <strong>刷片</strong>
+          <strong title={activeItem?.title}>{activeItem?.title ?? "刷片"}</strong>
           <span>{modeLabel} · {positionLabel || "正在准备"}</span>
         </div>
         <p>{analysisQueued ? <><LoaderCircle className="spin-icon" size={14} /> 后台分析 {analysisQueued} 部</> : "片段已就绪"}</p>
@@ -228,7 +237,32 @@ export function RecommendationFeedSection({ active, mode, modeLabel, onClose, on
                 <div className="recommendation-feed-actions">
                   <button type="button" className={item.liked ? "is-active" : ""} onClick={() => toggleLike(item)}><Heart size={18} fill={item.liked ? "currentColor" : "none"} />{item.liked ? "已喜欢" : "喜欢"}</button>
                   <button type="button" onClick={() => onOpenOriginal(item.videoId, Math.max(0, item.startTime - 10))}><Play size={18} />看原片</button>
-                  <button type="button" onClick={() => setIsMuted((value) => !value)}>{isMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}{isMuted ? "开启声音" : "静音"}</button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (isMuted && volume === 0) setVolume(0.8);
+                      setIsMuted((value) => !value);
+                    }}
+                  >
+                    {isMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}{isMuted ? "开启声音" : "静音"}
+                  </button>
+                  <label className="recommendation-feed-volume">
+                    <Volume2 size={17} aria-hidden="true" />
+                    <input
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.05"
+                      value={volume}
+                      aria-label="刷片音量"
+                      onChange={(event) => {
+                        const nextVolume = Number(event.currentTarget.value);
+                        setVolume(nextVolume);
+                        setIsMuted(nextVolume === 0);
+                      }}
+                    />
+                    <span>{Math.round(volume * 100)}%</span>
+                  </label>
                   <button type="button" onClick={() => setIsFillMode((value) => !value)}>{isFillMode ? <Minimize2 size={18} /> : <Expand size={18} />}{isFillMode ? "完整画面" : "填满画面"}</button>
                   <button type="button" onClick={() => moveTo(index + 1)} disabled={index >= items.length - 1 && !nextCursor}><SkipForward size={18} />下一条</button>
                   <button type="button" className="recommendation-feed-dismiss" onClick={() => dismiss(item)}><X size={18} />不再推荐</button>

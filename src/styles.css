@@ -211,8 +211,10 @@ button {
   gap: 0;
 }
 
-.app-shell.feed-view .top-bar {
-  display: none;
+.app-shell.home-view.feed-view .top-bar {
+  display: flex;
+  min-height: 52px;
+  padding: max(8px, env(safe-area-inset-top)) 12px 4px;
 }
 
 .recommendation-feed[hidden] {
@@ -272,6 +274,9 @@ button {
 }
 
 .recommendation-feed-header strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-family: "Microsoft YaHei UI", "Segoe UI", sans-serif;
   font-size: 19px;
   font-weight: 800;
@@ -347,6 +352,10 @@ button {
   content: "SOURCE FRAME / UNCROPPED";
 }
 
+.recommendation-feed-stage.is-fill::before {
+  content: "SOURCE FRAME / CROPPED TO FILL";
+}
+
 .recommendation-feed-stage::after {
   bottom: 15px;
   content: "LOCAL SIGNAL CUT";
@@ -354,15 +363,20 @@ button {
 
 .recommendation-feed-stage video {
   display: block;
-  width: 100%;
-  height: 100%;
+  width: calc(100% - 36px);
+  height: calc(100% - 36px);
   object-fit: contain;
   background: #000;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.42);
   cursor: pointer;
+  transition: width 180ms ease, height 180ms ease;
 }
 
 .recommendation-feed-stage.is-fill video {
+  width: 100%;
+  height: 100%;
   object-fit: cover;
+  box-shadow: none;
 }
 
 .recommendation-feed-progress {
@@ -478,7 +492,8 @@ button {
 }
 
 .recommendation-feed-actions button,
-.recommendation-feed-state button {
+.recommendation-feed-state button,
+.recommendation-feed-volume {
   display: flex;
   min-width: 0;
   min-height: 40px;
@@ -492,6 +507,25 @@ button {
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
+}
+
+.recommendation-feed-volume {
+  padding: 0 9px;
+  cursor: default;
+}
+
+.recommendation-feed-volume input {
+  width: 100%;
+  min-width: 48px;
+  accent-color: var(--feed-cue);
+}
+
+.recommendation-feed-volume span {
+  min-width: 32px;
+  color: var(--feed-muted);
+  font-family: "Cascadia Mono", "SFMono-Regular", monospace;
+  font-size: 10px;
+  text-align: right;
 }
 
 .recommendation-feed-actions button:hover,
@@ -573,8 +607,10 @@ button {
 
 .app-shell.theme-light .recommendation-feed-actions button,
 .app-shell.theme-light .recommendation-feed-state button,
+.app-shell.theme-light .recommendation-feed-volume,
 :root[data-theme="light"] .recommendation-feed-actions button,
-:root[data-theme="light"] .recommendation-feed-state button {
+:root[data-theme="light"] .recommendation-feed-state button,
+:root[data-theme="light"] .recommendation-feed-volume {
   border-color: rgba(23, 33, 42, 0.14);
   background: #e9eeee;
   color: #17212a;

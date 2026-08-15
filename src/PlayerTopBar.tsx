@@ -46,6 +46,7 @@ type PlayerTopBarProps = {
   theme: "dark" | "light";
   videoCount: number;
   playabilityMessage: string;
+  recommendationFeedTitle: string;
   onAddMediaLibrary: () => void;
   onOpenCacheStatus: () => void;
   onOpenMediaProcessingTask: () => void;
@@ -85,6 +86,7 @@ export const PlayerTopBar = forwardRef<HTMLElement, PlayerTopBarProps>(function 
     theme,
     videoCount,
     playabilityMessage,
+    recommendationFeedTitle,
     onAddMediaLibrary,
     onOpenCacheStatus,
     onOpenMediaProcessingTask,
@@ -237,6 +239,8 @@ export const PlayerTopBar = forwardRef<HTMLElement, PlayerTopBarProps>(function 
               </div>
             ) : null}
           </form>
+        ) : recommendationFeedTitle ? (
+          <p className="current-video-title" title={recommendationFeedTitle}>{recommendationFeedTitle}</p>
         ) : summaryFallbackText ? (
           <p className="current-video-title">{summaryFallbackText}</p>
         ) : null}
