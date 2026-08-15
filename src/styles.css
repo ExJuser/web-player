@@ -2230,7 +2230,7 @@ button {
 .home-side-card {
   position: relative;
   min-width: 0;
-  padding-left: 18px;
+  padding-left: 8px;
 }
 
 .home-side-card-drag-handle {
@@ -2242,8 +2242,8 @@ button {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 14px;
-  min-width: 14px;
+  width: 8px;
+  min-width: 8px;
   height: auto;
   min-height: 36px;
   padding: 0;
@@ -2285,7 +2285,7 @@ button {
   position: fixed;
   z-index: 1000;
   box-sizing: border-box;
-  padding-left: 18px;
+  padding-left: 8px;
   pointer-events: none;
   opacity: 0.92;
   border-radius: 8px;
