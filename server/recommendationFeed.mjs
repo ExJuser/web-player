@@ -154,32 +154,177 @@ function rankVideos(videos, store, feedbackByVideoId, segmentsByVideoId) {
         + rating * 0.12
         + progressScore
         + feedbackScore(feedbackByVideoId[video.id])
-        + analyzedScore
-        + ((stableNumber(`${video.id}:${new Date().toISOString().slice(0, 10)}`) % 600) / 1000 - 0.3);
+        + analyzedScore;
       return { video, score };
     })
     .sort((left, right) => right.score - left.score)
     .map((item) => item.video);
 }
 
-function diversify(videos) {
-  const result = [];
-  const pending = [...videos];
-  let cursor = 0;
-  while (pending.length) {
-    const previousSeries = result.length ? videoSeriesKey(result[result.length - 1]) : "";
-    let index = -1;
-    for (let offset = 0; offset < pending.length; offset += 1) {
-      if (videoSeriesKey(pending[(cursor + offset) % pending.length]) !== previousSeries) {
-        index = (cursor + offset) % pending.length;
-        break;
-      }
-    }
-    if (index < 0) index = 0;
-    result.push(pending.splice(index, 1)[0]);
-    cursor = index;
+/**
+ * 多路召回：从不同信号通道分别召回候选，再按权重交错融合（抖音式"多队列调度"）。
+ * 各通道内部排序、互相允许重叠（融合时按 videoId 去重，先取到的通道生效）。
+ */
+const CHANNEL_WEIGHTS = { relevant: 4, hot: 2.5, fresh: 1.5, rewatch: 1 };
+
+/** 高热度路：全库观看统计（累计播放秒数 / 播放次数 / 曝光次数）归一化排序。 */
+function recallHot(videos, store) {
+  const stats = store?.videoStats ?? {};
+  return videos
+    .map((video) => {
+      const stat = stats[video.id];
+      const playedSeconds = Number(stat?.totalPlayedSeconds) || 0;
+      const playCount = Number(stat?.playCount) || 0;
+      const emissionCount = Number(stat?.emissionCount) || 0;
+      const score = clamp(playedSeconds / 7200, 0, 1) * 0.5
+        + clamp(playCount / 10, 0, 1) * 0.3
+        + clamp(emissionCount / 20, 0, 1) * 0.2;
+      return { video, score };
+    })
+    .sort((left, right) => right.score - left.score)
+    .map((item) => item.video);
+}
+
+/** 新片路：最近入库且完全没看过的影片，越新权重越高。 */
+function recallFresh(videos, store, now) {
+  const FRESH_DAYS = 30;
+  return videos
+    .map((video) => {
+      const progress = store?.items?.[video.id];
+      const untouched = !progress || !Number.isFinite(progress.currentTime) || (progress.currentTime ?? 0) <= 0;
+      if (!untouched) return null;
+      const ageDays = Math.max(0, (now - (Number(video.lastModified) || 0)) / 86400000);
+      const score = ageDays < FRESH_DAYS ? 1 - ageDays / FRESH_DAYS : 0;
+      return score > 0 ? { video, score } : null;
+    })
+    .filter(Boolean)
+    .sort((left, right) => right.score - left.score)
+    .map((item) => item.video);
+}
+
+/** 重温路：已看完且收藏或高评分的影片，冷却 7 天后重新进入候选。 */
+function recallRewatch(videos, store, now) {
+  const favorites = new Set(store?.favorites ?? []);
+  const REWATCH_GAP_DAYS = 7;
+  const REWATCH_WINDOW_DAYS = 90;
+  return videos
+    .map((video) => {
+      const progress = store?.items?.[video.id];
+      if (!progress?.completed) return null;
+      const finishedAt = Number(progress.updatedAt) || 0;
+      const gapDays = (now - finishedAt) / 86400000;
+      if (gapDays < REWATCH_GAP_DAYS || gapDays > REWATCH_WINDOW_DAYS) return null;
+      const rating = Number(store?.videoRatings?.[video.id]) || 0;
+      // 重温路只收用户明确喜欢过（收藏或高评分）的影片。
+      if (!favorites.has(video.id) && rating < 4) return null;
+      const score = (favorites.has(video.id) ? 0.8 : 0)
+        + Math.min(1, rating / 5) * 0.4
+        + clamp(gapDays / REWATCH_WINDOW_DAYS, 0, 1) * 0.2;
+      return { video, score };
+    })
+    .filter(Boolean)
+    .sort((left, right) => right.score - left.score)
+    .map((item) => item.video);
+}
+
+/** 随机探索路：以会话 seed 做 Fisher-Yates 洗牌，保证"刷到什么都有可能"。 */
+function recallExplore(videos, seed) {
+  const result = [...videos];
+  if (!seed || result.length < 2) return result;
+  let state = stableNumber(seed) || 1;
+  const random = () => {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+    return state / 4294967296;
+  };
+  for (let index = result.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(random() * (index + 1));
+    [result[index], result[swapIndex]] = [result[swapIndex], result[index]];
   }
   return result;
+}
+
+/** 加权公平轮询：按通道权重比例交错各通道（每路内部保持排序），并去重。 */
+function interleaveChannels(channels) {
+  const active = Object.entries(channels)
+    .map(([name, items]) => ({ name, weight: CHANNEL_WEIGHTS[name] ?? 1, items, index: 0 }))
+    .filter((entry) => entry.items.length > 0);
+  if (!active.length) return [];
+  const totalWeight = active.reduce((sum, entry) => sum + entry.weight, 0);
+  const result = [];
+  const seen = new Set();
+  const taken = new Map(active.map((entry) => [entry.name, 0]));
+  let remaining = active.reduce((sum, entry) => sum + entry.items.length, 0);
+  let guard = 0;
+  while (remaining > 0 && guard < 500000) {
+    guard += 1;
+    let chosen = null;
+    let bestDeficit = -Infinity;
+    for (const entry of active) {
+      if (entry.index >= entry.items.length) continue;
+      const expected = (entry.weight / totalWeight) * (result.length + 1);
+      const deficit = expected - taken.get(entry.name);
+      if (deficit > bestDeficit) {
+        bestDeficit = deficit;
+        chosen = entry;
+      }
+    }
+    if (!chosen) break;
+    const item = chosen.items[chosen.index];
+    chosen.index += 1;
+    taken.set(chosen.name, taken.get(chosen.name) + 1);
+    remaining -= 1;
+    if (!seen.has(item.id)) {
+      seen.add(item.id);
+      result.push(item);
+    }
+  }
+  return result;
+}
+
+/** 把探索路（seed 相关、不进快照）按固定间隔插入确定性通道的融合结果中。 */
+function mergeExplore(base, explore, every = 10) {
+  if (!explore.length) return [...base];
+  const seen = new Set(base.map((video) => video.id));
+  const uniqueExplore = explore.filter((video) => !seen.has(video.id));
+  if (!uniqueExplore.length) return [...base];
+  const result = [];
+  let exploreIndex = 0;
+  for (let index = 0; index < base.length; index += 1) {
+    result.push(base[index]);
+    if ((index + 1) % every === 0 && exploreIndex < uniqueExplore.length) {
+      result.push(uniqueExplore[exploreIndex]);
+      exploreIndex += 1;
+    }
+  }
+  while (exploreIndex < uniqueExplore.length) {
+    result.push(uniqueExplore[exploreIndex]);
+    exploreIndex += 1;
+  }
+  return result;
+}
+
+/**
+ * 片段级反馈热力：用户曾在某时间窗口内看完（complete）/重看（replay）/跳过（skip）过，
+ * 对该窗口产生正/负向评分，按 30 天半衰期衰减。窗口内无事件时返回 null（不参与加权）。
+ */
+function segmentFeedbackScore(events, startTime, endTime, now = Date.now()) {
+  if (!events?.length) return null;
+  let total = 0;
+  let hit = 0;
+  for (const event of events) {
+    const time = Number(event?.t);
+    if (!Number.isFinite(time) || time < startTime || time >= endTime) continue;
+    const eventAt = Number(event?.at);
+    const ageDays = Number.isFinite(eventAt) ? Math.max(0, (now - eventAt) / 86400000) : 30;
+    const decay = Math.pow(0.5, ageDays / 30);
+    if (event.a === "complete") total += 0.6 * decay;
+    else if (event.a === "replay") total += 0.5 * decay;
+    else if (event.a === "skip") total -= 0.7 * decay;
+    else continue;
+    hit += 1;
+  }
+  if (!hit) return null;
+  return clamp(total * 0.5 + 0.5, 0, 1);
 }
 
 /**
@@ -231,6 +376,26 @@ function createBehaviorWindows(duration, history) {
   });
   if (runStart >= 0) flushRun(strength.length - 1);
   return windows;
+}
+
+function diversify(videos) {
+  const result = [];
+  const pending = [...videos];
+  let cursor = 0;
+  while (pending.length) {
+    const previousSeries = result.length ? videoSeriesKey(result[result.length - 1]) : "";
+    let index = -1;
+    for (let offset = 0; offset < pending.length; offset += 1) {
+      if (videoSeriesKey(pending[(cursor + offset) % pending.length]) !== previousSeries) {
+        index = (cursor + offset) % pending.length;
+        break;
+      }
+    }
+    if (index < 0) index = 0;
+    result.push(pending.splice(index, 1)[0]);
+    cursor = index;
+  }
+  return result;
 }
 
 function varyRecommendationOrder(videos, seed) {
@@ -330,7 +495,7 @@ export function createRecommendationFeedService({
     }
   };
 
-  const analyzeVideo = async ({ config, scan, store, video, mediaInfo }) => {
+  const analyzeVideo = async ({ config, scan, store, video, mediaInfo, feedback }) => {
     const filePath = resolveVideoPath(config, video.mediaRootId, video.relativePath);
     const duration = Number(mediaInfo?.duration);
     if (!Number.isFinite(duration) || duration <= 0) throw new Error("无法读取影片时长。");
@@ -363,11 +528,15 @@ export function createRecommendationFeedService({
       let score = signals.sceneScore * 0.34 + signals.audioScore * 0.24 + signals.speechRatio * 0.16 + subtitles.score * 0.26;
       // 用户反复回看的窗口获得行为信号加成。
       if (candidate.behavior) score = score * 0.6 + candidate.score * 0.4;
-      scored.push({ ...candidate, score, subtitles, ...signals });
+      // 片段级反馈热力：曾看完/重看的窗口提权，曾跳过的窗口降权。
+      const segmentHeat = segmentFeedbackScore(feedback?.segmentEvents, candidate.startTime, candidate.endTime);
+      if (segmentHeat !== null) score = score * 0.75 + segmentHeat * 0.25;
+      scored.push({ ...candidate, score, subtitles, ...signals, segmentHeat });
     }
     const best = scored.sort((left, right) => right.score - left.score)[0] ?? createFallbackSegment(video, duration);
     const reasons = [];
     if (best.behavior) reasons.push("你反复回看的段落");
+    if (best.segmentHeat !== null && best.segmentHeat > 0.6) reasons.push("你标记过的精彩段落");
     if (best.sceneScore > 0.42) reasons.push("镜头变化活跃");
     if (best.audioScore > 0.45) reasons.push("声音张力较强");
     if (best.subtitles?.score > 0.4) reasons.push("对白密集且语义完整");
@@ -455,16 +624,25 @@ export function createRecommendationFeedService({
       ]);
       const rootIds = new Set(scan.roots.filter((item) => modeMatchesRoot(item.root, normalizedMode)).map((item) => item.root.id));
       const modeVideos = scan.videos.filter((video) => rootIds.has(video.mediaRootId));
+      const eligibleVideos = modeVideos.filter((video) => !cache.feedback[video.id]?.dismissed);
       const dateKey = new Date().toISOString().slice(0, 10);
+      const now = Date.now();
       if (!sortedSnapshot || sortedSnapshot.mode !== normalizedMode || sortedSnapshot.dateKey !== dateKey) {
+        // 多路召回：相关/热度/新片/重温四路确定性通道按权重交错，探索路（seed 相关）不进快照。
         sortedSnapshot = {
           mode: normalizedMode,
           dateKey,
-          videos: rankVideos(modeVideos, store, cache.feedback, cache.segments),
+          videos: interleaveChannels({
+            relevant: rankVideos(eligibleVideos, store, cache.feedback, cache.segments),
+            hot: recallHot(eligibleVideos, store),
+            fresh: recallFresh(eligibleVideos, store, now),
+            rewatch: recallRewatch(eligibleVideos, store, now),
+          }),
         };
       }
-      // 洗牌在去重之前执行：vary 提供会话内随机性，diversify 最后保证相邻不同系列。
-      const ranked = diversify(varyRecommendationOrder(sortedSnapshot.videos, seed));
+      // 探索路按会话 seed 洗牌后插入，洗牌在去重之前执行：vary 提供会话内随机性，diversify 最后保证相邻不同系列。
+      const explore = recallExplore(eligibleVideos, seed);
+      const ranked = diversify(varyRecommendationOrder(mergeExplore(sortedSnapshot.videos, explore), seed));
       const start = Math.max(0, Math.floor(Number(cursor) || 0));
       const pageSize = Math.min(Math.max(0, ranked.length - start), clamp(Math.floor(Number(limit) || 8), 1, 20));
       const page = Array.from({ length: pageSize }, (_, index) => ({
@@ -508,7 +686,7 @@ export function createRecommendationFeedService({
           if (cached?.analysisFailedAt && Date.now() - cached.analysisFailedAt < ANALYSIS_RETRY_BACKOFF_MS) return false;
           return cached?.fingerprint !== videoFingerprint(video) || cached.analysisPending;
         })
-        .map((video) => ({ config, scan, store, video })));
+        .map((video) => ({ config, scan, store, video, feedback: cache.feedback[video.id] })));
       return {
         version: 1,
         mode: normalizedMode,
@@ -554,4 +732,15 @@ export function createRecommendationFeedService({
   };
 }
 
-export { createBehaviorWindows, diversify, rankVideos };
+export {
+  createBehaviorWindows,
+  diversify,
+  interleaveChannels,
+  mergeExplore,
+  rankVideos,
+  recallExplore,
+  recallFresh,
+  recallHot,
+  recallRewatch,
+  segmentFeedbackScore,
+};

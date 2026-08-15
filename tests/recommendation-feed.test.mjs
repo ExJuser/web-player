@@ -5,8 +5,14 @@ import {
   createBehaviorWindows,
   createRecommendationFeedService,
   diversify,
+  interleaveChannels,
+  mergeExplore,
   parseSubtitleCues,
   rankVideos,
+  recallFresh,
+  recallHot,
+  recallRewatch,
+  segmentFeedbackScore,
 } from "../server/recommendationFeed.mjs";
 
 const makeVideo = (id, relativePath) => ({
@@ -255,4 +261,82 @@ test("rankVideos prefers videos with an analyzed segment over cold fallbacks", (
     const order = rankVideos(videos, {}, {}, segments).map((video) => video.id);
     assert.ok(order.indexOf("ready") < order.indexOf("cold"), `已分析应排前: ${order.join(",")}`);
   }
+});
+
+test("recallHot ranks by aggregate play stats with untracked videos last", () => {
+  const videos = [makeVideo("v1", "a.mp4"), makeVideo("v2", "b.mp4"), makeVideo("v3", "c.mp4")];
+  const store = {
+    videoStats: {
+      v1: { totalPlayedSeconds: 7200, playCount: 10, emissionCount: 5 },
+      v2: { totalPlayedSeconds: 3600, playCount: 2, emissionCount: 1 },
+    },
+  };
+  assert.deepEqual(recallHot(videos, store).map((video) => video.id), ["v1", "v2", "v3"]);
+});
+
+test("recallFresh keeps only untouched recent videos", () => {
+  const now = Date.now();
+  const videos = [makeVideo("old", "old.mp4"), makeVideo("new", "new.mp4"), makeVideo("watched", "w.mp4")];
+  videos[0].lastModified = now - 90 * 86400000;
+  videos[1].lastModified = now - 2 * 86400000;
+  videos[2].lastModified = now - 1 * 86400000;
+  const store = { items: { watched: { currentTime: 100, duration: 3600, completed: false } } };
+  assert.deepEqual(recallFresh(videos, store, now).map((video) => video.id), ["new"]);
+});
+
+test("recallRewatch surfaces completed favorites after cooldown only", () => {
+  const now = Date.now();
+  const videos = [makeVideo("fav", "a.mp4"), makeVideo("recent", "b.mp4"), makeVideo("plain", "c.mp4")];
+  const store = {
+    favorites: ["fav"],
+    videoRatings: {},
+    items: {
+      fav: { currentTime: 3600, duration: 3600, completed: true, updatedAt: now - 14 * 86400000 },
+      recent: { currentTime: 3600, duration: 3600, completed: true, updatedAt: now - 3 * 86400000 },
+      plain: { currentTime: 3600, duration: 3600, completed: true, updatedAt: now - 14 * 86400000 },
+    },
+  };
+  const rewatch = recallRewatch(videos, store, now);
+  assert.ok(rewatch.some((video) => video.id === "fav"), "冷却期后的收藏应入选");
+  assert.ok(!rewatch.some((video) => video.id === "recent"), "冷却期内不应入选");
+  assert.ok(!rewatch.some((video) => video.id === "plain"), "无收藏无高评分的看完影片不应入选");
+});
+
+test("interleaveChannels merges channels by weight and dedupes", () => {
+  const channels = {
+    relevant: [{ id: "r1" }, { id: "r2" }, { id: "r3" }, { id: "r4" }],
+    hot: [{ id: "h1" }, { id: "h2" }],
+    fresh: [{ id: "f1" }],
+    rewatch: [],
+  };
+  const merged = interleaveChannels(channels);
+  assert.equal(merged.length, 7);
+  assert.equal(new Set(merged.map((video) => video.id)).size, 7, "不应出现重复");
+  assert.deepEqual(merged.map((video) => video.id), ["r1", "h1", "f1", "r2", "h2", "r3", "r4"]);
+});
+
+test("mergeExplore inserts exploration picks every N items and dedupes", () => {
+  const base = Array.from({ length: 20 }, (_, index) => ({ id: `b${index}` }));
+  const explore = [{ id: "x1" }, { id: "x2" }, { id: "b0" }, { id: "x3" }];
+  const merged = mergeExplore(base, explore, 10);
+  assert.equal(merged.length, 23);
+  assert.equal(merged[10].id, "x1");
+  assert.equal(merged[21].id, "x2");
+  assert.equal(merged[22].id, "x3");
+  assert.ok(!merged.some((video, index, list) => list.indexOf(video) !== index), "不应出现重复");
+});
+
+test("segmentFeedbackScore rewards watched windows and penalizes skipped ones", () => {
+  const now = Date.now();
+  const events = [
+    { t: 100, a: "complete", at: now },
+    { t: 500, a: "skip", at: now },
+    { t: 100, a: "skip", at: now - 90 * 86400000 },
+  ];
+  const hot = segmentFeedbackScore(events, 50, 200, now);
+  assert.ok(hot !== null && hot > 0.55, `看完窗口应得高分: ${hot}`);
+  const cold = segmentFeedbackScore(events, 400, 600, now);
+  assert.ok(cold !== null && cold < 0.45, `跳过窗口应得低分: ${cold}`);
+  assert.equal(segmentFeedbackScore(events, 700, 900, now), null, "无事件窗口应返回 null");
+  assert.equal(segmentFeedbackScore(undefined, 0, 100, now), null);
 });
