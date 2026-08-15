@@ -1,4 +1,4 @@
-import { ArrowLeft, Expand, Film, Heart, LoaderCircle, Minimize2, Play, SkipForward, Volume2, VolumeX, X } from "lucide-react";
+import { ArrowLeft, Film, Heart, LoaderCircle, Play, SkipForward, Volume2, VolumeX, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 
@@ -27,7 +27,6 @@ export function RecommendationFeedSection({ active, mode, modeLabel, onActiveTit
   const [error, setError] = useState("");
   const [isMuted, setIsMuted] = useState(true);
   const [volume, setVolume] = useState(0.8);
-  const [isFillMode, setIsFillMode] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [analysisQueued, setAnalysisQueued] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -195,7 +194,7 @@ export function RecommendationFeedSection({ active, mode, modeLabel, onActiveTit
         >
           {items.map((item, index) => (
             <article className="recommendation-feed-card" key={item.id} aria-current={index === activeIndex ? "true" : undefined}>
-              <div className={`recommendation-feed-stage${isFillMode ? " is-fill" : ""}`}>
+              <div className="recommendation-feed-stage">
                 <video
                   ref={(element) => {
                     if (element) videoRefs.current.set(item.id, element);
@@ -281,7 +280,6 @@ export function RecommendationFeedSection({ active, mode, modeLabel, onActiveTit
                     />
                     <span>{Math.round(volume * 100)}%</span>
                   </label>
-                  <button type="button" onClick={() => setIsFillMode((value) => !value)}>{isFillMode ? <Minimize2 size={18} /> : <Expand size={18} />}{isFillMode ? "标准画面" : "放大画面"}</button>
                   <button type="button" onClick={() => moveTo(index + 1)} disabled={index >= items.length - 1 && !nextCursor}><SkipForward size={18} />下一条</button>
                   <button type="button" className="recommendation-feed-dismiss" onClick={() => dismiss(item)}><X size={18} />不再推荐</button>
                 </div>

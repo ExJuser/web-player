@@ -357,10 +357,6 @@ button {
   content: "SOURCE FRAME / UNCROPPED";
 }
 
-.recommendation-feed-stage.is-fill::before {
-  content: "SOURCE FRAME / EXPANDED UNCROPPED";
-}
-
 .recommendation-feed-stage::after {
   bottom: 15px;
   content: "LOCAL SIGNAL CUT";
@@ -378,14 +374,6 @@ button {
   background: #000;
   box-shadow: 0 12px 36px rgba(0, 0, 0, 0.42);
   cursor: pointer;
-  transition: width 180ms ease, height 180ms ease;
-}
-
-.recommendation-feed-stage.is-fill video {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  box-shadow: none;
 }
 
 .recommendation-feed-progress {
