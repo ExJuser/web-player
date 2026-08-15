@@ -2249,6 +2249,30 @@ button {
   color: #edf4f7;
 }
 
+.multi-view-fatal-error {
+  padding: 32px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.multi-view-fatal-error > span {
+  color: #87949d;
+  font-size: 12px;
+}
+
+.multi-view-fatal-error > button {
+  min-height: 36px;
+  margin-top: 8px;
+  padding: 0 14px;
+  border-radius: 7px;
+  color: #071014;
+  font-weight: 700;
+  background: var(--multi-view-accent);
+  cursor: pointer;
+}
+
 .multi-view-toolbar {
   display: flex;
   min-width: 0;

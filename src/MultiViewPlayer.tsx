@@ -11,7 +11,7 @@ import {
   VolumeX,
   X,
 } from "lucide-react";
-import { useMemo, useRef, useState, type CSSProperties } from "react";
+import { Component, useMemo, useRef, useState, type CSSProperties, type ErrorInfo, type ReactNode } from "react";
 
 import { formatTime } from "./playerFormatUtils";
 import type { VideoItem } from "./playerTypes";
@@ -28,7 +28,43 @@ type PickerState = { targetIndex: number | null } | null;
 
 const layoutOptions = [2, 3, 4] as const;
 
-export function MultiViewPlayer({
+class MultiViewErrorBoundary extends Component<
+  { children: ReactNode; onClose: () => void },
+  { hasError: boolean }
+> {
+  state = { hasError: false };
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error("多路播放渲染失败", error, info);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <section className="multi-view-player multi-view-fatal-error" role="alert">
+          <strong>多路播放加载失败</strong>
+          <span>普通播放器未受影响，可以退出后继续播放。</span>
+          <button type="button" onClick={this.props.onClose}>退出多路播放</button>
+        </section>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+export function MultiViewPlayer(props: MultiViewPlayerProps) {
+  return (
+    <MultiViewErrorBoundary onClose={props.onClose}>
+      <MultiViewPlayerContent {...props} />
+    </MultiViewErrorBoundary>
+  );
+}
+
+function MultiViewPlayerContent({
   videos,
   selectedVideoIds,
   getVideoUrl,
@@ -185,8 +221,14 @@ export function MultiViewPlayer({
                 onClick={() => toggleVideoPlayback(video.id)}
                 onPlay={() => setPlayingById((current) => ({ ...current, [video.id]: true }))}
                 onPause={() => setPlayingById((current) => ({ ...current, [video.id]: false }))}
-                onTimeUpdate={(event) => setTimeById((current) => ({ ...current, [video.id]: event.currentTarget.currentTime }))}
-                onDurationChange={(event) => setDurationById((current) => ({ ...current, [video.id]: event.currentTarget.duration || 0 }))}
+                onTimeUpdate={(event) => {
+                  const nextTime = event.currentTarget.currentTime;
+                  setTimeById((current) => ({ ...current, [video.id]: nextTime }));
+                }}
+                onDurationChange={(event) => {
+                  const nextDuration = event.currentTarget.duration || 0;
+                  setDurationById((current) => ({ ...current, [video.id]: nextDuration }));
+                }}
                 onLoadedData={() => setFailedVideoIds((current) => current[video.id] ? { ...current, [video.id]: false } : current)}
                 onError={() => setFailedVideoIds((current) => ({ ...current, [video.id]: true }))}
               />
