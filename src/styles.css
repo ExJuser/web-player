@@ -2230,18 +2230,23 @@ button {
 .home-side-card {
   position: relative;
   min-width: 0;
+  padding-left: 18px;
 }
 
 .home-side-card-drag-handle {
   position: absolute;
-  top: 8px;
-  right: 8px;
+  top: 0;
+  bottom: 0;
+  left: 0;
   z-index: 2;
-  display: inline-flex;
+  display: flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
+  width: 14px;
+  min-width: 14px;
+  height: auto;
+  min-height: 36px;
+  padding: 0;
   border: 1px solid transparent;
   border-radius: 6px;
   background: transparent;
@@ -2279,6 +2284,8 @@ button {
 .home-side-drag-ghost {
   position: fixed;
   z-index: 1000;
+  box-sizing: border-box;
+  padding-left: 18px;
   pointer-events: none;
   opacity: 0.92;
   border-radius: 8px;
@@ -11209,16 +11216,20 @@ button {
   background: #ffffff;
 }
 
-.app-shell.theme-light .home-side-card-drag-handle {
+.app-shell.theme-light .home-side-card-drag-handle,
+:root[data-theme="light"] .home-side-card-drag-handle {
   color: #64748b;
 }
 
 .app-shell.theme-light .home-side-card-drag-handle:hover,
-.app-shell.theme-light .home-side-card-drag-handle:focus-visible {
+.app-shell.theme-light .home-side-card-drag-handle:focus-visible,
+:root[data-theme="light"] .home-side-card-drag-handle:hover,
+:root[data-theme="light"] .home-side-card-drag-handle:focus-visible {
   color: #0f172a;
 }
 
-.app-shell.theme-light .home-side-drag-ghost {
+.app-shell.theme-light .home-side-drag-ghost,
+:root[data-theme="light"] .home-side-drag-ghost {
   box-shadow: 0 12px 32px rgba(15, 23, 42, 0.28);
 }
 

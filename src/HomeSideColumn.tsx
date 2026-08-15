@@ -74,16 +74,18 @@ export function HomeSideColumn({
   const orderedEntries: SideCardEntry[] = [];
   const entriesByKey = new Map<HomeSideCardKey, SideCardEntry>();
   entries.forEach((entry) => entriesByKey.set(entry.key, entry));
+  const remainingEntriesByKey = new Map(entriesByKey);
   order.forEach((key) => {
-    const entry = entriesByKey.get(key);
+    const entry = remainingEntriesByKey.get(key);
     if (entry) {
       orderedEntries.push(entry);
-      entriesByKey.delete(key);
+      remainingEntriesByKey.delete(key);
     }
   });
-  entriesByKey.forEach((entry) => orderedEntries.push(entry));
+  remainingEntriesByKey.forEach((entry) => orderedEntries.push(entry));
 
   const commitOrder = useCallback((next: HomeSideCardKey[]) => {
+    orderRef.current = next;
     setOrder(next);
     saveHomeSideColumnOrder(next);
   }, []);
@@ -173,8 +175,8 @@ export function HomeSideColumn({
           <button
             className="home-side-card-drag-handle"
             type="button"
-            aria-label={`拖动排序“${entry.label}”卡片（按住手柄拖动，或按上下方向键移动）`}
-            title={`拖动排序“${entry.label}”，或按上下方向键移动`}
+            aria-label={`拖动排序“${entry.label}”卡片（按住左侧拖拽条，或按上下方向键移动）`}
+            title={`按住左侧拖拽条排序“${entry.label}”，或按上下方向键移动`}
             onPointerDown={(event) => startDrag(event, entry.key)}
             onPointerMove={handlePointerMove}
             onPointerUp={endDrag}
