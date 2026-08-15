@@ -5,6 +5,7 @@ import { probeMediaFile } from "./mediaCompatibility.mjs";
 
 const CACHE_VERSION = 1;
 const ANALYZER_VERSION = 1;
+const ANALYSIS_CONCURRENCY = 2;
 const DEFAULT_SEGMENT_SECONDS = 52;
 const MIN_SEGMENT_SECONDS = 30;
 const MAX_SEGMENT_SECONDS = 90;
@@ -239,10 +240,9 @@ export function createRecommendationFeedService({
     }
   };
 
-  const analyzeVideo = async ({ config, scan, store, video }) => {
+  const analyzeVideo = async ({ config, scan, store, video, mediaInfo }) => {
     const filePath = resolveVideoPath(config, video.mediaRootId, video.relativePath);
-    const probe = await probeMediaFile(runProcess, filePath);
-    const duration = Number(probe?.format?.duration);
+    const duration = Number(mediaInfo?.duration);
     if (!Number.isFinite(duration) || duration <= 0) throw new Error("无法读取影片时长。");
     const highlights = store?.videoHighlights?.[video.id] ?? [];
     if (highlights.length) {
@@ -257,7 +257,7 @@ export function createRecommendationFeedService({
     }
 
     const cues = await findSubtitleCues(config, scan, video);
-    const hasAudio = probe?.streams?.some((stream) => stream.codec_type === "audio");
+    const hasAudio = mediaInfo?.hasAudio;
     const candidates = createCandidateWindows(duration, video.id);
     const scored = [];
     for (const candidate of candidates) {
@@ -279,22 +279,47 @@ export function createRecommendationFeedService({
     if (isAnalyzing) return;
     isAnalyzing = true;
     try {
-      while (analysisQueue.length) {
-        const task = analysisQueue.shift();
-        try {
-          const segment = await analyzeVideo(task);
-          const cache = await loadCache();
-          cache.segments[task.video.id] = { ...segment, fingerprint: videoFingerprint(task.video), analyzedAt: Date.now() };
-          const store = await loadRecommendationStore();
-          store.saveRecommendationSegment(task.video.id, cache.segments[task.video.id]);
-        } catch {
-          // Fast candidates remain usable when local tools or a media path are unavailable.
-        } finally {
-          queuedVideoIds.delete(task.video.id);
+      await Promise.all(Array.from({ length: ANALYSIS_CONCURRENCY }, async () => {
+        while (analysisQueue.length) {
+          const task = analysisQueue.shift();
+          try {
+            const cache = await loadCache();
+            const fingerprint = videoFingerprint(task.video);
+            const recommendationStore = await loadRecommendationStore();
+            const cached = cache.segments[task.video.id];
+            let mediaInfo = cached?.fingerprint === fingerprint && cached.analysisPending && cached.duration > 0
+              ? { duration: cached.duration, hasAudio: cached.hasAudio }
+              : null;
+            if (!mediaInfo) {
+              const filePath = resolveVideoPath(task.config, task.video.mediaRootId, task.video.relativePath);
+              const probe = await probeMediaFile(runProcess, filePath);
+              mediaInfo = {
+                duration: Number(probe?.format?.duration),
+                hasAudio: probe?.streams?.some((stream) => stream.codec_type === "audio") ?? false,
+              };
+              if (!Number.isFinite(mediaInfo.duration) || mediaInfo.duration <= 0) throw new Error("无法读取影片时长。");
+
+              const manual = task.store.videoHighlights?.[task.video.id]?.[0];
+              const fallback = manual
+                ? { ...normalizeManualSegment(manual, mediaInfo.duration), duration: mediaInfo.duration, score: 1, source: "manual", reasons: [manual.tag ? `人工标记：${manual.tag}` : "人工标记的高能片段"] }
+                : { ...createFallbackSegment(task.video, mediaInfo.duration), duration: mediaInfo.duration };
+              cache.segments[task.video.id] = { ...fallback, hasAudio: mediaInfo.hasAudio, fingerprint, analysisPending: true, probedAt: Date.now() };
+              recommendationStore.saveRecommendationSegment(task.video.id, cache.segments[task.video.id]);
+            }
+
+            const segment = await analyzeVideo({ ...task, mediaInfo });
+            cache.segments[task.video.id] = { ...segment, fingerprint, analyzedAt: Date.now() };
+            recommendationStore.saveRecommendationSegment(task.video.id, cache.segments[task.video.id]);
+          } catch {
+            // Fast candidates remain usable when local tools or a media path are unavailable.
+          } finally {
+            queuedVideoIds.delete(task.video.id);
+          }
         }
-      }
+      }));
     } finally {
       isAnalyzing = false;
+      if (analysisQueue.length) void drainQueue();
     }
   };
 
@@ -305,16 +330,6 @@ export function createRecommendationFeedService({
       analysisQueue.push(task);
     }
     void drainQueue();
-  };
-
-  const getDuration = async (config, video) => {
-    try {
-      const filePath = resolveVideoPath(config, video.mediaRootId, video.relativePath);
-      const probe = await probeMediaFile(runProcess, filePath);
-      return Number(probe?.format?.duration) || 0;
-    } catch {
-      return 0;
-    }
   };
 
   return {
@@ -336,17 +351,11 @@ export function createRecommendationFeedService({
         video: ranked[(start + index) % ranked.length],
         sequence: start + index,
       }));
-      const items = await Promise.all(page.map(async ({ video, sequence }) => {
+      const items = page.map(({ video, sequence }) => {
         const cached = cache.segments[video.id];
         let segment = cached?.fingerprint === videoFingerprint(video) ? cached : null;
         if (!segment) {
-          const duration = await getDuration(config, video);
-          const manual = store.videoHighlights?.[video.id]?.[0];
-          segment = duration > 0
-            ? manual
-              ? { ...normalizeManualSegment(manual, duration), duration, score: 1, source: "manual", reasons: [manual.tag ? `人工标记：${manual.tag}` : "人工标记的高能片段"] }
-              : { ...createFallbackSegment(video, duration), duration }
-            : { startTime: 0, endTime: DEFAULT_SEGMENT_SECONDS, duration: 0, score: 0, source: "fallback", reasons: ["从影片开头开始预览"] };
+          segment = { startTime: 0, endTime: DEFAULT_SEGMENT_SECONDS, duration: 0, score: 0, source: "fallback", reasons: ["从影片开头开始预览"] };
         }
         return {
           id: `${video.id}@${Math.round(segment.startTime * 10)}:${sequence}`,
@@ -364,10 +373,13 @@ export function createRecommendationFeedService({
           tags: store.videoTags?.[video.id] ?? [],
           rating: store.videoRatings?.[video.id],
         };
-      }));
+      });
       queueAnalysis(page
         .map((item) => item.video)
-        .filter((video) => cache.segments[video.id]?.fingerprint !== videoFingerprint(video))
+        .filter((video) => {
+          const cached = cache.segments[video.id];
+          return cached?.fingerprint !== videoFingerprint(video) || cached.analysisPending;
+        })
         .map((video) => ({ config, scan, store, video })));
       return {
         version: 1,
@@ -399,7 +411,8 @@ export function createRecommendationFeedService({
 
     async getStatus() {
       const cache = await loadCache();
-      return { analyzed: Object.keys(cache.segments).length, queued: queuedVideoIds.size, analyzing: isAnalyzing };
+      const analyzed = Object.values(cache.segments).filter((segment) => !segment.analysisPending).length;
+      return { analyzed, queued: queuedVideoIds.size, analyzing: isAnalyzing };
     },
   };
 }
