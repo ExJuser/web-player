@@ -2115,6 +2115,18 @@ export default function App() {
     },
     [createHomeVideoCard, isExploreViewVisible, modeFilteredVideos, specialHomeSection],
   );
+  // 侧边条“最近添加”迷你卡：当前媒体模式按文件时间倒序取最近 5 部（同样先筛后建卡）。
+  const homeRecentAddsCards = useMemo(
+    () => {
+      if (!isHomeViewVisible) return [];
+      return [...modeFilteredVideos]
+        .filter((video) => video.lastModified > 0)
+        .sort((a, b) => b.lastModified - a.lastModified)
+        .slice(0, 5)
+        .map(createHomeVideoCard);
+    },
+    [createHomeVideoCard, isHomeViewVisible, modeFilteredVideos],
+  );
   const specialModeInsights = useMemo(
     () => {
       if (homeMediaMode !== "special") return null;
@@ -6805,6 +6817,12 @@ export default function App() {
                 restoredCount: videoVersionGroups.reduce((count, group) => count + group.restored.length, 0),
                 videoCount: versionPlaylistVideos.length,
                 onOpenPlaylist: openVersionPlaylist,
+              } : null}
+              recentAdds={homeRecentAddsCards.length ? {
+                cards: homeRecentAddsCards,
+                formatRelativeTime,
+                onOpenVideo: openVideoFromHome,
+                onThumbnailError: markVideoThumbnailFailed,
               } : null}
             />
           </section>

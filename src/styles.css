@@ -4779,6 +4779,58 @@ button {
   font-size: 12px;
 }
 
+.home-recent-adds-list {
+  display: grid;
+  gap: 4px;
+}
+
+.home-recent-adds-row {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 6px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.home-recent-adds-row:hover,
+.home-recent-adds-row:focus-visible {
+  background: #20252d;
+  outline: none;
+}
+
+.home-recent-adds-row .home-card-thumbnail {
+  align-self: center;
+  border-radius: 6px;
+}
+
+.home-recent-adds-copy {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.home-recent-adds-copy strong {
+  overflow: hidden;
+  color: #f5f7fb;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.home-recent-adds-copy small {
+  color: #8e97a5;
+  font-size: 12px;
+}
+
 .home-tag-stats-card {
   gap: 10px;
 }
@@ -12201,6 +12253,19 @@ button {
 .app-shell.theme-light .playlist-item.active {
   border-color: #00a1d6;
   background: #eef8fc;
+}
+
+.app-shell.theme-light .home-recent-adds-row:hover,
+.app-shell.theme-light .home-recent-adds-row:focus-visible {
+  background: #eef8fc;
+}
+
+.app-shell.theme-light .home-recent-adds-copy strong {
+  color: #0f172a;
+}
+
+.app-shell.theme-light .home-recent-adds-copy small {
+  color: #64748b;
 }
 
 .app-shell.theme-light .home-progress {

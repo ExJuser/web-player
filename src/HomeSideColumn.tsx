@@ -6,6 +6,7 @@ import { GripVertical } from "lucide-react";
 import { DuplicateVideoSummaryCard } from "./DuplicateVideoSummaryCard";
 import { HomeMediaLibraryCard } from "./HomeMediaLibraryCard";
 import { HomeModeCard } from "./HomeModeCard";
+import { HomeRecentAddsCard } from "./HomeRecentAddsCard";
 import { HomeRecapCard } from "./HomeRecapCard";
 import { HomeTagStats } from "./HomeTagStats";
 import { VideoVersionSummaryCard } from "./VideoVersionSummaryCard";
@@ -20,6 +21,7 @@ type HomeSideColumnProps = {
   mediaLibrary: ComponentProps<typeof HomeMediaLibraryCard>;
   mode: ComponentProps<typeof HomeModeCard>;
   recap: ComponentProps<typeof HomeRecapCard> | null;
+  recentAdds: ComponentProps<typeof HomeRecentAddsCard> | null;
   tagStats: ComponentProps<typeof HomeTagStats> | null;
   videoVersions: ComponentProps<typeof VideoVersionSummaryCard> | null;
 };
@@ -44,6 +46,7 @@ export function HomeSideColumn({
   mediaLibrary,
   mode,
   recap,
+  recentAdds,
   tagStats,
   videoVersions,
 }: HomeSideColumnProps) {
@@ -61,6 +64,9 @@ export function HomeSideColumn({
   const entries: SideCardEntry[] = [];
   entries.push({ key: "mode", label: "媒体模式", node: <HomeModeCard {...mode} /> });
   entries.push({ key: "mediaLibrary", label: "媒体库", node: <HomeMediaLibraryCard {...mediaLibrary} /> });
+  if (recentAdds) {
+    entries.push({ key: "recentAdds", label: "最近添加", node: <HomeRecentAddsCard {...recentAdds} /> });
+  }
   if (recap) entries.push({ key: "recap", label: "无剧透回顾", node: <HomeRecapCard {...recap} /> });
   if (tagStats) entries.push({ key: "tagStats", label: "标签统计", node: <HomeTagStats {...tagStats} /> });
   if (duplicateSummary) {
