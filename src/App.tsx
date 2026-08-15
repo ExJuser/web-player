@@ -5406,7 +5406,7 @@ export default function App() {
       element.removeEventListener("canplay", handleCanPlay);
       element.removeEventListener("error", handleError);
     };
-  }, [activeView, currentVideo?.id, currentVideoPlaybackUrl, updateVideoMetadata]);
+  }, [activeView, currentVideo?.id, currentVideoPlaybackUrl, isMultiViewOpen, updateVideoMetadata]);
 
   useEffect(() => {
     const element = videoRef.current;
@@ -7278,6 +7278,7 @@ export default function App() {
             onToggleFullscreen={toggleFullscreen}
             onToggleMute={toggleMute}
             onToggleMultiView={() => {
+              persistCurrentProgress();
               videoRef.current?.pause();
               const currentIndex = currentVideoId
                 ? playlistVideos.findIndex((video) => video.id === currentVideoId)
