@@ -7279,7 +7279,13 @@ export default function App() {
             onToggleMute={toggleMute}
             onToggleMultiView={() => {
               videoRef.current?.pause();
-              setMultiViewVideoIds((current) => current.length ? current : currentVideoId ? [currentVideoId] : []);
+              const currentIndex = currentVideoId
+                ? playlistVideos.findIndex((video) => video.id === currentVideoId)
+                : -1;
+              const initialVideos = currentIndex >= 0
+                ? [...playlistVideos.slice(currentIndex), ...playlistVideos.slice(0, currentIndex)].slice(0, 4)
+                : playlistVideos.slice(0, 4);
+              setMultiViewVideoIds((current) => current.length ? current : initialVideos.map((video) => video.id));
               setIsMultiViewOpen(true);
             }}
             onTogglePictureInPicture={togglePictureInPicture}

@@ -43,6 +43,7 @@ export function MultiViewPlayer({
   const [playingById, setPlayingById] = useState<Record<string, boolean>>({});
   const [timeById, setTimeById] = useState<Record<string, number>>({});
   const [durationById, setDurationById] = useState<Record<string, number>>({});
+  const [failedVideoIds, setFailedVideoIds] = useState<Record<string, boolean>>({});
   const videoElementsRef = useRef(new Map<string, HTMLVideoElement>());
   const slotCount = layoutSize * layoutSize;
   const visibleVideoIds = selectedVideoIds.slice(0, slotCount);
@@ -176,7 +177,9 @@ export function MultiViewPlayer({
                   else videoElementsRef.current.delete(video.id);
                 }}
                 src={getVideoUrl(video)}
+                poster={video.thumbnailUrl || video.posterUrl || undefined}
                 muted={isMuted}
+                autoPlay
                 playsInline
                 preload="metadata"
                 onClick={() => toggleVideoPlayback(video.id)}
@@ -184,7 +187,15 @@ export function MultiViewPlayer({
                 onPause={() => setPlayingById((current) => ({ ...current, [video.id]: false }))}
                 onTimeUpdate={(event) => setTimeById((current) => ({ ...current, [video.id]: event.currentTarget.currentTime }))}
                 onDurationChange={(event) => setDurationById((current) => ({ ...current, [video.id]: event.currentTarget.duration || 0 }))}
+                onLoadedData={() => setFailedVideoIds((current) => current[video.id] ? { ...current, [video.id]: false } : current)}
+                onError={() => setFailedVideoIds((current) => ({ ...current, [video.id]: true }))}
               />
+              {failedVideoIds[video.id] ? (
+                <div className="multi-view-channel-error" role="status">
+                  <strong>无法播放此影片</strong>
+                  <span>请在普通播放器中检查格式或兼容版本</span>
+                </div>
+              ) : null}
               <div className="multi-view-channel-label">
                 <span>CH {String(index + 1).padStart(2, "0")}</span>
                 <strong title={video.relativePath}>{video.name}</strong>
