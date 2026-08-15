@@ -15,6 +15,7 @@ import {
 } from "react";
 
 import { fetchLocalJson as fetchJson } from "./localApiClient";
+import { MultiViewPlayer } from "./MultiViewPlayer";
 import {
   activeViewForRoute,
   parseAppRoute,
@@ -675,6 +676,8 @@ export default function App() {
   const [currentVideoId, setCurrentVideoId] = useState<string | null>(
     initialAppRoute.kind === "player" ? initialAppRoute.videoId : null,
   );
+  const [isMultiViewOpen, setIsMultiViewOpen] = useState(false);
+  const [multiViewVideoIds, setMultiViewVideoIds] = useState<string[]>([]);
   currentVideoIdRef.current = currentVideoId;
   const [activeView, setActiveView] = useState<ActiveView>(() => activeViewForRoute(initialAppRoute));
   const [photoAlbums, setPhotoAlbums] = useState<PhotoAlbum[]>([]);
@@ -7102,23 +7105,31 @@ export default function App() {
         ) : null}
 
         <div
-          className={`player-frame ${isNonPlayerViewVisible ? "home-hidden" : ""} ${isFullscreen ? "fullscreen" : ""} ${areControlsVisible ? "" : "controls-hidden"}`}
+          className={`player-frame ${isMultiViewOpen ? "multi-view-active" : ""} ${isNonPlayerViewVisible ? "home-hidden" : ""} ${isFullscreen ? "fullscreen" : ""} ${areControlsVisible ? "" : "controls-hidden"}`}
           ref={playerRef}
           onMouseEnter={revealControls}
           onMouseMove={revealControls}
-          onContextMenu={handlePlayerContextMenu}
-          onPointerDownCapture={handlePlayerPointerDown}
-          onPointerUpCapture={handlePlayerPointerUp}
-          onPointerCancel={handlePlayerPointerCancel}
-          onDoubleClick={handlePlayerDoubleClick}
-          onWheel={handlePlayerWheel}
+          onContextMenu={isMultiViewOpen ? undefined : handlePlayerContextMenu}
+          onPointerDownCapture={isMultiViewOpen ? undefined : handlePlayerPointerDown}
+          onPointerUpCapture={isMultiViewOpen ? undefined : handlePlayerPointerUp}
+          onPointerCancel={isMultiViewOpen ? undefined : handlePlayerPointerCancel}
+          onDoubleClick={isMultiViewOpen ? undefined : handlePlayerDoubleClick}
+          onWheel={isMultiViewOpen ? undefined : handlePlayerWheel}
           onMouseLeave={() => {
             hideControls();
             stopRightMouseHoldSpeed();
           }}
           tabIndex={-1}
         >
-          <PlayerStage
+          {isMultiViewOpen ? (
+            <MultiViewPlayer
+              videos={playlistVideos}
+              selectedVideoIds={multiViewVideoIds}
+              getVideoUrl={(video) => getPlayableVideoUrl(video, playbackSourceChoices[video.id] ?? "compatible")}
+              onChangeSelectedVideoIds={setMultiViewVideoIds}
+              onClose={() => setIsMultiViewOpen(false)}
+            />
+          ) : <PlayerStage
             autoNextPrompt={autoNextPrompt}
             currentVideoSourceAspectRatio={currentVideoSourceAspectRatio}
             danmakuComments={danmakuComments}
@@ -7160,9 +7171,9 @@ export default function App() {
             }}
             onTimeUpdate={handleTimeUpdate}
             onTogglePlay={togglePlay}
-          />
+          />}
 
-          <PlayerControlBar
+          {!isMultiViewOpen ? <PlayerControlBar
             canPlayNext={canPlayNext}
             canPlayPrevious={canPlayPrevious}
             canRecordEmission={canRecordEmission}
@@ -7266,6 +7277,11 @@ export default function App() {
             onToggleCinemaMode={toggleCinemaMode}
             onToggleFullscreen={toggleFullscreen}
             onToggleMute={toggleMute}
+            onToggleMultiView={() => {
+              videoRef.current?.pause();
+              setMultiViewVideoIds((current) => current.length ? current : currentVideoId ? [currentVideoId] : []);
+              setIsMultiViewOpen(true);
+            }}
             onTogglePictureInPicture={togglePictureInPicture}
             onTogglePlay={togglePlay}
             onTogglePrivacyMode={togglePrivacyMode}
@@ -7273,7 +7289,7 @@ export default function App() {
             onToggleStartFromHighEnergy={toggleStartFromHighEnergy}
             onUpdateTimelinePreview={updateTimelinePreview}
             onUpdateTimelinePreviewFromTime={updateTimelinePreviewFromTime}
-          />
+          /> : null}
         </div>
       </section>
 

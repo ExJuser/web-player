@@ -1,4 +1,4 @@
-import { EyeOff, Keyboard, Maximize, PictureInPicture2, RotateCw, Zap } from "lucide-react";
+import { EyeOff, Grid2X2, Keyboard, Maximize, PictureInPicture2, RotateCw, Zap } from "lucide-react";
 
 type PlayerViewControlsProps = {
   hasCurrentVideo: boolean;
@@ -9,6 +9,7 @@ type PlayerViewControlsProps = {
   startFromHighEnergy: boolean;
   onRotateVideo: () => void;
   onToggleCinemaMode: () => void;
+  onToggleMultiView: () => void;
   onToggleFullscreen: () => void;
   onTogglePictureInPicture: () => void;
   onTogglePrivacyMode: () => void;
@@ -25,6 +26,7 @@ export function PlayerViewControls({
   startFromHighEnergy,
   onRotateVideo,
   onToggleCinemaMode,
+  onToggleMultiView,
   onToggleFullscreen,
   onTogglePictureInPicture,
   onTogglePrivacyMode,
@@ -62,6 +64,9 @@ export function PlayerViewControls({
       </button>
       <button className="icon-button view-control-secondary" type="button" onClick={onToggleShortcutDialog} title="快捷键帮助">
         <Keyboard size={20} />
+      </button>
+      <button className="icon-button view-control-secondary" type="button" onClick={onToggleMultiView} title="多路播放" aria-label="进入多路播放">
+        <Grid2X2 size={20} />
       </button>
       <button
         className={`icon-button privacy-toggle view-control-secondary ${isPrivacyMode ? "active" : ""}`}

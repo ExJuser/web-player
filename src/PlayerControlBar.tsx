@@ -116,6 +116,7 @@ type PlayerControlBarProps = {
   onToggleCinemaMode: () => void;
   onToggleFullscreen: () => void;
   onToggleMute: () => void;
+  onToggleMultiView: () => void;
   onTogglePictureInPicture: () => void;
   onTogglePlay: () => void;
   onTogglePrivacyMode: () => void;
@@ -212,6 +213,7 @@ export function PlayerControlBar({
   onToggleCinemaMode,
   onToggleFullscreen,
   onToggleMute,
+  onToggleMultiView,
   onTogglePictureInPicture,
   onTogglePlay,
   onTogglePrivacyMode,
@@ -371,6 +373,7 @@ export function PlayerControlBar({
             onRotateVideo={onRotateVideo}
             onToggleCinemaMode={onToggleCinemaMode}
             onToggleFullscreen={onToggleFullscreen}
+            onToggleMultiView={onToggleMultiView}
             onTogglePictureInPicture={onTogglePictureInPicture}
             onTogglePrivacyMode={onTogglePrivacyMode}
             onToggleShortcutDialog={onToggleShortcutDialog}

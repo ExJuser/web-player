@@ -122,6 +122,21 @@ button,
 
 /* Stacked player layouts need an explicit stage height before the playlist. */
 @media (max-width: 980px) {
+  .multi-view-toolbar {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .multi-view-actions {
+    width: 100%;
+    margin-left: 0;
+    overflow-x: auto;
+  }
+
+  .app-shell:not(.home-view):not(.cinema-mode) .player-frame.multi-view-active:not(.fullscreen) {
+    height: min(78dvh, 760px);
+  }
+
   .app-shell:not(.home-view):not(.cinema-mode) .player-column {
     height: max-content;
   }
@@ -146,6 +161,34 @@ button,
 }
 
 @media (max-width: 720px) {
+  .multi-view-heading {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .multi-view-actions > button {
+    min-width: max-content;
+  }
+
+  .multi-view-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-rows: minmax(140px, 1fr);
+    grid-template-rows: none;
+    overflow-y: auto;
+  }
+
+  .multi-view-channel-label > strong {
+    display: none;
+  }
+
+  .multi-view-channel-timeline span {
+    display: none;
+  }
+
+  .multi-view-picker-backdrop {
+    padding: 8px;
+  }
+
   .app-shell {
     padding-top: max(12px, env(safe-area-inset-top));
     padding-right: max(12px, env(safe-area-inset-right));
