@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 
 import type { HomeVideoCard } from "./playerTypes";
+import type { TagExplorerSelection } from "./tagExplorer";
 import { useVideoThumbnail } from "./useVideoThumbnail";
 import type {
   WatchActivityDayInsight,
@@ -157,9 +158,10 @@ type WatchActivityTagButtonProps = {
   index: number;
   metric: WatchActivityMetric;
   formatMetric: (value: number, metric: WatchActivityMetric) => string;
+  onOpenTagPlaylist: (selection: TagExplorerSelection) => void;
 };
 
-export function WatchActivityTagButton({ insight, index, metric, formatMetric }: WatchActivityTagButtonProps) {
+export function WatchActivityTagButton({ insight, index, metric, formatMetric, onOpenTagPlaylist }: WatchActivityTagButtonProps) {
   const metricValue =
     metric === "plays"
       ? insight.playCount
@@ -170,10 +172,16 @@ export function WatchActivityTagButton({ insight, index, metric, formatMetric }:
           : insight.watchedSeconds;
 
   return (
-    <div className="watch-activity-tag" title={insight.tag}>
+    <button
+      className="watch-activity-tag"
+      type="button"
+      title={`用标签“${insight.tag}”生成片单`}
+      aria-label={`用标签“${insight.tag}”生成片单，${formatMetric(metricValue, metric)}`}
+      onClick={() => onOpenTagPlaylist({ included: [{ key: insight.key, label: insight.tag }], excluded: [] })}
+    >
       <span>{index + 1}</span>
       <strong>{insight.tag}</strong>
       <small>{formatMetric(metricValue, metric)}</small>
-    </div>
+    </button>
   );
 }

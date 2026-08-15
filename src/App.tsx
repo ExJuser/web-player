@@ -6883,6 +6883,7 @@ export default function App() {
                       formatHomeMeta={formatHomeMeta}
                       formatMetric={formatWatchActivityMetric}
                       onMetricChange={setWatchActivityMetric}
+                      onOpenTagPlaylist={openTagPlaylist}
                       onOpenVideo={openVideoFromHome}
                       onRangeChange={setWatchActivityRange}
                       onSelectDate={setSelectedWatchActivityDate}
@@ -6898,7 +6899,9 @@ export default function App() {
                     formatRelativeTime={formatRelativeTime}
                     formatVideoMetric={formatSpecialInsightMetric}
                     insights={specialModeInsights}
+                    onOpenTagPlaylist={openTagPlaylist}
                     onOpenVideo={openVideoFromHome}
+                    onSelectActor={selectActorRoute}
                     onTabChange={setSpecialInsightTab}
                     onThumbnailError={markVideoThumbnailFailed}
                     rankingVideos={specialInsightRankingVideos}

@@ -5,6 +5,7 @@ import { RatingChip, TagChips } from "./MetadataChips";
 import type { ActorInsight } from "./actorUtils";
 import type { HomeVideoCard, VideoCommentStore, VideoItem, VideoRatingStore } from "./playerTypes";
 import type { SpecialInsightTab, SpecialModeInsights, SpecialModeTagInsight, SpecialModeVideoInsight } from "./specialInsights";
+import type { TagExplorerSelection } from "./tagExplorer";
 
 type SpecialInsightTabOption = {
   value: SpecialInsightTab;
@@ -28,6 +29,8 @@ type SpecialInsightsCardProps = {
   formatDuration: (seconds: number) => string;
   formatRelativeTime: (timestamp: number) => string;
   formatVideoMetric: (insight: SpecialModeVideoInsight) => string;
+  onOpenTagPlaylist: (selection: TagExplorerSelection) => void;
+  onSelectActor: (actorId: string) => void;
   onTabChange: (tab: SpecialInsightTab) => void;
   onOpenVideo: (video: VideoItem) => void;
   onThumbnailError: (videoId: string) => void;
@@ -57,12 +60,14 @@ function SpecialActorChartGroup({
   actors,
   metric,
   formatDuration,
+  onSelectActor,
 }: {
   label: string;
   icon: ReactNode;
   actors: ActorInsight[];
   metric: SpecialActorMetric;
   formatDuration: (seconds: number) => string;
+  onSelectActor: (actorId: string) => void;
 }) {
   const rankedActors = [...actors]
     .filter((insight) => getSpecialActorMetricValue(insight, metric) > 0)
@@ -80,11 +85,14 @@ function SpecialActorChartGroup({
           const valueLabel = metric === "played" ? formatDuration(metricValue) : `${metricValue} 次`;
           const share = maxValue > 0 ? Math.max(8, Math.round((metricValue / maxValue) * 100)) : 0;
           return (
-            <div
+            <button
               className="special-tag-insight"
+              type="button"
               key={`${metric}-${insight.actor.id}`}
               style={{ "--tag-share": `${share}%` } as CSSProperties}
-              title={insight.actor.name}
+              title={`打开 ${insight.actor.name} 的演员档案`}
+              aria-label={`打开 ${insight.actor.name} 的演员档案，${valueLabel}`}
+              onClick={() => onSelectActor(insight.actor.id)}
             >
               <span className="special-tag-insight-meter" aria-hidden="true"><span /></span>
               <span className="special-tag-insight-rank">{index + 1}</span>
@@ -93,7 +101,7 @@ function SpecialActorChartGroup({
                 <small>{insight.videos.length} 部影片</small>
               </span>
               <strong>{valueLabel}</strong>
-            </div>
+            </button>
           );
         }) : <small>暂无演员统计</small>}
       </div>
@@ -151,12 +159,14 @@ function SpecialTagInsightButton({
   maxValue,
   index,
   formatDuration,
+  onOpenTagPlaylist,
 }: {
   insight: SpecialModeTagInsight;
   metric: SpecialTagMetric;
   maxValue: number;
   index: number;
   formatDuration: (seconds: number) => string;
+  onOpenTagPlaylist: (selection: TagExplorerSelection) => void;
 }) {
   const metricValue = getSpecialTagMetricValue(insight, metric);
   const valueLabel =
@@ -168,12 +178,15 @@ function SpecialTagInsightButton({
   const share = maxValue > 0 ? Math.max(8, Math.round((metricValue / maxValue) * 100)) : 0;
 
   return (
-    <div
+    <button
       className="special-tag-insight"
+      type="button"
       style={{
         "--tag-share": `${share}%`,
       } as CSSProperties}
-      title={insight.tag}
+      title={`用标签“${insight.tag}”生成片单`}
+      aria-label={`用标签“${insight.tag}”生成片单，${valueLabel}`}
+      onClick={() => onOpenTagPlaylist({ included: [{ key: insight.key, label: insight.tag }], excluded: [] })}
     >
       <span className="special-tag-insight-meter" aria-hidden="true">
         <span />
@@ -184,7 +197,7 @@ function SpecialTagInsightButton({
         <small>{insight.videoCount} 个视频</small>
       </span>
       <strong>{valueLabel}</strong>
-    </div>
+    </button>
   );
 }
 
@@ -195,6 +208,7 @@ function SpecialTagChartGroup({
   metric,
   emptyText,
   formatDuration,
+  onOpenTagPlaylist,
 }: {
   label: string;
   icon: ReactNode;
@@ -202,6 +216,7 @@ function SpecialTagChartGroup({
   metric: SpecialTagMetric;
   emptyText: string;
   formatDuration: (seconds: number) => string;
+  onOpenTagPlaylist: (selection: TagExplorerSelection) => void;
 }) {
   const maxValue = insights.reduce((max, insight) => Math.max(max, getSpecialTagMetricValue(insight, metric)), 0);
 
@@ -221,6 +236,7 @@ function SpecialTagChartGroup({
               key={`${metric}-${insight.key}`}
               maxValue={maxValue}
               metric={metric}
+              onOpenTagPlaylist={onOpenTagPlaylist}
             />
           ))
         ) : (
@@ -244,6 +260,8 @@ export function SpecialInsightsCard({
   formatDuration,
   formatRelativeTime,
   formatVideoMetric,
+  onOpenTagPlaylist,
+  onSelectActor,
   onTabChange,
   onOpenVideo,
   onThumbnailError,
@@ -343,6 +361,7 @@ export function SpecialInsightsCard({
               icon={tagGroupIcons[actorMetric === "count" ? "videoCount" : actorMetric]}
               label={`${actorMetricLabel}靠前的演员`}
               metric={actorMetric}
+              onSelectActor={onSelectActor}
             />
           </section>
           <section className="special-facet-card" aria-labelledby="special-tag-facet-title">
@@ -369,6 +388,7 @@ export function SpecialInsightsCard({
               insights={tagMetricConfig.insights}
               label={tagMetricConfig.label}
               metric={tagMetric}
+              onOpenTagPlaylist={onOpenTagPlaylist}
             />
           </section>
         </aside>

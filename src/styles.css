@@ -17404,6 +17404,14 @@ button {
   background: color-mix(in srgb, var(--archive-cyan) 10%, transparent);
   color: var(--archive-paper);
   font-size: 12px;
+  cursor: pointer;
+}
+
+.explore-overview .watch-activity-tag:hover,
+.explore-overview .watch-activity-tag:focus-visible {
+  border-color: var(--archive-cyan);
+  background: color-mix(in srgb, var(--archive-cyan) 22%, transparent);
+  outline: none;
 }
 
 .explore-overview .watch-activity-tag span,
@@ -17636,6 +17644,14 @@ button {
   border-color: color-mix(in srgb, var(--archive-paper) 10%, transparent);
   border-radius: 4px;
   background: color-mix(in srgb, var(--tag-accent) 6%, var(--archive-night));
+  cursor: pointer;
+}
+
+.explore-overview .special-tag-insight:hover,
+.explore-overview .special-tag-insight:focus-visible {
+  border-color: var(--archive-cyan);
+  background: color-mix(in srgb, var(--tag-accent) 16%, var(--archive-night));
+  outline: none;
 }
 
 .explore-overview .special-tag-insight::after {

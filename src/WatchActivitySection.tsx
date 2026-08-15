@@ -3,6 +3,7 @@ import { CalendarDays } from "lucide-react";
 
 import { HomeCardThumbnail } from "./HomeVideoCards";
 import type { HomeVideoCard, VideoItem, WatchActivityStore } from "./playerTypes";
+import type { TagExplorerSelection } from "./tagExplorer";
 import { WatchActivityMonth, WatchActivityTagButton } from "./WatchActivityCalendar";
 import {
   createWatchActivityKey,
@@ -31,6 +32,7 @@ type WatchActivitySectionProps = {
   formatHomeMeta: (card: HomeVideoCard) => string;
   formatMetric: (value: number, metric: WatchActivityMetric) => string;
   onMetricChange: (metric: WatchActivityMetric) => void;
+  onOpenTagPlaylist: (selection: TagExplorerSelection) => void;
   onOpenVideo: (video: VideoItem) => void;
   onRangeChange: (range: WatchActivityRange) => void;
   onSelectDate: (date: string) => void;
@@ -53,6 +55,7 @@ export function WatchActivitySection({
   formatHomeMeta,
   formatMetric,
   onMetricChange,
+  onOpenTagPlaylist,
   onOpenVideo,
   onRangeChange,
   onSelectDate,
@@ -183,6 +186,7 @@ export function WatchActivitySection({
                     insight={insight}
                     key={insight.key}
                     metric={metric}
+                    onOpenTagPlaylist={onOpenTagPlaylist}
                   />
                 ))
               ) : (
