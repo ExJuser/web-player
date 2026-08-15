@@ -5238,7 +5238,7 @@ export default function App() {
         element.src = currentVideoPlaybackUrl;
       }
     });
-  }, [currentVideo?.id, currentVideoPlaybackUrl]);
+  }, [currentVideo?.id, currentVideoPlaybackUrl, isMultiViewOpen]);
 
   useEffect(() => {
     setVideoRotation(0);
