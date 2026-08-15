@@ -71,6 +71,7 @@ import type { HighlightMontageConfirmState, HighlightMontageResultState } from "
 import type { LadaHighlightMontageMode, LadaRestorationConfirmState, LadaRestorationResultState } from "./LadaRestorationDialogs";
 import { readStoredLadaOptions, resolveLadaOptions, type LadaCapabilities, type LadaRestoreOptions } from "./ladaPreferences";
 import type { MediaProcessingTaskState } from "./MediaProcessingTaskDialog";
+import type { RecommendationOpenVideo } from "./recommendationFeedClient";
 import {
   buildSpecialModeInsights,
   type SpecialInsightTab,
@@ -3994,8 +3995,32 @@ export default function App() {
     [selectVideo],
   );
 
-  const openVideoFromRecommendation = useCallback((videoId: string, time: number) => {
+  /**
+   * 从刷片推荐流打开原片。推荐流由服务端实时扫描全部已配置媒体根生成，
+   * 而前端本地媒体库可能只包含浏览器授权/缓存加载的部分视频（例如仅通过
+   * 浏览器添加了部分目录，或本地缓存早于文件变动）。目标影片缺失时，先用
+   * 推荐流数据补一个可播放条目，保证"看原片"能直接打开，而不是静默无反应。
+   */
+  const openVideoFromRecommendation = useCallback((video: RecommendationOpenVideo, time: number) => {
+    const videoId = video.videoId;
     recommendationSeekRef.current = { videoId, time: Math.max(0, time) };
+    const known = videosRef.current.some((candidate) => candidate.id === videoId);
+    if (!known && video.playbackUrl) {
+      const fallbackVideo: VideoItem = {
+        id: videoId,
+        name: video.title || video.relativePath.split("/").filter(Boolean).pop() || videoId,
+        relativePath: video.relativePath,
+        url: video.playbackUrl,
+        size: 0,
+        lastModified: 0,
+        mediaRootId: video.mediaRootId,
+        playbackSource: "server",
+        ...(video.thumbnailUrl ? { thumbnailUrl: video.thumbnailUrl } : {}),
+        ...(Number.isFinite(video.duration) && video.duration > 0 ? { duration: video.duration } : {}),
+      };
+      videosRef.current = [...videosRef.current, fallbackVideo];
+      setVideos((current) => (current.some((candidate) => candidate.id === videoId) ? current : [...current, fallbackVideo]));
+    }
     selectVideo(videoId, { syncSeriesMode: false });
   }, [selectVideo]);
 

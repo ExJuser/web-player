@@ -340,3 +340,56 @@ test("segmentFeedbackScore rewards watched windows and penalizes skipped ones", 
   assert.equal(segmentFeedbackScore(events, 700, 900, now), null, "无事件窗口应返回 null");
   assert.equal(segmentFeedbackScore(undefined, 0, 100, now), null);
 });
+
+test("series entries carry playable fields so the client can open a missing sibling", async () => {
+  const videos = [
+    {
+      id: "root:a",
+      mediaRootId: "root",
+      relativePath: "series/a.mp4",
+      name: "a.mp4",
+      size: 1,
+      lastModified: 3,
+      url: "/media/series/a.mp4",
+    },
+    {
+      id: "root:b",
+      mediaRootId: "root",
+      relativePath: "series/b.mp4",
+      name: "b.mp4",
+      size: 1,
+      lastModified: 2,
+      url: "/media/series/b.mp4",
+      playability: { status: "direct", reason: "ok", compatibleUrl: "/media-compatible/b.mp4" },
+      duration: 1234,
+    },
+  ];
+  const recommendationCache = { segments: {}, feedback: {} };
+  const recommendationStore = {
+    loadRecommendationCache: () => recommendationCache,
+    saveRecommendationSegment: (videoId, segment) => { recommendationCache.segments[videoId] = segment; },
+  };
+  const service = createRecommendationFeedService({
+    loadConfig: async () => ({}),
+    loadPlayerStore: async () => ({}),
+    loadRecommendationStore: async () => recommendationStore,
+    resolveMediaPath: () => "",
+    resolveVideoPath: () => "",
+    runProcess: async () => "",
+    scanMediaRoots: async () => ({
+      roots: [{ root: { id: "root", label: "Anime" } }],
+      videos,
+      subtitles: [],
+    }),
+  });
+
+  const feed = await service.getFeed({ mode: "anime", limit: 2 });
+  const item = feed.items.find((candidate) => candidate.videoId === "root:a");
+  assert.ok(item && item.series?.length, "同目录影片应出现在 series 中");
+  const sibling = item.series[0];
+  assert.equal(sibling.videoId, "root:b");
+  assert.equal(sibling.playbackUrl, "/media-compatible/b.mp4", "series 应带可播放 URL（兼容优先）");
+  assert.equal(sibling.relativePath, "series/b.mp4");
+  assert.equal(sibling.mediaRootId, "root");
+  assert.equal(sibling.duration, 1234);
+});

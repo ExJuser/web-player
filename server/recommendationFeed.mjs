@@ -52,7 +52,11 @@ function buildSeriesEntries(video, modeVideos, limit = 4) {
   return siblings.map((candidate) => ({
     videoId: candidate.id,
     title: path.basename(candidate.name, path.extname(candidate.name)),
+    relativePath: candidate.relativePath,
+    mediaRootId: candidate.mediaRootId,
+    playbackUrl: candidate.playability?.compatibleUrl || candidate.url,
     thumbnailUrl: candidate.thumbnailUrl || candidate.thumbUrl || candidate.posterUrl,
+    duration: Number(candidate.duration) || 0,
   }));
 }
 

@@ -1,6 +1,16 @@
 import { fetchLocalJson } from "./localApiClient";
 import type { HomeMediaMode } from "./playerTypes";
 
+export type RecommendationFeedSeriesItem = {
+  videoId: string;
+  title: string;
+  relativePath?: string;
+  mediaRootId?: string;
+  playbackUrl?: string;
+  thumbnailUrl?: string;
+  duration?: number;
+};
+
 export type RecommendationFeedItem = {
   id: string;
   videoId: string;
@@ -21,7 +31,22 @@ export type RecommendationFeedItem = {
   progressCurrentTime?: number;
   progressDuration?: number;
   stats?: { playCount: number; totalPlayedSeconds: number };
-  series?: Array<{ videoId: string; title: string; thumbnailUrl?: string }>;
+  series?: RecommendationFeedSeriesItem[];
+};
+
+/**
+ * "看原片/同系列"跳转所需的最小可播放信息。推荐流来自服务端实时扫描，
+ * 目标影片可能不在前端已加载的本地媒体库中（例如只通过浏览器授权了部分媒体根，
+ * 或本地缓存早于文件变动），前端据此补充一个可播放条目后再打开。
+ */
+export type RecommendationOpenVideo = {
+  videoId: string;
+  title: string;
+  relativePath: string;
+  mediaRootId?: string;
+  playbackUrl: string;
+  thumbnailUrl?: string;
+  duration: number;
 };
 
 export type RecommendationFeedResponse = {

@@ -10,6 +10,7 @@ import {
   loadRecommendationFeedStatus,
   sendRecommendationFeedback,
   type RecommendationFeedItem,
+  type RecommendationOpenVideo,
 } from "./recommendationFeedClient";
 
 type RecommendationFeedSectionProps = {
@@ -18,7 +19,7 @@ type RecommendationFeedSectionProps = {
   modeLabel: string;
   onClose: () => void;
   onActiveTitleChange: (title: string) => void;
-  onOpenOriginal: (videoId: string, startTime: number) => void;
+  onOpenOriginal: (video: RecommendationOpenVideo, startTime: number) => void;
 };
 
 const MAX_RETAINED_ITEMS = 40;
@@ -502,7 +503,15 @@ export function RecommendationFeedSection({ active, mode, modeLabel, onActiveTit
                         <span className="recommendation-feed-details-label">同系列</span>
                         <div className="recommendation-feed-details-series">
                           {item.series.map((sibling) => (
-                            <button key={sibling.videoId} type="button" title={`打开《${sibling.title}》`} onClick={() => onOpenOriginal(sibling.videoId, 0)}>{sibling.title}</button>
+                            <button key={sibling.videoId} type="button" title={`打开《${sibling.title}》`} onClick={() => onOpenOriginal({
+                              videoId: sibling.videoId,
+                              title: sibling.title,
+                              relativePath: sibling.relativePath ?? "",
+                              mediaRootId: sibling.mediaRootId,
+                              playbackUrl: sibling.playbackUrl ?? "",
+                              thumbnailUrl: sibling.thumbnailUrl,
+                              duration: sibling.duration ?? 0,
+                            }, 0)}>{sibling.title}</button>
                           ))}
                         </div>
                       </div>
@@ -559,7 +568,15 @@ export function RecommendationFeedSection({ active, mode, modeLabel, onActiveTit
                     <SkipForward size={18} />下一条
                   </button>
                   <div className="recommendation-feed-actions-row">
-                    <button type="button" className="recommendation-feed-ghost" onClick={() => onOpenOriginal(item.videoId, Math.max(0, item.startTime - 10))}><Play size={16} />看原片</button>
+                    <button type="button" className="recommendation-feed-ghost" onClick={() => onOpenOriginal({
+                      videoId: item.videoId,
+                      title: item.title,
+                      relativePath: item.relativePath,
+                      mediaRootId: item.mediaRootId,
+                      playbackUrl: item.playbackUrl,
+                      thumbnailUrl: item.thumbnailUrl,
+                      duration: item.duration,
+                    }, Math.max(0, item.startTime - 10))}><Play size={16} />看原片</button>
                     {openDismissId === item.id ? (
                       <>
                         <button type="button" className="recommendation-feed-ghost recommendation-feed-dismiss" title="不再推荐这部片" onClick={() => dismiss(item)}><X size={16} />这部片</button>
