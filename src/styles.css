@@ -17658,6 +17658,105 @@ button {
   font-size: 10px;
 }
 
+/* 最近入库 */
+.recently-added-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+  border-top: 1px solid color-mix(in srgb, var(--archive-paper) 13%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--archive-paper) 13%, transparent);
+}
+
+.recently-added-summary div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column-reverse;
+  gap: 5px;
+  padding: 13px 16px;
+  border-left: 1px solid color-mix(in srgb, var(--archive-paper) 11%, transparent);
+}
+
+.recently-added-summary div:first-child {
+  border-left: 0;
+}
+
+.recently-added-summary dt {
+  overflow: hidden;
+  color: color-mix(in srgb, var(--archive-paper) 52%, transparent);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.recently-added-summary dd {
+  margin: 0;
+  overflow: hidden;
+  color: var(--archive-paper);
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: clamp(20px, 1.8vw, 28px);
+  font-variant-numeric: tabular-nums;
+  font-weight: 750;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recently-added-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.recently-added-row {
+  display: grid;
+  grid-template-columns: 138px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  min-height: 94px;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--archive-paper) 11%, transparent);
+  border-radius: 6px;
+  background: var(--archive-card);
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.recently-added-row:hover,
+.recently-added-row:focus-visible {
+  border-color: var(--archive-cyan);
+  background: color-mix(in srgb, var(--archive-cyan) 8%, var(--archive-card));
+  outline: none;
+}
+
+.recently-added-row .home-card-thumbnail {
+  border-radius: 5px;
+}
+
+.recently-added-copy {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+  align-content: center;
+}
+
+.recently-added-copy strong {
+  overflow: hidden;
+  color: var(--archive-paper);
+  font-size: 15px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recently-added-copy small {
+  color: color-mix(in srgb, var(--archive-paper) 52%, transparent);
+  font-size: 13px;
+}
+
 @media (max-width: 1500px) and (min-width: 1181px) {
   .explore-overview .watch-activity-video-list {
     grid-template-columns: minmax(0, 1fr);
@@ -17814,6 +17913,37 @@ button {
 
   .explore-overview .special-insight-video-row {
     grid-template-columns: 24px 94px minmax(0, 1fr);
+    gap: 7px;
+    padding: 7px;
+  }
+
+  .recently-added-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .recently-added-summary div {
+    border-top: 1px solid color-mix(in srgb, var(--archive-paper) 11%, transparent);
+  }
+
+  .recently-added-summary div:nth-child(-n + 2) {
+    border-top: 0;
+  }
+
+  .recently-added-summary div:nth-child(odd) {
+    border-left: 0;
+  }
+
+  .recently-added-summary div:last-child {
+    grid-column: 1 / -1;
+    border-left: 0;
+  }
+
+  .recently-added-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .recently-added-row {
+    grid-template-columns: 94px minmax(0, 1fr);
     gap: 7px;
     padding: 7px;
   }

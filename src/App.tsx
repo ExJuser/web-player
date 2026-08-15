@@ -394,6 +394,7 @@ import { HomeSideColumn } from "./HomeSideColumn";
 import { HomeTagExplorerDialog } from "./HomeTagExplorerDialog";
 import { FavoriteHomeSection } from "./FavoriteHomeSection";
 import { HomeSpecialInsightsSection } from "./HomeSpecialInsightsSection";
+import { RecentlyAddedSection } from "./RecentlyAddedSection";
 import { HomeListCard } from "./HomeVideoCards";
 import { MediaRootDialogsGroup } from "./MediaRootDialogsGroup";
 import { CreativeWorkshopSection, type CreativeFeature } from "./CreativeWorkshopSection";
@@ -2101,6 +2102,18 @@ export default function App() {
   const homeTagExplorerVideos = useMemo(
     () => homeMediaMode === "special" ? modeFilteredVideos.map(createHomeVideoCard) : [],
     [createHomeVideoCard, homeMediaMode, modeFilteredVideos],
+  );
+  // 最近入库：仅探索概览可见时计算，按文件时间倒序取最近 12 部（先筛后建卡，避免全库建卡）。
+  const recentlyAddedCards = useMemo(
+    () => {
+      if (!isExploreViewVisible || specialHomeSection !== "overview") return [];
+      return [...modeFilteredVideos]
+        .filter((video) => video.lastModified > 0)
+        .sort((a, b) => b.lastModified - a.lastModified)
+        .slice(0, 12)
+        .map(createHomeVideoCard);
+    },
+    [createHomeVideoCard, isExploreViewVisible, modeFilteredVideos, specialHomeSection],
   );
   const specialModeInsights = useMemo(
     () => {
@@ -6844,6 +6857,14 @@ export default function App() {
                       <strong>{watchActivityRange} 天</strong>
                     </div>
                   </header>
+
+                  <RecentlyAddedSection
+                    cards={recentlyAddedCards}
+                    formatFileSize={formatFileSize}
+                    formatRelativeTime={formatRelativeTime}
+                    onOpenVideo={openVideoFromHome}
+                    onThumbnailError={markVideoThumbnailFailed}
+                  />
 
                   {isRatingFilterEnabled ? (
                     <WatchActivitySection
