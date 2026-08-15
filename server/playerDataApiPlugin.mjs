@@ -863,6 +863,7 @@ export function playerDataApiPlugin({ projectRoot, env }) {
   let toolsPromise = null;
   let ladaAvailablePromise = null;
   let mediaRootsScanPromise = null;
+  let mediaRootsScanSnapshot = null;
   let mediaScanTaskSnapshot = null;
   let photoAlbumsScanPromise = null;
   let localDataStoreReadyPromise = null;
@@ -881,7 +882,15 @@ export function playerDataApiPlugin({ projectRoot, env }) {
   };
   const loadLadaCapabilities = createLadaCapabilitiesLoader(runProcess);
   const mediaProcessingTaskApi = createMediaProcessingTaskApi(createMediaProcessingTaskManager());
-  const scanMediaRootsOnce = async () => {
+  const mediaRootsScanSnapshotTtlMs = 60_000;
+  const invalidateMediaRootsScanSnapshot = () => {
+    mediaRootsScanSnapshot = null;
+  };
+  const scanMediaRootsOnce = async ({ force = false } = {}) => {
+    if (!force && mediaRootsScanSnapshot && Date.now() - mediaRootsScanSnapshot.createdAt < mediaRootsScanSnapshotTtlMs) {
+      return mediaRootsScanSnapshot.result;
+    }
+    if (force) invalidateMediaRootsScanSnapshot();
     if (!mediaRootsScanPromise) {
       mediaRootsScanPromise = (async () => {
         const store = await getLocalDataStore();
@@ -953,6 +962,7 @@ export function playerDataApiPlugin({ projectRoot, env }) {
             ...(failedRoots.length ? { error: `${failedRoots.length} 个媒体库扫描失败。` } : {}),
           };
           store.updateMediaScanRun(mediaScanTaskSnapshot);
+          if (!failedRoots.length) mediaRootsScanSnapshot = { result, createdAt: Date.now() };
           return result;
         } catch (error) {
           mediaScanTaskSnapshot = {
@@ -1127,7 +1137,7 @@ export function playerDataApiPlugin({ projectRoot, env }) {
       }
 
       if (url.pathname === "/api/media-roots/scan" && request.method === "GET") {
-        sendJson(response, 200, await scanMediaRootsOnce());
+        sendJson(response, 200, await scanMediaRootsOnce({ force: true }));
         return;
       }
 
@@ -1182,6 +1192,7 @@ export function playerDataApiPlugin({ projectRoot, env }) {
       if (url.pathname === "/api/local-config/media-root" && request.method === "POST") {
         const payload = await parseJsonBody(request);
         const mediaRoot = await upsertMediaRoot(payload);
+        invalidateMediaRootsScanSnapshot();
         sendJson(response, 200, {
           ...createPublicLocalConfig(await loadAppConfig(), await getTools(), env, await getLadaAvailable()),
           mediaRoot,
@@ -1192,6 +1203,7 @@ export function playerDataApiPlugin({ projectRoot, env }) {
       if (url.pathname === "/api/local-config/media-root/local-path" && request.method === "PUT") {
         const payload = await parseJsonBody(request);
         const result = await updateMediaRootLocalPath(payload);
+        invalidateMediaRootsScanSnapshot();
         sendJson(response, 200, {
           ...createPublicLocalConfig(result.config, await getTools(), env, await getLadaAvailable()),
           mediaRoot: result.mediaRoot,
