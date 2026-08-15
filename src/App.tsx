@@ -5322,9 +5322,33 @@ export default function App() {
         setCurrentTime(resumeAt);
       }
     };
+    let isPlayerEffectDisposed = false;
+    let autoPlayPromise: Promise<void> | null = null;
+    let autoPlayRetryTimeout: ReturnType<typeof setTimeout> | null = null;
+    const attemptPendingAutoPlay = () => {
+      if (isPlayerEffectDisposed || pendingAutoPlayVideoIdRef.current !== currentVideo.id || autoPlayPromise) return;
+      autoPlayPromise = element.play().then(() => {
+        if (pendingAutoPlayVideoIdRef.current === currentVideo.id) {
+          pendingAutoPlayVideoIdRef.current = null;
+        }
+      }).catch((error: unknown) => {
+        if (videoRef.current !== element || currentVideoIdRef.current !== currentVideo.id) return;
+        if (error instanceof DOMException && error.name === "AbortError") {
+          if (element.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) {
+            autoPlayRetryTimeout = setTimeout(attemptPendingAutoPlay, 0);
+          }
+          return;
+        }
+        pendingAutoPlayVideoIdRef.current = null;
+        setMessage("浏览器没有开始播放当前视频，请再点一次播放按钮。");
+      }).finally(() => {
+        autoPlayPromise = null;
+      });
+    };
     const handleCanPlay = () => {
       isMainVideoLoadingRef.current = false;
       setIsMainVideoLoading(false);
+      attemptPendingAutoPlay();
     };
     const handleError = () => {
       isMainVideoLoadingRef.current = false;
@@ -5345,14 +5369,11 @@ export default function App() {
         handleCanPlay();
       }
     }
-    if (pendingAutoPlayVideoIdRef.current === currentVideo.id) {
-      pendingAutoPlayVideoIdRef.current = null;
-      element.play().catch(() => {
-        setMessage("浏览器没有开始播放当前视频，请再点一次播放按钮。");
-      });
-    }
+    attemptPendingAutoPlay();
 
     return () => {
+      isPlayerEffectDisposed = true;
+      if (autoPlayRetryTimeout !== null) clearTimeout(autoPlayRetryTimeout);
       element.removeEventListener("loadedmetadata", handleLoadedMetadata);
       element.removeEventListener("canplay", handleCanPlay);
       element.removeEventListener("error", handleError);
