@@ -281,7 +281,7 @@ export function RecommendationFeedSection({ active, mode, modeLabel, onActiveTit
                     />
                     <span>{Math.round(volume * 100)}%</span>
                   </label>
-                  <button type="button" onClick={() => setIsFillMode((value) => !value)}>{isFillMode ? <Minimize2 size={18} /> : <Expand size={18} />}{isFillMode ? "完整画面" : "填满画面"}</button>
+                  <button type="button" onClick={() => setIsFillMode((value) => !value)}>{isFillMode ? <Minimize2 size={18} /> : <Expand size={18} />}{isFillMode ? "标准画面" : "放大画面"}</button>
                   <button type="button" onClick={() => moveTo(index + 1)} disabled={index >= items.length - 1 && !nextCursor}><SkipForward size={18} />下一条</button>
                   <button type="button" className="recommendation-feed-dismiss" onClick={() => dismiss(item)}><X size={18} />不再推荐</button>
                 </div>
