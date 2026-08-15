@@ -649,8 +649,13 @@ export function createRecommendationFeedService({
         video: ranked[start + index],
         sequence: start + index,
       }));
+      const favoriteIds = new Set(store?.favorites ?? []);
       const items = page.map(({ video, sequence }) => {
         const cached = cache.segments[video.id];
+        const progress = store?.items?.[video.id];
+        const progressTime = Number(progress?.currentTime);
+        const hasProgress = Number.isFinite(progressTime) && progressTime > 0;
+        const progressDuration = Number(progress?.duration);
         let segment = cached?.fingerprint === videoFingerprint(video) ? cached : null;
         if (!segment) {
           // 还没有分析结果时的兜底：优先用播放进度里已知的时长生成片中段位置，
@@ -677,6 +682,10 @@ export function createRecommendationFeedService({
           reasons: segment.reasons,
           tags: store.videoTags?.[video.id] ?? [],
           rating: store.videoRatings?.[video.id],
+          isFavorite: favoriteIds.has(video.id),
+          viewState: progress?.completed ? "completed" : hasProgress ? "partial" : "untouched",
+          progressCurrentTime: hasProgress ? progressTime : undefined,
+          progressDuration: Number.isFinite(progressDuration) && progressDuration > 0 ? progressDuration : undefined,
         };
       });
       queueAnalysis(page

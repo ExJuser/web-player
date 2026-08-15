@@ -1,8 +1,9 @@
-import { ArrowLeft, Film, LoaderCircle, Play, SkipForward, Volume2, VolumeX, X } from "lucide-react";
+import { ArrowLeft, Film, LoaderCircle, Play, SkipForward, Star, Volume2, VolumeX, X } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 
 import { formatTime } from "./playerFormatUtils";
+import { savePlayerFavorite } from "./playerStorage";
 import type { HomeMediaMode } from "./playerTypes";
 import {
   loadRecommendationFeed,
@@ -42,6 +43,21 @@ function resolveSegmentWindow(item: RecommendationFeedItem, videoDuration: numbe
     return { start, end: Math.min(videoDuration, start + span) };
   }
   return { start: item.startTime, end: item.endTime };
+}
+
+/** 消费状态徽标文案：没看过 / 看到中途（带百分比）/ 已看完。 */
+function viewStateLabel(item: RecommendationFeedItem): string {
+  if (item.viewState === "completed") return "已看完";
+  if (item.viewState === "partial") {
+    const currentTime = item.progressCurrentTime;
+    const duration = item.progressDuration;
+    if (typeof currentTime === "number" && typeof duration === "number" && duration > 0) {
+      const percent = Math.max(0, Math.min(100, Math.round((currentTime / duration) * 100)));
+      return `看到 ${percent}%`;
+    }
+    return "看到中途";
+  }
+  return "未观看";
 }
 
 export function RecommendationFeedSection({ active, mode, modeLabel, onActiveTitleChange, onClose, onOpenOriginal }: RecommendationFeedSectionProps) {
@@ -226,6 +242,17 @@ export function RecommendationFeedSection({ active, mode, modeLabel, onActiveTit
     setItems((current) => current.filter((candidate) => candidate.videoId !== item.videoId));
   }, []);
 
+  const toggleFavorite = useCallback((item: RecommendationFeedItem) => {
+    const nextValue = !item.isFavorite;
+    // 乐观更新：先改本地状态，接口失败再回滚，避免刷片节奏被网络打断。
+    setItems((current) => current.map((candidate) =>
+      candidate.videoId === item.videoId ? { ...candidate, isFavorite: nextValue } : candidate));
+    void savePlayerFavorite(item.videoId, nextValue).catch(() => {
+      setItems((current) => current.map((candidate) =>
+        candidate.videoId === item.videoId ? { ...candidate, isFavorite: !nextValue } : candidate));
+    });
+  }, []);
+
   const finishItem = useCallback((item: RecommendationFeedItem) => {
     if (!completedItemIdsRef.current.has(item.id)) {
       completedItemIdsRef.current.add(item.id);
@@ -335,6 +362,12 @@ export function RecommendationFeedSection({ active, mode, modeLabel, onActiveTit
                 <div className="recommendation-feed-copy">
                   <h1>{item.title}</h1>
                   <p title={item.relativePath}>{item.relativePath}</p>
+                  <div className="recommendation-feed-meta">
+                    <span className={`recommendation-feed-meta-chip status-${item.viewState ?? "untouched"}`}>{viewStateLabel(item)}</span>
+                    {typeof item.rating === "number" ? (
+                      <span className="recommendation-feed-meta-chip rating"><Star size={12} fill="currentColor" />{item.rating}/10</span>
+                    ) : null}
+                  </div>
                   <div className="recommendation-feed-reasons">
                     {item.reasons.map((reason) => <span key={reason}>{reason}</span>)}
                     <span>{formatTime(item.startTime)} – {formatTime(item.endTime)}</span>
@@ -342,16 +375,25 @@ export function RecommendationFeedSection({ active, mode, modeLabel, onActiveTit
                   {item.tags.length ? <div className="recommendation-feed-tags">{item.tags.slice(0, 6).map((tag) => <span key={tag}>{tag}</span>)}</div> : null}
                 </div>
                 <div className="recommendation-feed-actions">
-                  <button type="button" onClick={() => onOpenOriginal(item.videoId, Math.max(0, item.startTime - 10))}><Play size={18} />看原片</button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (isMuted && volume === 0) setVolume(0.8);
-                      setIsMuted((value) => !value);
-                    }}
-                  >
-                    {isMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}{isMuted ? "开启声音" : "静音"}
-                  </button>
+                  <div className="recommendation-feed-actions-row">
+                    <button
+                      type="button"
+                      className={`recommendation-feed-favorite${item.isFavorite ? " active" : ""}`}
+                      aria-pressed={item.isFavorite}
+                      onClick={() => toggleFavorite(item)}
+                    >
+                      <Star size={18} fill={item.isFavorite ? "currentColor" : "none"} />{item.isFavorite ? "已收藏" : "收藏"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (isMuted && volume === 0) setVolume(0.8);
+                        setIsMuted((value) => !value);
+                      }}
+                    >
+                      {isMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}{isMuted ? "开启声音" : "静音"}
+                    </button>
+                  </div>
                   <label className="recommendation-feed-volume">
                     <Volume2 size={17} aria-hidden="true" />
                     <input
@@ -369,8 +411,18 @@ export function RecommendationFeedSection({ active, mode, modeLabel, onActiveTit
                     />
                     <span>{Math.round(volume * 100)}%</span>
                   </label>
-                  <button type="button" onClick={() => moveTo(index + 1)} disabled={index >= items.length - 1 && !nextCursor}><SkipForward size={18} />下一条</button>
-                  <button type="button" className="recommendation-feed-dismiss" onClick={() => dismiss(item)}><X size={18} />不再推荐</button>
+                  <button
+                    type="button"
+                    className="recommendation-feed-next"
+                    onClick={() => moveTo(index + 1)}
+                    disabled={index >= items.length - 1 && !nextCursor}
+                  >
+                    <SkipForward size={18} />下一条
+                  </button>
+                  <div className="recommendation-feed-actions-row">
+                    <button type="button" className="recommendation-feed-ghost" onClick={() => onOpenOriginal(item.videoId, Math.max(0, item.startTime - 10))}><Play size={16} />看原片</button>
+                    <button type="button" className="recommendation-feed-ghost recommendation-feed-dismiss" onClick={() => dismiss(item)}><X size={16} />不再推荐</button>
+                  </div>
                 </div>
               </aside>
             </article>

@@ -16,6 +16,10 @@ export type RecommendationFeedItem = {
   reasons: string[];
   tags: string[];
   rating?: number;
+  isFavorite?: boolean;
+  viewState?: "untouched" | "partial" | "completed";
+  progressCurrentTime?: number;
+  progressDuration?: number;
 };
 
 export type RecommendationFeedResponse = {

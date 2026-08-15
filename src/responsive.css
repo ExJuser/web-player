@@ -607,11 +607,23 @@ button,
 
   .recommendation-feed-actions {
     grid-column: 1 / -1;
+    display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
     margin-top: 0;
   }
 
-  .recommendation-feed-actions button {
+  .recommendation-feed-actions-row {
+    display: contents;
+  }
+
+  .recommendation-feed-actions .recommendation-feed-next {
+    grid-column: span 3;
+    min-height: 42px;
+  }
+
+  .recommendation-feed-actions button,
+  .recommendation-feed-volume {
     min-height: 42px;
   }
 }
