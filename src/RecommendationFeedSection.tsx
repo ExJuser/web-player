@@ -1,4 +1,4 @@
-import { ArrowLeft, ChevronDown, Film, Gauge, Heart, LoaderCircle, Play, Repeat, SkipForward, Star, Volume2, VolumeX, X } from "lucide-react";
+import { ArrowLeft, Film, Heart, LoaderCircle, Play, SkipForward, Star, Volume2, VolumeX, X } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 
@@ -77,18 +77,6 @@ function isPersonalReason(item: RecommendationFeedItem, reasonIndex: number): bo
   return reasonIndex === 0 && (item.source === "behavior" || item.source === "manual");
 }
 
-/** 累计播放时长文案：秒数 → "45 秒 / 12 分钟 / 1 小时 25 分"。 */
-function formatPlayedDuration(totalSeconds: number): string {
-  const seconds = Math.max(0, Math.round(totalSeconds));
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  if (hours > 0) return `${hours} 小时 ${minutes} 分`;
-  if (minutes > 0) return `${minutes} 分钟`;
-  return `${seconds} 秒`;
-}
-
-const PLAYBACK_RATES = [1, 1.25, 1.5, 2];
-
 export function RecommendationFeedSection({ active, mode, modeLabel, onActiveTitleChange, onClose, onOpenOriginal }: RecommendationFeedSectionProps) {
   const [items, setItems] = useState<RecommendationFeedItem[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -100,9 +88,6 @@ export function RecommendationFeedSection({ active, mode, modeLabel, onActiveTit
   const [currentTime, setCurrentTime] = useState(0);
   const [analysisQueued, setAnalysisQueued] = useState(0);
   const [openDismissId, setOpenDismissId] = useState<string | null>(null);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [loopEnabled, setLoopEnabled] = useState(false);
-  const [playbackRate, setPlaybackRate] = useState(1);
   const scrollRef = useRef<HTMLDivElement>(null);
   const videoRefs = useRef(new Map<string, HTMLVideoElement>());
   const requestIdRef = useRef(0);
@@ -212,7 +197,6 @@ export function RecommendationFeedSection({ active, mode, modeLabel, onActiveTit
       const shouldPlay = active && id === activeItem?.id;
       video.muted = isMuted;
       video.volume = volume;
-      video.playbackRate = playbackRate;
       if (shouldPlay) {
         if (video.readyState >= HTMLMediaElement.HAVE_METADATA && activeItem && (video.currentTime < activeItem.startTime || video.currentTime >= activeItem.endTime)) {
           video.currentTime = activeItem.startTime;
@@ -222,7 +206,7 @@ export function RecommendationFeedSection({ active, mode, modeLabel, onActiveTit
         video.pause();
       }
     });
-  }, [active, activeItem, isMuted, volume, playbackRate]);
+  }, [active, activeItem, isMuted, volume]);
 
   useEffect(() => {
     if (!active || !nextCursor || activeIndex < items.length - 3 || isLoading) return;
@@ -245,10 +229,9 @@ export function RecommendationFeedSection({ active, mode, modeLabel, onActiveTit
     setActiveIndex(Math.max(0, items.length - 1));
   }, [activeIndex, items.length]);
 
-  // 切换条目时收起"不感兴趣"菜单与详情区，避免它们悬在错误的卡片上。
+  // 切换条目时收起“不感兴趣”菜单，避免它悬在错误的卡片上。
   useEffect(() => {
     setOpenDismissId(null);
-    setExpandedId(null);
   }, [activeIndex]);
 
   const moveTo = useCallback((index: number) => {
@@ -271,10 +254,6 @@ export function RecommendationFeedSection({ active, mode, modeLabel, onActiveTit
     if (video.paused) void video.play().catch(() => undefined);
     else video.pause();
   }, [activeItem]);
-
-  const cyclePlaybackRate = useCallback(() => {
-    setPlaybackRate((current) => PLAYBACK_RATES[(PLAYBACK_RATES.indexOf(current) + 1) % PLAYBACK_RATES.length]);
-  }, []);
 
   useEffect(() => {
     if (!active) return;
@@ -403,27 +382,9 @@ export function RecommendationFeedSection({ active, mode, modeLabel, onActiveTit
                       const video = event.currentTarget;
                       setCurrentTime(video.currentTime);
                       const window = resolveSegmentWindow(item, video.duration);
-                      if (video.currentTime >= window.end - 0.15) {
-                        if (loopEnabled) {
-                          video.currentTime = window.start;
-                          setCurrentTime(window.start);
-                        } else {
-                          finishItem(item);
-                        }
-                      }
+                      if (video.currentTime >= window.end - 0.15) finishItem(item);
                     }}
-                    onEnded={() => {
-                      if (loopEnabled) {
-                        const video = videoRefs.current.get(item.id);
-                        if (video) {
-                          const window = resolveSegmentWindow(item, video.duration);
-                          video.currentTime = window.start;
-                          void video.play().catch(() => undefined);
-                        }
-                      } else {
-                        finishItem(item);
-                      }
-                    }}
+                    onEnded={() => finishItem(item)}
                     onClick={(event) => {
                       if (event.currentTarget.paused) void event.currentTarget.play().catch(() => undefined);
                       else event.currentTarget.pause();
@@ -476,55 +437,6 @@ export function RecommendationFeedSection({ active, mode, modeLabel, onActiveTit
                   </div>
                   {item.tags.length ? <div className="recommendation-feed-tags">{item.tags.slice(0, 6).map((tag) => <span key={tag}>{tag}</span>)}</div> : null}
                 </div>
-                <button
-                  type="button"
-                  className="recommendation-feed-more"
-                  aria-expanded={expandedId === item.id}
-                  onClick={() => setExpandedId(expandedId === item.id ? null : item.id)}
-                >
-                  <ChevronDown size={14} />{expandedId === item.id ? "收起详情" : "更多详情"}
-                </button>
-                {expandedId === item.id ? (
-                  <div className="recommendation-feed-details">
-                    {item.tags.length ? (
-                      <div className="recommendation-feed-details-block">
-                        <span className="recommendation-feed-details-label">标签</span>
-                        <div className="recommendation-feed-details-tags">{item.tags.map((tag) => <span key={tag}>{tag}</span>)}</div>
-                      </div>
-                    ) : null}
-                    {item.stats && (item.stats.playCount > 0 || item.stats.totalPlayedSeconds > 0) ? (
-                      <div className="recommendation-feed-details-block">
-                        <span className="recommendation-feed-details-label">观看</span>
-                        <span className="recommendation-feed-details-value">播放 {item.stats.playCount} 次 · 累计 {formatPlayedDuration(item.stats.totalPlayedSeconds)}</span>
-                      </div>
-                    ) : null}
-                    {item.series?.length ? (
-                      <div className="recommendation-feed-details-block">
-                        <span className="recommendation-feed-details-label">同系列</span>
-                        <div className="recommendation-feed-details-series">
-                          {item.series.map((sibling) => (
-                            <button key={sibling.videoId} type="button" title={`打开《${sibling.title}》`} onClick={() => onOpenOriginal({
-                              videoId: sibling.videoId,
-                              title: sibling.title,
-                              relativePath: sibling.relativePath ?? "",
-                              mediaRootId: sibling.mediaRootId,
-                              playbackUrl: sibling.playbackUrl ?? "",
-                              thumbnailUrl: sibling.thumbnailUrl,
-                              duration: sibling.duration ?? 0,
-                            }, 0)}>{sibling.title}</button>
-                          ))}
-                        </div>
-                      </div>
-                    ) : null}
-                    <div className="recommendation-feed-details-block">
-                      <span className="recommendation-feed-details-label">播放</span>
-                      <div className="recommendation-feed-details-controls">
-                        <button type="button" className={loopEnabled ? "active" : ""} aria-pressed={loopEnabled} onClick={() => setLoopEnabled((value) => !value)}><Repeat size={14} />片段循环</button>
-                        <button type="button" onClick={cyclePlaybackRate}><Gauge size={14} />倍速 {String(playbackRate)}×</button>
-                      </div>
-                    </div>
-                  </div>
-                ) : null}
                 <div className="recommendation-feed-actions">
                   <div className="recommendation-feed-actions-row">
                     <button
