@@ -116,6 +116,52 @@ test("cold feed falls back to a mid-video window when progress records the durat
   assert.ok(item.startTime < 3600 * 0.8, "兜底应落在影片中前段");
 });
 
+test("feed pagination stops at the end without repeating videos", async () => {
+  const videos = Array.from({ length: 10 }, (_, index) => ({
+    id: `root:v${index}`,
+    mediaRootId: "root",
+    relativePath: `v${index}.mp4`,
+    name: `v${index}.mp4`,
+    size: 1,
+    lastModified: 1,
+    url: `/media/v${index}.mp4`,
+  }));
+  const segments = Object.fromEntries(videos.map((video) => [video.id, {
+    fingerprint: `${video.id}|1|1|1`,
+    startTime: 30,
+    endTime: 82,
+    duration: 120,
+    source: "signals",
+    reasons: [],
+  }]));
+  const recommendationStore = {
+    loadRecommendationCache: () => ({ segments, feedback: {} }),
+    saveRecommendationSegment: () => undefined,
+  };
+  const service = createRecommendationFeedService({
+    loadConfig: async () => ({}),
+    loadPlayerStore: async () => ({}),
+    loadRecommendationStore: async () => recommendationStore,
+    resolveMediaPath: () => "",
+    resolveVideoPath: () => "",
+    runProcess: async () => "",
+    scanMediaRoots: async () => ({
+      roots: [{ root: { id: "root", label: "Anime" } }],
+      videos,
+      subtitles: [],
+    }),
+  });
+
+  const firstPage = await service.getFeed({ mode: "anime", limit: 8, seed: "session" });
+  const secondPage = await service.getFeed({ mode: "anime", cursor: firstPage.nextCursor, limit: 8, seed: "session" });
+  const videoIds = [...firstPage.items, ...secondPage.items].map((item) => item.videoId);
+
+  assert.equal(firstPage.items.length, 8);
+  assert.equal(secondPage.items.length, 2);
+  assert.equal(secondPage.nextCursor, null);
+  assert.equal(new Set(videoIds).size, videos.length);
+});
+
 test("diversify keeps adjacent series distinct unless unavoidable", () => {
   const videos = [
     makeVideo("a1", "s1/a.mp4"),

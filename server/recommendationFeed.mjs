@@ -466,9 +466,9 @@ export function createRecommendationFeedService({
       // 洗牌在去重之前执行：vary 提供会话内随机性，diversify 最后保证相邻不同系列。
       const ranked = diversify(varyRecommendationOrder(sortedSnapshot.videos, seed));
       const start = Math.max(0, Math.floor(Number(cursor) || 0));
-      const pageSize = Math.min(ranked.length, clamp(Math.floor(Number(limit) || 8), 1, 20));
+      const pageSize = Math.min(Math.max(0, ranked.length - start), clamp(Math.floor(Number(limit) || 8), 1, 20));
       const page = Array.from({ length: pageSize }, (_, index) => ({
-        video: ranked[(start + index) % ranked.length],
+        video: ranked[start + index],
         sequence: start + index,
       }));
       const items = page.map(({ video, sequence }) => {
@@ -513,7 +513,7 @@ export function createRecommendationFeedService({
         version: 1,
         mode: normalizedMode,
         items,
-        nextCursor: ranked.length ? String(start + page.length) : null,
+        nextCursor: start + page.length < ranked.length ? String(start + page.length) : null,
         analysis: { queued: queuedVideoIds.size, analyzing: isAnalyzing },
       };
     },

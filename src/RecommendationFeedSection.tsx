@@ -62,6 +62,7 @@ export function RecommendationFeedSection({ active, mode, modeLabel, onActiveTit
   const skippedItemIdsRef = useRef(new Set<string>());
   const previousActiveIndexRef = useRef(0);
   const sessionSeedRef = useRef("");
+  const seenVideoIdsRef = useRef(new Set<string>());
   const activeItem = items[activeIndex] ?? null;
 
   const loadPage = useCallback(async (cursor?: string | null, append = false) => {
@@ -72,9 +73,13 @@ export function RecommendationFeedSection({ active, mode, modeLabel, onActiveTit
     try {
       const response = await loadRecommendationFeed(mode, cursor, sessionSeedRef.current);
       if (requestId !== requestIdRef.current) return;
-      setItems((current) => append
-        ? [...current, ...response.items.filter((item) => !current.some((existing) => existing.id === item.id))]
-        : response.items);
+      if (!append) seenVideoIdsRef.current.clear();
+      const nextItems = response.items.filter((item) => {
+        if (seenVideoIdsRef.current.has(item.videoId)) return false;
+        seenVideoIdsRef.current.add(item.videoId);
+        return true;
+      });
+      setItems((current) => append ? [...current, ...nextItems] : nextItems);
       setNextCursor(response.nextCursor);
       setAnalysisQueued(response.analysis.queued);
       if (!append) setActiveIndex(0);
@@ -107,6 +112,7 @@ export function RecommendationFeedSection({ active, mode, modeLabel, onActiveTit
   useEffect(() => {
     if (!active) return;
     sessionSeedRef.current = crypto.randomUUID();
+    seenVideoIdsRef.current.clear();
     setItems([]);
     setNextCursor(null);
     setActiveIndex(0);
