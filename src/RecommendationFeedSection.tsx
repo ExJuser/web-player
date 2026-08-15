@@ -1,5 +1,6 @@
 import { ArrowLeft, Expand, Film, Heart, LoaderCircle, Minimize2, Play, SkipForward, Volume2, VolumeX, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 
 import { formatTime } from "./playerFormatUtils";
 import type { HomeMediaMode } from "./playerTypes";
@@ -220,7 +221,24 @@ export function RecommendationFeedSection({ active, mode, modeLabel, onActiveTit
                     else event.currentTarget.pause();
                   }}
                 />
-                <span className="recommendation-feed-progress" aria-hidden="true"><i style={{ transform: `scaleX(${index === activeIndex ? progress : 0})` }} /></span>
+                <input
+                  className="recommendation-feed-progress"
+                  type="range"
+                  min={item.startTime}
+                  max={Math.max(item.startTime + 0.1, item.endTime)}
+                  step="0.1"
+                  value={index === activeIndex ? Math.max(item.startTime, Math.min(item.endTime, currentTime)) : item.startTime}
+                  disabled={index !== activeIndex}
+                  aria-label={`跳转片段进度：${formatTime(index === activeIndex ? currentTime : item.startTime)}`}
+                  style={{ "--feed-progress": `${(index === activeIndex ? progress : 0) * 100}%` } as CSSProperties}
+                  onChange={(event) => {
+                    const nextTime = Number(event.currentTarget.value);
+                    const video = videoRefs.current.get(item.id);
+                    if (!video || !Number.isFinite(nextTime)) return;
+                    video.currentTime = nextTime;
+                    if (index === activeIndex) setCurrentTime(nextTime);
+                  }}
+                />
               </div>
 
               <aside className="recommendation-feed-info">
