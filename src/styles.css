@@ -725,10 +725,11 @@ button {
 }
 
 .recommendation-feed-shortcuts {
-  margin: 0;
+  margin: 2px 0 0;
   color: var(--feed-muted);
   font-family: "Cascadia Mono", "SFMono-Regular", monospace;
-  font-size: 10px;
+  font-size: 12px;
+  line-height: 1.6;
   letter-spacing: 0.04em;
   text-align: center;
 }
