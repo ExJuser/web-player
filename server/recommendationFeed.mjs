@@ -1,8 +1,6 @@
 import { readFile } from "node:fs/promises";
-import path from "node:path";
 
 import { probeMediaFile } from "./mediaCompatibility.mjs";
-import { readJsonFile, writeJsonFile } from "./jsonFiles.mjs";
 
 const CACHE_VERSION = 1;
 const ANALYZER_VERSION = 1;
@@ -177,33 +175,29 @@ function varyRecommendationOrder(videos, seed) {
 }
 
 export function createRecommendationFeedService({
-  cachePath,
   loadConfig,
   loadPlayerStore,
+  loadRecommendationStore,
   resolveMediaPath,
   resolveVideoPath,
   runProcess,
   scanMediaRoots,
 }) {
   let cachePromise;
-  let writePromise = Promise.resolve();
   const queuedVideoIds = new Set();
   const analysisQueue = [];
   let isAnalyzing = false;
 
   const loadCache = async () => {
-    cachePromise ??= readJsonFile(cachePath, { version: CACHE_VERSION, segments: {}, feedback: {} })
-      .then((value) => ({
+    cachePromise ??= loadRecommendationStore().then((store) => {
+      const value = store.loadRecommendationCache();
+      return {
         version: CACHE_VERSION,
         segments: value?.segments && typeof value.segments === "object" ? value.segments : {},
         feedback: value?.feedback && typeof value.feedback === "object" ? value.feedback : {},
-      }));
+      };
+    });
     return cachePromise;
-  };
-
-  const saveCache = async (cache) => {
-    writePromise = writePromise.then(() => writeJsonFile(cachePath, cache));
-    await writePromise;
   };
 
   const findSubtitleCues = async (config, scan, video) => {
@@ -290,7 +284,8 @@ export function createRecommendationFeedService({
           const segment = await analyzeVideo(task);
           const cache = await loadCache();
           cache.segments[task.video.id] = { ...segment, fingerprint: videoFingerprint(task.video), analyzedAt: Date.now() };
-          await saveCache(cache);
+          const store = await loadRecommendationStore();
+          store.saveRecommendationSegment(task.video.id, cache.segments[task.video.id]);
         } catch {
           // Fast candidates remain usable when local tools or a media path are unavailable.
         } finally {
@@ -396,7 +391,8 @@ export function createRecommendationFeedService({
       else if (action === "replay") feedback.replayed = (feedback.replayed ?? 0) + 1;
       feedback.updatedAt = Date.now();
       cache.feedback[videoId] = feedback;
-      await saveCache(cache);
+      const store = await loadRecommendationStore();
+      store.saveRecommendationFeedback(videoId, feedback);
       return { ok: true, feedback };
     },
 

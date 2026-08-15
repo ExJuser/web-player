@@ -414,6 +414,61 @@ test("sqlite imports legacy duplicate detection json", async () => {
   }
 });
 
+test("sqlite stores recommendation segments and feedback by video", async () => {
+  const context = await createTempStore();
+  try {
+    await context.store.initialize();
+    context.store.saveRecommendationSegment("video-a", { startTime: 10, analyzedAt: 100 });
+    context.store.saveRecommendationSegment("video-b", { startTime: 20, analyzedAt: 200 });
+    context.store.saveRecommendationFeedback("video-a", { skipped: 1, updatedAt: 300 });
+    context.store.saveRecommendationSegment("video-a", { startTime: 30, analyzedAt: 400 });
+
+    assert.deepEqual(context.store.loadRecommendationCache(), {
+      segments: {
+        "video-a": { startTime: 30, analyzedAt: 400 },
+        "video-b": { startTime: 20, analyzedAt: 200 },
+      },
+      feedback: {
+        "video-a": { skipped: 1, updatedAt: 300 },
+      },
+    });
+  } finally {
+    context.store.close();
+    await rm(context.root, { recursive: true, force: true });
+  }
+});
+
+test("sqlite imports the legacy recommendations json once", async () => {
+  const context = await createTempStore();
+  try {
+    await writeFile(path.join(context.dataRoot, "recommendations.json"), JSON.stringify({
+      segments: { "video-a": { startTime: 10, analyzedAt: 100 } },
+      feedback: { "video-a": { completed: 1, updatedAt: 200 } },
+    }));
+    await context.store.initialize();
+
+    assert.deepEqual(context.store.loadRecommendationCache(), {
+      segments: { "video-a": { startTime: 10, analyzedAt: 100 } },
+      feedback: { "video-a": { completed: 1, updatedAt: 200 } },
+    });
+
+    context.store.saveRecommendationFeedback("video-a", { completed: 2, updatedAt: 300 });
+    context.store.close();
+    context.store = new LocalDataSqliteStore({
+      dataRoot: context.dataRoot,
+      librariesRoot: context.librariesRoot,
+      photoAlbumsRoot: context.photoAlbumsRoot,
+      indexPath: path.join(context.dataRoot, "index.json"),
+      globalDataPath: path.join(context.dataRoot, "global.json"),
+    });
+    await context.store.initialize();
+    assert.deepEqual(context.store.loadRecommendationCache().feedback["video-a"], { completed: 2, updatedAt: 300 });
+  } finally {
+    context.store.close();
+    await rm(context.root, { recursive: true, force: true });
+  }
+});
+
 test("sqlite initialization migrates high energy highlight tags into existing databases", async () => {
   const context = await createTempStore();
   try {
@@ -687,7 +742,7 @@ test("sqlite initialization migrates the legacy photo album scan json", async ()
   try {
     await context.store.initialize();
     assert.equal(context.store.hasTable("photo_album_scan_caches"), false);
-    assert.equal(context.store.getMeta("schema_version"), "6");
+    assert.equal(context.store.getMeta("schema_version"), "7");
     assert.deepEqual(context.store.loadPhotoAlbumScanCacheImages("legacy-album"), [legacyImage]);
   } finally {
     context.store.close();

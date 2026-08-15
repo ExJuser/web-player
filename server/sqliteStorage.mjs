@@ -3,7 +3,7 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { readJsonFile } from "./jsonFiles.mjs";
 
-const schemaVersion = 6;
+const schemaVersion = 7;
 const playerStoreVersion = 6;
 const photoAlbumStoreVersion = 1;
 
@@ -95,6 +95,7 @@ export class LocalDataSqliteStore {
     `);
     this.createSchema();
     await this.importLegacyJsonOnce();
+    await this.importLegacyRecommendationsOnce();
     this.db.exec("PRAGMA optimize;");
   }
 
@@ -459,6 +460,18 @@ export class LocalDataSqliteStore {
         updated_at INTEGER NOT NULL,
         PRIMARY KEY (root_id, relative_path)
       );
+
+      CREATE TABLE IF NOT EXISTS recommendation_segments (
+        video_id TEXT PRIMARY KEY,
+        segment_json TEXT NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS recommendation_feedback (
+        video_id TEXT PRIMARY KEY,
+        feedback_json TEXT NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
     `);
     this.migrateLegacyPhotoAlbumScanCache();
     this.ensureColumn("video_progress", "history_json", "TEXT");
@@ -544,6 +557,23 @@ export class LocalDataSqliteStore {
       if (photoAlbumStore) this.savePhotoAlbumStoreSync(photoAlbumStore);
       if (indexStore) this.setMeta("legacy_index_json", stringifyJson(indexStore));
       this.setMeta("legacy_json_imported_at", String(now()));
+    });
+  }
+
+  async importLegacyRecommendationsOnce() {
+    if (this.getMeta("legacy_recommendations_imported_at")) return;
+    const legacy = await readJsonFile(path.join(this.dataRoot, "recommendations.json"), null);
+    this.transaction(() => {
+      const saveSegment = this.db.prepare("INSERT OR IGNORE INTO recommendation_segments (video_id, segment_json, updated_at) VALUES (?, ?, ?)");
+      const saveFeedback = this.db.prepare("INSERT OR IGNORE INTO recommendation_feedback (video_id, feedback_json, updated_at) VALUES (?, ?, ?)");
+      const importedAt = now();
+      for (const [videoId, segment] of Object.entries(asObject(legacy?.segments))) {
+        saveSegment.run(videoId, stringifyJson(segment), Number(segment?.analyzedAt) || importedAt);
+      }
+      for (const [videoId, feedback] of Object.entries(asObject(legacy?.feedback))) {
+        saveFeedback.run(videoId, stringifyJson(feedback), Number(feedback?.updatedAt) || importedAt);
+      }
+      this.setMeta("legacy_recommendations_imported_at", String(importedAt));
     });
   }
 
@@ -2050,6 +2080,38 @@ export class LocalDataSqliteStore {
         `)
         .run(rootId, relativePath, fileIdentity.size, fileIdentity.lastModified, stringifyJson(result), now());
     });
+  }
+
+  loadRecommendationCache() {
+    const segments = {};
+    const feedback = {};
+    for (const row of allRows(this.db.prepare("SELECT video_id, segment_json FROM recommendation_segments"))) {
+      segments[row.video_id] = parseJson(row.segment_json, {});
+    }
+    for (const row of allRows(this.db.prepare("SELECT video_id, feedback_json FROM recommendation_feedback"))) {
+      feedback[row.video_id] = parseJson(row.feedback_json, {});
+    }
+    return { segments, feedback };
+  }
+
+  saveRecommendationSegment(videoId, segment) {
+    this.db
+      .prepare(`
+        INSERT INTO recommendation_segments (video_id, segment_json, updated_at)
+        VALUES (?, ?, ?)
+        ON CONFLICT(video_id) DO UPDATE SET segment_json = excluded.segment_json, updated_at = excluded.updated_at
+      `)
+      .run(videoId, stringifyJson(segment), Number(segment?.analyzedAt) || now());
+  }
+
+  saveRecommendationFeedback(videoId, feedback) {
+    this.db
+      .prepare(`
+        INSERT INTO recommendation_feedback (video_id, feedback_json, updated_at)
+        VALUES (?, ?, ?)
+        ON CONFLICT(video_id) DO UPDATE SET feedback_json = excluded.feedback_json, updated_at = excluded.updated_at
+      `)
+      .run(videoId, stringifyJson(feedback), Number(feedback?.updatedAt) || now());
   }
 
   clearCacheEntriesByKinds(kinds) {

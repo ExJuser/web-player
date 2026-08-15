@@ -1000,9 +1000,9 @@ export function playerDataApiPlugin({ projectRoot, env }) {
     return photoAlbumsScanPromise;
   };
   const recommendationFeed = createRecommendationFeedService({
-    cachePath: path.join(dataRoot, "recommendations.json"),
     loadConfig: loadAppConfig,
     loadPlayerStore: async (view) => (await getLocalDataStore()).loadPlayerDataStore("global", view),
+    loadRecommendationStore: getLocalDataStore,
     resolveMediaPath: resolveMediaPathFromConfig,
     resolveVideoPath: resolveVideoPathFromConfig,
     runProcess,
