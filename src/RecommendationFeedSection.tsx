@@ -6,6 +6,7 @@ import { formatTime } from "./playerFormatUtils";
 import type { HomeMediaMode } from "./playerTypes";
 import {
   loadRecommendationFeed,
+  loadRecommendationFeedStatus,
   sendRecommendationFeedback,
   type RecommendationFeedItem,
 } from "./recommendationFeedClient";
@@ -72,6 +73,22 @@ export function RecommendationFeedSection({ active, mode, modeLabel, onActiveTit
     // mode is the reset boundary; loadPage intentionally stays out to avoid resetting after loading state changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, mode]);
+
+  useEffect(() => {
+    if (!active) return;
+    let cancelled = false;
+    const intervalId = window.setInterval(() => {
+      void loadRecommendationFeedStatus()
+        .then((status) => {
+          if (!cancelled) setAnalysisQueued(status.queued);
+        })
+        .catch(() => undefined);
+    }, 3_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [active]);
 
   useEffect(() => {
     onActiveTitleChange(active ? activeItem?.title ?? "刷片" : "");

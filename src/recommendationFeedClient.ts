@@ -33,6 +33,10 @@ export function loadRecommendationFeed(mode: HomeMediaMode, cursor?: string | nu
   return fetchLocalJson<RecommendationFeedResponse>(`/api/recommendations/feed?${params}`);
 }
 
+export function loadRecommendationFeedStatus() {
+  return fetchLocalJson<{ analyzed: number; queued: number; analyzing: boolean }>("/api/recommendations/status");
+}
+
 export function sendRecommendationFeedback(videoId: string, action: "skip" | "complete" | "replay" | "dismiss") {
   return fetchLocalJson<{ ok: true }>("/api/recommendations/feedback", {
     method: "POST",
