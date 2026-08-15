@@ -195,6 +195,391 @@ button {
   gap: 8px;
 }
 
+/* 推荐流把影片保持在完整画幅内，片段信息与常驻操作位于画面外。 */
+.app-shell.feed-view {
+  --feed-ink: #0b1016;
+  --feed-panel: #141c25;
+  --feed-paper: #dfe7e6;
+  --feed-muted: #91a0ae;
+  --feed-cue: #d9a65a;
+  --feed-beam: #78aeb5;
+  padding: 0;
+  background: var(--feed-ink);
+}
+
+.app-shell.feed-view .player-column {
+  gap: 0;
+}
+
+.app-shell.feed-view .top-bar {
+  display: none;
+}
+
+.recommendation-feed[hidden] {
+  display: none;
+}
+
+.recommendation-feed {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  grid-template-rows: 52px minmax(0, 1fr);
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 38% 42%, rgba(120, 174, 181, 0.09), transparent 36%),
+    var(--feed-ink);
+  color: var(--feed-paper);
+}
+
+.recommendation-feed-header {
+  z-index: 3;
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 6px 16px;
+  border-bottom: 1px solid rgba(223, 231, 230, 0.1);
+  background: rgba(11, 16, 22, 0.94);
+  backdrop-filter: blur(18px);
+}
+
+.recommendation-feed-back {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border: 1px solid rgba(223, 231, 230, 0.14);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--feed-paper);
+  cursor: pointer;
+}
+
+.recommendation-feed-back:hover,
+.recommendation-feed-back:focus-visible {
+  border-color: var(--feed-beam);
+  background: rgba(120, 174, 181, 0.12);
+  outline: none;
+}
+
+.recommendation-feed-header > div {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.recommendation-feed-header strong {
+  font-family: "Microsoft YaHei UI", "Segoe UI", sans-serif;
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+}
+
+.recommendation-feed-header span,
+.recommendation-feed-header p {
+  color: var(--feed-muted);
+  font-family: "Cascadia Mono", "SFMono-Regular", monospace;
+  font-size: 11px;
+}
+
+.recommendation-feed-header p {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+}
+
+.recommendation-feed-scroll {
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scroll-behavior: smooth;
+  scroll-snap-type: y mandatory;
+  scrollbar-width: none;
+}
+
+.recommendation-feed-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.recommendation-feed-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 330px);
+  gap: 0;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+}
+
+.recommendation-feed-stage {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  place-items: center;
+  overflow: hidden;
+  border-right: 1px solid rgba(223, 231, 230, 0.1);
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.022) 1px, transparent 1px) 0 0 / 34px 100%,
+    #05070a;
+}
+
+.recommendation-feed-stage::before,
+.recommendation-feed-stage::after {
+  position: absolute;
+  z-index: 1;
+  left: 18px;
+  color: rgba(223, 231, 230, 0.38);
+  font-family: "Cascadia Mono", "SFMono-Regular", monospace;
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  pointer-events: none;
+}
+
+.recommendation-feed-stage::before {
+  top: 14px;
+  content: "SOURCE FRAME / UNCROPPED";
+}
+
+.recommendation-feed-stage::after {
+  bottom: 15px;
+  content: "LOCAL SIGNAL CUT";
+}
+
+.recommendation-feed-stage video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+  cursor: pointer;
+}
+
+.recommendation-feed-stage.is-fill video {
+  object-fit: cover;
+}
+
+.recommendation-feed-progress {
+  position: absolute;
+  z-index: 2;
+  right: 18px;
+  bottom: 10px;
+  left: 18px;
+  height: 3px;
+  overflow: hidden;
+  background: rgba(223, 231, 230, 0.2);
+}
+
+.recommendation-feed-progress i {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform: scaleX(0);
+  transform-origin: left;
+  background: var(--feed-cue);
+}
+
+.recommendation-feed-info {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  gap: 22px;
+  overflow: hidden;
+  padding: 24px 22px 20px;
+  background: var(--feed-panel);
+}
+
+.recommendation-feed-count {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid rgba(223, 231, 230, 0.12);
+}
+
+.recommendation-feed-count span {
+  color: var(--feed-beam);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+.recommendation-feed-count strong {
+  color: rgba(223, 231, 230, 0.22);
+  font-family: "Cascadia Mono", "SFMono-Regular", monospace;
+  font-size: 34px;
+  font-weight: 400;
+  line-height: 0.8;
+}
+
+.recommendation-feed-copy {
+  min-width: 0;
+}
+
+.recommendation-feed-copy h1 {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--feed-paper);
+  font-family: "Microsoft YaHei UI", "Segoe UI", sans-serif;
+  font-size: clamp(22px, 2.2vw, 32px);
+  font-weight: 800;
+  line-height: 1.16;
+  letter-spacing: -0.035em;
+}
+
+.recommendation-feed-copy > p {
+  margin: 10px 0 0;
+  overflow: hidden;
+  color: var(--feed-muted);
+  font-size: 11px;
+  line-height: 1.5;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recommendation-feed-reasons,
+.recommendation-feed-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 18px;
+}
+
+.recommendation-feed-reasons span,
+.recommendation-feed-tags span {
+  border: 1px solid rgba(120, 174, 181, 0.22);
+  border-radius: 999px;
+  padding: 5px 8px;
+  background: rgba(120, 174, 181, 0.07);
+  color: #b8cbd0;
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.recommendation-feed-tags span {
+  border-color: rgba(217, 166, 90, 0.18);
+  background: rgba(217, 166, 90, 0.06);
+  color: #d4bd94;
+}
+
+.recommendation-feed-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: auto;
+}
+
+.recommendation-feed-actions button,
+.recommendation-feed-state button {
+  display: flex;
+  min-width: 0;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid rgba(223, 231, 230, 0.12);
+  border-radius: 8px;
+  background: #1a2530;
+  color: var(--feed-paper);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.recommendation-feed-actions button:hover,
+.recommendation-feed-actions button:focus-visible,
+.recommendation-feed-state button:hover,
+.recommendation-feed-state button:focus-visible {
+  border-color: var(--feed-beam);
+  background: #20313d;
+  outline: none;
+}
+
+.recommendation-feed-actions button:disabled {
+  opacity: 0.42;
+  cursor: default;
+}
+
+.recommendation-feed-actions button.is-active {
+  border-color: rgba(217, 166, 90, 0.48);
+  background: rgba(217, 166, 90, 0.12);
+  color: #f0c77f;
+}
+
+.recommendation-feed-actions .recommendation-feed-dismiss {
+  color: #aeb8c1;
+}
+
+.recommendation-feed-state {
+  display: grid;
+  min-height: 0;
+  place-items: center;
+  align-content: center;
+  gap: 12px;
+  padding: 28px;
+  color: var(--feed-paper);
+  text-align: center;
+}
+
+.recommendation-feed-state span {
+  max-width: 520px;
+  color: var(--feed-muted);
+  line-height: 1.6;
+}
+
+.recommendation-feed-state button {
+  padding: 0 16px;
+}
+
+.app-shell.theme-light.feed-view,
+:root[data-theme="light"] .app-shell.feed-view {
+  --feed-ink: #e8ecec;
+  --feed-panel: #f7f8f7;
+  --feed-paper: #17212a;
+  --feed-muted: #63717d;
+  --feed-cue: #a96c20;
+  --feed-beam: #397985;
+}
+
+.app-shell.theme-light .recommendation-feed-header,
+:root[data-theme="light"] .recommendation-feed-header {
+  border-bottom-color: rgba(23, 33, 42, 0.12);
+  background: rgba(247, 248, 247, 0.94);
+}
+
+.app-shell.theme-light .recommendation-feed-back,
+:root[data-theme="light"] .recommendation-feed-back {
+  border-color: rgba(23, 33, 42, 0.16);
+  color: #17212a;
+}
+
+.app-shell.theme-light .recommendation-feed-stage,
+:root[data-theme="light"] .recommendation-feed-stage {
+  border-right-color: rgba(23, 33, 42, 0.12);
+}
+
+.app-shell.theme-light .recommendation-feed-count,
+:root[data-theme="light"] .recommendation-feed-count {
+  border-bottom-color: rgba(23, 33, 42, 0.12);
+}
+
+.app-shell.theme-light .recommendation-feed-actions button,
+.app-shell.theme-light .recommendation-feed-state button,
+:root[data-theme="light"] .recommendation-feed-actions button,
+:root[data-theme="light"] .recommendation-feed-state button {
+  border-color: rgba(23, 33, 42, 0.14);
+  background: #e9eeee;
+  color: #17212a;
+}
+
 .app-shell:not(.home-view) .player-column {
   gap: 4px;
 }

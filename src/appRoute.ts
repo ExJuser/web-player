@@ -6,6 +6,7 @@ export type PhotoViewerReturnTarget = "photos" | "mosaic";
 
 export type AppRoute =
   | { kind: "home" }
+  | { kind: "feed" }
   | {
       kind: "explore";
       section: ExploreSection;
@@ -34,6 +35,7 @@ export function parseAppRoute(hash: string): AppRoute {
   const { path, params } = parseHashParts(hash);
 
   if (path === "/home") return homeRoute;
+  if (path === "/feed") return { kind: "feed" };
   if (path === "/explore/overview") return { kind: "explore", section: "overview" };
   if (path === "/explore/actors") {
     const actorId = params.get("actor")?.trim();
@@ -74,6 +76,8 @@ export function serializeAppRoute(route: AppRoute) {
   switch (route.kind) {
     case "home":
       return "#/home";
+    case "feed":
+      return "#/feed";
     case "explore":
       if (route.section === "overview") return "#/explore/overview";
       if (route.section === "actors") {
@@ -100,6 +104,8 @@ export function activeViewForRoute(route: AppRoute): ActiveView {
   switch (route.kind) {
     case "home":
       return "home";
+    case "feed":
+      return "feed";
     case "explore":
       return "explore";
     case "player":

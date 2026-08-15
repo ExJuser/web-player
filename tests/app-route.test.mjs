@@ -8,6 +8,7 @@ const routes = await importTsModule(new URL("../src/appRoute.ts", import.meta.ur
 test("parses and serializes every supported route", () => {
   const cases = [
     [{ kind: "home" }, "#/home"],
+    [{ kind: "feed" }, "#/feed"],
     [{ kind: "explore", section: "overview" }, "#/explore/overview"],
     [{ kind: "explore", section: "actors" }, "#/explore/actors"],
     [{ kind: "explore", section: "creative" }, "#/explore/creative"],
@@ -53,6 +54,7 @@ test("falls back safely for unknown routes and missing required ids", () => {
 
 test("maps routes to existing view names", () => {
   assert.equal(routes.activeViewForRoute({ kind: "home" }), "home");
+  assert.equal(routes.activeViewForRoute({ kind: "feed" }), "feed");
   assert.equal(routes.activeViewForRoute({ kind: "explore", section: "actors" }), "explore");
   assert.equal(routes.activeViewForRoute({ kind: "player", videoId: "v1" }), "player");
   assert.equal(routes.activeViewForRoute({ kind: "photos" }), "photos");

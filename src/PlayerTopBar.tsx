@@ -1,4 +1,4 @@
-import { Compass, Film, FolderOpen, HardDrive, Images, Info, LoaderCircle, Moon, Scissors, Search, Sparkles, Sun, X } from "lucide-react";
+import { Clapperboard, Compass, Film, FolderOpen, HardDrive, Images, Info, LoaderCircle, Moon, Scissors, Search, Sparkles, Sun, X } from "lucide-react";
 import { forwardRef, useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import type { MediaProcessingTaskState } from "./MediaProcessingTaskDialog";
@@ -55,6 +55,7 @@ type PlayerTopBarProps = {
   onFocusHomeSearch: () => void;
   onSelectHomeSearchResult: (videoId: string) => void;
   onShowExplore: () => void;
+  onShowFeed: () => void;
   onShowHome: () => void;
   onShowPhotoAlbums: () => void;
   onPreloadExplore?: () => void;
@@ -93,6 +94,7 @@ export const PlayerTopBar = forwardRef<HTMLElement, PlayerTopBarProps>(function 
     onFocusHomeSearch,
     onSelectHomeSearchResult,
     onShowExplore,
+    onShowFeed,
     onShowHome,
     onShowPhotoAlbums,
     onPreloadExplore,
@@ -327,6 +329,12 @@ export const PlayerTopBar = forwardRef<HTMLElement, PlayerTopBarProps>(function 
           >
             <Compass size={17} />
             探索
+          </button>
+        ) : null}
+        {!isPrivacyMode && isHomeViewVisible && videoCount ? (
+          <button className="secondary-button top-home-button" type="button" onClick={onShowFeed}>
+            <Clapperboard size={17} />
+            刷片
           </button>
         ) : null}
         {!isPrivacyMode && (videoCount || isExploreViewVisible) && !isHomeViewVisible ? (

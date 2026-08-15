@@ -550,3 +550,106 @@ button,
     display: none;
   }
 }
+
+@media (max-width: 900px) {
+  .recommendation-feed {
+    grid-template-rows: 50px minmax(0, 1fr);
+  }
+
+  .recommendation-feed-header {
+    padding-right: max(12px, env(safe-area-inset-right));
+    padding-left: max(12px, env(safe-area-inset-left));
+  }
+
+  .recommendation-feed-header p {
+    display: none;
+  }
+
+  .recommendation-feed-card {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 56%) minmax(0, 44%);
+  }
+
+  .recommendation-feed-stage {
+    border-right: 0;
+    border-bottom: 1px solid rgba(223, 231, 230, 0.1);
+  }
+
+  .recommendation-feed-info {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: minmax(0, 1fr) auto;
+    gap: 10px 14px;
+    overflow-y: auto;
+    padding: 14px max(14px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
+  }
+
+  .recommendation-feed-count {
+    display: none;
+  }
+
+  .recommendation-feed-copy h1 {
+    font-size: clamp(19px, 5vw, 26px);
+  }
+
+  .recommendation-feed-copy > p {
+    margin-top: 5px;
+  }
+
+  .recommendation-feed-reasons,
+  .recommendation-feed-tags {
+    margin-top: 8px;
+  }
+
+  .recommendation-feed-tags {
+    display: none;
+  }
+
+  .recommendation-feed-actions {
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    margin-top: 0;
+  }
+
+  .recommendation-feed-actions button {
+    min-height: 42px;
+  }
+}
+
+@media (max-width: 520px) {
+  .recommendation-feed-header > div {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .recommendation-feed-header strong {
+    font-size: 16px;
+  }
+
+  .recommendation-feed-card {
+    grid-template-rows: minmax(0, 52%) minmax(0, 48%);
+  }
+
+  .recommendation-feed-stage::before,
+  .recommendation-feed-stage::after {
+    display: none;
+  }
+
+  .recommendation-feed-info {
+    padding-top: 11px;
+  }
+
+  .recommendation-feed-reasons span:nth-child(n + 3) {
+    display: none;
+  }
+
+  .recommendation-feed-actions {
+    gap: 6px;
+  }
+
+  .recommendation-feed-actions button {
+    min-height: 40px;
+    font-size: 11px;
+  }
+}

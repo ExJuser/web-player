@@ -70,6 +70,7 @@ import { createPlayerDeferredData, createPlayerStartupData } from "./playerDataV
 import { createVideoThumbnailService } from "./videoThumbnailService.mjs";
 import { createThumbnailMemoryCache } from "./thumbnailMemoryCache.mjs";
 import { createMosaicStore } from "./mosaicStore.mjs";
+import { createRecommendationFeedService } from "./recommendationFeed.mjs";
 
 // 参数化路由模式集中在模块顶层：正则只编译一次，且 middleware 中按需惰性匹配
 // （静态路径路由完全不执行正则；参数路由只执行到命中的那一条为止）。
@@ -988,6 +989,15 @@ export function playerDataApiPlugin({ projectRoot, env }) {
     }
     return photoAlbumsScanPromise;
   };
+  const recommendationFeed = createRecommendationFeedService({
+    cachePath: path.join(dataRoot, "recommendations.json"),
+    loadConfig: loadAppConfig,
+    loadPlayerStore: async (view) => (await getLocalDataStore()).loadPlayerDataStore("global", view),
+    resolveMediaPath: resolveMediaPathFromConfig,
+    resolveVideoPath: resolveVideoPathFromConfig,
+    runProcess,
+    scanMediaRoots: scanMediaRootsOnce,
+  });
 
   const middleware = async (request, response, next) => {
     if (!request.url?.startsWith("/api/")) {
@@ -1009,6 +1019,25 @@ export function playerDataApiPlugin({ projectRoot, env }) {
 
     try {
       const store = await getLocalDataStore();
+
+      if (url.pathname === "/api/recommendations/feed" && request.method === "GET") {
+        sendJson(response, 200, await recommendationFeed.getFeed({
+          mode: url.searchParams.get("mode"),
+          cursor: url.searchParams.get("cursor"),
+          limit: url.searchParams.get("limit"),
+        }));
+        return;
+      }
+
+      if (url.pathname === "/api/recommendations/feedback" && request.method === "POST") {
+        sendJson(response, 200, await recommendationFeed.recordFeedback(await parseJsonBody(request)));
+        return;
+      }
+
+      if (url.pathname === "/api/recommendations/status" && request.method === "GET") {
+        sendJson(response, 200, await recommendationFeed.getStatus());
+        return;
+      }
 
       if (url.pathname === "/api/mosaics") {
         if (request.method === "GET") {

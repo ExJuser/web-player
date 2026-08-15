@@ -419,6 +419,7 @@ const loadMosaicStudio = () => import("./MosaicStudioSection");
 const loadVideoGrowthRings = () => import("./VideoGrowthRingsSection");
 const loadPhotoDashboard = () => import("./PhotoDashboardSection");
 const loadPhotoViewer = () => import("./PhotoViewerSection");
+const loadRecommendationFeed = () => import("./RecommendationFeedSection");
 
 const ActorDashboardSection = lazy(() =>
   loadActorDashboard().then((module) => ({ default: module.ActorDashboardSection })));
@@ -430,6 +431,8 @@ const PhotoDashboardSection = lazy(() =>
   loadPhotoDashboard().then((module) => ({ default: module.PhotoDashboardSection })));
 const PhotoViewerSection = lazy(() =>
   loadPhotoViewer().then((module) => ({ default: module.PhotoViewerSection })));
+const RecommendationFeedSection = lazy(() =>
+  loadRecommendationFeed().then((module) => ({ default: module.RecommendationFeedSection })));
 
 const playlistResizeMinWidth = 400;
 const playlistResizeDefaultWidth = 460;
@@ -564,6 +567,7 @@ export default function App() {
   const didHoldSpeedStartPlaybackRef = useRef(false);
   const wasHoldSpeedPlaybackPausedRef = useRef(false);
   const startFromBeginningVideoIdRef = useRef<string | null>(null);
+  const recommendationSeekRef = useRef<{ videoId: string; time: number } | null>(null);
   const autoSubtitleSelectionVideoIdRef = useRef<string | null>(null);
   const lastSubtitleSelectionVideoIdRef = useRef<string | null>(null);
   const selectedSubtitleIdRef = useRef("off");
@@ -585,6 +589,7 @@ export default function App() {
   const duplicateDetectionMessageRef = useRef("尚未检测重复视频。");
   const [appRoute, setAppRoute] = useState<AppRoute>(initialAppRoute);
   const [hasInitialMediaLoadSettled, setHasInitialMediaLoadSettled] = useState(false);
+  const [hasOpenedRecommendationFeed, setHasOpenedRecommendationFeed] = useState(initialAppRoute.kind === "feed");
 
   const updateAppRoute = useCallback((nextRoute: AppRoute, options?: { replace?: boolean }) => {
     const nextHash = serializeAppRoute(nextRoute);
@@ -773,6 +778,7 @@ export default function App() {
 
   useEffect(() => {
     setActiveView(activeViewForRoute(appRoute));
+    if (appRoute.kind === "feed") setHasOpenedRecommendationFeed(true);
     if (appRoute.kind === "explore") {
       setSpecialHomeSection(appRoute.section);
       setSelectedActorId(appRoute.section === "actors" ? appRoute.actorId ?? null : null);
@@ -2050,6 +2056,7 @@ export default function App() {
   );
   const isHomeViewVisible = activeView === "home" && !isPrivacyMode && !isCinemaMode && !isFullscreen;
   const isExploreViewVisible = activeView === "explore" && !isPrivacyMode && !isCinemaMode && !isFullscreen;
+  const isRecommendationFeedVisible = activeView === "feed" && !isPrivacyMode && !isCinemaMode && !isFullscreen;
   const shouldKeepMosaicExploreMounted = activeView === "photoViewer" && photoViewerReturnRef.current === "mosaic";
   const shouldLoadWatchActivity = isExploreViewVisible
     && isRatingFilterEnabled
@@ -2064,7 +2071,7 @@ export default function App() {
   const isPhotoAlbumViewVisible =
     (activeView === "photos" || activeView === "photoViewer") && !isPrivacyMode && !isCinemaMode && !isFullscreen;
   const isThumbnailDashboardVisible = isHomeViewVisible || isExploreViewVisible;
-  const isNonPlayerViewVisible = isHomeViewVisible || isExploreViewVisible || isPhotoAlbumViewVisible;
+  const isNonPlayerViewVisible = isHomeViewVisible || isExploreViewVisible || isRecommendationFeedVisible || isPhotoAlbumViewVisible;
   const firstPlayableHomeCard = playlistVideos[0] ? createHomeVideoCard(playlistVideos[0]) : null;
   const primaryHomeCard = createPrimaryHomeCard(primaryResumeCard, firstPlayableHomeCard);
   // 仅首页可见时统计：播放器/看图视图下每次进度保存都会触发 O(20k) 统计重算，属于纯浪费
@@ -3986,6 +3993,11 @@ export default function App() {
     [selectVideo],
   );
 
+  const openVideoFromRecommendation = useCallback((videoId: string, time: number) => {
+    recommendationSeekRef.current = { videoId, time: Math.max(0, time) };
+    selectVideo(videoId, { syncSeriesMode: false });
+  }, [selectVideo]);
+
   const openDuplicateVideo = useCallback(
     (video: VideoItem, options?: { keepDuplicatePlaylist?: boolean }) => {
       selectVideo(video.id, {
@@ -4060,6 +4072,12 @@ export default function App() {
   const showHomeView = useCallback(() => {
     setActiveView("home");
     updateAppRoute({ kind: "home" });
+  }, [updateAppRoute]);
+
+  const showRecommendationFeed = useCallback(() => {
+    setHasOpenedRecommendationFeed(true);
+    setActiveView("feed");
+    updateAppRoute({ kind: "feed" });
   }, [updateAppRoute]);
 
   const resetHomeSearchScope = useCallback(() => {
@@ -5247,8 +5265,12 @@ export default function App() {
     if (shouldStartFromBeginning) {
       startFromBeginningVideoIdRef.current = null;
     }
+    const recommendationSeek = recommendationSeekRef.current?.videoId === currentVideo.id
+      ? recommendationSeekRef.current.time
+      : null;
+    if (recommendationSeek !== null) recommendationSeekRef.current = null;
     const progress = progressStoreRef.current[currentVideo.id];
-    const resumeAt = resolveInitialPlaybackTime({
+    const resumeAt = recommendationSeek ?? resolveInitialPlaybackTime({
       progressTime: progress?.currentTime,
       progressCompleted: progress?.completed,
       progressDuration: progress?.duration,
@@ -6565,7 +6587,7 @@ export default function App() {
   return (
     <>
     <main
-      className={`app-shell theme-${theme} ${isDragActive ? "drag-active" : ""} ${isPrivacyMode ? "privacy-mode" : ""} ${isCinemaMode ? "cinema-mode" : ""} ${isPhotoImmersive ? "photo-immersive" : ""} ${activeView === "photoViewer" ? "photo-viewer-view" : ""} ${isNonPlayerViewVisible ? "home-view" : ""} ${isPlaylistCollapsed && !isFullscreen ? "playlist-collapsed" : ""} ${isFullscreen ? "player-fullscreen" : ""} ${isFullscreenPlaylistOpen ? "fullscreen-playlist-open" : ""}`}
+      className={`app-shell theme-${theme} ${isDragActive ? "drag-active" : ""} ${isPrivacyMode ? "privacy-mode" : ""} ${isCinemaMode ? "cinema-mode" : ""} ${isPhotoImmersive ? "photo-immersive" : ""} ${activeView === "photoViewer" ? "photo-viewer-view" : ""} ${isRecommendationFeedVisible ? "feed-view" : ""} ${isNonPlayerViewVisible ? "home-view" : ""} ${isPlaylistCollapsed && !isFullscreen ? "playlist-collapsed" : ""} ${isFullscreen ? "player-fullscreen" : ""} ${isFullscreenPlaylistOpen ? "fullscreen-playlist-open" : ""}`}
       ref={appShellRef}
       style={shellStyle}
       onDragOver={handleDragOver}
@@ -6619,6 +6641,7 @@ export default function App() {
           onSelectHomeSearchResult={(videoId) => selectVideo(videoId, { syncSeriesMode: false })}
           playlistThumbnailStore={playlistThumbnailStore}
           onShowExplore={showExploreView}
+          onShowFeed={showRecommendationFeed}
           onShowHome={showHomeView}
           onShowPhotoAlbums={showPhotoAlbumsView}
           onPreloadExplore={preloadExplore}
@@ -6724,6 +6747,18 @@ export default function App() {
               } : null}
             />
           </section>
+        ) : null}
+
+        {hasOpenedRecommendationFeed ? (
+          <LazyFeatureBoundary label="刷片推荐流">
+            <RecommendationFeedSection
+              active={isRecommendationFeedVisible}
+              mode={homeMediaMode}
+              modeLabel={homeMediaModeLabel}
+              onClose={showHomeView}
+              onOpenOriginal={openVideoFromRecommendation}
+            />
+          </LazyFeatureBoundary>
         ) : null}
 
         {isExploreViewVisible || shouldKeepMosaicExploreMounted ? (
