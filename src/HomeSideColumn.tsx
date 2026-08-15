@@ -213,7 +213,7 @@ export function HomeSideColumn({
               }
             }}
           >
-            <GripVertical size={10} aria-hidden="true" />
+            <GripVertical size={14} aria-hidden="true" />
           </button>
           {entry.node}
         </div>
