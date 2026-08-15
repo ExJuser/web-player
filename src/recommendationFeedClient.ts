@@ -20,6 +20,8 @@ export type RecommendationFeedItem = {
   viewState?: "untouched" | "partial" | "completed";
   progressCurrentTime?: number;
   progressDuration?: number;
+  stats?: { playCount: number; totalPlayedSeconds: number };
+  series?: Array<{ videoId: string; title: string; thumbnailUrl?: string }>;
 };
 
 export type RecommendationFeedResponse = {

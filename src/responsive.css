@@ -605,6 +605,12 @@ button,
     display: none;
   }
 
+  .recommendation-feed-more,
+  .recommendation-feed-details,
+  .recommendation-feed-shortcuts {
+    grid-column: 1 / -1;
+  }
+
   .recommendation-feed-actions {
     grid-column: 1 / -1;
     display: grid;

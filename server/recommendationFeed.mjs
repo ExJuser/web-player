@@ -40,6 +40,22 @@ function videoSeriesKey(video) {
   return normalized.includes("/") ? normalized.slice(0, normalized.lastIndexOf("/")) : video.name;
 }
 
+/** 同系列影片入口：与当前影片同目录的相邻影片（最近修改优先），供"看下一部/同系列"跳转。 */
+function buildSeriesEntries(video, modeVideos, limit = 4) {
+  const key = videoSeriesKey(video);
+  if (!key) return undefined;
+  const siblings = modeVideos
+    .filter((candidate) => candidate.id !== video.id && videoSeriesKey(candidate) === key)
+    .sort((left, right) => Number(right.lastModified || 0) - Number(left.lastModified || 0))
+    .slice(0, limit);
+  if (!siblings.length) return undefined;
+  return siblings.map((candidate) => ({
+    videoId: candidate.id,
+    title: path.basename(candidate.name, path.extname(candidate.name)),
+    thumbnailUrl: candidate.thumbnailUrl || candidate.thumbUrl || candidate.posterUrl,
+  }));
+}
+
 function parseTimestamp(value) {
   const match = String(value).trim().match(/^(?:(\d+):)?(\d{2}):(\d{2})[,.](\d{3})$/u);
   if (!match) return null;
@@ -664,6 +680,7 @@ export function createRecommendationFeedService({
         const progressTime = Number(progress?.currentTime);
         const hasProgress = Number.isFinite(progressTime) && progressTime > 0;
         const progressDuration = Number(progress?.duration);
+        const stat = store?.videoStats?.[video.id];
         let segment = cached?.fingerprint === videoFingerprint(video) ? cached : null;
         if (!segment) {
           // 还没有分析结果时的兜底：优先用播放进度里已知的时长生成片中段位置，
@@ -694,6 +711,10 @@ export function createRecommendationFeedService({
           viewState: progress?.completed ? "completed" : hasProgress ? "partial" : "untouched",
           progressCurrentTime: hasProgress ? progressTime : undefined,
           progressDuration: Number.isFinite(progressDuration) && progressDuration > 0 ? progressDuration : undefined,
+          stats: (stat && (Number(stat.playCount) > 0 || Number(stat.totalPlayedSeconds) > 0))
+            ? { playCount: Number(stat.playCount) || 0, totalPlayedSeconds: Number(stat.totalPlayedSeconds) || 0 }
+            : undefined,
+          series: buildSeriesEntries(video, modeVideos, 4),
         };
       });
       queueAnalysis(page
