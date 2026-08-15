@@ -6,9 +6,12 @@ import { probeMediaFile } from "./mediaCompatibility.mjs";
 const CACHE_VERSION = 1;
 const ANALYZER_VERSION = 1;
 const ANALYSIS_CONCURRENCY = 2;
+const ANALYSIS_RETRY_BACKOFF_MS = 60 * 60 * 1000;
+const STORE_SNAPSHOT_TTL_MS = 30_000;
 const DEFAULT_SEGMENT_SECONDS = 52;
 const MIN_SEGMENT_SECONDS = 30;
 const MAX_SEGMENT_SECONDS = 90;
+const MAX_BEHAVIOR_WINDOWS = 2;
 
 function clamp(value, minimum, maximum) {
   return Math.min(maximum, Math.max(minimum, value));
@@ -135,11 +138,15 @@ function rankVideos(videos, store, feedbackByVideoId) {
     .map((video) => {
       const progress = store?.items?.[video.id];
       const rating = Number(store?.videoRatings?.[video.id]) || 0;
+      // 进度感知：完全没看过的新鲜内容提权，看一半的不打断追剧节奏，看完的短期降权。
+      let progressScore = 0;
+      if (progress?.completed) progressScore = -0.4;
+      else if (!progress || !Number.isFinite(progress.currentTime) || (progress.currentTime ?? 0) <= 0) progressScore = 0.35;
       const score = (favorites.has(video.id) ? 1.4 : 0)
         + rating * 0.12
-        + (progress?.completed ? -0.65 : 0.2)
+        + progressScore
         + feedbackScore(feedbackByVideoId[video.id])
-        + (stableNumber(`${video.id}:${new Date().toISOString().slice(0, 10)}`) % 1000) / 1000;
+        + ((stableNumber(`${video.id}:${new Date().toISOString().slice(0, 10)}`) % 600) / 1000 - 0.3);
       return { video, score };
     })
     .sort((left, right) => right.score - left.score)
@@ -149,12 +156,72 @@ function rankVideos(videos, store, feedbackByVideoId) {
 function diversify(videos) {
   const result = [];
   const pending = [...videos];
+  let cursor = 0;
   while (pending.length) {
     const previousSeries = result.length ? videoSeriesKey(result[result.length - 1]) : "";
-    const index = pending.findIndex((video) => videoSeriesKey(video) !== previousSeries);
-    result.push(pending.splice(index < 0 ? 0 : index, 1)[0]);
+    let index = -1;
+    for (let offset = 0; offset < pending.length; offset += 1) {
+      if (videoSeriesKey(pending[(cursor + offset) % pending.length]) !== previousSeries) {
+        index = (cursor + offset) % pending.length;
+        break;
+      }
+    }
+    if (index < 0) index = 0;
+    result.push(pending.splice(index, 1)[0]);
+    cursor = index;
   }
   return result;
+}
+
+/**
+ * 从个人观看热力图（history.buckets，200 个时间桶）中提取"反复回看"的高光窗口。
+ * 每个桶的强度 = 桶内累计观看秒数 / 桶时长（>1 表示完整看过不止一遍）。
+ * 对每个强度 >= 1 的连续热区，用前缀和滑窗找其中最热的目标时长子窗口。
+ */
+function createBehaviorWindows(duration, history) {
+  if (!history?.buckets?.length || !Number.isFinite(duration) || duration <= 0) return [];
+  const bucketCount = history.buckets.length;
+  const bucketDuration = duration / bucketCount;
+  if (bucketDuration <= 0) return [];
+  const strength = history.buckets.map((watchedSeconds) => clamp(Number(watchedSeconds) / bucketDuration, 0, 4));
+  const windows = [];
+  let runStart = -1;
+  const flushRun = (runEnd) => {
+    if (runStart < 0) return;
+    const runBucketCount = runEnd - runStart + 1;
+    const targetBuckets = Math.max(1, Math.round(DEFAULT_SEGMENT_SECONDS / bucketDuration));
+    const usable = Math.min(targetBuckets, runBucketCount);
+    const prefixSums = new Array(runBucketCount);
+    let prefix = 0;
+    for (let index = 0; index < runBucketCount; index += 1) {
+      prefix += strength[runStart + index];
+      prefixSums[index] = prefix;
+    }
+    let bestStart = runStart;
+    let bestSum = -1;
+    for (let index = 0; index + usable <= runBucketCount; index += 1) {
+      const sum = prefixSums[index + usable - 1] - (index > 0 ? prefixSums[index - 1] : 0);
+      if (sum > bestSum) {
+        bestSum = sum;
+        bestStart = runStart + index;
+      }
+    }
+    windows.push({
+      startTime: (bestStart / bucketCount) * duration,
+      endTime: Math.min(duration, ((bestStart + usable) / bucketCount) * duration),
+      score: clamp(bestSum / usable / 2, 0, 1),
+    });
+    runStart = -1;
+  };
+  strength.forEach((value, index) => {
+    if (value >= 1) {
+      if (runStart < 0) runStart = index;
+    } else if (runStart >= 0) {
+      flushRun(index - 1);
+    }
+  });
+  if (runStart >= 0) flushRun(strength.length - 1);
+  return windows;
 }
 
 function varyRecommendationOrder(videos, seed) {
@@ -189,6 +256,20 @@ export function createRecommendationFeedService({
   const queuedVideoIds = new Set();
   const analysisQueue = [];
   let isAnalyzing = false;
+  let sortedSnapshot = null;
+  let storeSnapshot = null;
+  let storeSnapshotAt = 0;
+
+  const loadStoreSnapshot = async () => {
+    if (storeSnapshot && Date.now() - storeSnapshotAt < STORE_SNAPSHOT_TTL_MS) return storeSnapshot;
+    const [startupStore, deferredStore] = await Promise.all([
+      loadPlayerStore("startup"),
+      loadPlayerStore("deferred"),
+    ]);
+    storeSnapshot = { ...(startupStore ?? {}), ...(deferredStore ?? {}) };
+    storeSnapshotAt = Date.now();
+    return storeSnapshot;
+  };
 
   const loadCache = async () => {
     cachePromise ??= loadRecommendationStore().then((store) => {
@@ -258,21 +339,31 @@ export function createRecommendationFeedService({
 
     const cues = await findSubtitleCues(config, scan, video);
     const hasAudio = mediaInfo?.hasAudio;
-    const candidates = createCandidateWindows(duration, video.id);
+    const history = store?.items?.[video.id]?.history;
+    const behaviorWindows = createBehaviorWindows(duration, history)
+      .sort((left, right) => right.score - left.score)
+      .slice(0, MAX_BEHAVIOR_WINDOWS);
+    const candidates = [
+      ...behaviorWindows.map((window) => ({ ...window, behavior: true })),
+      ...createCandidateWindows(duration, video.id).map((window) => ({ ...window, behavior: false })),
+    ];
     const scored = [];
     for (const candidate of candidates) {
       const subtitles = subtitleScore(cues, candidate.startTime, candidate.endTime);
       const signals = await analyzeSignals(filePath, candidate, hasAudio);
-      const score = signals.sceneScore * 0.34 + signals.audioScore * 0.24 + signals.speechRatio * 0.16 + subtitles.score * 0.26;
+      let score = signals.sceneScore * 0.34 + signals.audioScore * 0.24 + signals.speechRatio * 0.16 + subtitles.score * 0.26;
+      // 用户反复回看的窗口获得行为信号加成。
+      if (candidate.behavior) score = score * 0.6 + candidate.score * 0.4;
       scored.push({ ...candidate, score, subtitles, ...signals });
     }
     const best = scored.sort((left, right) => right.score - left.score)[0] ?? createFallbackSegment(video, duration);
     const reasons = [];
+    if (best.behavior) reasons.push("你反复回看的段落");
     if (best.sceneScore > 0.42) reasons.push("镜头变化活跃");
     if (best.audioScore > 0.45) reasons.push("声音张力较强");
     if (best.subtitles?.score > 0.4) reasons.push("对白密集且语义完整");
     if (!reasons.length) reasons.push("综合画面、声音与片段位置选出");
-    return { startTime: best.startTime, endTime: best.endTime, duration, score: best.score, source: "signals", reasons };
+    return { startTime: best.startTime, endTime: best.endTime, duration, score: best.score, source: best.behavior ? "behavior" : "signals", reasons };
   };
 
   const drainQueue = async () => {
@@ -310,8 +401,23 @@ export function createRecommendationFeedService({
             const segment = await analyzeVideo({ ...task, mediaInfo });
             cache.segments[task.video.id] = { ...segment, fingerprint, analyzedAt: Date.now() };
             recommendationStore.saveRecommendationSegment(task.video.id, cache.segments[task.video.id]);
-          } catch {
+          } catch (error) {
             // Fast candidates remain usable when local tools or a media path are unavailable.
+            // 记录失败标记并带退避重试，避免每次刷页都重新入队空转。
+            try {
+              const cache = await loadCache();
+              const existing = cache.segments[task.video.id] ?? {};
+              cache.segments[task.video.id] = {
+                ...existing,
+                fingerprint: videoFingerprint(task.video),
+                analysisFailedAt: Date.now(),
+                analysisError: String(error instanceof Error ? error.message : error).slice(0, 160),
+              };
+              const recommendationStore = await loadRecommendationStore();
+              recommendationStore.saveRecommendationSegment(task.video.id, cache.segments[task.video.id]);
+            } catch {
+              // 失败标记写入失败不影响当前循环。
+            }
           } finally {
             queuedVideoIds.delete(task.video.id);
           }
@@ -335,16 +441,21 @@ export function createRecommendationFeedService({
   return {
     async getFeed({ mode, cursor = 0, limit = 8, seed = "" }) {
       const normalizedMode = mode === "special" ? "special" : "anime";
-      const [config, scan, cache, startupStore, deferredStore] = await Promise.all([
-        loadConfig(), scanMediaRoots(), loadCache(), loadPlayerStore("startup"), loadPlayerStore("deferred"),
+      const [config, scan, cache, store] = await Promise.all([
+        loadConfig(), scanMediaRoots(), loadCache(), loadStoreSnapshot(),
       ]);
-      const store = { ...(startupStore ?? {}), ...(deferredStore ?? {}) };
       const rootIds = new Set(scan.roots.filter((item) => modeMatchesRoot(item.root, normalizedMode)).map((item) => item.root.id));
-      const ranked = varyRecommendationOrder(diversify(rankVideos(
-        scan.videos.filter((video) => rootIds.has(video.mediaRootId)),
-        store,
-        cache.feedback,
-      )), seed);
+      const modeVideos = scan.videos.filter((video) => rootIds.has(video.mediaRootId));
+      const dateKey = new Date().toISOString().slice(0, 10);
+      if (!sortedSnapshot || sortedSnapshot.mode !== normalizedMode || sortedSnapshot.dateKey !== dateKey) {
+        sortedSnapshot = {
+          mode: normalizedMode,
+          dateKey,
+          videos: rankVideos(modeVideos, store, cache.feedback),
+        };
+      }
+      // 洗牌在去重之前执行：vary 提供会话内随机性，diversify 最后保证相邻不同系列。
+      const ranked = diversify(varyRecommendationOrder(sortedSnapshot.videos, seed));
       const start = Math.max(0, Math.floor(Number(cursor) || 0));
       const pageSize = Math.min(ranked.length, clamp(Math.floor(Number(limit) || 8), 1, 20));
       const page = Array.from({ length: pageSize }, (_, index) => ({
@@ -378,6 +489,7 @@ export function createRecommendationFeedService({
         .map((item) => item.video)
         .filter((video) => {
           const cached = cache.segments[video.id];
+          if (cached?.analysisFailedAt && Date.now() - cached.analysisFailedAt < ANALYSIS_RETRY_BACKOFF_MS) return false;
           return cached?.fingerprint !== videoFingerprint(video) || cached.analysisPending;
         })
         .map((video) => ({ config, scan, store, video })));
@@ -402,17 +514,28 @@ export function createRecommendationFeedService({
       else if (action === "skip") feedback.skipped = (feedback.skipped ?? 0) + 1;
       else if (action === "complete") feedback.completed = (feedback.completed ?? 0) + 1;
       else if (action === "replay") feedback.replayed = (feedback.replayed ?? 0) + 1;
+      // 记录片段级信号（刷片反馈发生在具体时间窗口上），供后续片段热力分析使用。
+      const startTime = Number(payload?.startTime);
+      if (Number.isFinite(startTime) && startTime >= 0) {
+        const segmentEvents = feedback.segmentEvents ?? [];
+        segmentEvents.push({ t: Math.round(startTime), a: action, at: Date.now() });
+        if (segmentEvents.length > 400) segmentEvents.splice(0, segmentEvents.length - 400);
+        feedback.segmentEvents = segmentEvents;
+      }
       feedback.updatedAt = Date.now();
       cache.feedback[videoId] = feedback;
       const store = await loadRecommendationStore();
       store.saveRecommendationFeedback(videoId, feedback);
+      sortedSnapshot = null;
       return { ok: true, feedback };
     },
 
     async getStatus() {
       const cache = await loadCache();
-      const analyzed = Object.values(cache.segments).filter((segment) => !segment.analysisPending).length;
+      const analyzed = Object.values(cache.segments).filter((segment) => !segment.analysisPending && !segment.analysisFailedAt).length;
       return { analyzed, queued: queuedVideoIds.size, analyzing: isAnalyzing };
     },
   };
 }
+
+export { createBehaviorWindows, diversify, rankVideos };

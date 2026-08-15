@@ -12,7 +12,7 @@ export type RecommendationFeedItem = {
   startTime: number;
   endTime: number;
   duration: number;
-  source: "manual" | "signals" | "fallback";
+  source: "manual" | "signals" | "behavior" | "fallback";
   reasons: string[];
   tags: string[];
   rating?: number;
@@ -37,9 +37,9 @@ export function loadRecommendationFeedStatus() {
   return fetchLocalJson<{ analyzed: number; queued: number; analyzing: boolean }>("/api/recommendations/status");
 }
 
-export function sendRecommendationFeedback(videoId: string, action: "skip" | "complete" | "replay" | "dismiss") {
+export function sendRecommendationFeedback(videoId: string, action: "skip" | "complete" | "replay" | "dismiss", startTime?: number) {
   return fetchLocalJson<{ ok: true }>("/api/recommendations/feedback", {
     method: "POST",
-    body: JSON.stringify({ videoId, action }),
+    body: JSON.stringify({ videoId, action, ...(startTime !== undefined ? { startTime } : {}) }),
   });
 }

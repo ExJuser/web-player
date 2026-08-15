@@ -104,7 +104,7 @@ export function RecommendationFeedSection({ active, mode, modeLabel, onActiveTit
     const previous = items[previousIndex];
     if (!previous || completedItemIdsRef.current.has(previous.id) || skippedItemIdsRef.current.has(previous.id)) return;
     skippedItemIdsRef.current.add(previous.id);
-    void sendRecommendationFeedback(previous.videoId, "skip").catch(() => undefined);
+    void sendRecommendationFeedback(previous.videoId, "skip", previous.startTime).catch(() => undefined);
   }, [activeIndex, items]);
 
   useEffect(() => {
@@ -178,7 +178,7 @@ export function RecommendationFeedSection({ active, mode, modeLabel, onActiveTit
   const finishItem = useCallback((item: RecommendationFeedItem) => {
     if (!completedItemIdsRef.current.has(item.id)) {
       completedItemIdsRef.current.add(item.id);
-      void sendRecommendationFeedback(item.videoId, "complete").catch(() => undefined);
+      void sendRecommendationFeedback(item.videoId, "complete", item.startTime).catch(() => undefined);
     }
     if (activeIndex < items.length - 1) moveTo(activeIndex + 1);
   }, [activeIndex, items.length, moveTo]);
