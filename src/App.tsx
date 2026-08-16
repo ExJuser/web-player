@@ -1217,10 +1217,10 @@ export default function App() {
 
   const scanPhotoLibraryRoots = useCallback(async (
     roots: PhotoAlbumLibraryRoot[],
-    options?: { retainExisting?: boolean; preserveExistingOnFailure?: boolean },
+    options?: { background?: boolean; retainExisting?: boolean; preserveExistingOnFailure?: boolean },
   ) => {
     const scannedRootIds = new Set(roots.map((root) => root.id));
-    setIsPhotoAlbumsLoading(true);
+    if (!options?.background) setIsPhotoAlbumsLoading(true);
     setPhotoAlbumMessage(roots.length > 1 ? "正在刷新全部看图媒体库..." : "正在扫描看图媒体库...");
     const fullCachedScan = options?.retainExisting
       ? await loadCachedPhotoAlbumScan({ includeImages: true })
@@ -1309,7 +1309,7 @@ export default function App() {
         ? `已加载 ${nextAlbums.length} 本相册；${failedCount} 个看图媒体库不可用`
         : `已从 ${nextStatuses.length} 个看图媒体库加载 ${nextAlbums.length} 本相册`);
     } finally {
-      setIsPhotoAlbumsLoading(false);
+      if (!options?.background) setIsPhotoAlbumsLoading(false);
     }
   }, [photoAlbumDirectoriesRef, photoRootStatuses, resetPhotoAlbumObjectUrls]);
 
@@ -1519,7 +1519,10 @@ export default function App() {
           )));
           window.requestAnimationFrame(() => {
             window.setTimeout(() => {
-              void scanPhotoLibraryRoots(restoredRoots, { preserveExistingOnFailure: true }).catch((error) => {
+              void scanPhotoLibraryRoots(restoredRoots, {
+                background: true,
+                preserveExistingOnFailure: true,
+              }).catch((error) => {
                 setPhotoAlbumMessage(error instanceof Error ? error.message : "后台刷新看图媒体库失败，请重试。");
               });
             }, 0);
@@ -4303,7 +4306,7 @@ export default function App() {
       appliedPhotoViewerRouteRef.current = null;
       return;
     }
-    if (!hasLoadedPhotoAlbums || isPhotoAlbumsLoading) return;
+    if (!hasLoadedPhotoAlbums) return;
     const routeKey = serializeAppRoute(appRoute);
     const album = photoAlbums.find((item) => item.id === appRoute.albumId);
     if (!album) {
@@ -4347,7 +4350,6 @@ export default function App() {
   }, [
     appRoute,
     hasLoadedPhotoAlbums,
-    isPhotoAlbumsLoading,
     persistPhotoAlbumProgress,
     photoAlbumProgressRef,
     photoAlbums,
