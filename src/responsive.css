@@ -250,28 +250,6 @@ button,
     display: none;
   }
 
-  .top-library-stats-popover {
-    position: fixed;
-    top: max(68px, calc(env(safe-area-inset-top) + 68px));
-    right: max(12px, env(safe-area-inset-right));
-    left: max(12px, env(safe-area-inset-left));
-    width: auto;
-    max-height: calc(100dvh - 92px);
-    overflow-y: auto;
-    transform: translateY(-5px) scale(0.985);
-    transform-origin: top center;
-  }
-
-  .top-library-stats.is-open .top-library-stats-popover {
-    transform: translateY(0) scale(1);
-  }
-
-  @media (hover: hover) {
-    .top-library-stats:hover .top-library-stats-popover {
-      transform: translateY(0) scale(1);
-    }
-  }
-
   .home-resume-copy h2 {
     display: -webkit-box;
     overflow: hidden;

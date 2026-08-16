@@ -265,8 +265,13 @@ test("home media mode helpers filter roots videos and statuses", () => {
   assert.deepEqual(uiState.filterMediaRootStatusesByHomeMediaMode(statuses, animeRootIds), [statuses[1]]);
 });
 
-test("library stats helper counts total progress and favorites", () => {
-  const videos = [{ id: "a" }, { id: "b" }, { id: "c" }];
+test("library stats helper derives viewing composition capacity duration and recent additions", () => {
+  const now = 1_000_000_000;
+  const videos = [
+    { id: "a", size: 100, duration: 60, lastModified: now - 1_000 },
+    { id: "b", size: 200, lastModified: now - 8 * 24 * 60 * 60 * 1000 },
+    { id: "c", size: 300, duration: 120, lastModified: now - 2_000 },
+  ];
 
   assert.deepEqual(
     uiState.createLibraryStats({
@@ -277,13 +282,19 @@ test("library stats helper counts total progress and favorites", () => {
         c: { currentTime: 99, duration: 100 },
       },
       favoriteVideoIds: new Set(["a", "missing"]),
-      isResumableProgress: (progress) => Boolean(progress && !progress.completed && (progress.currentTime ?? 0) > 0 && (progress.currentTime ?? 0) < 90),
+      now,
     }),
     {
       total: 3,
-      unfinished: 1,
+      unstarted: 0,
+      unfinished: 2,
       completed: 1,
       favorites: 1,
+      totalBytes: 600,
+      totalDurationSeconds: 260,
+      knownDurationVideos: 3,
+      recentlyAdded: 2,
+      latestAddedAt: now - 1_000,
     },
   );
 });

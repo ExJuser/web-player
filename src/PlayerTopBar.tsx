@@ -18,17 +18,9 @@ type HomeSearchResult = {
   searchMatch?: PlaylistSearchMatch;
 };
 
-type LibraryStats = {
-  completed: number;
-  favorites: number;
-  total: number;
-  unfinished: number;
-};
-
 type PlayerTopBarProps = {
   currentVideoId: string | null;
   canShowExplore: boolean;
-  homeMediaModeLabel: string;
   homeSearchQuery: string;
   homeSearchResultCount: number;
   homeSearchResults: readonly HomeSearchResult[];
@@ -39,7 +31,6 @@ type PlayerTopBarProps = {
   isNonPlayerViewVisible: boolean;
   isPrivacyMode: boolean;
   isScanning: boolean;
-  libraryStats: LibraryStats;
   metadataRows: readonly VideoMetadataRow[];
   playlistThumbnailStore: PlaylistThumbnailStore;
   summaryFallbackText: string;
@@ -67,7 +58,6 @@ export const PlayerTopBar = forwardRef<HTMLElement, PlayerTopBarProps>(function 
   {
     currentVideoId,
     canShowExplore,
-    homeMediaModeLabel,
     homeSearchQuery,
     homeSearchResultCount,
     homeSearchResults,
@@ -78,7 +68,6 @@ export const PlayerTopBar = forwardRef<HTMLElement, PlayerTopBarProps>(function 
     isNonPlayerViewVisible,
     isPrivacyMode,
     isScanning,
-    libraryStats,
     metadataRows,
     playlistThumbnailStore,
     summaryFallbackText,
@@ -104,9 +93,7 @@ export const PlayerTopBar = forwardRef<HTMLElement, PlayerTopBarProps>(function 
   ref
 ) {
   const [isMetadataPinnedOpen, setIsMetadataPinnedOpen] = useState(false);
-  const [isLibraryStatsPinnedOpen, setIsLibraryStatsPinnedOpen] = useState(false);
   const [isHomeSearchFocused, setIsHomeSearchFocused] = useState(false);
-  const libraryStatsRef = useRef<HTMLDivElement>(null);
   const metadataCardRef = useRef<HTMLButtonElement>(null);
   const shouldShowMetadata = Boolean(currentVideoId) && !isPrivacyMode && !isNonPlayerViewVisible;
   const isPlayerTopRail = !isNonPlayerViewVisible;
@@ -124,22 +111,6 @@ export const PlayerTopBar = forwardRef<HTMLElement, PlayerTopBarProps>(function 
     document.addEventListener("pointerdown", handlePointerDown);
     return () => document.removeEventListener("pointerdown", handlePointerDown);
   }, [isMetadataPinnedOpen]);
-
-  useEffect(() => {
-    if (!isLibraryStatsPinnedOpen) return;
-
-    const handlePointerDown = (event: PointerEvent) => {
-      if (libraryStatsRef.current?.contains(event.target as Node)) return;
-      setIsLibraryStatsPinnedOpen(false);
-    };
-
-    document.addEventListener("pointerdown", handlePointerDown);
-    return () => document.removeEventListener("pointerdown", handlePointerDown);
-  }, [isLibraryStatsPinnedOpen]);
-
-  useEffect(() => {
-    if (!isHomeViewVisible) setIsLibraryStatsPinnedOpen(false);
-  }, [isHomeViewVisible]);
 
   return (
     <header className={`top-bar${isPlayerTopRail ? " player-top-rail" : ""}`} ref={ref}>
@@ -250,54 +221,6 @@ export const PlayerTopBar = forwardRef<HTMLElement, PlayerTopBarProps>(function 
             <span>{Math.round(mediaProcessingTask.progress)}%</span>
             <small>{mediaProcessingTask.videoName}</small>
           </button>
-        ) : null}
-        {!isPrivacyMode && isHomeViewVisible ? (
-          <div
-            ref={libraryStatsRef}
-            className={`top-library-stats${isLibraryStatsPinnedOpen ? " is-open" : ""}`}
-            onKeyDown={(event) => {
-              if (event.key !== "Escape") return;
-              setIsLibraryStatsPinnedOpen(false);
-            }}
-          >
-            <button
-              className="secondary-button top-library-stats-button"
-              type="button"
-              aria-expanded={isLibraryStatsPinnedOpen}
-              aria-controls="top-library-stats-popover"
-              onClick={() => setIsLibraryStatsPinnedOpen((isOpen) => !isOpen)}
-            >
-              <Film size={17} />
-              <span>影片</span>
-              <strong>{libraryStats.total}</strong>
-            </button>
-            <div className="top-library-stats-popover" id="top-library-stats-popover">
-              <div className="top-library-stats-heading">
-                <div>
-                  <strong>片库概览</strong>
-                  <span>共 {libraryStats.total} 部</span>
-                </div>
-                <span className="top-library-stats-scope">{homeMediaModeLabel}</span>
-              </div>
-              <div className="top-library-stats-grid">
-                <div>
-                  <strong>{libraryStats.unfinished}</strong>
-                  <span><i className="unfinished" aria-hidden="true" />未看完</span>
-                </div>
-                <div>
-                  <strong>{libraryStats.completed}</strong>
-                  <span><i className="completed" aria-hidden="true" />已看完</span>
-                </div>
-                <div>
-                  <strong>{libraryStats.favorites}</strong>
-                  <span><i className="favorite" aria-hidden="true" />收藏</span>
-                </div>
-              </div>
-              <div className="top-library-stats-footer">
-                随{homeMediaModeLabel}实时更新
-              </div>
-            </div>
-          </div>
         ) : null}
         {!isPrivacyMode && isHomeViewVisible ? (
           <button

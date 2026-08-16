@@ -2083,7 +2083,7 @@ export default function App() {
   // （统计只被首页 JSX 消费，非首页时返回 null 不会被读取）。
   const libraryStats = useMemo(
     () => (isHomeViewVisible
-      ? createLibraryStats({ videos: modeFilteredVideos, progressStore, favoriteVideoIds, isResumableProgress })
+      ? createLibraryStats({ videos: modeFilteredVideos, progressStore, favoriteVideoIds })
       : null),
     [favoriteVideoIds, isHomeViewVisible, modeFilteredVideos, progressStore],
   );
@@ -6675,7 +6675,6 @@ export default function App() {
             comment: videoComments[video.id],
             searchMatch: playlistSearchResult.matchesByVideoId.get(video.id),
           }))}
-          homeMediaModeLabel={homeMediaModeLabel}
           mediaProcessingTask={mediaProcessingTask}
           isExploreViewVisible={isExploreViewVisible}
           isHomeSearchPending={isPlaylistSearchPending}
@@ -6684,7 +6683,6 @@ export default function App() {
           isPrivacyMode={isPrivacyMode}
           isScanning={isScanning}
           // 仅首页可见时渲染本分支，此时 libraryStats 必非空（门控依赖 isHomeViewVisible）
-          libraryStats={libraryStats!}
           metadataRows={currentVideoMetadataRows}
           playabilityMessage={currentVideoPlayabilityMessage}
           recommendationFeedTitle={isRecommendationFeedVisible ? recommendationFeedTitle : ""}
@@ -6750,6 +6748,13 @@ export default function App() {
                   isLoading: isCacheStatusLoading,
                   formatFileSize,
                   onOpen: openCacheStatusDialog,
+                }}
+                libraryStats={{
+                  homeMediaModeLabel,
+                  stats: libraryStats!,
+                  formatDuration: formatCumulativeDuration,
+                  formatFileSize,
+                  formatModifiedTime,
                 }}
                 mode={{
                   homeMediaMode,

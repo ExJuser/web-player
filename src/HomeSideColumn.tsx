@@ -5,6 +5,7 @@ import { GripVertical } from "lucide-react";
 
 import { DuplicateVideoSummaryCard } from "./DuplicateVideoSummaryCard";
 import { HomeCacheStatusCard } from "./HomeCacheStatusCard";
+import { HomeLibraryStatsCard } from "./HomeLibraryStatsCard";
 import { HomeMediaLibraryCard } from "./HomeMediaLibraryCard";
 import { HomeModeCard } from "./HomeModeCard";
 import { HomeRecentAddsCard } from "./HomeRecentAddsCard";
@@ -19,6 +20,7 @@ import {
 
 type HomeSideColumnProps = {
   cacheStatus: ComponentProps<typeof HomeCacheStatusCard>;
+  libraryStats: ComponentProps<typeof HomeLibraryStatsCard>;
   duplicateSummary: ComponentProps<typeof DuplicateVideoSummaryCard> | null;
   mediaLibrary: ComponentProps<typeof HomeMediaLibraryCard>;
   mode: ComponentProps<typeof HomeModeCard>;
@@ -45,6 +47,7 @@ type DragState = {
 
 export function HomeSideColumn({
   cacheStatus,
+  libraryStats,
   duplicateSummary,
   mediaLibrary,
   mode,
@@ -67,6 +70,7 @@ export function HomeSideColumn({
   const entries: SideCardEntry[] = [];
   entries.push({ key: "mode", label: "媒体模式", node: <HomeModeCard {...mode} /> });
   entries.push({ key: "mediaLibrary", label: "媒体库", node: <HomeMediaLibraryCard {...mediaLibrary} /> });
+  entries.push({ key: "libraryStats", label: "影片库统计", node: <HomeLibraryStatsCard {...libraryStats} /> });
   entries.push({ key: "cacheStatus", label: "本地缓存", node: <HomeCacheStatusCard {...cacheStatus} /> });
   if (recentAdds) {
     entries.push({ key: "recentAdds", label: "最近添加", node: <HomeRecentAddsCard {...recentAdds} /> });

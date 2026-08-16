@@ -89,6 +89,9 @@ type RatedVideoForUi = {
 
 type IdentifiedVideoForUi = {
   id: string;
+  duration?: number;
+  lastModified?: number;
+  size?: number;
 };
 
 type ModeVideoForUi = IdentifiedVideoForUi & {
@@ -97,6 +100,8 @@ type ModeVideoForUi = IdentifiedVideoForUi & {
 
 type ProgressForUi = {
   completed?: boolean;
+  currentTime?: number;
+  duration?: number;
   updatedAt?: number;
 };
 
@@ -303,22 +308,43 @@ export function createLibraryStats<Video extends IdentifiedVideoForUi, Progress 
   videos: Video[];
   progressStore: Record<string, Progress | undefined>;
   favoriteVideoIds: ReadonlySet<string>;
-  isResumableProgress: (progress?: Progress) => boolean;
+  now?: number;
 }) {
   let unfinished = 0;
   let completed = 0;
   let favorites = 0;
+  let totalBytes = 0;
+  let totalDurationSeconds = 0;
+  let knownDurationVideos = 0;
+  let recentlyAdded = 0;
+  let latestAddedAt = 0;
+  const recentThreshold = (input.now ?? Date.now()) - 7 * 24 * 60 * 60 * 1000;
   input.videos.forEach((video) => {
     const progress = input.progressStore[video.id];
     if (progress?.completed) completed += 1;
-    if (input.isResumableProgress(progress)) unfinished += 1;
+    else if ((progress?.currentTime ?? 0) >= 1) unfinished += 1;
     if (input.favoriteVideoIds.has(video.id)) favorites += 1;
+    totalBytes += Number.isFinite(video.size) ? Math.max(video.size ?? 0, 0) : 0;
+    const duration = progress?.duration || video.duration || 0;
+    if (Number.isFinite(duration) && duration > 0) {
+      totalDurationSeconds += duration;
+      knownDurationVideos += 1;
+    }
+    const lastModified = Number.isFinite(video.lastModified) ? Math.max(video.lastModified ?? 0, 0) : 0;
+    if (lastModified > 0 && lastModified >= recentThreshold) recentlyAdded += 1;
+    latestAddedAt = Math.max(latestAddedAt, lastModified);
   });
   return {
     total: input.videos.length,
+    unstarted: Math.max(input.videos.length - unfinished - completed, 0),
     unfinished,
     completed,
     favorites,
+    totalBytes,
+    totalDurationSeconds,
+    knownDurationVideos,
+    recentlyAdded,
+    latestAddedAt: latestAddedAt || null,
   };
 }
 
