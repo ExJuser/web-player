@@ -122,7 +122,7 @@ test("cold feed falls back to a mid-video window when progress records the durat
   assert.ok(item.startTime < 3600 * 0.8, "兜底应落在影片中前段");
 });
 
-test("feed pagination stops at the end without repeating videos", async () => {
+test("feed pagination starts a new round with alternate segments after all videos were shown", async () => {
   const videos = Array.from({ length: 10 }, (_, index) => ({
     id: `root:v${index}`,
     mediaRootId: "root",
@@ -163,9 +163,10 @@ test("feed pagination stops at the end without repeating videos", async () => {
   const videoIds = [...firstPage.items, ...secondPage.items].map((item) => item.videoId);
 
   assert.equal(firstPage.items.length, 8);
-  assert.equal(secondPage.items.length, 2);
-  assert.equal(secondPage.nextCursor, null);
-  assert.equal(new Set(videoIds).size, videos.length);
+  assert.equal(secondPage.items.length, 8);
+  assert.equal(secondPage.nextCursor, "16");
+  assert.equal(new Set(videoIds.slice(0, videos.length)).size, videos.length);
+  assert.ok(secondPage.items.slice(2).every((item) => item.reasons.includes("同一影片的另一个代表性片段")));
 });
 
 test("diversify keeps adjacent series distinct unless unavoidable", () => {

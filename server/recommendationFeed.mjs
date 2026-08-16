@@ -132,6 +132,23 @@ function createFallbackSegment(video, duration) {
   };
 }
 
+/** 同一影片再次进入推荐流时，按低差异序列选择不同位置，避免重复播放同一段。 */
+function createRepeatSegment(video, duration, occurrence) {
+  const segmentDuration = clamp(duration * 0.08, MIN_SEGMENT_SECONDS, Math.min(MAX_SEGMENT_SECONDS, duration));
+  const usableDuration = Math.max(0, duration - segmentDuration);
+  const base = (stableNumber(video.id) % 1000) / 1000;
+  const position = (base + occurrence * 0.61803398875) % 1;
+  const startTime = usableDuration * position;
+  return {
+    startTime,
+    endTime: Math.min(duration, startTime + segmentDuration),
+    duration,
+    score: 0.2,
+    source: "fallback",
+    reasons: ["同一影片的另一个代表性片段"],
+  };
+}
+
 function normalizeManualSegment(highlight, duration) {
   const rawStart = clamp(Number(highlight.startTime) || 0, 0, duration);
   const rawEnd = clamp(Number(highlight.endTime) || rawStart, rawStart, duration);
@@ -672,13 +689,14 @@ export function createRecommendationFeedService({
       const explore = recallExplore(eligibleVideos, seed);
       const ranked = diversify(varyRecommendationOrder(mergeExplore(sortedSnapshot.videos, explore), seed));
       const start = Math.max(0, Math.floor(Number(cursor) || 0));
-      const pageSize = Math.min(Math.max(0, ranked.length - start), clamp(Math.floor(Number(limit) || 8), 1, 20));
+      const pageSize = ranked.length ? clamp(Math.floor(Number(limit) || 8), 1, 20) : 0;
       const page = Array.from({ length: pageSize }, (_, index) => ({
-        video: ranked[start + index],
+        video: ranked[(start + index) % ranked.length],
         sequence: start + index,
+        occurrence: Math.floor((start + index) / ranked.length),
       }));
       const favoriteIds = new Set(store?.favorites ?? []);
-      const items = page.map(({ video, sequence }) => {
+      const items = page.map(({ video, sequence, occurrence }) => {
         const cached = cache.segments[video.id];
         const progress = store?.items?.[video.id];
         const progressTime = Number(progress?.currentTime);
@@ -696,8 +714,11 @@ export function createRecommendationFeedService({
             segment = { startTime: 0, endTime: DEFAULT_SEGMENT_SECONDS, duration: 0, score: 0, source: "fallback", reasons: ["正在分析这部影片，先播放一个代表性片段"] };
           }
         }
+        if (occurrence > 0 && Number.isFinite(segment.duration) && segment.duration > 0) {
+          segment = createRepeatSegment(video, segment.duration, occurrence);
+        }
         return {
-          id: `${video.id}@${Math.round(segment.startTime * 10)}:${sequence}`,
+          id: `${video.id}@${sequence}`,
           videoId: video.id,
           title: path.basename(video.name, path.extname(video.name)),
           relativePath: video.relativePath,
@@ -733,7 +754,7 @@ export function createRecommendationFeedService({
         version: 1,
         mode: normalizedMode,
         items,
-        nextCursor: start + page.length < ranked.length ? String(start + page.length) : null,
+        nextCursor: page.length ? String(start + page.length) : null,
         analysis: { queued: queuedVideoIds.size, analyzing: isAnalyzing },
       };
     },

@@ -96,7 +96,7 @@ export function RecommendationFeedSection({ active, mode, modeLabel, onActiveTit
   const skippedItemIdsRef = useRef(new Set<string>());
   const previousActiveIndexRef = useRef(0);
   const sessionSeedRef = useRef("");
-  const seenVideoIdsRef = useRef(new Set<string>());
+  const seenItemIdsRef = useRef(new Set<string>());
   const activeItem = items[activeIndex] ?? null;
 
   const loadPage = useCallback(async (cursor?: string | null, append = false) => {
@@ -107,10 +107,10 @@ export function RecommendationFeedSection({ active, mode, modeLabel, onActiveTit
     try {
       const response = await loadRecommendationFeed(mode, cursor, sessionSeedRef.current);
       if (requestId !== requestIdRef.current) return;
-      if (!append) seenVideoIdsRef.current.clear();
+      if (!append) seenItemIdsRef.current.clear();
       const nextItems = response.items.filter((item) => {
-        if (seenVideoIdsRef.current.has(item.videoId)) return false;
-        seenVideoIdsRef.current.add(item.videoId);
+        if (seenItemIdsRef.current.has(item.id)) return false;
+        seenItemIdsRef.current.add(item.id);
         return true;
       });
       setItems((current) => append ? [...current, ...nextItems] : nextItems);
@@ -135,7 +135,7 @@ export function RecommendationFeedSection({ active, mode, modeLabel, onActiveTit
       const response = await loadRecommendationFeed(mode, cursor, sessionSeedRef.current);
       if (requestId !== requestIdRef.current) return;
       setItems((current) => current.map((existing) => {
-        const fresh = response.items.find((item) => item.videoId === existing.videoId);
+        const fresh = response.items.find((item) => item.id === existing.id);
         return fresh ?? existing;
       }));
     } catch {
@@ -146,7 +146,7 @@ export function RecommendationFeedSection({ active, mode, modeLabel, onActiveTit
   useEffect(() => {
     if (!active) return;
     sessionSeedRef.current = crypto.randomUUID();
-    seenVideoIdsRef.current.clear();
+    seenItemIdsRef.current.clear();
     setItems([]);
     setNextCursor(null);
     setActiveIndex(0);
