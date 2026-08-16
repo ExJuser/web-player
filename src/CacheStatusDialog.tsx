@@ -95,7 +95,7 @@ export function CacheStatusDialog({
                 </div>
                 <div>
                   <strong>{cacheStatus?.items.length ?? 0}</strong>
-                  <span>缓存种类</span>
+                  <span>数据项目</span>
                 </div>
                 <div>
                   <strong>{cacheStatus?.updatedAt ? formatModifiedTime(cacheStatus.updatedAt) : "暂无缓存"}</strong>
@@ -235,7 +235,7 @@ export function CacheStatusDialog({
             </div>
             <div className="dialog-copy">
               <h2 id="clear-cache-title">确认清除缓存？</h2>
-              <p>将删除选中的本地缓存文件。播放数据、缩略图、字幕和 AI 结果被清除后会在需要时重新生成。</p>
+              <p>将删除选中的可再生成缓存；播放进度、标签、评分、目录授权和已保存作品等持久化数据不会被清除。</p>
             </div>
             <div className="delete-file-preview">
               <strong>{selectedCacheItems.length} 项缓存 · {formatFileSize(selectedCacheBytes)}</strong>

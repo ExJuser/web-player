@@ -1,4 +1,4 @@
-import { Clapperboard, Compass, Film, FolderOpen, HardDrive, Images, Info, LoaderCircle, Moon, Scissors, Search, Sparkles, Sun, X } from "lucide-react";
+import { Clapperboard, Compass, Film, FolderOpen, Images, Info, LoaderCircle, Moon, Scissors, Search, Sparkles, Sun, X } from "lucide-react";
 import { forwardRef, useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import type { MediaProcessingTaskState } from "./MediaProcessingTaskDialog";
@@ -48,7 +48,6 @@ type PlayerTopBarProps = {
   playabilityMessage: string;
   recommendationFeedTitle: string;
   onAddMediaLibrary: () => void;
-  onOpenCacheStatus: () => void;
   onOpenMediaProcessingTask: () => void;
   onThumbnailError: (videoId: string) => void;
   onChangeHomeSearch: (query: string) => void;
@@ -88,7 +87,6 @@ export const PlayerTopBar = forwardRef<HTMLElement, PlayerTopBarProps>(function 
     playabilityMessage,
     recommendationFeedTitle,
     onAddMediaLibrary,
-    onOpenCacheStatus,
     onOpenMediaProcessingTask,
     onThumbnailError,
     onChangeHomeSearch,
@@ -251,17 +249,6 @@ export const PlayerTopBar = forwardRef<HTMLElement, PlayerTopBarProps>(function 
             {mediaProcessingTask.kind === "lada" ? <Sparkles size={16} className="spin-icon" /> : <Scissors size={16} className="spin-icon" />}
             <span>{Math.round(mediaProcessingTask.progress)}%</span>
             <small>{mediaProcessingTask.videoName}</small>
-          </button>
-        ) : null}
-        {!isPrivacyMode && isHomeViewVisible ? (
-          <button
-            className="secondary-button top-cache-status-button"
-            type="button"
-            onClick={onOpenCacheStatus}
-            title="查看本地缓存"
-          >
-            <HardDrive size={17} />
-            本地缓存
           </button>
         ) : null}
         {!isPrivacyMode && isHomeViewVisible ? (

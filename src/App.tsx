@@ -342,7 +342,6 @@ import {
   createVideoVersionPlaylistMetaByVideoId,
 } from "./videoVersionUtils";
 import {
-  clearPhotoAlbumLibraryRoots,
   clearRecentFolderHandle,
   createDefaultPlayerDataStore,
   deleteActorCover,
@@ -5754,24 +5753,6 @@ export default function App() {
     shouldShowHomeRecap,
   });
 
-  const clearAllCacheRuntimeData = useCallback(async () => {
-    await clearRecentFolderHandle().catch(() => undefined);
-    await clearPhotoAlbumLibraryRoots().catch(() => undefined);
-    photoAlbumDirectoriesRef.current = {};
-    photoAlbumsRef.current = [];
-    setPhotoLibraryRoots([]);
-    setPhotoRootStatuses([]);
-    setPhotoAlbums([]);
-    clearLoadedMedia();
-    directoryRef.current = null;
-    libraryIdRef.current = null;
-    libraryMetadataRef.current = undefined;
-    setLibraryId(null);
-    setMediaRootId(null);
-    setActiveView("home");
-    updateAppRoute({ kind: "home" }, { replace: true });
-  }, [clearLoadedMedia, updateAppRoute]);
-
   const getPhotoRuntimeCacheItems = useCallback((): CacheStatusItem[] => {
     const objectUrlIds = Object.keys(photoObjectUrlsRef.current);
     const objectUrlBytes = objectUrlIds.reduce(
@@ -5788,19 +5769,23 @@ export default function App() {
         id: "photo-runtime-object-urls",
         label: "看图原图内存",
         path: "浏览器内存 · 对象 URL",
-        bytes: objectUrlBytes,
-        files: objectUrlIds.length,
+        bytes: 0,
+        files: 0,
+        memoryBytes: objectUrlBytes,
+        memoryEntries: objectUrlIds.length,
         updatedAt: objectUrlUpdatedAt,
       },
       {
         id: "photo-runtime-previews",
         label: "看图预览缓存",
         path: "浏览器内存 · 缩放预览图",
-        bytes: previewStatus.bytes,
-        files: previewStatus.entries,
+        bytes: 0,
+        files: 0,
+        memoryBytes: previewStatus.bytes,
+        memoryEntries: previewStatus.entries,
         updatedAt: previewStatus.updatedAt,
       },
-    ].filter((item) => item.bytes > 0 || item.files > 0);
+    ].filter((item) => (item.memoryBytes ?? 0) > 0 || (item.memoryEntries ?? 0) > 0);
   }, []);
 
   const clearPhotoRuntimeCache = useCallback((ids: string[]) => {
@@ -5845,7 +5830,6 @@ export default function App() {
   } = useCacheStatusDialog({
     getClientCacheItems: getPhotoRuntimeCacheItems,
     isHomeViewVisible,
-    onClearAllCache: clearAllCacheRuntimeData,
     onClearClientCache: clearPhotoRuntimeCache,
     onClearRuntimeCache: clearCurrentLibraryRuntimeData,
   });
@@ -6711,7 +6695,6 @@ export default function App() {
           onChangeHomeSearch={changeHomeSearch}
           onClearHomeSearch={() => setPlaylistSearchQuery("")}
           onFocusHomeSearch={resetHomeSearchScope}
-          onOpenCacheStatus={openCacheStatusDialog}
           onOpenMediaProcessingTask={reopenMediaProcessingTask}
           onThumbnailError={markVideoThumbnailFailed}
           onSelectHomeSearchResult={(videoId) => selectVideo(videoId, { syncSeriesMode: false })}
@@ -6762,6 +6745,12 @@ export default function App() {
             </div>
 
               <HomeSideColumn
+                cacheStatus={{
+                  cacheStatus,
+                  isLoading: isCacheStatusLoading,
+                  formatFileSize,
+                  onOpen: openCacheStatusDialog,
+                }}
                 mode={{
                   homeMediaMode,
                   homeMediaModeLabel,

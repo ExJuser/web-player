@@ -2132,11 +2132,12 @@ export class LocalDataSqliteStore {
       const stats = await Promise.all(databaseFiles.map((filePath) => stat(filePath)));
       return {
         id: "sqlite-database",
-        label: "SQLite 数据库",
+        label: "应用持久化数据",
         path: this.databasePath,
         bytes: stats.reduce((sum, entryStat) => sum + entryStat.size, 0),
         files: stats.length,
         updatedAt: stats.reduce((latest, entryStat) => Math.max(latest, entryStat.mtimeMs), 0) || null,
+        clearable: false,
       };
     } catch {
       return null;

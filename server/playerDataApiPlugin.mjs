@@ -184,8 +184,8 @@ function createDanmakuSourcePath(sourceId, options = {}) {
 function createCacheStatusDefinitions(thumbnailMemoryStats = { entries: 0, bytes: 0 }) {
   return [
     { id: "bangumi-matches", label: "Bangumi 匹配", path: bangumiMatchesRoot },
-    { id: "global", label: "全局播放数据", path: globalDataPath },
-    { id: "libraries", label: "播放数据", path: librariesRoot },
+    { id: "global", label: "全局播放数据", path: globalDataPath, clearable: false },
+    { id: "libraries", label: "播放数据", path: librariesRoot, clearable: false },
     {
       id: "thumbnails",
       label: "视频缩略图",
@@ -197,9 +197,9 @@ function createCacheStatusDefinitions(thumbnailMemoryStats = { entries: 0, bytes
       memoryCoalesced: thumbnailMemoryStats.coalesced ?? 0,
       memoryDiskReads: thumbnailMemoryStats.diskReads ?? 0,
     },
-    { id: "actor-covers", label: "演员封面", path: actorCoversRoot },
-    { id: "mosaics", label: "千图作品", path: mosaicsRoot },
-    { id: "photo-albums", label: "看图数据", path: photoAlbumsRoot },
+    { id: "actor-covers", label: "演员封面", path: actorCoversRoot, clearable: false },
+    { id: "mosaics", label: "千图作品", path: mosaicsRoot, clearable: false },
+    { id: "photo-albums", label: "看图数据", path: photoAlbumsRoot, clearable: false },
     {
       id: "photo-scan-cache",
       label: "看图扫描缓存",

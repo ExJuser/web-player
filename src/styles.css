@@ -1355,12 +1355,6 @@ button {
   height: 34px;
 }
 
-.top-cache-status-button {
-  min-width: 96px;
-  height: 34px;
-  padding: 0 11px;
-}
-
 .top-library-stats {
   position: relative;
   z-index: 31;
@@ -2231,6 +2225,54 @@ button {
   position: relative;
   min-width: 0;
   padding-left: 14px;
+}
+
+.home-cache-status-card {
+  padding: 16px;
+}
+
+.home-cache-status-button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 12px;
+  border: 1px solid #303945;
+  border-radius: 7px;
+  background: #15191f;
+  color: #e8edf3;
+  text-align: left;
+}
+
+.home-cache-status-button:hover,
+.home-cache-status-button:focus-visible {
+  border-color: #38c7ee;
+  background: #19232b;
+  outline: none;
+}
+
+.home-cache-status-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  color: #79dfff;
+}
+
+.home-cache-status-copy {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.home-cache-status-copy strong {
+  font-size: 17px;
+}
+
+.home-cache-status-copy small {
+  overflow: hidden;
+  color: #9aa5b3;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .player-frame.multi-view-active {
@@ -11830,6 +11872,26 @@ button {
   box-shadow: 0 12px 32px rgba(15, 23, 42, 0.28);
 }
 
+.app-shell.theme-light .home-cache-status-button,
+:root[data-theme="light"] .home-cache-status-button {
+  border-color: #d7e0ea;
+  background: #f7f9fb;
+  color: #17212b;
+}
+
+.app-shell.theme-light .home-cache-status-button:hover,
+.app-shell.theme-light .home-cache-status-button:focus-visible,
+:root[data-theme="light"] .home-cache-status-button:hover,
+:root[data-theme="light"] .home-cache-status-button:focus-visible {
+  border-color: #38a8c7;
+  background: #eef7fa;
+}
+
+.app-shell.theme-light .home-cache-status-copy small,
+:root[data-theme="light"] .home-cache-status-copy small {
+  color: #64748b;
+}
+
 .app-shell.theme-light .home-resume-visual,
 :root[data-theme="light"] .home-resume-visual {
   border-right-color: #d7e0ea;
@@ -14812,10 +14874,6 @@ button {
 
   .top-home-button {
     flex: 0 0 78px;
-  }
-
-  .top-cache-status-button {
-    flex: 0 0 auto;
   }
 
   .top-library-stats {

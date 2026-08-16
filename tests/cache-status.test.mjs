@@ -73,7 +73,9 @@ test("createCacheStatus adds database and unclassified local data items", async 
     });
 
     assert.equal(status.rootPath, tempDir);
-    assert.equal(status.totalBytes, 12);
+    assert.equal(status.diskBytes, 12);
+    assert.equal(status.memoryBytes, 4);
+    assert.equal(status.totalBytes, 16);
     assert.equal(status.totalFiles, 3);
     assert.deepEqual(
       status.items.map((item) => item.id),

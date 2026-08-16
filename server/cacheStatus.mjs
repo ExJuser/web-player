@@ -83,9 +83,10 @@ export async function createCacheStatus({ dataRoot, definitions, createDatabaseS
   if (databaseItem) visibleItems.push(databaseItem);
 
   const rootStats = await getPathStats(dataRoot);
-  const totalBytes = visibleItems.reduce((sum, item) => sum + item.bytes, 0);
+  const classifiedBytes = visibleItems.reduce((sum, item) => sum + item.bytes, 0);
+  const memoryBytes = visibleItems.reduce((sum, item) => sum + (item.memoryBytes ?? 0), 0);
   const totalFiles = visibleItems.reduce((sum, item) => sum + item.files, 0);
-  const unclassifiedBytes = Math.max(rootStats.bytes - totalBytes, 0);
+  const unclassifiedBytes = Math.max(rootStats.bytes - classifiedBytes, 0);
   const unclassifiedFiles = Math.max(rootStats.files - totalFiles, 0);
   if (unclassifiedBytes > 0 || unclassifiedFiles > 0) {
     visibleItems.push({
@@ -102,7 +103,9 @@ export async function createCacheStatus({ dataRoot, definitions, createDatabaseS
 
   return {
     rootPath: dataRoot,
-    totalBytes: rootStats.bytes,
+    diskBytes: rootStats.bytes,
+    memoryBytes,
+    totalBytes: rootStats.bytes + memoryBytes,
     totalFiles: rootStats.files,
     updatedAt,
     items: visibleItems,

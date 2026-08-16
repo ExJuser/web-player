@@ -9,6 +9,7 @@
 export const HOME_SIDE_CARD_KEYS = [
   "mode",
   "mediaLibrary",
+  "cacheStatus",
   "recentAdds",
   "recap",
   "tagStats",

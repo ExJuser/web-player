@@ -18,7 +18,6 @@ import {
 type UseCacheStatusDialogParams = {
   isHomeViewVisible: boolean;
   getClientCacheItems: () => CacheStatusItem[];
-  onClearAllCache: () => Promise<void>;
   onClearClientCache: (ids: string[]) => void;
   onClearRuntimeCache: () => void;
 };
@@ -26,7 +25,6 @@ type UseCacheStatusDialogParams = {
 export function useCacheStatusDialog({
   isHomeViewVisible,
   getClientCacheItems,
-  onClearAllCache,
   onClearClientCache,
   onClearRuntimeCache,
 }: UseCacheStatusDialogParams) {
@@ -46,9 +44,15 @@ export function useCacheStatusDialog({
     try {
       const status = await fetchJson<CacheStatus>("/api/cache-status");
       const clientItems = getClientCacheItems();
+      const clientMemoryBytes = clientItems.reduce(
+        (sum, item) => sum + item.bytes + (item.memoryBytes ?? 0),
+        0,
+      );
       setCacheStatus({
         ...status,
-        totalBytes: status.totalBytes + clientItems.reduce((sum, item) => sum + item.bytes, 0),
+        diskBytes: status.diskBytes ?? status.totalBytes,
+        memoryBytes: (status.memoryBytes ?? 0) + clientMemoryBytes,
+        totalBytes: status.totalBytes + clientMemoryBytes,
         totalFiles: status.totalFiles + clientItems.reduce((sum, item) => sum + item.files, 0),
         updatedAt: Math.max(status.updatedAt ?? 0, ...clientItems.map((item) => item.updatedAt ?? 0)) || null,
         items: [...status.items, ...clientItems],
@@ -68,7 +72,10 @@ export function useCacheStatusDialog({
     [clearableCacheStatusItems, selectedCacheItemIds],
   );
   const selectedCacheItemIdsList = useMemo(() => selectedCacheItems.map((item) => item.id), [selectedCacheItems]);
-  const selectedCacheBytes = selectedCacheItems.reduce((sum, item) => sum + item.bytes, 0);
+  const selectedCacheBytes = selectedCacheItems.reduce(
+    (sum, item) => sum + item.bytes + (item.memoryBytes ?? 0),
+    0,
+  );
   const selectedCacheFiles = selectedCacheItems.reduce((sum, item) => sum + item.files, 0);
   const isAllCacheSelected =
     clearableCacheStatusItems.length > 0 && clearableCacheStatusItems.every((item) => selectedCacheItemIds.has(item.id));
@@ -114,7 +121,6 @@ export function useCacheStatusDialog({
 
   const confirmClearSelectedCache = useCallback(async () => {
     if (!selectedCacheItems.length) return;
-    const shouldClearAllCache = isAllCacheSelected;
     setIsClearingCache(true);
     setCacheStatusMessage("");
     try {
@@ -134,9 +140,6 @@ export function useCacheStatusDialog({
       if (clearedServerIds.some((id) => id === "global" || id === "libraries" || id === "index")) {
         onClearRuntimeCache();
       }
-      if (shouldClearAllCache) {
-        await onClearAllCache();
-      }
       await loadCacheStatus();
       setCacheStatusMessage(`已清除 ${clearedServerIds.length + clientIds.length} 项缓存。`);
     } catch (error) {
@@ -145,9 +148,7 @@ export function useCacheStatusDialog({
       setIsClearingCache(false);
     }
   }, [
-    isAllCacheSelected,
     loadCacheStatus,
-    onClearAllCache,
     onClearClientCache,
     onClearRuntimeCache,
     selectedCacheItemIdsList,

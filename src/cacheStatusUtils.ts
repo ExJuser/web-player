@@ -15,6 +15,8 @@ export type CacheStatusItem = {
 
 export type CacheStatus = {
   rootPath: string;
+  diskBytes: number;
+  memoryBytes: number;
   totalBytes: number;
   totalFiles: number;
   updatedAt: number | null;

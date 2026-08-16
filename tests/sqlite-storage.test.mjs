@@ -565,6 +565,7 @@ test("sqlite database status includes wal and shm sidecar files", async () => {
     await writeFile(path.join(context.dataRoot, "web-player.sqlite-shm"), "shm", "utf8");
 
     const status = await context.store.createDatabaseStatusItem();
+    assert.equal(status.clearable, false);
 
     assert.equal(status.id, "sqlite-database");
     assert.equal(status.files, 3);
