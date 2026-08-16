@@ -1217,7 +1217,7 @@ export default function App() {
 
   const scanPhotoLibraryRoots = useCallback(async (
     roots: PhotoAlbumLibraryRoot[],
-    options?: { retainExisting?: boolean },
+    options?: { retainExisting?: boolean; preserveExistingOnFailure?: boolean },
   ) => {
     const scannedRootIds = new Set(roots.map((root) => root.id));
     setIsPhotoAlbumsLoading(true);
@@ -1277,8 +1277,13 @@ export default function App() {
         }
       };
       await Promise.all(Array.from({ length: Math.min(photoRootScanConcurrency, roots.length) }, () => rootScanWorker()));
-      for (const result of rootScanResults) {
+      for (let index = 0; index < rootScanResults.length; index += 1) {
+        const result = rootScanResults[index];
         if (result.scan) nextAlbums.push(...result.scan.albums);
+        else if (options?.preserveExistingOnFailure) {
+          nextAlbums.push(...(fullCachedScan?.albums ?? photoAlbumsRef.current)
+            .filter((album) => album.mediaRootId === roots[index].id));
+        }
         nextStatuses.push(result.status);
       }
 
@@ -1465,23 +1470,31 @@ export default function App() {
     setPhotoAlbumMessage("正在恢复看图媒体库...");
     void (async () => {
       try {
-        const [roots, cachedScan, store] = await Promise.all([
-          readPhotoAlbumLibraryRoots(),
-          loadCachedPhotoAlbumScan({ includeImages: shouldLoadForMosaic }),
-          loadPhotoAlbumStore().catch(() => ({
-            version: 1,
-            favorites: [],
-            progress: {},
-            coverImageByAlbumId: {},
-            albumTags: {},
-            preferences: defaultPhotoAlbumPreferences,
-          })),
-        ]);
-        applyPhotoAlbumStore(store);
-        const permissionResults = await Promise.all(roots.map(async (root) => ({
+        const rootsPromise = readPhotoAlbumLibraryRoots();
+        const cachedScanPromise = loadCachedPhotoAlbumScan({ includeImages: shouldLoadForMosaic });
+        const storePromise = loadPhotoAlbumStore().catch(() => ({
+          version: 1,
+          favorites: [],
+          progress: {},
+          coverImageByAlbumId: {},
+          albumTags: {},
+          preferences: defaultPhotoAlbumPreferences,
+        }));
+        const [roots, cachedScan] = await Promise.all([rootsPromise, cachedScanPromise]);
+        const configuredRootIds = new Set(roots.map((root) => root.id));
+        const hasConfiguredCache = Boolean(cachedScan && (
+          cachedScan.rootId === "browser-photo-libraries"
+          || roots.some((root) => root.id === cachedScan.rootId)
+          || cachedScan.albums.some((album) => configuredRootIds.has(album.mediaRootId))
+        ));
+        if (cachedScan && hasConfiguredCache) {
+          applyCachedPhotoAlbumScan(cachedScan, roots, configuredRootIds);
+        }
+        const [permissionResults, store] = await Promise.all([Promise.all(roots.map(async (root) => ({
           root,
           canRead: Boolean(root.directory && await hasDirectoryWritePermission(root.directory)),
-        })));
+        }))), storePromise]);
+        applyPhotoAlbumStore(store);
         const restoredRoots = permissionResults.map(({ root, canRead }) => canRead ? root : { ...root, directory: undefined });
         if (restoredRoots.some((root, index) => root.directory !== roots[index].directory)) {
           await writePhotoAlbumLibraryRoots(restoredRoots).catch(() => undefined);
@@ -1497,16 +1510,16 @@ export default function App() {
           setPhotoAlbumMessage("新增一个看图媒体库后开始扫描图片。");
           return;
         }
-        const hasConfiguredCache = Boolean(cachedScan && (
-          cachedScan.rootId === "browser-photo-libraries"
-          || roots.some((root) => root.id === cachedScan.rootId)
-          || cachedScan.albums.some((album) => roots.some((root) => root.id === album.mediaRootId))
-        ));
         if (cachedScan && hasConfiguredCache) {
-          applyCachedPhotoAlbumScan(cachedScan, restoredRoots, readableRootIds);
+          setPhotoRootStatuses(restoredRoots.map((root) => createPhotoAlbumLibraryRootStatus(
+            root,
+            cachedScan.albums,
+            readableRootIds.has(root.id) ? "ready" : "needsAccess",
+            readableRootIds.has(root.id) ? undefined : "需要重新授权浏览器目录。",
+          )));
           window.requestAnimationFrame(() => {
             window.setTimeout(() => {
-              void scanPhotoLibraryRoots(restoredRoots).catch((error) => {
+              void scanPhotoLibraryRoots(restoredRoots, { preserveExistingOnFailure: true }).catch((error) => {
                 setPhotoAlbumMessage(error instanceof Error ? error.message : "后台刷新看图媒体库失败，请重试。");
               });
             }, 0);
